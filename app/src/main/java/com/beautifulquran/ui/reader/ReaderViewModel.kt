@@ -55,8 +55,9 @@ class ReaderViewModel(
     @OptIn(ExperimentalCoroutinesApi::class)
     val activeWord: StateFlow<ActiveWord?> = player.state
         .map { s ->
-            val np = s.nowPlaying
-            if (np != null && np.surahId == surahId && (s.isPlaying || s.isBuffering)) np else null
+            // Keep the highlight while paused (like a lyrics player); it only
+            // clears when this surah stops being the loaded one.
+            s.nowPlaying?.takeIf { it.surahId == surahId }
         }
         .distinctUntilChanged()
         .flatMapLatest { np ->
@@ -70,7 +71,8 @@ class ReaderViewModel(
                             HighlightEngine.activeWord(it, player.positionMs)
                         }
                         emit(pos?.let { ActiveWord(np.ayah, it) })
-                        delay(TICK_MS)
+                        // Position is frozen while paused; poll gently.
+                        delay(if (player.state.value.isPlaying) TICK_MS else PAUSED_TICK_MS)
                     }
                 }
             }
@@ -168,5 +170,6 @@ class ReaderViewModel(
 
     companion object {
         private const val TICK_MS = 33L
+        private const val PAUSED_TICK_MS = 250L
     }
 }

@@ -1,0 +1,156 @@
+# Architecture
+
+How Beautiful Quran is put together, and why each piece is the way it is.
+
+## The one-sentence version
+
+A **prepackaged SQLite database** (built offline by `tools/build_db.py` from
+open Quran datasets) feeds a **single-module Compose app** whose signature
+feature — words lighting up in time with the reciter — is driven by a
+**pure-function sync engine** polling a **Media3 player** 30 times a second.
+
+```
+tools/build_db.py  (build time, runs in CI)
+   quran-json (npm) ─┐
+   WBW gloss (npm)  ─┼─► validate, align, pack ─► app/src/main/assets/quran.db
+   quran-align zip  ─┘
+                                                        │
+app (runtime)                                           ▼
+   QuranDatabase ── copies asset once, opens read-only SQLite
+   QuranRepository ── typed queries (surahs, ayahs+words, timing segments)
+   SettingsRepository ── SharedPreferences behind a StateFlow
+   PlayerController ─┬─ MediaController → PlaybackService (ExoPlayer + cache)
+                     └─ PlayerUiState StateFlow (what's playing, where)
+   HighlightEngine ── pure: (segments, positionMs) → active word position
+   ViewModels ── HomeViewModel, ReaderViewModel, SettingsViewModel
+   UI ── three sheets: Home, Reader, Settings (Compose + Material 3)
+```
+
+## Principles
+
+1. **Offline-first, no backend.** All text, translations, and word timings ship
+   inside the APK. Only recitation audio streams (and is cached, 256 MB LRU).
+   No accounts, no analytics, no API keys — the app works in airplane mode
+   once audio is cached.
+2. **The data pipeline is a build step, not app code.** Everything fragile
+   about data (three sources with different word segmentations, a corrupt file
+   in an upstream release, basmalah offsets) is resolved *once*, at build
+   time, with validation and logged diagnostics. The app only ever sees a
+   clean, consistent database.
+3. **Purity where correctness matters.** The sync engine (`HighlightEngine`)
+   is a pure function over immutable data — trivially unit-testable, no
+   Android dependencies.
+4. **Small over clever.** No Hilt (a hand-rolled ViewModel factory over
+   Application-scoped singletons), no Room (a 100-line raw-SQLite wrapper),
+   no navigation library beyond navigation-compose. Every dependency earns
+   its place.
+
+## The data pipeline (`tools/build_db.py`)
+
+Sources (all fetched over HTTPS, cached in `tools/.cache/`):
+
+| Source | Provides | Why this one |
+|---|---|---|
+| `quran-json` (npm) | Uthmani Unicode text, Saheeh International translation, surah metadata | Tanzil-derived, verse-keyed, no auth |
+| `@kmaslesa/holy-quran-word-by-word-full-data` (npm) | Per-word English gloss + transliteration (Quran.com data) | Only per-word English dataset on an open registry |
+| `cpfair/quran-align` release zip | Word-level timestamps per reciter, CC-BY 4.0 | The canonical open word-alignment dataset, matched to everyayah.com audio |
+
+The **canonical word segmentation** is the space-split of the Uthmani text.
+The other two sources are mapped onto it by position:
+
+- The WBW gloss disagrees on word count for exactly **10 of 6,236 ayahs**
+  (off by one); those are clamped by index and logged.
+- Timing files use 0-based word indices; the pipeline converts to 1-based
+  positions, drops segments that point at basmalah words prefixed to
+  first-ayah audio (`adjust_segments`), clamps overshoot, and **fails the
+  build** if a reciter's coverage drops below 6,000 ayahs.
+- A reciter whose timing file cannot be parsed at all (the Sudais file in the
+  upstream release zip is truncated) ships with `has_timings = 0` — the app
+  plays audio for that reciter without word highlighting.
+
+Output schema (all read-only at runtime):
+
+```sql
+surahs   (id, name_arabic, name_transliteration, name_translation, revelation_place, ayah_count)
+ayahs    (surah_id, ayah_number, text_uthmani, translation_en)
+words    (surah_id, ayah_number, position, arabic, translation_en, transliteration)
+reciters (id, slug, name, style, has_timings)
+timings  (reciter_id, surah_id, ayah_number, segments)   -- segments = "[[pos,startMs,endMs],…]"
+```
+
+Timing segments are stored as one compact JSON array per (reciter, ayah)
+rather than one row per word: ~37 k rows instead of ~465 k, smaller file,
+and the app always loads a whole ayah's segments at once anyway.
+
+## The sync engine
+
+```
+ExoPlayer ──(currentPosition, polled every 33 ms while playing)──►
+HighlightEngine.activeWord(segments, position)  [binary search]  ──►
+StateFlow<ActiveWord?>  (distinctUntilChanged: emits once per word)  ──►
+per-item derivedStateOf in the reader list  ──►  one ayah recomposes
+```
+
+- `PlayerController` wraps a `MediaController` connected to `PlaybackService`
+  (a `MediaSessionService`), mirroring player callbacks into a
+  `PlayerUiState` StateFlow. Playlists are one `MediaItem` per ayah with
+  `mediaId = "surah:ayah:reciterId"`, so `currentMediaItemIndex` ↔ ayah is a
+  trivial mapping and ayah-repeat is just `REPEAT_MODE_ONE`.
+- `ReaderViewModel.activeWord` runs the polling loop only while this surah is
+  audible (`flatMapLatest` on the playing state) and publishes only *changes*
+  (word boundaries), so downstream recomposition happens ~2–3×/sec during
+  recitation, not 30×.
+- `HighlightEngine` holds a word lit through inter-word gaps (karaoke
+  behavior), lights nothing before the first word (covers the basmalah lead
+  on first-ayah audio) and nothing after the last word ends.
+- Word-level accuracy of the source data is ±73 ms on average — inside the
+  ~150 ms window that reads as "in sync" to a human.
+
+## Playback
+
+`PlaybackService` is a standard `MediaSessionService`: lock-screen and
+notification controls, audio focus, becoming-noisy handling, wake mode for
+streaming. Audio flows through a `CacheDataSource` backed by a 256 MB LRU
+`SimpleCache`, so an ayah streams once and replays from disk afterwards.
+
+## UI structure
+
+Three full-screen "sheets", one visible at a time
+(`NavHost` with slide-and-fade transitions):
+
+- `home/HomeScreen` — surah list with search and a continue-listening card.
+- `reader/ReaderScreen` — the follow-along view. Composed of
+  `SurahHeader` + one `AyahBlock` per ayah in a `LazyColumn`;
+  `AyahBlock` renders `WordUnit`s (Arabic mode, RTL flow) or
+  `EnglishWordUnit`s (English mode, LTR flow); `PlayerBar` sits flat at the
+  bottom.
+- `settings/SettingsScreen` — reciter, reading mode, text size, display
+  toggles, theme, attributions.
+
+ViewModels get their dependencies from `QuranApp` (Application) through
+`AppViewModelFactory`. Settings changes propagate reactively: e.g.
+`ReaderViewModel` observes `reciterId` and reloads timings / restarts the
+current ayah in the new voice when it changes on the settings sheet.
+
+## Code conventions
+
+- Kotlin official style; Compose function-per-component; one file per screen
+  plus a components file where a screen has several.
+- KDoc on every non-obvious public type/function; inline comments only where
+  the code can't say it (e.g. *why* a state read is deferred to the draw
+  phase, *why* lintVital is off for release).
+- UI state flows down as immutable data classes; events flow up as lambdas.
+- No ripple indications anywhere — taps respond with content motion, not
+  Material ink, to preserve the paper feel (see docs/DESIGN.md).
+- Tests live where logic lives: the pure engine and the segment parser have
+  JVM unit tests; UI correctness is kept reviewable by keeping composables
+  small and stateless.
+
+## Build & delivery
+
+CI (`.github/workflows/build.yml`) on every push: build `quran.db` (with
+network access to all three sources) → unit tests → **assembleRelease**
+(R8-minified, resource-shrunk; see docs/PERFORMANCE.md) → upload artifact →
+publish the APK to the rolling `latest` GitHub release. Release builds are
+signed with the repo's debug keystore so sideloaded installs update in place;
+swap in a real keystore before any store release.

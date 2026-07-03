@@ -29,7 +29,12 @@ python3 tools/build_db.py     # builds app/src/main/assets/quran.db
 audio timings, validates them against each other, and packs them into a single
 SQLite asset. CI (GitHub Actions) does this on every push and publishes the APK.
 
-See [PLAN.md](PLAN.md) for the full product/engineering plan.
+## Documentation
+
+- [PLAN.md](PLAN.md) — the original product/engineering plan and research
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how the app is put together: pipeline, sync engine, modules, conventions
+- [docs/DESIGN.md](docs/DESIGN.md) — the design language: the sheet, ink, color, type, motion
+- [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — every smoothness technique in use and why
 
 ## Data & attribution
 

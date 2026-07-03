@@ -30,18 +30,10 @@ private val SoftGreen = Color(0xFF7FB8A4)
 /** Accent colors that sit outside the Material scheme. */
 data class QuranAccents(
     val gold: Color,
-    val goldWash: Color,
-    val recitedInk: Color,
-    val divider: Color,
 )
 
 val LocalQuranAccents = staticCompositionLocalOf {
-    QuranAccents(
-        gold = Color(0xFFC9A227),
-        goldWash = Color(0x2EC9A227),
-        recitedInk = Color(0xFF0E5C4A),
-        divider = Color(0x1F1C1B18),
-    )
+    QuranAccents(gold = Color(0xFFC9A227))
 }
 
 private val LightColors: ColorScheme = lightColorScheme(
@@ -82,19 +74,9 @@ private val DarkColors: ColorScheme = darkColorScheme(
     surfaceContainerHighest = Color(0xFF31352C),
 )
 
-private val LightAccents = QuranAccents(
-    gold = Color(0xFFB8901C),
-    goldWash = Color(0x24C9A227),
-    recitedInk = DeepGreen,
-    divider = Color(0x1F1C1B18),
-)
+private val LightAccents = QuranAccents(gold = Color(0xFFB8901C))
 
-private val DarkAccents = QuranAccents(
-    gold = Color(0xFFD9B44A),
-    goldWash = Color(0x30D9B44A),
-    recitedInk = SoftGreen,
-    divider = Color(0x26E8E2D5),
-)
+private val DarkAccents = QuranAccents(gold = Color(0xFFD9B44A))
 
 @Composable
 fun BeautifulQuranTheme(

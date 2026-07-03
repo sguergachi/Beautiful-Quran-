@@ -55,7 +55,17 @@ class PlayerController(private val context: Context) {
     private suspend fun ensureController(): MediaController = connectMutex.withLock {
         controller?.let { return it }
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
-        val c = MediaController.Builder(context, token).buildAsync().await()
+        val c = MediaController.Builder(context, token)
+            .setListener(object : MediaController.Listener {
+                override fun onDisconnected(controller: MediaController) {
+                    // Service went away (e.g. task removed while paused).
+                    // Drop the stale handle so the next command reconnects.
+                    this@PlayerController.controller = null
+                    _state.value = PlayerUiState()
+                }
+            })
+            .buildAsync()
+            .await()
         c.addListener(listener)
         controller = c
         _state.value = _state.value.copy(isConnected = true)
@@ -91,6 +101,8 @@ class PlayerController(private val context: Context) {
             nowPlaying = player.currentMediaItem?.mediaId?.let(::parseMediaId),
             repeatMode = player.repeatMode,
             speed = player.playbackParameters.speed,
+            // Playing again means we recovered; retire any stale error line.
+            error = if (player.isPlaying) null else _state.value.error,
         )
     }
 

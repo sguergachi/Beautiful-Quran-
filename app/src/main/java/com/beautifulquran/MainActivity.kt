@@ -64,15 +64,21 @@ class MainActivity : ComponentActivity() {
                         val vm: HomeViewModel = viewModel(factory = AppViewModelFactory)
                         HomeScreen(
                             viewModel = vm,
-                            onOpenSurah = { surahId -> navController.navigate("reader/$surahId") },
+                            onOpenSurah = { surahId, ayah ->
+                                navController.navigate(
+                                    if (ayah != null) "reader/$surahId?ayah=$ayah" else "reader/$surahId",
+                                )
+                            },
                         )
                     }
-                    composable("reader/{surahId}") { backStackEntry ->
+                    composable("reader/{surahId}?ayah={ayah}") { backStackEntry ->
                         val surahId =
                             backStackEntry.arguments?.getString("surahId")?.toIntOrNull() ?: 1
+                        val startAyah = backStackEntry.arguments?.getString("ayah")?.toIntOrNull()
                         val vm: ReaderViewModel = viewModel(factory = AppViewModelFactory)
                         ReaderScreen(
                             surahId = surahId,
+                            startAyah = startAyah,
                             viewModel = vm,
                             onBack = { navController.popBackStack() },
                             onOpenSettings = { navController.navigate("settings") },

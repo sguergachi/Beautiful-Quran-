@@ -46,7 +46,7 @@ import com.beautifulquran.ui.theme.verticalFadingEdges
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
-    onOpenSurah: (surahId: Int) -> Unit,
+    onOpenSurah: (surahId: Int, ayah: Int?) -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -131,7 +131,7 @@ fun HomeScreen(
                 item(key = "continue") {
                     ContinueCard(
                         target = target,
-                        onClick = { onOpenSurah(target.surah.id) },
+                        onClick = { onOpenSurah(target.surah.id, target.ayah) },
                     )
                 }
             }
@@ -141,7 +141,7 @@ fun HomeScreen(
             items(count = uiState.surahs.size, key = { uiState.surahs[it].id }) { index ->
                 SurahRow(
                     surah = uiState.surahs[index],
-                    onClick = { onOpenSurah(uiState.surahs[index].id) },
+                    onClick = { onOpenSurah(uiState.surahs[index].id, null) },
                 )
             }
             }

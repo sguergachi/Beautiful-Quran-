@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,11 +39,12 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -56,6 +58,7 @@ private const val ITEMS_BEFORE_AYAHS = 1 // surah header
 @Composable
 fun ReaderScreen(
     surahId: Int,
+    startAyah: Int?,
     viewModel: ReaderViewModel,
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -78,8 +81,9 @@ fun ReaderScreen(
     val activeAyah = if (isThisSurahPlaying) playerState.nowPlaying?.ayah else null
 
     // While reciting, all chrome recedes into the paper — only the words
-    // and the pause button stay present.
-    val chromeAlpha by animateFloatAsState(
+    // and the pause button stay present. Read inside graphicsLayer blocks so
+    // the fade is draw-phase-only.
+    val chromeAlpha = animateFloatAsState(
         targetValue = if (isThisSurahPlaying && playerState.isPlaying) 0.08f else 1f,
         animationSpec = tween(900),
         label = "chromeAlpha",
@@ -119,6 +123,21 @@ fun ReaderScreen(
         }
     }
 
+    // Opening from "Continue listening": settle on the saved ayah once.
+    var didInitialScroll by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(uiState.content) {
+        val content = uiState.content ?: return@LaunchedEffect
+        if (!didInitialScroll) {
+            didInitialScroll = true
+            if (startAyah != null && startAyah in 2..content.ayahs.size) {
+                listState.scrollToItem(
+                    index = startAyah - 1 + ITEMS_BEFORE_AYAHS,
+                    scrollOffset = -topOffsetPx,
+                )
+            }
+        }
+    }
+
     // Errors surface as a quiet line on the sheet, then dissolve.
     LaunchedEffect(playerState.error) {
         if (playerState.error != null) {
@@ -135,7 +154,10 @@ fun ReaderScreen(
             TopAppBar(
                 title = {},
                 navigationIcon = {
-                    IconButton(onClick = onBack, modifier = Modifier.alpha(chromeAlpha)) {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.graphicsLayer { alpha = chromeAlpha.value },
+                    ) {
                         Icon(
                             Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = "Back",
@@ -144,7 +166,10 @@ fun ReaderScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onOpenSettings, modifier = Modifier.alpha(chromeAlpha)) {
+                    IconButton(
+                        onClick = onOpenSettings,
+                        modifier = Modifier.graphicsLayer { alpha = chromeAlpha.value },
+                    ) {
                         Icon(
                             Icons.Rounded.Tune,
                             contentDescription = "Settings",
@@ -192,7 +217,7 @@ fun ReaderScreen(
                 PlayerBar(
                     state = playerState,
                     isThisSurahLoaded = isThisSurahPlaying,
-                    chromeAlpha = chromeAlpha,
+                    chromeAlpha = { chromeAlpha.value },
                     reciterName = uiState.currentReciter?.name.orEmpty(),
                     onPlayPause = {
                         if (isThisSurahPlaying) {
