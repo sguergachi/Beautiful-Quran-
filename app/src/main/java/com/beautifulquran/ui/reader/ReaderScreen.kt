@@ -5,6 +5,8 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
@@ -39,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -69,6 +72,14 @@ fun ReaderScreen(
 
     val isThisSurahPlaying = playerState.nowPlaying?.surahId == surahId
     val activeAyah = if (isThisSurahPlaying) playerState.nowPlaying?.ayah else null
+
+    // While reciting, all chrome recedes into the paper — only the words
+    // and the pause button stay present.
+    val chromeAlpha by animateFloatAsState(
+        targetValue = if (isThisSurahPlaying && playerState.isPlaying) 0.08f else 1f,
+        animationSpec = tween(900),
+        label = "chromeAlpha",
+    )
 
     // Ask for notification permission (playback controls) right before first play.
     val notifPermission = rememberLauncherForActivityResult(
@@ -120,7 +131,7 @@ fun ReaderScreen(
             TopAppBar(
                 title = {},
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = onBack, modifier = Modifier.alpha(chromeAlpha)) {
                         Icon(
                             Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = "Back",
@@ -129,7 +140,7 @@ fun ReaderScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onOpenSettings) {
+                    IconButton(onClick = onOpenSettings, modifier = Modifier.alpha(chromeAlpha)) {
                         Icon(
                             Icons.Rounded.Tune,
                             contentDescription = "Settings",
@@ -177,6 +188,7 @@ fun ReaderScreen(
                 PlayerBar(
                     state = playerState,
                     isThisSurahLoaded = isThisSurahPlaying,
+                    chromeAlpha = chromeAlpha,
                     reciterName = uiState.currentReciter?.name.orEmpty(),
                     onPlayPause = {
                         if (isThisSurahPlaying) {
@@ -237,6 +249,7 @@ fun ReaderScreen(
                     val isActive = activeAyah == ayah.number
                     AyahBlock(
                         ayah = ayah,
+                        readingMode = settings.readingMode,
                         activeWordPosition = if (isActive) {
                             activeWord?.takeIf { it.ayah == ayah.number }?.wordPosition
                         } else {

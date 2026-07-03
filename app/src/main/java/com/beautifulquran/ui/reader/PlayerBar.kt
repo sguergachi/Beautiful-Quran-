@@ -24,6 +24,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
@@ -37,6 +38,7 @@ import com.beautifulquran.playback.PlayerUiState
 fun PlayerBar(
     state: PlayerUiState,
     isThisSurahLoaded: Boolean,
+    chromeAlpha: Float,
     reciterName: String,
     onPlayPause: () -> Unit,
     onPrevious: () -> Unit,
@@ -59,7 +61,12 @@ fun PlayerBar(
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 4.dp),
             ) {
-            TextButton(onClick = onReciterClick, modifier = Modifier.weight(1f)) {
+            TextButton(
+                onClick = onReciterClick,
+                modifier = Modifier
+                    .weight(1f)
+                    .alpha(chromeAlpha),
+            ) {
                 Text(
                     text = reciterName,
                     style = MaterialTheme.typography.labelMedium,
@@ -68,7 +75,11 @@ fun PlayerBar(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            IconButton(onClick = onPrevious, enabled = isThisSurahLoaded) {
+            IconButton(
+                onClick = onPrevious,
+                enabled = isThisSurahLoaded,
+                modifier = Modifier.alpha(chromeAlpha),
+            ) {
                 Icon(
                     Icons.Rounded.SkipPrevious,
                     contentDescription = "Previous ayah",
@@ -95,14 +106,18 @@ fun PlayerBar(
                     )
                 }
             }
-            IconButton(onClick = onNext, enabled = isThisSurahLoaded) {
+            IconButton(
+                onClick = onNext,
+                enabled = isThisSurahLoaded,
+                modifier = Modifier.alpha(chromeAlpha),
+            ) {
                 Icon(
                     Icons.Rounded.SkipNext,
                     contentDescription = "Next ayah",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            IconButton(onClick = onRepeat) {
+            IconButton(onClick = onRepeat, modifier = Modifier.alpha(chromeAlpha)) {
                 Icon(
                     imageVector = if (state.repeatMode == Player.REPEAT_MODE_ONE) {
                         Icons.Rounded.RepeatOne
@@ -117,7 +132,7 @@ fun PlayerBar(
                     },
                 )
             }
-            TextButton(onClick = onSpeed) {
+            TextButton(onClick = onSpeed, modifier = Modifier.alpha(chromeAlpha)) {
                 Text(
                     text = "${if (state.speed % 1f == 0f) state.speed.toInt() else state.speed}×",
                     style = MaterialTheme.typography.labelMedium,

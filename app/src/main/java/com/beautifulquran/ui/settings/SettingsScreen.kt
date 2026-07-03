@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.theme.verticalFadingEdges
 
@@ -128,7 +129,28 @@ fun SettingsScreen(
             }
 
             Spacer(Modifier.height(32.dp))
-            SectionLabel("Arabic text size")
+            SectionLabel("Reading")
+            Spacer(Modifier.height(10.dp))
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                ReadingMode.entries.forEachIndexed { index, mode ->
+                    SegmentedButton(
+                        selected = settings.readingMode == mode,
+                        onClick = { viewModel.settings.update { it.copy(readingMode = mode) } },
+                        shape = SegmentedButtonDefaults.itemShape(index, ReadingMode.entries.size),
+                    ) {
+                        Text(
+                            text = when (mode) {
+                                ReadingMode.ARABIC_ENGLISH -> "Arabic & English"
+                                ReadingMode.ENGLISH_ONLY -> "English"
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+            SectionLabel("Text size")
             Slider(
                 value = settings.fontScale,
                 onValueChange = { v -> viewModel.settings.update { it.copy(fontScale = v) } },
@@ -137,21 +159,23 @@ fun SettingsScreen(
             )
 
             Spacer(Modifier.height(20.dp))
-            SettingToggle(
-                label = "Word-by-word translation",
-                checked = settings.showWordGloss,
-                onChange = { v -> viewModel.settings.update { it.copy(showWordGloss = v) } },
-            )
-            SettingToggle(
-                label = "Transliteration",
-                checked = settings.showTransliteration,
-                onChange = { v -> viewModel.settings.update { it.copy(showTransliteration = v) } },
-            )
-            SettingToggle(
-                label = "Ayah translation",
-                checked = settings.showTranslation,
-                onChange = { v -> viewModel.settings.update { it.copy(showTranslation = v) } },
-            )
+            if (settings.readingMode == ReadingMode.ARABIC_ENGLISH) {
+                SettingToggle(
+                    label = "Word-by-word translation",
+                    checked = settings.showWordGloss,
+                    onChange = { v -> viewModel.settings.update { it.copy(showWordGloss = v) } },
+                )
+                SettingToggle(
+                    label = "Transliteration",
+                    checked = settings.showTransliteration,
+                    onChange = { v -> viewModel.settings.update { it.copy(showTransliteration = v) } },
+                )
+                SettingToggle(
+                    label = "Ayah translation",
+                    checked = settings.showTranslation,
+                    onChange = { v -> viewModel.settings.update { it.copy(showTranslation = v) } },
+                )
+            }
 
             Spacer(Modifier.height(32.dp))
             SectionLabel("Theme")
