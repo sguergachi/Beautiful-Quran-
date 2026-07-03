@@ -1,0 +1,55 @@
+package com.beautifulquran.data
+
+import android.content.Context
+import android.content.SharedPreferences
+import androidx.core.content.edit
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+
+enum class ThemeMode { SYSTEM, LIGHT, DARK }
+
+data class Settings(
+    val reciterId: Int = 1,
+    val fontScale: Float = 1f,
+    val showWordGloss: Boolean = true,
+    val showTransliteration: Boolean = false,
+    val showTranslation: Boolean = true,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val lastSurah: Int = 0,
+    val lastAyah: Int = 1,
+)
+
+class SettingsRepository(context: Context) {
+
+    private val prefs: SharedPreferences =
+        context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+
+    private val _settings = MutableStateFlow(read())
+    val settings: StateFlow<Settings> = _settings
+
+    private fun read() = Settings(
+        reciterId = prefs.getInt("reciterId", 1),
+        fontScale = prefs.getFloat("fontScale", 1f),
+        showWordGloss = prefs.getBoolean("showWordGloss", true),
+        showTransliteration = prefs.getBoolean("showTransliteration", false),
+        showTranslation = prefs.getBoolean("showTranslation", true),
+        themeMode = ThemeMode.entries[prefs.getInt("themeMode", 0)],
+        lastSurah = prefs.getInt("lastSurah", 0),
+        lastAyah = prefs.getInt("lastAyah", 1),
+    )
+
+    fun update(transform: (Settings) -> Settings) {
+        val next = transform(_settings.value)
+        _settings.value = next
+        prefs.edit {
+            putInt("reciterId", next.reciterId)
+            putFloat("fontScale", next.fontScale)
+            putBoolean("showWordGloss", next.showWordGloss)
+            putBoolean("showTransliteration", next.showTransliteration)
+            putBoolean("showTranslation", next.showTranslation)
+            putInt("themeMode", next.themeMode.ordinal)
+            putInt("lastSurah", next.lastSurah)
+            putInt("lastAyah", next.lastAyah)
+        }
+    }
+}

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Rub el Hizb: two overlapping squares forming an 8-pointed star -->
+    <path
+        android:fillColor="#C9A227"
+        android:pathData="M33,33 L75,33 L75,75 L33,75 Z" />
+    <path
+        android:fillColor="#C9A227"
+        android:pathData="M54,24.3 L83.7,54 L54,83.7 L24.3,54 Z" />
+    <path
+        android:fillColor="#0E5C4A"
+        android:pathData="M54,38 A16,16 0 1,1 53.99,38 Z" />
+    <path
+        android:fillColor="#FAF6EF"
+        android:pathData="M54,44 A10,10 0 1,1 53.99,44 Z" />
+</vector>

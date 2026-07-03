@@ -1,0 +1,59 @@
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache source data
+        uses: actions/cache@v4
+        with:
+          path: tools/.cache
+          key: quran-data-${{ hashFiles('tools/build_db.py') }}
+
+      - name: Build Quran database (text + word-by-word + timings)
+        run: python3 tools/build_db.py
+
+      - name: Accept Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      - name: Assemble APK
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk BeautifulQuran.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BeautifulQuran-apk
+          path: BeautifulQuran.apk
+
+      - name: Publish APK to "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --cleanup-tag --yes || true
+          gh release create latest BeautifulQuran.apk \
+            --prerelease \
+            --title "Beautiful Quran — latest build" \
+            --notes "Debug-signed APK built from ${{ github.sha }}. Download on your Android phone and install (allow installs from your browser when prompted)."
