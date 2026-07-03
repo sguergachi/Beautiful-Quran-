@@ -113,21 +113,26 @@ fun ReaderScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
+            // Unread-style chrome: no title (the surah name opens the sheet
+            // itself), just two quiet marks that recede behind the text.
             TopAppBar(
-                title = {
-                    Text(
-                        text = uiState.content?.surah?.nameTransliteration.orEmpty(),
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                },
+                title = {},
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                        )
                     }
                 },
                 actions = {
                     IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Rounded.Tune, contentDescription = "Settings")
+                        Icon(
+                            Icons.Rounded.Tune,
+                            contentDescription = "Settings",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

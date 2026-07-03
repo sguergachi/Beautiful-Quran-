@@ -191,7 +191,7 @@ private fun SurahRow(surah: Surah, onClick: () -> Unit) {
                 indication = null,
                 onClick = onClick,
             )
-            .padding(horizontal = 28.dp, vertical = 13.dp),
+            .padding(horizontal = 28.dp, vertical = 15.dp),
     ) {
         Box(Modifier.width(34.dp)) {
             Text(
@@ -204,7 +204,7 @@ private fun SurahRow(surah: Surah, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(
                 text = surah.nameTransliteration,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp),
                 color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

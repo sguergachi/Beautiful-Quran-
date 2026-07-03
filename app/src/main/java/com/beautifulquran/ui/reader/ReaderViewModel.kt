@@ -61,9 +61,9 @@ class ReaderViewModel(
         .distinctUntilChanged()
         .flatMapLatest { np ->
             if (np == null) {
-                flowOf(null)
+                flowOf<ActiveWord?>(null)
             } else {
-                flow {
+                flow<ActiveWord?> {
                     while (true) {
                         val segments = timings[np.ayah]
                         val pos = segments?.let {

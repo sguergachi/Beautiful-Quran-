@@ -163,7 +163,7 @@ fun AyahBlock(
         modifier = Modifier
             .fillMaxWidth()
             .alpha(blockAlpha)
-            .padding(horizontal = 24.dp, vertical = 14.dp),
+            .padding(horizontal = 28.dp, vertical = 14.dp),
     ) {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
             FlowRow(
@@ -203,6 +203,7 @@ fun AyahBlock(
                 style = MaterialTheme.typography.bodyLarge.copy(
                     fontFamily = TranslationFontFamily,
                     fontSize = MaterialTheme.typography.bodyLarge.fontSize * (0.9f + 0.1f * fontScale),
+                    lineHeight = 26.sp,
                 ),
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
                 modifier = Modifier
