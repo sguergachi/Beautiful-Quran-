@@ -34,9 +34,13 @@ import com.beautifulquran.data.model.Ayah
 import com.beautifulquran.data.model.Word
 import com.beautifulquran.ui.theme.ArabicTitleStyle
 import com.beautifulquran.ui.theme.ArabicWordStyle
+import com.beautifulquran.ui.theme.GildedRosette
 import com.beautifulquran.ui.theme.HafsFontFamily
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.TranslationFontFamily
+import com.beautifulquran.ui.theme.gilded
+import com.beautifulquran.ui.theme.starAndCrossWeave
+import com.beautifulquran.ui.theme.verticalFadingEdges
 
 enum class WordVisualState { Plain, Upcoming, Active, Recited }
 
@@ -149,7 +153,7 @@ fun EnglishWordUnit(
     )
 }
 
-/** Quiet typographic ayah marker: gold ornate brackets, no borders. */
+/** Quiet typographic ayah marker: ornate brackets leafed in gradient gold. */
 @Composable
 fun AyahNumberMark(number: Int, fontScale: Float) {
     val accents = LocalQuranAccents.current
@@ -157,7 +161,11 @@ fun AyahNumberMark(number: Int, fontScale: Float) {
         text = "﴿${number.toArabicIndic()}﴾",
         fontFamily = HafsFontFamily,
         fontSize = 20.sp * fontScale,
-        color = accents.gold.copy(alpha = 0.75f),
+        color = accents.gold,
+        modifier = Modifier.gilded(
+            bright = accents.goldBright.copy(alpha = 0.9f),
+            deep = accents.goldDeep.copy(alpha = 0.9f),
+        ),
     )
 }
 
@@ -275,7 +283,11 @@ fun AyahBlock(
     }
 }
 
-/** Surah opening: quiet centered typography, held by whitespace alone. */
+/**
+ * Surah opening: quiet centered typography over a whisper-faint embossed
+ * star-and-cross weave, crowned by a gilded eight-fold rosette whose sheen
+ * shifts with the page ([sheen] is read at draw time only).
+ */
 @Composable
 fun SurahHeader(
     nameArabic: String,
@@ -283,21 +295,30 @@ fun SurahHeader(
     nameTranslation: String,
     revelationPlace: String,
     ayahCount: Int,
+    sheen: State<Float>,
 ) {
     val accents = LocalQuranAccents.current
+    val weaveFade = MaterialTheme.colorScheme.background
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .fillMaxWidth()
+            .starAndCrossWeave(
+                ink = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.04f),
+                embossLight = accents.embossLight.copy(alpha = 0.05f),
+            )
+            .verticalFadingEdges(color = weaveFade, top = 12.dp, bottom = 36.dp)
             .padding(top = 36.dp, bottom = 30.dp, start = 24.dp, end = 24.dp),
     ) {
-        Text(
-            text = "۞",
-            fontFamily = HafsFontFamily,
-            fontSize = 22.sp,
-            color = accents.gold.copy(alpha = 0.6f),
+        GildedRosette(
+            size = 44.dp,
+            brightGold = accents.goldBright,
+            deepGold = accents.goldDeep,
+            embossDark = accents.embossDark,
+            embossLight = accents.embossLight,
+            sheen = sheen,
         )
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(16.dp))
         Text(
             text = "سُورَةُ $nameArabic",
             style = ArabicTitleStyle,

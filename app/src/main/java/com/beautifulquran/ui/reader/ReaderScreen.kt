@@ -74,6 +74,18 @@ fun ReaderScreen(
     val settings by viewModel.settings.settings.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
+    // Gilding sheen: light catches the header rosette as the page moves.
+    // Derived from scroll and read only at draw time — animates exactly on
+    // scroll frames, costs nothing at rest.
+    val sheen = remember {
+        derivedStateOf {
+            if (listState.firstVisibleItemIndex == 0) {
+                0.15f + 0.7f * (listState.firstVisibleItemScrollOffset / 900f).coerceIn(0f, 1f)
+            } else {
+                0.85f
+            }
+        }
+    }
     var followEnabled by remember { mutableStateOf(true) }
     var programmaticScroll by remember { mutableStateOf(false) }
 

@@ -68,6 +68,31 @@ Reference points: **Unread** (iOS RSS reader) for chrome-free typographic
 lists and reading view; **Apple Music lyrics** for the word illumination and
 the recede-while-playing behavior.
 
+## Ornament
+
+Traditional, geometric, and nearly invisible — ornament whispers, never
+speaks. All of it is drawn procedurally (`ui/theme/Ornament.kt`), never an
+image, so it is crisp at any density and nearly free to render.
+
+- **Khatam geometry.** The vocabulary is the classical eight-fold star: two
+  overlapped squares, and the {8/3} octagram — the same figures that
+  generate star-and-cross tessellation in traditional tilework.
+- **Gilding.** Gold is never a flat color. Gilded elements (the surah
+  rosette, ayah number marks, the home mark) carry a three-stop leaf
+  gradient (deep bronze → bright gilt → deep bronze). On the reader, the
+  gradient's lighting axis tilts with page scroll, so light appears to catch
+  the leaf as the sheet moves — computed at draw time only, animating
+  exclusively on scroll frames.
+- **Embossing.** Ornament is pressed into the paper: each figure is drawn
+  with a dark copy nudged to the lower-right and a light copy to the
+  upper-left beneath its face — relief under a top-left light, subtle enough
+  to be felt more than seen.
+- **The weave.** Behind each surah opening, a star-and-cross tessellation at
+  ~4 % ink, embossed, dissolving into the page at its edges.
+- **Restraint rule:** ornament appears in exactly three places — the surah
+  header (rosette + weave), ayah number marks, and the home title mark.
+  Nothing else on the sheet is decorated.
+
 ## Motion
 
 - Everything ≤ 400 ms except the two deliberate slow moves: chrome recede

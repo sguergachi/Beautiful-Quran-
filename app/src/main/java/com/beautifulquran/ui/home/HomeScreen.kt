@@ -29,6 +29,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.data.model.Surah
 import com.beautifulquran.ui.theme.ArabicTitleStyle
+import com.beautifulquran.ui.theme.GildedRosette
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.verticalFadingEdges
 
@@ -66,21 +68,38 @@ fun HomeScreen(
                 contentPadding = PaddingValues(bottom = 48.dp),
             ) {
             item(key = "title") {
-                Column(Modifier.padding(horizontal = 28.dp)) {
-                    Spacer(Modifier.height(30.dp))
-                    Text(
-                        text = "القرآن الكريم",
-                        style = ArabicTitleStyle,
-                        fontSize = 36.sp,
-                        color = MaterialTheme.colorScheme.onBackground,
+                val accents = LocalQuranAccents.current
+                val titleSheen = remember { mutableStateOf(0.35f) }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 28.dp),
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Spacer(Modifier.height(30.dp))
+                        Text(
+                            text = "القرآن الكريم",
+                            style = ArabicTitleStyle,
+                            fontSize = 36.sp,
+                            color = MaterialTheme.colorScheme.onBackground,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = "Beautiful Quran",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        )
+                        Spacer(Modifier.height(24.dp))
+                    }
+                    GildedRosette(
+                        size = 30.dp,
+                        brightGold = accents.goldBright,
+                        deepGold = accents.goldDeep,
+                        embossDark = accents.embossDark,
+                        embossLight = accents.embossLight,
+                        sheen = titleSheen,
                     )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = "Beautiful Quran",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    )
-                    Spacer(Modifier.height(24.dp))
                 }
             }
 

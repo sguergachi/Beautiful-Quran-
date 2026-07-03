@@ -27,13 +27,28 @@ private val Parchment = Color(0xFFE8E2D5)
 private val ParchmentMuted = Color(0xFF97917F)
 private val SoftGreen = Color(0xFF7FB8A4)
 
-/** Accent colors that sit outside the Material scheme. */
+/**
+ * Accent colors that sit outside the Material scheme.
+ * Gold is never flat: [goldBright]/[goldDeep] are the gilding gradient stops,
+ * and [embossDark]/[embossLight] are the relief shadows for ornament pressed
+ * into the paper (light from the upper-left).
+ */
 data class QuranAccents(
     val gold: Color,
+    val goldBright: Color,
+    val goldDeep: Color,
+    val embossDark: Color,
+    val embossLight: Color,
 )
 
 val LocalQuranAccents = staticCompositionLocalOf {
-    QuranAccents(gold = Color(0xFFC9A227))
+    QuranAccents(
+        gold = Color(0xFFC9A227),
+        goldBright = Color(0xFFE9CD7A),
+        goldDeep = Color(0xFF8A6B1E),
+        embossDark = Color(0x24000000),
+        embossLight = Color(0x59FFFFFF),
+    )
 }
 
 private val LightColors: ColorScheme = lightColorScheme(
@@ -74,9 +89,21 @@ private val DarkColors: ColorScheme = darkColorScheme(
     surfaceContainerHighest = Color(0xFF31352C),
 )
 
-private val LightAccents = QuranAccents(gold = Color(0xFFB8901C))
+private val LightAccents = QuranAccents(
+    gold = Color(0xFFB8901C),
+    goldBright = Color(0xFFE9CD7A),
+    goldDeep = Color(0xFF8A6B1E),
+    embossDark = Color(0x24000000),
+    embossLight = Color(0x59FFFFFF),
+)
 
-private val DarkAccents = QuranAccents(gold = Color(0xFFD9B44A))
+private val DarkAccents = QuranAccents(
+    gold = Color(0xFFD9B44A),
+    goldBright = Color(0xFFEDD188),
+    goldDeep = Color(0xFF9A7B2A),
+    embossDark = Color(0x66000000),
+    embossLight = Color(0x1FFFFFFF),
+)
 
 @Composable
 fun BeautifulQuranTheme(
