@@ -1,67 +1,108 @@
-package com.beautifulquran.ui.reader
+package com.beautifulquran.ui.settings
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.data.ThemeMode
+import com.beautifulquran.ui.theme.verticalFadingEdges
 
+private val ATTRIBUTIONS = """
+Quran text (Uthmani script) and Saheeh International translation via the quran-json project, from Tanzil and Al Quran Cloud.
+
+Word-by-word translation and transliteration from the Quran.com dataset.
+
+Word-level audio timing data © the quran-align project contributors, CC-BY 4.0.
+
+Recitation audio streamed from everyayah.com. All rights to the recitations belong to the respective reciters.
+
+Arabic typeface: KFGQPC HAFS Uthmanic Script © King Fahd Glorious Quran Printing Complex, Madinah.
+
+This app is free, ad-free, and collects no data.
+""".trimIndent()
+
+/** Settings as its own sheet of paper — a full page, nothing floating. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsSheet(
-    viewModel: ReaderViewModel,
-    uiState: ReaderUiState,
-    onDismiss: () -> Unit,
+fun SettingsScreen(
+    viewModel: SettingsViewModel,
+    onBack: () -> Unit,
 ) {
     val settings by viewModel.settings.settings.collectAsStateWithLifecycle()
-    var showAttributions by remember { mutableStateOf(false) }
+    val reciters by viewModel.reciters.collectAsStateWithLifecycle()
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = { Text("Settings", style = MaterialTheme.typography.titleLarge) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                ),
+            )
+        },
+    ) { padding ->
         Column(
             modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .verticalFadingEdges(top = 24.dp, bottom = 40.dp)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp),
+                .padding(horizontal = 28.dp),
         ) {
-            Text("Reciter", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(4.dp))
-            uiState.reciters.forEach { reciter ->
+            Spacer(Modifier.height(8.dp))
+
+            SectionLabel("Reciter")
+            reciters.forEach { reciter ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { viewModel.switchReciter(reciter) }
-                        .padding(vertical = 2.dp),
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { viewModel.selectReciter(reciter) }
+                        .padding(vertical = 4.dp),
                 ) {
                     RadioButton(
-                        selected = reciter.id == (uiState.currentReciter?.id ?: -1),
-                        onClick = { viewModel.switchReciter(reciter) },
+                        selected = reciter.id == settings.reciterId,
+                        onClick = { viewModel.selectReciter(reciter) },
                     )
                     Column {
                         Text(reciter.name, style = MaterialTheme.typography.bodyLarge)
@@ -69,16 +110,15 @@ fun SettingsSheet(
                             Text(
                                 "No word highlighting",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                             )
                         }
                     }
                 }
             }
 
-            Spacer(Modifier.height(28.dp))
-
-            Text("Arabic text size", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(32.dp))
+            SectionLabel("Arabic text size")
             Slider(
                 value = settings.fontScale,
                 onValueChange = { v -> viewModel.settings.update { it.copy(fontScale = v) } },
@@ -86,6 +126,7 @@ fun SettingsSheet(
                 steps = 7,
             )
 
+            Spacer(Modifier.height(20.dp))
             SettingToggle(
                 label = "Word-by-word translation",
                 checked = settings.showWordGloss,
@@ -102,9 +143,9 @@ fun SettingsSheet(
                 onChange = { v -> viewModel.settings.update { it.copy(showTranslation = v) } },
             )
 
-            Spacer(Modifier.height(16.dp))
-            Text("Theme", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(32.dp))
+            SectionLabel("Theme")
+            Spacer(Modifier.height(10.dp))
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 ThemeMode.entries.forEachIndexed { index, mode ->
                     SegmentedButton(
@@ -120,21 +161,26 @@ fun SettingsSheet(
                 }
             }
 
-            Spacer(Modifier.height(20.dp))
-            Row(
-                horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                TextButton(onClick = { showAttributions = true }) {
-                    Text("About & attributions")
-                }
-            }
+            Spacer(Modifier.height(48.dp))
+            SectionLabel("About & attributions")
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = ATTRIBUTIONS,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+            )
+            Spacer(Modifier.height(56.dp))
         }
     }
+}
 
-    if (showAttributions) {
-        AttributionsDialog(onDismiss = { showAttributions = false })
-    }
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+    )
 }
 
 @Composable
@@ -144,7 +190,7 @@ private fun SettingToggle(label: String, checked: Boolean, onChange: (Boolean) -
         horizontalArrangement = Arrangement.SpaceBetween,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 6.dp),
     ) {
         Text(label, style = MaterialTheme.typography.bodyLarge)
         Switch(checked = checked, onCheckedChange = onChange)

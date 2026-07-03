@@ -4,6 +4,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -17,6 +20,8 @@ import com.beautifulquran.ui.home.HomeScreen
 import com.beautifulquran.ui.home.HomeViewModel
 import com.beautifulquran.ui.reader.ReaderScreen
 import com.beautifulquran.ui.reader.ReaderViewModel
+import com.beautifulquran.ui.settings.SettingsScreen
+import com.beautifulquran.ui.settings.SettingsViewModel
 import com.beautifulquran.ui.theme.BeautifulQuranTheme
 
 class MainActivity : ComponentActivity() {
@@ -33,10 +38,16 @@ class MainActivity : ComponentActivity() {
 
             BeautifulQuranTheme(themeMode = settings.themeMode) {
                 val navController = rememberNavController()
+                // Sheets are single planes viewed one at a time: navigation
+                // dissolves one sheet into the next, nothing slides or stacks.
                 NavHost(
                     navController = navController,
                     startDestination = "home",
                     modifier = Modifier,
+                    enterTransition = { fadeIn(tween(350)) },
+                    exitTransition = { fadeOut(tween(350)) },
+                    popEnterTransition = { fadeIn(tween(350)) },
+                    popExitTransition = { fadeOut(tween(350)) },
                 ) {
                     composable("home") {
                         val vm: HomeViewModel = viewModel(factory = AppViewModelFactory)
@@ -51,6 +62,14 @@ class MainActivity : ComponentActivity() {
                         val vm: ReaderViewModel = viewModel(factory = AppViewModelFactory)
                         ReaderScreen(
                             surahId = surahId,
+                            viewModel = vm,
+                            onBack = { navController.popBackStack() },
+                            onOpenSettings = { navController.navigate("settings") },
+                        )
+                    }
+                    composable("settings") {
+                        val vm: SettingsViewModel = viewModel(factory = AppViewModelFactory)
+                        SettingsScreen(
                             viewModel = vm,
                             onBack = { navController.popBackStack() },
                         )

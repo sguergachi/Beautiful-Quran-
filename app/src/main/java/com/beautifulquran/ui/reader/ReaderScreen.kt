@@ -7,28 +7,24 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -37,18 +33,18 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.ui.theme.verticalFadingEdges
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
-private const val ITEMS_BEFORE_AYAHS = 1 // surah header card
+private const val ITEMS_BEFORE_AYAHS = 1 // surah header
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +52,7 @@ fun ReaderScreen(
     surahId: Int,
     viewModel: ReaderViewModel,
     onBack: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     LaunchedEffect(surahId) { viewModel.load(surahId) }
 
@@ -65,9 +62,6 @@ fun ReaderScreen(
     val settings by viewModel.settings.settings.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
-    val snackbar = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    var showSettings by remember { mutableStateOf(false) }
     var followEnabled by remember { mutableStateOf(true) }
     var programmaticScroll by remember { mutableStateOf(false) }
 
@@ -84,7 +78,7 @@ fun ReaderScreen(
         }
     }
 
-    // Disable follow mode when the user scrolls by hand.
+    // Reading by hand pauses the follow mode.
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
             if (scrolling && !programmaticScroll) followEnabled = false
@@ -108,16 +102,16 @@ fun ReaderScreen(
         }
     }
 
+    // Errors surface as a quiet line on the sheet, then dissolve.
     LaunchedEffect(playerState.error) {
-        playerState.error?.let {
-            snackbar.showSnackbar(it)
+        if (playerState.error != null) {
+            delay(5_000)
             viewModel.player.clearError()
         }
     }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = {
@@ -132,7 +126,7 @@ fun ReaderScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showSettings = true }) {
+                    IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Rounded.Tune, contentDescription = "Settings")
                     }
                 },
@@ -142,25 +136,57 @@ fun ReaderScreen(
             )
         },
         bottomBar = {
-            PlayerBar(
-                state = playerState,
-                isThisSurahLoaded = isThisSurahPlaying,
-                reciterName = uiState.currentReciter?.name.orEmpty(),
-                onPlayPause = {
-                    if (isThisSurahPlaying) {
-                        viewModel.player.togglePlayPause()
-                    } else {
-                        ensureNotifPermission()
-                        followEnabled = true
-                        viewModel.playFromAyah(1)
+            Column {
+                // In-plane status line: an error, or the way back to following
+                // the recitation. Part of the sheet, nothing floats.
+                val statusText = playerState.error
+                    ?: "Return to the recitation".takeIf {
+                        !followEnabled && isThisSurahPlaying && playerState.isPlaying
                     }
-                },
-                onPrevious = viewModel.player::previous,
-                onNext = viewModel.player::next,
-                onRepeat = viewModel::cycleRepeatMode,
-                onSpeed = viewModel::cycleSpeed,
-                onReciterClick = { showSettings = true },
-            )
+                AnimatedVisibility(
+                    visible = statusText != null,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                ) {
+                    Text(
+                        text = statusText.orEmpty(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (playerState.error != null) {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        } else {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+                        },
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                enabled = playerState.error == null,
+                            ) { followEnabled = true }
+                            .padding(vertical = 6.dp),
+                    )
+                }
+                PlayerBar(
+                    state = playerState,
+                    isThisSurahLoaded = isThisSurahPlaying,
+                    reciterName = uiState.currentReciter?.name.orEmpty(),
+                    onPlayPause = {
+                        if (isThisSurahPlaying) {
+                            viewModel.player.togglePlayPause()
+                        } else {
+                            ensureNotifPermission()
+                            followEnabled = true
+                            viewModel.playFromAyah(1)
+                        }
+                    },
+                    onPrevious = viewModel.player::previous,
+                    onNext = viewModel.player::next,
+                    onRepeat = viewModel::cycleRepeatMode,
+                    onSpeed = viewModel::cycleSpeed,
+                    onReciterClick = onOpenSettings,
+                )
+            }
         },
     ) { padding ->
         val content = uiState.content
@@ -171,106 +197,59 @@ fun ReaderScreen(
             return@Scaffold
         }
 
-        Box(Modifier.padding(padding)) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalFadingEdges(top = 32.dp, bottom = 64.dp),
-            ) {
-                item(key = "header") {
-                    SurahHeader(
-                        nameArabic = content.surah.nameArabic,
-                        nameTransliteration = content.surah.nameTransliteration,
-                        nameTranslation = content.surah.nameTranslation,
-                        revelationPlace = content.surah.revelationPlace,
-                        ayahCount = content.surah.ayahCount,
-                    )
-                }
-                items(
-                    count = content.ayahs.size,
-                    key = { content.ayahs[it].number },
-                ) { index ->
-                    val ayah = content.ayahs[index]
-                    val isActive = activeAyah == ayah.number
-                    AyahBlock(
-                        ayah = ayah,
-                        activeWordPosition = if (isActive) {
-                            activeWord?.takeIf { it.ayah == ayah.number }?.wordPosition
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .verticalFadingEdges(top = 32.dp, bottom = 64.dp),
+        ) {
+            item(key = "header") {
+                SurahHeader(
+                    nameArabic = content.surah.nameArabic,
+                    nameTransliteration = content.surah.nameTransliteration,
+                    nameTranslation = content.surah.nameTranslation,
+                    revelationPlace = content.surah.revelationPlace,
+                    ayahCount = content.surah.ayahCount,
+                )
+            }
+            items(
+                count = content.ayahs.size,
+                key = { content.ayahs[it].number },
+            ) { index ->
+                val ayah = content.ayahs[index]
+                val isActive = activeAyah == ayah.number
+                AyahBlock(
+                    ayah = ayah,
+                    activeWordPosition = if (isActive) {
+                        activeWord?.takeIf { it.ayah == ayah.number }?.wordPosition
+                    } else {
+                        null
+                    },
+                    isActiveAyah = isActive,
+                    dimmed = isThisSurahPlaying && playerState.isPlaying && !isActive,
+                    fontScale = settings.fontScale,
+                    showGloss = settings.showWordGloss,
+                    showTransliteration = settings.showTransliteration,
+                    showTranslation = settings.showTranslation,
+                    onWordClick = { word ->
+                        val segment = viewModel.segmentsFor(ayah.number)
+                            ?.firstOrNull { it.position == word.position }
+                        if (isThisSurahPlaying && segment != null) {
+                            viewModel.player.seekToWord(ayah.number, segment.startMs)
                         } else {
-                            null
-                        },
-                        isActiveAyah = isActive,
-                        dimmed = isThisSurahPlaying && playerState.isPlaying && !isActive,
-                        fontScale = settings.fontScale,
-                        showGloss = settings.showWordGloss,
-                        showTransliteration = settings.showTransliteration,
-                        showTranslation = settings.showTranslation,
-                        onWordClick = { word ->
-                            val segment = viewModel.segmentsFor(ayah.number)
-                                ?.firstOrNull { it.position == word.position }
-                            if (isThisSurahPlaying && segment != null) {
-                                viewModel.player.seekToWord(ayah.number, segment.startMs)
-                            } else {
-                                ensureNotifPermission()
-                                followEnabled = true
-                                viewModel.playFromAyah(ayah.number)
-                            }
-                        },
-                        onAyahClick = {
                             ensureNotifPermission()
                             followEnabled = true
                             viewModel.playFromAyah(ayah.number)
-                        },
-                    )
-                }
-            }
-
-            AnimatedVisibility(
-                visible = !followEnabled && isThisSurahPlaying && playerState.isPlaying,
-                enter = fadeIn() + slideInVertically { it / 2 },
-                exit = fadeOut() + slideOutVertically { it / 2 },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 16.dp),
-            ) {
-                ExtendedFloatingActionButton(
-                    onClick = {
-                        followEnabled = true
-                        activeAyah?.let { ayah ->
-                            scope.launch {
-                                programmaticScroll = true
-                                try {
-                                    listState.animateScrollToItem(
-                                        index = ayah - 1 + ITEMS_BEFORE_AYAHS,
-                                        scrollOffset = -topOffsetPx,
-                                    )
-                                } finally {
-                                    programmaticScroll = false
-                                }
-                            }
                         }
                     },
-                    icon = { Icon(Icons.Rounded.ArrowDownward, contentDescription = null) },
-                    text = { Text("Follow along") },
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    elevation = FloatingActionButtonDefaults.elevation(
-                        defaultElevation = 0.dp,
-                        pressedElevation = 0.dp,
-                        focusedElevation = 0.dp,
-                        hoveredElevation = 0.dp,
-                    ),
+                    onAyahClick = {
+                        ensureNotifPermission()
+                        followEnabled = true
+                        viewModel.playFromAyah(ayah.number)
+                    },
                 )
             }
         }
-    }
-
-    if (showSettings) {
-        SettingsSheet(
-            viewModel = viewModel,
-            uiState = uiState,
-            onDismiss = { showSettings = false },
-        )
     }
 }

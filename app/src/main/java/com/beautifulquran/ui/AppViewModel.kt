@@ -6,6 +6,7 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import com.beautifulquran.QuranApp
 import com.beautifulquran.ui.home.HomeViewModel
 import com.beautifulquran.ui.reader.ReaderViewModel
+import com.beautifulquran.ui.settings.SettingsViewModel
 
 /** Tiny hand-rolled DI: ViewModel factory backed by the Application singletons. */
 object AppViewModelFactory : ViewModelProvider.Factory {
@@ -18,6 +19,8 @@ object AppViewModelFactory : ViewModelProvider.Factory {
                 HomeViewModel(app.repository, app.settings) as T
             modelClass.isAssignableFrom(ReaderViewModel::class.java) ->
                 ReaderViewModel(app.repository, app.settings, app.player) as T
+            modelClass.isAssignableFrom(SettingsViewModel::class.java) ->
+                SettingsViewModel(app.repository, app.settings) as T
             else -> throw IllegalArgumentException("Unknown ViewModel: $modelClass")
         }
     }

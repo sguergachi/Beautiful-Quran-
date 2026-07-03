@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -77,6 +78,18 @@ class ReaderViewModel(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(1_000), null)
 
+    init {
+        // React when the reciter is changed on the settings sheet: reload the
+        // timing data and, if this surah is playing, continue with the new voice.
+        viewModelScope.launch {
+            settings.settings
+                .map { it.reciterId }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { onReciterChanged() }
+        }
+    }
+
     fun load(surahId: Int) {
         if (this.surahId == surahId && _uiState.value.content != null) return
         this.surahId = surahId
@@ -91,6 +104,21 @@ class ReaderViewModel(
                 hasTimings = timings.isNotEmpty(),
                 isLoading = false,
             )
+        }
+    }
+
+    private suspend fun onReciterChanged() {
+        if (surahId == 0) return
+        val reciters = _uiState.value.reciters.ifEmpty { repository.reciters() }
+        val reciter = currentReciter(reciters)
+        timings = if (reciter.hasTimings) repository.timings(reciter.id, surahId) else emptyMap()
+        _uiState.value = _uiState.value.copy(
+            currentReciter = reciter,
+            hasTimings = timings.isNotEmpty(),
+        )
+        val np = player.state.value.nowPlaying
+        if (np != null && np.surahId == surahId && np.reciterId != reciter.id) {
+            playFromAyah(np.ayah)
         }
     }
 
@@ -120,22 +148,6 @@ class ReaderViewModel(
 
     private fun rememberPosition(ayah: Int) {
         settings.update { it.copy(lastSurah = surahId, lastAyah = ayah) }
-    }
-
-    fun switchReciter(reciter: Reciter) {
-        settings.update { it.copy(reciterId = reciter.id) }
-        viewModelScope.launch {
-            timings = if (reciter.hasTimings) repository.timings(reciter.id, surahId) else emptyMap()
-            _uiState.value = _uiState.value.copy(
-                currentReciter = reciter,
-                hasTimings = timings.isNotEmpty(),
-            )
-            // If this surah is playing, restart the current ayah with the new voice.
-            val np = player.state.value.nowPlaying
-            if (np != null && np.surahId == surahId) {
-                playFromAyah(np.ayah)
-            }
-        }
     }
 
     fun cycleRepeatMode() {
