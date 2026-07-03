@@ -121,10 +121,24 @@ def load_wbw(tgz: Path):
 def load_timings(zip_path: Path, slug: str):
     """Return {(surah, ayah): [[word_idx0, start_ms, end_ms], ...]} for a reciter."""
     with zipfile.ZipFile(zip_path) as zf:
-        cand = [n for n in zf.namelist() if slug.lower() in n.lower() and n.endswith(".json")]
+        cand = [
+            n
+            for n in zf.namelist()
+            if slug.lower() in n.lower()
+            and n.endswith(".json")
+            and not n.startswith("__MACOSX")
+            and not n.rsplit("/", 1)[-1].startswith("._")
+        ]
         if not cand:
             return None
-        raw = json.loads(zf.read(cand[0]))
+        # Prefer an exact "<slug>.json" basename over looser matches.
+        cand.sort(key=lambda n: (n.rsplit("/", 1)[-1].lower() != f"{slug.lower()}.json", len(n)))
+        payload = zf.read(cand[0]).decode("utf-8-sig")
+        try:
+            raw = json.loads(payload)
+        except json.JSONDecodeError:
+            print(f"  !! cannot parse {cand[0]}; head: {payload[:120]!r}", file=sys.stderr)
+            raise
     out = {}
     entries = raw if isinstance(raw, list) else raw.get("data", [])
     for e in entries:
