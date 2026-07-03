@@ -280,6 +280,7 @@ fun ReaderScreen(
                         nameTranslation = content.surah.nameTranslation,
                         revelationPlace = content.surah.revelationPlace,
                         ayahCount = content.surah.ayahCount,
+                        sheen = sheen,
                     )
                 }
                 items(
