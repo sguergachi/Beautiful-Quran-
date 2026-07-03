@@ -1,9 +1,12 @@
 package com.beautifulquran.ui.reader
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -21,6 +24,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import com.beautifulquran.playback.PlayerUiState
@@ -42,18 +46,26 @@ fun PlayerBar(
     onReciterClick: () -> Unit,
 ) {
     Surface(color = MaterialTheme.colorScheme.background) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
+        Box(
+            Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 4.dp),
+                .navigationBarsPadding(),
         ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .widthIn(max = 680.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+            ) {
             TextButton(onClick = onReciterClick, modifier = Modifier.weight(1f)) {
                 Text(
                     text = reciterName,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    maxLines = 2,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             IconButton(onClick = onPrevious, enabled = isThisSurahLoaded) {
@@ -115,6 +127,7 @@ fun PlayerBar(
                         MaterialTheme.colorScheme.primary
                     },
                 )
+            }
             }
         }
     }

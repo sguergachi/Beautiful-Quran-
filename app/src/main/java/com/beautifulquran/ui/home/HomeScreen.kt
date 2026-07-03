@@ -8,11 +8,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -49,13 +51,20 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
-        LazyColumn(
-            modifier = Modifier
+        Box(
+            Modifier
                 .padding(padding)
-                .fillMaxSize()
-                .verticalFadingEdges(top = 24.dp, bottom = 48.dp),
-            contentPadding = PaddingValues(bottom = 48.dp),
+                .fillMaxSize(),
         ) {
+            LazyColumn(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxHeight()
+                    .widthIn(max = 640.dp)
+                    .fillMaxWidth()
+                    .verticalFadingEdges(top = 24.dp, bottom = 48.dp),
+                contentPadding = PaddingValues(bottom = 48.dp),
+            ) {
             item(key = "title") {
                 Column(Modifier.padding(horizontal = 28.dp)) {
                     Spacer(Modifier.height(30.dp))
@@ -134,6 +143,7 @@ fun HomeScreen(
                     surah = uiState.surahs[index],
                     onClick = { onOpenSurah(uiState.surahs[index].id) },
                 )
+            }
             }
         }
     }

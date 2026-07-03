@@ -7,6 +7,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -38,16 +40,25 @@ class MainActivity : ComponentActivity() {
 
             BeautifulQuranTheme(themeMode = settings.themeMode) {
                 val navController = rememberNavController()
-                // Sheets are single planes viewed one at a time: navigation
-                // dissolves one sheet into the next, nothing slides or stacks.
+                // Sheets are single planes viewed one at a time: the next
+                // sheet glides in from the side while the old one drifts away,
+                // both softened with a fade so nothing feels stacked.
                 NavHost(
                     navController = navController,
                     startDestination = "home",
                     modifier = Modifier,
-                    enterTransition = { fadeIn(tween(350)) },
-                    exitTransition = { fadeOut(tween(350)) },
-                    popEnterTransition = { fadeIn(tween(350)) },
-                    popExitTransition = { fadeOut(tween(350)) },
+                    enterTransition = {
+                        slideInHorizontally(tween(380)) { it / 4 } + fadeIn(tween(380))
+                    },
+                    exitTransition = {
+                        slideOutHorizontally(tween(380)) { -it / 4 } + fadeOut(tween(380))
+                    },
+                    popEnterTransition = {
+                        slideInHorizontally(tween(380)) { -it / 4 } + fadeIn(tween(380))
+                    },
+                    popExitTransition = {
+                        slideOutHorizontally(tween(380)) { it / 4 } + fadeOut(tween(380))
+                    },
                 ) {
                     composable("home") {
                         val vm: HomeViewModel = viewModel(factory = AppViewModelFactory)

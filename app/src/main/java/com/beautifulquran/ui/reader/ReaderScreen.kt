@@ -11,9 +11,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -202,58 +204,68 @@ fun ReaderScreen(
             return@Scaffold
         }
 
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
+        // One column of text at a book-like measure: full-bleed on phones,
+        // centered with air on tablets and in landscape.
+        Box(
+            Modifier
                 .padding(padding)
-                .fillMaxSize()
-                .verticalFadingEdges(top = 32.dp, bottom = 64.dp),
+                .fillMaxSize(),
         ) {
-            item(key = "header") {
-                SurahHeader(
-                    nameArabic = content.surah.nameArabic,
-                    nameTransliteration = content.surah.nameTransliteration,
-                    nameTranslation = content.surah.nameTranslation,
-                    revelationPlace = content.surah.revelationPlace,
-                    ayahCount = content.surah.ayahCount,
-                )
-            }
-            items(
-                count = content.ayahs.size,
-                key = { content.ayahs[it].number },
-            ) { index ->
-                val ayah = content.ayahs[index]
-                val isActive = activeAyah == ayah.number
-                AyahBlock(
-                    ayah = ayah,
-                    activeWordPosition = if (isActive) {
-                        activeWord?.takeIf { it.ayah == ayah.number }?.wordPosition
-                    } else {
-                        null
-                    },
-                    isActiveAyah = isActive,
-                    dimmed = isThisSurahPlaying && playerState.isPlaying && !isActive,
-                    fontScale = settings.fontScale,
-                    showGloss = settings.showWordGloss,
-                    showTransliteration = settings.showTransliteration,
-                    showTranslation = settings.showTranslation,
-                    onWordClick = { word ->
-                        val segment = viewModel.segmentsFor(ayah.number)
-                            ?.firstOrNull { it.position == word.position }
-                        if (isThisSurahPlaying && segment != null) {
-                            viewModel.player.seekToWord(ayah.number, segment.startMs)
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxHeight()
+                    .widthIn(max = 680.dp)
+                    .fillMaxWidth()
+                    .verticalFadingEdges(top = 32.dp, bottom = 64.dp),
+            ) {
+                item(key = "header") {
+                    SurahHeader(
+                        nameArabic = content.surah.nameArabic,
+                        nameTransliteration = content.surah.nameTransliteration,
+                        nameTranslation = content.surah.nameTranslation,
+                        revelationPlace = content.surah.revelationPlace,
+                        ayahCount = content.surah.ayahCount,
+                    )
+                }
+                items(
+                    count = content.ayahs.size,
+                    key = { content.ayahs[it].number },
+                ) { index ->
+                    val ayah = content.ayahs[index]
+                    val isActive = activeAyah == ayah.number
+                    AyahBlock(
+                        ayah = ayah,
+                        activeWordPosition = if (isActive) {
+                            activeWord?.takeIf { it.ayah == ayah.number }?.wordPosition
                         } else {
+                            null
+                        },
+                        isActiveAyah = isActive,
+                        dimmed = isThisSurahPlaying && playerState.isPlaying && !isActive,
+                        fontScale = settings.fontScale,
+                        showGloss = settings.showWordGloss,
+                        showTransliteration = settings.showTransliteration,
+                        showTranslation = settings.showTranslation,
+                        onWordClick = { word ->
+                            val segment = viewModel.segmentsFor(ayah.number)
+                                ?.firstOrNull { it.position == word.position }
+                            if (isThisSurahPlaying && segment != null) {
+                                viewModel.player.seekToWord(ayah.number, segment.startMs)
+                            } else {
+                                ensureNotifPermission()
+                                followEnabled = true
+                                viewModel.playFromAyah(ayah.number)
+                            }
+                        },
+                        onAyahClick = {
                             ensureNotifPermission()
                             followEnabled = true
                             viewModel.playFromAyah(ayah.number)
-                        }
-                    },
-                    onAyahClick = {
-                        ensureNotifPermission()
-                        followEnabled = true
-                        viewModel.playFromAyah(ayah.number)
-                    },
-                )
+                        },
+                    )
+            }
             }
         }
     }

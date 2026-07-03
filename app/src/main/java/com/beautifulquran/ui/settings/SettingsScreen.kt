@@ -3,13 +3,16 @@ package com.beautifulquran.ui.settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -78,14 +81,21 @@ fun SettingsScreen(
             )
         },
     ) { padding ->
-        Column(
-            modifier = Modifier
+        Box(
+            Modifier
                 .padding(padding)
-                .fillMaxSize()
-                .verticalFadingEdges(top = 24.dp, bottom = 40.dp)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 28.dp),
+                .fillMaxSize(),
         ) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxHeight()
+                    .widthIn(max = 640.dp)
+                    .fillMaxWidth()
+                    .verticalFadingEdges(top = 24.dp, bottom = 40.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 28.dp),
+            ) {
             Spacer(Modifier.height(8.dp))
 
             SectionLabel("Reciter")
@@ -170,6 +180,7 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
             )
             Spacer(Modifier.height(56.dp))
+            }
         }
     }
 }
