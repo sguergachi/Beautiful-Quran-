@@ -22,6 +22,7 @@ import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.beautifulquran.ui.theme.verticalFadingEdges
 import kotlinx.coroutines.launch
 
 private const val ITEMS_BEFORE_AYAHS = 1 // surah header card
@@ -170,7 +172,12 @@ fun ReaderScreen(
         }
 
         Box(Modifier.padding(padding)) {
-            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalFadingEdges(top = 32.dp, bottom = 64.dp),
+            ) {
                 item(key = "header") {
                     SurahHeader(
                         nameArabic = content.surah.nameArabic,
@@ -246,8 +253,14 @@ fun ReaderScreen(
                     },
                     icon = { Icon(Icons.Rounded.ArrowDownward, contentDescription = null) },
                     text = { Text("Follow along") },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    elevation = FloatingActionButtonDefaults.elevation(
+                        defaultElevation = 0.dp,
+                        pressedElevation = 0.dp,
+                        focusedElevation = 0.dp,
+                        hoveredElevation = 0.dp,
+                    ),
                 )
             }
         }

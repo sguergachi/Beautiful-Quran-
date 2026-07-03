@@ -84,14 +84,14 @@ private val DarkColors: ColorScheme = darkColorScheme(
 
 private val LightAccents = QuranAccents(
     gold = Color(0xFFB8901C),
-    goldWash = Color(0x33C9A227),
+    goldWash = Color(0x24C9A227),
     recitedInk = DeepGreen,
     divider = Color(0x1F1C1B18),
 )
 
 private val DarkAccents = QuranAccents(
     gold = Color(0xFFD9B44A),
-    goldWash = Color(0x40D9B44A),
+    goldWash = Color(0x30D9B44A),
     recitedInk = SoftGreen,
     divider = Color(0x26E8E2D5),
 )

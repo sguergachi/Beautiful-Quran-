@@ -1,37 +1,37 @@
 package com.beautifulquran.ui.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.data.model.Surah
 import com.beautifulquran.ui.theme.ArabicTitleStyle
 import com.beautifulquran.ui.theme.LocalQuranAccents
+import com.beautifulquran.ui.theme.verticalFadingEdges
 
 @Composable
 fun HomeScreen(
@@ -49,49 +50,71 @@ fun HomeScreen(
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         LazyColumn(
-            modifier = Modifier.padding(padding),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp),
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .verticalFadingEdges(top = 24.dp, bottom = 48.dp),
+            contentPadding = PaddingValues(bottom = 48.dp),
         ) {
             item(key = "title") {
-                Column(Modifier.padding(horizontal = 24.dp)) {
-                    Spacer(Modifier.height(18.dp))
+                Column(Modifier.padding(horizontal = 28.dp)) {
+                    Spacer(Modifier.height(30.dp))
                     Text(
                         text = "القرآن الكريم",
                         style = ArabicTitleStyle,
-                        fontSize = 34.sp,
+                        fontSize = 36.sp,
                         color = MaterialTheme.colorScheme.onBackground,
                     )
+                    Spacer(Modifier.height(2.dp))
                     Text(
                         text = "Beautiful Quran",
                         style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     )
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(24.dp))
                 }
             }
 
             item(key = "search") {
-                OutlinedTextField(
+                TextField(
                     value = uiState.query,
                     onValueChange = viewModel::onQueryChange,
-                    placeholder = { Text("Search surah…") },
-                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                    placeholder = {
+                        Text(
+                            "Search surah…",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Rounded.Search,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        )
+                    },
                     trailingIcon = {
                         if (uiState.query.isNotEmpty()) {
                             IconButton(onClick = { viewModel.onQueryChange("") }) {
-                                Icon(Icons.Rounded.Close, contentDescription = "Clear search")
+                                Icon(
+                                    Icons.Rounded.Close,
+                                    contentDescription = "Clear search",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                )
                             }
                         }
                     },
                     singleLine = true,
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(20.dp),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent,
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp),
+                        .padding(horizontal = 24.dp),
                 )
             }
 
@@ -104,8 +127,13 @@ fun HomeScreen(
                 }
             }
 
+            item(key = "spacer-list") { Spacer(Modifier.height(16.dp)) }
+
             items(count = uiState.surahs.size, key = { uiState.surahs[it].id }) { index ->
-                SurahRow(surah = uiState.surahs[index], onClick = { onOpenSurah(uiState.surahs[index].id) })
+                SurahRow(
+                    surah = uiState.surahs[index],
+                    onClick = { onOpenSurah(uiState.surahs[index].id) },
+                )
             }
         }
     }
@@ -117,44 +145,36 @@ private fun ContinueCard(target: ContinueTarget, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 14.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 16.dp),
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary),
-        ) {
-            Icon(
-                Icons.Rounded.PlayArrow,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimary,
+            .padding(horizontal = 24.dp)
+            .padding(top = 18.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
             )
-        }
-        Spacer(Modifier.width(14.dp))
-        Column {
+            .padding(horizontal = 22.dp, vertical = 18.dp),
+    ) {
+        Column(Modifier.weight(1f)) {
             Text(
                 text = "Continue listening",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
             )
+            Spacer(Modifier.height(2.dp))
             Text(
-                text = "${target.surah.nameTransliteration} • Ayah ${target.ayah}",
+                text = "${target.surah.nameTransliteration} · Ayah ${target.ayah}",
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.width(16.dp))
         Text(
             text = target.surah.nameArabic,
             style = ArabicTitleStyle,
-            fontSize = 22.sp,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            fontSize = 24.sp,
+            color = MaterialTheme.colorScheme.primary,
         )
     }
 }
@@ -166,22 +186,21 @@ private fun SurahRow(surah: Surah, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(horizontal = 28.dp, vertical = 13.dp),
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(40.dp)
-                .border(1.dp, accents.gold.copy(alpha = 0.55f), CircleShape),
-        ) {
+        Box(Modifier.width(34.dp)) {
             Text(
                 text = surah.id.toString(),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = accents.gold.copy(alpha = 0.75f),
             )
         }
-        Spacer(Modifier.width(16.dp))
+        Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 text = surah.nameTransliteration,
@@ -191,9 +210,9 @@ private fun SurahRow(surah: Surah, onClick: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "${surah.nameTranslation} • ${surah.ayahCount} ayahs",
+                text = "${surah.nameTranslation} · ${surah.ayahCount} ayahs",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -202,7 +221,7 @@ private fun SurahRow(surah: Surah, onClick: () -> Unit) {
         Text(
             text = surah.nameArabic,
             style = ArabicTitleStyle,
-            color = MaterialTheme.colorScheme.primary,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
         )
     }
 }

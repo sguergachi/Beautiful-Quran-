@@ -119,7 +119,9 @@ def load_wbw(tgz: Path):
 
 
 def load_timings(zip_path: Path, slug: str):
-    """Return {(surah, ayah): [[word_idx0, start_ms, end_ms], ...]} for a reciter."""
+    """Return {(surah, ayah): [[word_idx0, start_ms, end_ms], ...]} for a reciter,
+    or None if no parseable timing file exists (the reciter then ships without
+    word highlighting rather than failing the whole build)."""
     with zipfile.ZipFile(zip_path) as zf:
         cand = [
             n
@@ -130,15 +132,25 @@ def load_timings(zip_path: Path, slug: str):
             and not n.rsplit("/", 1)[-1].startswith("._")
         ]
         if not cand:
+            print(f"  !! no timing file for {slug}; zip contains: {zf.namelist()}", flush=True)
             return None
         # Prefer an exact "<slug>.json" basename over looser matches.
         cand.sort(key=lambda n: (n.rsplit("/", 1)[-1].lower() != f"{slug.lower()}.json", len(n)))
-        payload = zf.read(cand[0]).decode("utf-8-sig")
-        try:
-            raw = json.loads(payload)
-        except json.JSONDecodeError:
-            print(f"  !! cannot parse {cand[0]}; head: {payload[:120]!r}", file=sys.stderr)
-            raise
+        raw = None
+        for name in cand:
+            payload = zf.read(name).decode("utf-8-sig", errors="replace")
+            try:
+                raw = json.loads(payload)
+                break
+            except json.JSONDecodeError as e:
+                info = zf.getinfo(name)
+                print(
+                    f"  !! cannot parse {name} ({info.file_size} bytes): {e}; "
+                    f"head: {payload[:80]!r}",
+                    flush=True,
+                )
+        if raw is None:
+            return None
     out = {}
     entries = raw if isinstance(raw, list) else raw.get("data", [])
     for e in entries:
