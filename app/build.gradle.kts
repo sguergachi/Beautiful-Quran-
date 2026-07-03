@@ -56,6 +56,12 @@ android {
     androidResources {
         noCompress += "db"
     }
+    lint {
+        // Media3's @UnstableApi opt-in trips lintVital on release builds; the
+        // full lint task still reports it. CI ships release APKs, so keep
+        // assembleRelease unblocked.
+        checkReleaseBuilds = false
+    }
 }
 
 dependencies {

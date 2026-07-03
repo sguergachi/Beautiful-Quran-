@@ -93,7 +93,7 @@ fun SettingsScreen(
                     .fillMaxHeight()
                     .widthIn(max = 640.dp)
                     .fillMaxWidth()
-                    .verticalFadingEdges(top = 24.dp, bottom = 40.dp)
+                    .verticalFadingEdges(color = MaterialTheme.colorScheme.background, top = 24.dp, bottom = 40.dp)
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 28.dp),
             ) {

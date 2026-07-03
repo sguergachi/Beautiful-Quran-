@@ -17,11 +17,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -55,15 +55,18 @@ private fun WordVisualState.inkAlpha(): Float = when (this) {
     WordVisualState.Recited -> 0.8f
 }
 
+/**
+ * Returns the ink alpha as [State] so callers can defer the read to the draw
+ * phase (inside a graphicsLayer block): the fade animates every frame without
+ * recomposing or re-laying-out a single word.
+ */
 @Composable
-private fun animatedInkAlpha(state: WordVisualState): Float {
-    val alpha by animateFloatAsState(
+private fun animatedInkAlpha(state: WordVisualState): State<Float> =
+    animateFloatAsState(
         targetValue = state.inkAlpha(),
         animationSpec = tween(if (state == WordVisualState.Active) 250 else 450),
         label = "inkAlpha",
     )
-    return alpha
-}
 
 @Composable
 fun WordUnit(
@@ -79,6 +82,7 @@ fun WordUnit(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
+            .graphicsLayer { alpha = ink.value }
             .let { m ->
                 if (onClick != null) {
                     m.clickable(interactionSource = interaction, indication = null, onClick = onClick)
@@ -92,14 +96,14 @@ fun WordUnit(
             text = word.arabic,
             style = ArabicWordStyle,
             fontSize = ArabicWordStyle.fontSize * fontScale,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = ink),
+            color = MaterialTheme.colorScheme.onBackground,
         )
         if (showGloss) {
             Text(
                 text = word.translation,
                 fontSize = 11.sp * fontScale,
                 lineHeight = 14.sp * fontScale,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f * ink),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                 textAlign = TextAlign.Center,
             )
         }
@@ -108,7 +112,7 @@ fun WordUnit(
                 text = word.transliteration,
                 fontSize = 10.sp * fontScale,
                 lineHeight = 13.sp * fontScale,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f * ink),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
                 textAlign = TextAlign.Center,
             )
         }
@@ -131,8 +135,9 @@ fun EnglishWordUnit(
         fontWeight = FontWeight.SemiBold,
         fontSize = 21.sp * fontScale,
         lineHeight = 1.55.em,
-        color = MaterialTheme.colorScheme.onBackground.copy(alpha = ink),
+        color = MaterialTheme.colorScheme.onBackground,
         modifier = Modifier
+            .graphicsLayer { alpha = ink.value }
             .let { m ->
                 if (onClick != null) {
                     m.clickable(interactionSource = interaction, indication = null, onClick = onClick)
@@ -178,7 +183,8 @@ fun AyahBlock(
     onAyahClick: () -> Unit,
 ) {
     // Non-active ayahs recede softly while another is being recited.
-    val blockAlpha by animateFloatAsState(
+    // State is read inside graphicsLayer so the dim animates draw-phase-only.
+    val blockAlpha = animateFloatAsState(
         targetValue = if (dimmed) 0.32f else 1f,
         animationSpec = tween(600),
         label = "ayahAlpha",
@@ -195,7 +201,7 @@ fun AyahBlock(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .alpha(blockAlpha)
+            .graphicsLayer { alpha = blockAlpha.value }
             .padding(horizontal = 28.dp, vertical = 14.dp),
     ) {
         if (readingMode == ReadingMode.ENGLISH_ONLY) {

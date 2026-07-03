@@ -34,6 +34,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,7 +64,10 @@ fun ReaderScreen(
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
-    val activeWord by viewModel.activeWord.collectAsStateWithLifecycle()
+    // Deliberately NOT delegated: the value is only read inside individual
+    // list items (via derivedStateOf), so a word change recomposes exactly
+    // one ayah block — never the whole screen.
+    val activeWordState = viewModel.activeWord.collectAsStateWithLifecycle()
     val settings by viewModel.settings.settings.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
@@ -230,7 +234,7 @@ fun ReaderScreen(
                     .fillMaxHeight()
                     .widthIn(max = 680.dp)
                     .fillMaxWidth()
-                    .verticalFadingEdges(top = 32.dp, bottom = 64.dp),
+                    .verticalFadingEdges(color = MaterialTheme.colorScheme.background, top = 32.dp, bottom = 64.dp),
             ) {
                 item(key = "header") {
                     SurahHeader(
@@ -247,14 +251,17 @@ fun ReaderScreen(
                 ) { index ->
                     val ayah = content.ayahs[index]
                     val isActive = activeAyah == ayah.number
+                    val activeWordPosition by remember(ayah.number) {
+                        derivedStateOf {
+                            activeWordState.value
+                                ?.takeIf { it.ayah == ayah.number }
+                                ?.wordPosition
+                        }
+                    }
                     AyahBlock(
                         ayah = ayah,
                         readingMode = settings.readingMode,
-                        activeWordPosition = if (isActive) {
-                            activeWord?.takeIf { it.ayah == ayah.number }?.wordPosition
-                        } else {
-                            null
-                        },
+                        activeWordPosition = activeWordPosition,
                         isActiveAyah = isActive,
                         dimmed = isThisSurahPlaying && playerState.isPlaying && !isActive,
                         fontScale = settings.fontScale,

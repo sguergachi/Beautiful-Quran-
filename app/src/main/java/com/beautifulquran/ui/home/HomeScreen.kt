@@ -62,7 +62,7 @@ fun HomeScreen(
                     .fillMaxHeight()
                     .widthIn(max = 640.dp)
                     .fillMaxWidth()
-                    .verticalFadingEdges(top = 24.dp, bottom = 48.dp),
+                    .verticalFadingEdges(color = MaterialTheme.colorScheme.background, top = 24.dp, bottom = 48.dp),
                 contentPadding = PaddingValues(bottom = 48.dp),
             ) {
             item(key = "title") {

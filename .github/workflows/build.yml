@@ -37,11 +37,13 @@ jobs:
       - name: Unit tests
         run: ./gradlew --no-daemon testDebugUnitTest
 
+      # Ship the R8-optimized release build: minified, resource-shrunk and
+      # non-debuggable — this is what makes it feel native-fast on device.
       - name: Assemble APK
-        run: ./gradlew --no-daemon assembleDebug
+        run: ./gradlew --no-daemon assembleRelease
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk BeautifulQuran.apk
+        run: cp app/build/outputs/apk/release/app-release.apk BeautifulQuran.apk
 
       - uses: actions/upload-artifact@v4
         with:
