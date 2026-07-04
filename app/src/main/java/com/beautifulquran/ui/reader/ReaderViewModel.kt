@@ -2,7 +2,6 @@ package com.beautifulquran.ui.reader
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.media3.common.Player
 import com.beautifulquran.data.QuranRepository
 import com.beautifulquran.data.SettingsRepository
 import com.beautifulquran.data.model.Reciter
@@ -152,13 +151,21 @@ class ReaderViewModel(
         settings.update { it.copy(lastSurah = surahId, lastAyah = ayah) }
     }
 
-    fun cycleRepeatMode() {
-        val next = when (playerState.value.repeatMode) {
-            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
-            Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_ALL
-            else -> Player.REPEAT_MODE_OFF
+    /** One of Player.REPEAT_MODE_*; always leaves range-repeat behind. */
+    fun setRepeatMode(mode: Int) {
+        player.clearRepeatRange()
+        player.setRepeatMode(mode)
+    }
+
+    /** Loops ayahs [from]..[to]; starts the surah if it isn't playing yet. */
+    fun setRepeatRange(from: Int, to: Int) {
+        val content = _uiState.value.content ?: return
+        val start = from.coerceIn(1, content.surah.ayahCount)
+        val end = to.coerceIn(start, content.surah.ayahCount)
+        if (playerState.value.nowPlaying?.surahId != surahId) {
+            playFromAyah(start)
         }
-        player.setRepeatMode(next)
+        player.setRepeatRange(start, end)
     }
 
     fun cycleSpeed() {

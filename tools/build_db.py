@@ -52,6 +52,7 @@ RECITERS = [
     (4, "Minshawy_Murattal_128kbps", "Mohamed Siddiq El-Minshawi", "Murattal"),
     (5, "Abdurrahmaan_As-Sudais_192kbps", "Abdurrahman As-Sudais", "Murattal"),
     (6, "Saood_ash-Shuraym_128kbps", "Saud Ash-Shuraym", "Murattal"),
+    (7, "Hani_Rifai_192kbps", "Hani Ar-Rifai", "Murattal"),
 ]
 
 BASMALAH_WORDS = 4  # words in bismillah, prefixed to audio of every first ayah
