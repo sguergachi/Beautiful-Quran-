@@ -172,7 +172,14 @@ class PlayerController(private val context: Context) {
     }
 
     /** Loads the whole surah as a playlist and starts from [startAyah]. */
-    fun playSurah(surahId: Int, ayahCount: Int, startAyah: Int, reciter: Reciter, surahName: String) {
+    fun playSurah(
+        surahId: Int,
+        ayahCount: Int,
+        startAyah: Int,
+        reciter: Reciter,
+        surahName: String,
+        startPositionMs: Long = 0L,
+    ) {
         // A new playlist invalidates any ayah range chosen for the old one.
         repeatRange = null
         _state.value = _state.value.copy(repeatRange = null)
@@ -190,7 +197,7 @@ class PlayerController(private val context: Context) {
                     )
                     .build()
             }
-            c.setMediaItems(items, startAyah - 1, 0L)
+            c.setMediaItems(items, startAyah - 1, startPositionMs)
             c.prepare()
             c.play()
         }
@@ -211,11 +218,33 @@ class PlayerController(private val context: Context) {
         }
     }
 
+    fun playLoadedFromAyah(ayah: Int) {
+        scope.launch {
+            val c = ensureController()
+            val index = ayah - 1
+            if (index in 0 until c.mediaItemCount) {
+                c.seekTo(index, 0L)
+            }
+            c.play()
+        }
+    }
+
     fun seekToWord(ayah: Int, positionMs: Long) {
         scope.launch {
             val c = ensureController()
             val index = ayah - 1
             if (index in 0 until c.mediaItemCount) c.seekTo(index, positionMs)
+        }
+    }
+
+    fun seekToWordAndPlay(ayah: Int, positionMs: Long) {
+        scope.launch {
+            val c = ensureController()
+            val index = ayah - 1
+            if (index in 0 until c.mediaItemCount) {
+                c.seekTo(index, positionMs)
+                c.play()
+            }
         }
     }
 

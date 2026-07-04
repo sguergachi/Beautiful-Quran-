@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -47,6 +48,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -311,17 +313,24 @@ fun EnglishWordUnit(
 
 /** Quiet typographic ayah marker: ornate brackets leafed in gradient gold. */
 @Composable
-fun AyahNumberMark(number: Int, fontScale: Float) {
+fun AyahNumberMark(
+    number: Int,
+    fontScale: Float,
+    verticalNudge: Dp = 0.dp,
+    useArabicIndicDigits: Boolean = true,
+) {
     val accents = LocalQuranAccents.current
     Text(
-        text = "﴿${number.toArabicIndic()}﴾",
+        text = "﴿${if (useArabicIndicDigits) number.toArabicIndic() else number.toString()}﴾",
         fontFamily = HafsFontFamily,
         fontSize = 20.sp * fontScale,
         color = accents.gold,
-        modifier = Modifier.gilded(
-            bright = accents.goldBright.copy(alpha = 0.9f),
-            deep = accents.goldDeep.copy(alpha = 0.9f),
-        ),
+        modifier = Modifier
+            .offset(y = verticalNudge)
+            .gilded(
+                bright = accents.goldBright.copy(alpha = 0.9f),
+                deep = accents.goldDeep.copy(alpha = 0.9f),
+            ),
     )
 }
 
@@ -407,7 +416,12 @@ fun AyahBlock(
                     modifier = Modifier.padding(horizontal = 6.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    AyahNumberMark(ayah.number, fontScale * 0.8f)
+                    AyahNumberMark(
+                        number = ayah.number,
+                        fontScale = fontScale * 0.8f,
+                        verticalNudge = 4.dp * fontScale,
+                        useArabicIndicDigits = false,
+                    )
                 }
             }
         } else {
