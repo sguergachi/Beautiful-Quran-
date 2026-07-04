@@ -136,18 +136,6 @@ private fun rememberLetterSweep(active: Boolean, sweepMs: Int?): State<Float> {
     return sweep.asState()
 }
 
-/** Marks every occurrence of [query] in [text] with a soft gold wash. */
-private fun highlightMatches(text: String, query: String?, mark: Color): AnnotatedString =
-    buildAnnotatedString {
-        append(text)
-        if (query.isNullOrEmpty()) return@buildAnnotatedString
-        var i = text.indexOf(query, ignoreCase = true)
-        while (i >= 0) {
-            addStyle(SpanStyle(background = mark), i, i + query.length)
-            i = text.indexOf(query, i + query.length, ignoreCase = true)
-        }
-    }
-
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 fun WordUnit(
@@ -311,6 +299,18 @@ fun EnglishWordUnit(
             .padding(horizontal = 3.dp, vertical = 2.dp),
     )
 }
+
+/** Marks every occurrence of [query] in [text] with a soft gold wash. */
+private fun highlightMatches(text: String, query: String?, mark: Color): AnnotatedString =
+    buildAnnotatedString {
+        append(text)
+        if (query.isNullOrEmpty()) return@buildAnnotatedString
+        var i = text.indexOf(query, ignoreCase = true)
+        while (i >= 0) {
+            addStyle(SpanStyle(background = mark), i, i + query.length)
+            i = text.indexOf(query, i + query.length, ignoreCase = true)
+        }
+    }
 
 /** Quiet typographic ayah marker: ornate brackets leafed in gradient gold. */
 @Composable

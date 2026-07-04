@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Beautiful Quran</string>
+    <string name="notification_permission_title">Playback controls</string>
+    <string name="notification_permission_message">Allow notifications to show recitation controls on the lock screen and in the media tray.</string>
+    <string name="notification_permission_allow">Allow</string>
+    <string name="notification_permission_not_now">Not now</string>
 </resources>

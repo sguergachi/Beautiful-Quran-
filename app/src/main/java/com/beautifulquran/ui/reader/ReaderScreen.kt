@@ -1,6 +1,7 @@
 package com.beautifulquran.ui.reader
 
 import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.os.Build
@@ -11,6 +12,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.exponentialDecay
@@ -22,21 +24,28 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -47,6 +56,7 @@ import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -54,7 +64,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -86,18 +98,29 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.content.ContextCompat
+import com.beautifulquran.R
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.ui.theme.IslamicReturnToAyahButton
 import com.beautifulquran.ui.theme.LocalQuranAccents
+import com.beautifulquran.ui.theme.SerifFontFamily
 import com.beautifulquran.ui.theme.verticalFadingEdges
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -181,6 +204,8 @@ fun ReaderScreen(
     }
     var followEnabled by remember { mutableStateOf(true) }
     var showRepeatDialog by remember { mutableStateOf(false) }
+    var showNotifPermissionDialog by remember { mutableStateOf(false) }
+    var pendingNotifPermissionAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var requestedJumpAyah by remember { mutableIntStateOf(0) }
 
     // In-surah English search: matches are ayahs whose translation or any
@@ -254,14 +279,41 @@ fun ReaderScreen(
         label = "topBarAlpha",
     )
 
-    // Ask for notification permission (playback controls) right before first play.
+    val context = LocalContext.current
     val notifPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { }
-    fun ensureNotifPermission() {
-        if (Build.VERSION.SDK_INT >= 33) {
-            notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+    fun requestPlaybackNotificationPermission(action: () -> Unit) {
+        if (Build.VERSION.SDK_INT < 33) {
+            action()
+            return
         }
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            action()
+            return
+        }
+        pendingNotifPermissionAction = action
+        showNotifPermissionDialog = true
+    }
+
+    if (showNotifPermissionDialog && pendingNotifPermissionAction != null) {
+        PlaybackNotificationPermissionDialog(
+            onDismiss = {
+                showNotifPermissionDialog = false
+                pendingNotifPermissionAction?.invoke()
+                pendingNotifPermissionAction = null
+            },
+            onAllow = {
+                showNotifPermissionDialog = false
+                notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                pendingNotifPermissionAction?.invoke()
+                pendingNotifPermissionAction = null
+            },
+        )
     }
 
     // Reading by hand pauses the follow mode via pointerInput.
@@ -570,18 +622,21 @@ fun ReaderScreen(
                             if (playerState.isPlaying) {
                                 viewModel.player.togglePlayPause()
                             } else {
-                                val selectedAyah = selectedPlaybackAyah()
-                                followEnabled = true
-                                if (requestedJumpAyah > 0 || playerState.nowPlaying?.ayah != selectedAyah) {
-                                    viewModel.player.playLoadedFromAyah(selectedAyah)
-                                } else {
-                                    viewModel.player.togglePlayPause()
+                                requestPlaybackNotificationPermission {
+                                    val selectedAyah = selectedPlaybackAyah()
+                                    followEnabled = true
+                                    if (requestedJumpAyah > 0 || playerState.nowPlaying?.ayah != selectedAyah) {
+                                        viewModel.player.playLoadedFromAyah(selectedAyah)
+                                    } else {
+                                        viewModel.player.togglePlayPause()
+                                    }
                                 }
                             }
                         } else {
-                            ensureNotifPermission()
-                            followEnabled = true
-                            viewModel.playFromAyah(selectedPlaybackAyah())
+                            requestPlaybackNotificationPermission {
+                                followEnabled = true
+                                viewModel.playFromAyah(selectedPlaybackAyah())
+                            }
                         }
                     },
                     onFastBackward = viewModel::fastBackward,
@@ -699,18 +754,20 @@ fun ReaderScreen(
                                 onWordClick = { word ->
                                     val segment = viewModel.segmentsFor(ayah.number)
                                         ?.firstOrNull { it.position == word.position }
-                                    ensureNotifPermission()
-                                    followEnabled = true
-                                    if (segment != null) {
-                                        viewModel.playFromWord(ayah.number, segment.startMs)
-                                    } else {
-                                        viewModel.playFromAyah(ayah.number)
+                                    requestPlaybackNotificationPermission {
+                                        followEnabled = true
+                                        if (segment != null) {
+                                            viewModel.playFromWord(ayah.number, segment.startMs)
+                                        } else {
+                                            viewModel.playFromAyah(ayah.number)
+                                        }
                                     }
                                 },
                                 onAyahClick = {
-                                    ensureNotifPermission()
-                                    followEnabled = true
-                                    viewModel.playFromAyah(ayah.number)
+                                    requestPlaybackNotificationPermission {
+                                        followEnabled = true
+                                        viewModel.playFromAyah(ayah.number)
+                                    }
                                 },
                             )
                         }
@@ -793,12 +850,182 @@ fun ReaderScreen(
             onDismiss = { showRepeatDialog = false },
             onRepeatMode = viewModel::setRepeatMode,
             onRepeatRange = { from, to ->
-                ensureNotifPermission()
-                followEnabled = true
-                viewModel.setRepeatRange(from, to)
+                requestPlaybackNotificationPermission {
+                    followEnabled = true
+                    viewModel.setRepeatRange(from, to)
+                }
             },
         )
     }
+}
+
+@Composable
+private fun PlaybackNotificationPermissionDialog(
+    onDismiss: () -> Unit,
+    onAllow: () -> Unit,
+) {
+    val titleStyle = MaterialTheme.typography.titleMedium.copy(
+        fontFamily = SerifFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 28.sp,
+        lineHeight = 34.sp,
+        letterSpacing = 0.sp,
+    )
+    val bodyStyle = MaterialTheme.typography.bodyMedium.copy(
+        fontFamily = SerifFontFamily,
+        fontSize = 16.sp,
+        lineHeight = 24.sp,
+        letterSpacing = 0.sp,
+    )
+    val actionStyle = MaterialTheme.typography.labelLarge.copy(
+        fontFamily = SerifFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 15.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.2.sp,
+    )
+    val paperAlpha = remember { Animatable(0f) }
+    val actionAlpha = remember { Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        launch {
+            delay(2_920)
+            actionAlpha.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 700, easing = LinearOutSlowInEasing),
+            )
+        }
+        paperAlpha.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 360, easing = LinearEasing),
+        )
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
+            shadowElevation = 18.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 372.dp)
+                .heightIn(min = 318.dp)
+                .graphicsLayer {
+                    alpha = paperAlpha.value
+                    scaleX = 0.985f + (0.015f * paperAlpha.value)
+                    scaleY = 0.985f + (0.015f * paperAlpha.value)
+                },
+        ) {
+            Box(
+                modifier = Modifier.padding(
+                    start = 28.dp,
+                    top = 32.dp,
+                    end = 28.dp,
+                    bottom = 26.dp,
+                ),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(end = 2.dp),
+                ) {
+                    WordFadeText(
+                        text = stringResource(R.string.notification_permission_title),
+                        style = titleStyle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        initialDelayMs = 120,
+                        wordDelayMs = 110,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    WordFadeText(
+                        text = stringResource(R.string.notification_permission_message),
+                        style = bodyStyle,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.86f),
+                        initialDelayMs = 420,
+                        wordDelayMs = 92,
+                    )
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomEnd)
+                        .graphicsLayer { alpha = actionAlpha.value },
+                ) {
+                    TextButton(
+                        onClick = onDismiss,
+                        shape = RoundedCornerShape(7.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+                        modifier = Modifier.defaultMinSize(minWidth = 0.dp, minHeight = 44.dp),
+                    ) {
+                        WordFadeText(
+                            text = stringResource(R.string.notification_permission_not_now),
+                            style = actionStyle,
+                            color = MaterialTheme.colorScheme.primary,
+                            initialDelayMs = 2_920,
+                            wordDelayMs = 95,
+                        )
+                    }
+                    Button(
+                        onClick = onAllow,
+                        shape = RoundedCornerShape(7.dp),
+                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+                        modifier = Modifier.defaultMinSize(minWidth = 92.dp, minHeight = 48.dp),
+                    ) {
+                        WordFadeText(
+                            text = stringResource(R.string.notification_permission_allow),
+                            style = actionStyle,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            initialDelayMs = 3_020,
+                            wordDelayMs = 95,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WordFadeText(
+    text: String,
+    style: TextStyle,
+    color: androidx.compose.ui.graphics.Color,
+    initialDelayMs: Int,
+    wordDelayMs: Int,
+) {
+    val words = remember(text) { text.split(" ") }
+    val alphas = remember(text) {
+        List(words.size) { Animatable(0f) }
+    }
+
+    LaunchedEffect(text, initialDelayMs, wordDelayMs) {
+        alphas.forEach { it.snapTo(0f) }
+        delay(initialDelayMs.toLong())
+        alphas.forEachIndexed { index, alpha ->
+            launch {
+                delay((index * wordDelayMs).toLong())
+                alpha.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(durationMillis = 2_480, easing = LinearOutSlowInEasing),
+                )
+            }
+        }
+    }
+
+    Text(
+        text = buildAnnotatedString {
+            words.forEachIndexed { index, word ->
+                if (index > 0) append(" ")
+                withStyle(SpanStyle(color = color.copy(alpha = alphas[index].value))) {
+                    append(word)
+                }
+            }
+        },
+        style = style,
+    )
 }
 
 private fun rubberBandDialPosition(value: Float, min: Float, max: Float): Float {

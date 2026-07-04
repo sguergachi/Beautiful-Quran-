@@ -8,8 +8,8 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -124,6 +124,8 @@ class MainActivity : ComponentActivity() {
 private const val COVER_LAYER = 0
 private const val AYAH_LAYER = 1
 private const val SETTINGS_LAYER = 2
+private const val STACK_PAGE_DURATION_MS = 460
+private val StackMotionEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
 
 @Composable
 private fun PaperStackApp() {
@@ -136,15 +138,18 @@ private fun PaperStackApp() {
     var settledLayer by rememberSaveable { mutableIntStateOf(COVER_LAYER) }
     val stackPosition = remember { Animatable(settledLayer.toFloat()) }
     val scope = rememberCoroutineScope()
+    val settingsLayer = if (selectedSurahId == 0) AYAH_LAYER else SETTINGS_LAYER
 
     suspend fun settleTo(layer: Int) {
-        val boundedLayer = layer.coerceIn(COVER_LAYER, if (selectedSurahId == 0) COVER_LAYER else SETTINGS_LAYER)
+        val boundedLayer = layer.coerceIn(COVER_LAYER, settingsLayer)
+        val distance = abs(boundedLayer - stackPosition.value)
         settledLayer = boundedLayer
         stackPosition.animateTo(
             targetValue = boundedLayer.toFloat(),
-            animationSpec = spring(
-                dampingRatio = 0.88f,
-                stiffness = Spring.StiffnessMediumLow,
+            animationSpec = tween(
+                durationMillis = (STACK_PAGE_DURATION_MS * distance).roundToInt()
+                    .coerceAtLeast(STACK_PAGE_DURATION_MS / 2),
+                easing = StackMotionEasing,
             ),
         )
     }
@@ -168,11 +173,17 @@ private fun PaperStackApp() {
             .background(MaterialTheme.colorScheme.background)
             .paperStackDrag(
                 position = { stackPosition.value },
-                maxLayer = { if (selectedSurahId == 0) COVER_LAYER else SETTINGS_LAYER },
+                maxLayer = {
+                    if (selectedSurahId == 0 && stackPosition.value <= COVER_LAYER + 0.01f) COVER_LAYER else settingsLayer
+                },
                 onDragStart = { dragStartPosition = stackPosition.value },
                 onDrag = { deltaPages ->
                     scope.launch {
-                        val maxLayer = if (selectedSurahId == 0) COVER_LAYER else SETTINGS_LAYER
+                        val maxLayer = if (selectedSurahId == 0 && dragStartPosition <= COVER_LAYER + 0.01f) {
+                            COVER_LAYER
+                        } else {
+                            settingsLayer
+                        }
                         // A single gesture may advance at most one layer, so a hard swipe
                         // from the cover lands on the reader instead of overshooting to settings.
                         val startLayer = dragStartPosition.roundToInt()
@@ -190,11 +201,14 @@ private fun PaperStackApp() {
         PaperPage(
             layer = PaperLayer.Settings,
             stackPosition = page,
+            settingsLayer = settingsLayer,
             modifier = Modifier.zIndex(0f),
         ) {
             SettingsScreen(
                 viewModel = settingsViewModel,
-                onBack = { animateTo(AYAH_LAYER) },
+                onBack = {
+                    animateTo(if (selectedSurahId == 0) COVER_LAYER else AYAH_LAYER)
+                },
             )
         }
 
@@ -202,6 +216,7 @@ private fun PaperStackApp() {
             PaperPage(
                 layer = PaperLayer.Ayah,
                 stackPosition = page,
+                settingsLayer = settingsLayer,
                 modifier = Modifier.zIndex(1f),
             ) {
                 key(selectedSurahId, selectedStartAyah) {
@@ -219,6 +234,7 @@ private fun PaperStackApp() {
         PaperPage(
             layer = PaperLayer.Cover,
             stackPosition = page,
+            settingsLayer = settingsLayer,
             modifier = Modifier.zIndex(2f),
         ) {
             HomeScreen(
@@ -229,6 +245,7 @@ private fun PaperStackApp() {
                     selectedStartAyah = ayah ?: 0
                     animateTo(AYAH_LAYER)
                 },
+                onOpenSettings = { animateTo(SETTINGS_LAYER) },
             )
         }
     }
@@ -244,6 +261,7 @@ private enum class PaperLayer {
 private fun PaperPage(
     layer: PaperLayer,
     stackPosition: Float,
+    settingsLayer: Int,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
@@ -255,7 +273,7 @@ private fun PaperPage(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .paperLayerTransform(layer, stackPosition)
+            .paperLayerTransform(layer, stackPosition, settingsLayer)
             .paperDropShadow(turning),
     ) {
         content()
@@ -265,6 +283,7 @@ private fun PaperPage(
 private fun Modifier.paperLayerTransform(
     layer: PaperLayer,
     stackPosition: Float,
+    settingsLayer: Int,
 ): Modifier = graphicsLayer {
     val width = size.width
     cameraDistance = 18f * density
@@ -285,7 +304,7 @@ private fun Modifier.paperLayerTransform(
             shadowElevation = 18f * (1f - turn)
         }
         PaperLayer.Settings -> {
-            val reveal = (stackPosition / SETTINGS_LAYER).coerceIn(0f, 1f)
+            val reveal = (stackPosition / settingsLayer.toFloat()).coerceIn(0f, 1f)
             translationX = width * 0.035f * (1f - reveal)
             scaleX = 0.97f + 0.03f * reveal
             scaleY = 0.97f + 0.03f * reveal
