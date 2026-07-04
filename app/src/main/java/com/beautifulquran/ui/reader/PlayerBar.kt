@@ -10,12 +10,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
-import androidx.compose.material.icons.rounded.SkipNext
-import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,8 +47,8 @@ fun PlayerBar(
     chromeAlpha: () -> Float,
     reciterName: String,
     onPlayPause: () -> Unit,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
+    onFastBackward: () -> Unit,
+    onFastForward: () -> Unit,
     onRepeatClick: () -> Unit,
     onSpeed: () -> Unit,
     onReciterClick: () -> Unit,
@@ -103,15 +103,15 @@ fun PlayerBar(
                     )
                 }
                 IconButton(
-                    onClick = onPrevious,
+                    onClick = onFastBackward,
                     enabled = isThisSurahLoaded,
                     modifier = Modifier
                         .size(48.dp)
                         .graphicsLayer { alpha = chromeAlpha() },
                 ) {
                     Icon(
-                        Icons.Rounded.SkipPrevious,
-                        contentDescription = "Previous ayah",
+                        Icons.Rounded.FastRewind,
+                        contentDescription = "Fast backward",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -136,15 +136,15 @@ fun PlayerBar(
                     }
                 }
                 IconButton(
-                    onClick = onNext,
+                    onClick = onFastForward,
                     enabled = isThisSurahLoaded,
                     modifier = Modifier
                         .size(48.dp)
                         .graphicsLayer { alpha = chromeAlpha() },
                 ) {
                     Icon(
-                        Icons.Rounded.SkipNext,
-                        contentDescription = "Next ayah",
+                        Icons.Rounded.FastForward,
+                        contentDescription = "Fast forward",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }

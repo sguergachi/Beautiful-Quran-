@@ -22,12 +22,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -114,6 +117,10 @@ fun SettingsScreen(
                     RadioButton(
                         selected = reciter.id == settings.reciterId,
                         onClick = { viewModel.selectReciter(reciter) },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = MaterialTheme.colorScheme.primary,
+                            unselectedColor = MaterialTheme.colorScheme.outline,
+                        ),
                     )
                     Column {
                         Text(reciter.name, style = MaterialTheme.typography.bodyLarge)
@@ -137,6 +144,7 @@ fun SettingsScreen(
                         selected = settings.readingMode == mode,
                         onClick = { viewModel.settings.update { it.copy(readingMode = mode) } },
                         shape = SegmentedButtonDefaults.itemShape(index, ReadingMode.entries.size),
+                        colors = greenSegmentedButtonColors(),
                     ) {
                         Text(
                             text = when (mode) {
@@ -156,6 +164,13 @@ fun SettingsScreen(
                 onValueChange = { v -> viewModel.settings.update { it.copy(fontScale = v) } },
                 valueRange = 0.8f..1.6f,
                 steps = 7,
+                colors = SliderDefaults.colors(
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    activeTickColor = MaterialTheme.colorScheme.onPrimary,
+                    inactiveTrackColor = MaterialTheme.colorScheme.primaryContainer,
+                    inactiveTickColor = MaterialTheme.colorScheme.primary,
+                ),
             )
 
             Spacer(Modifier.height(20.dp))
@@ -186,6 +201,7 @@ fun SettingsScreen(
                         selected = settings.themeMode == mode,
                         onClick = { viewModel.settings.update { it.copy(themeMode = mode) } },
                         shape = SegmentedButtonDefaults.itemShape(index, ThemeMode.entries.size),
+                        colors = greenSegmentedButtonColors(),
                     ) {
                         Text(
                             mode.name.lowercase().replaceFirstChar { it.uppercase() },
@@ -228,6 +244,27 @@ private fun SettingToggle(label: String, checked: Boolean, onChange: (Boolean) -
             .padding(vertical = 6.dp),
     ) {
         Text(label, style = MaterialTheme.typography.bodyLarge)
-        Switch(checked = checked, onCheckedChange = onChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = MaterialTheme.colorScheme.surface,
+                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                checkedBorderColor = MaterialTheme.colorScheme.primary,
+                uncheckedThumbColor = MaterialTheme.colorScheme.surface,
+                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                uncheckedBorderColor = MaterialTheme.colorScheme.outline,
+            ),
+        )
     }
 }
+
+@Composable
+private fun greenSegmentedButtonColors() = SegmentedButtonDefaults.colors(
+    activeContainerColor = MaterialTheme.colorScheme.primaryContainer,
+    activeContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+    activeBorderColor = MaterialTheme.colorScheme.outline,
+    inactiveContainerColor = MaterialTheme.colorScheme.surface,
+    inactiveContentColor = MaterialTheme.colorScheme.onSurface,
+    inactiveBorderColor = MaterialTheme.colorScheme.outline,
+)

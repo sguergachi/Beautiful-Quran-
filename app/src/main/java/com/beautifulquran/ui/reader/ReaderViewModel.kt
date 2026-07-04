@@ -132,6 +132,38 @@ class ReaderViewModel(
 
     fun segmentsFor(ayah: Int): List<Segment>? = timings[ayah]
 
+    fun fastForward() {
+        val content = _uiState.value.content ?: return
+        val np = playerState.value.nowPlaying?.takeIf { it.surahId == surahId } ?: return
+        val midpointMs = midpointForLongAyah(np.ayah)
+        if (midpointMs != null && player.positionMs < midpointMs - MIDPOINT_SEEK_GRACE_MS) {
+            player.seekToWord(np.ayah, midpointMs)
+            return
+        }
+
+        if (np.ayah < content.surah.ayahCount) {
+            player.seekToAyah(np.ayah + 1)
+        }
+    }
+
+    fun fastBackward() {
+        val np = playerState.value.nowPlaying?.takeIf { it.surahId == surahId } ?: return
+        if (player.positionMs > START_SEEK_GRACE_MS) {
+            player.seekToAyah(np.ayah)
+            return
+        }
+
+        if (np.ayah > 1) {
+            player.seekToAyah(np.ayah - 1)
+        }
+    }
+
+    private fun midpointForLongAyah(ayah: Int): Long? {
+        val segments = timings[ayah].orEmpty()
+        if (segments.size < LONG_AYAH_MIN_WORDS) return null
+        return segments[segments.size / 2].startMs
+    }
+
     fun playFromAyah(ayah: Int) {
         val content = _uiState.value.content ?: return
         val reciter = _uiState.value.currentReciter ?: return
@@ -180,5 +212,8 @@ class ReaderViewModel(
     companion object {
         private const val TICK_MS = 33L
         private const val PAUSED_TICK_MS = 250L
+        private const val LONG_AYAH_MIN_WORDS = 20
+        private const val MIDPOINT_SEEK_GRACE_MS = 1_000L
+        private const val START_SEEK_GRACE_MS = 1_500L
     }
 }

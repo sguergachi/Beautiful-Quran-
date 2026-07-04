@@ -414,8 +414,8 @@ fun ReaderScreen(
                             viewModel.playFromAyah(startAyah ?: 1)
                         }
                     },
-                    onPrevious = viewModel.player::previous,
-                    onNext = viewModel.player::next,
+                    onFastBackward = viewModel::fastBackward,
+                    onFastForward = viewModel::fastForward,
                     onRepeatClick = { showRepeatDialog = true },
                     onSpeed = viewModel::cycleSpeed,
                     onReciterClick = onOpenSettings,

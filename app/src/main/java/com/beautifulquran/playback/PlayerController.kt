@@ -82,6 +82,7 @@ class PlayerController(private val context: Context) {
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             syncFromController(player)
+            loopSingleAyahIfNeeded(player)
             loopRangeIfNeeded(player)
         }
 
@@ -116,6 +117,23 @@ class PlayerController(private val context: Context) {
 
     fun clearError() {
         _state.value = _state.value.copy(error = null)
+    }
+
+    /**
+     * Media3 normally handles REPEAT_MODE_ONE itself, but remote per-ayah
+     * streams can still surface STATE_ENDED through the session. In that case,
+     * restart the current item explicitly so the UI does not sit at the ayah's
+     * final timestamp.
+     */
+    private fun loopSingleAyahIfNeeded(player: Player) {
+        if (repeatRange != null) return
+        if (player.repeatMode != Player.REPEAT_MODE_ONE) return
+        if (player.playbackState != Player.STATE_ENDED) return
+        if (player.mediaItemCount == 0) return
+
+        val idx = player.currentMediaItemIndex.coerceIn(0, player.mediaItemCount - 1)
+        player.seekTo(idx, 0L)
+        player.play()
     }
 
     /**

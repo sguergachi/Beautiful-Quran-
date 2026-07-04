@@ -96,7 +96,8 @@ const val MAX_SWEEP_MS = 8_000
  */
 @Composable
 private fun rememberLetterSweep(active: Boolean, sweepMs: Int?): State<Float> {
-    val sweep = remember { Animatable(1f) }
+    val initialProgress = if (active && sweepMs != null) 0f else 1f
+    val sweep = remember(active) { Animatable(initialProgress) }
     LaunchedEffect(active, sweepMs) {
         if (active && sweepMs != null) {
             sweep.snapTo(0f)

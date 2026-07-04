@@ -32,6 +32,34 @@ python3 tools/build_db.py     # builds app/src/main/assets/quran.db
 audio timings, validates them against each other, and packs them into a single
 SQLite asset. CI (GitHub Actions) does this on every push and publishes the APK.
 
+## Run in an Android emulator on Linux
+
+From a fresh Arch/CachyOS-style Linux install:
+
+```bash
+scripts/setup_android_emulator.sh
+scripts/run_android_app.sh
+```
+
+The setup script installs/verifies JDK 17, using
+`~/.local/share/android-dev/jdk-17` if no system Java is available, downloads
+Android command-line tools to `~/Android/Sdk`, installs API 35 emulator
+packages, writes `local.properties`, builds `app/src/main/assets/quran.db` if
+needed, and creates an AVD named `BeautifulQuran_API_35`.
+
+For future runs, use:
+
+```bash
+scripts/run_android_app.sh
+```
+
+If the emulator window does not appear or booting times out, check
+`.android-emulator.log`. To make the SDK tools available in your current shell:
+
+```bash
+source scripts/android_env.sh
+```
+
 ## Documentation
 
 - [PLAN.md](PLAN.md) — the original product/engineering plan and research
