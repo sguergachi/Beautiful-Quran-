@@ -203,7 +203,10 @@ fun ReaderScreen(
     val currentMatch = searchIndex.coerceIn(0, (searchMatches.size - 1).coerceAtLeast(0))
 
     val isThisSurahPlaying = playerState.nowPlaying?.surahId == surahId
-    val activeAyah = if (isThisSurahPlaying) playerState.nowPlaying?.ayah else null
+    // Lead-adjusted: crosses to the next ayah ~500ms before the current one's
+    // audio ends, so the block fade to the next ayah starts a touch early.
+    val activeAyahState = viewModel.activeAyah.collectAsStateWithLifecycle()
+    val activeAyah = if (isThisSurahPlaying) activeAyahState.value else null
 
     val readerItems = remember(uiState.content) {
         val c = uiState.content
