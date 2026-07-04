@@ -17,6 +17,8 @@ data class ContinueTarget(val surah: Surah, val ayah: Int)
 data class HomeUiState(
     val query: String = "",
     val surahs: List<Surah> = emptyList(),
+    /** Every surah, unfiltered — the jump dials scroll across the whole book. */
+    val allSurahs: List<Surah> = emptyList(),
     val continueTarget: ContinueTarget? = null,
 )
 
@@ -43,6 +45,7 @@ class HomeViewModel(
             HomeUiState(
                 query = q,
                 surahs = filtered,
+                allSurahs = surahs,
                 continueTarget = surahs.firstOrNull { it.id == prefs.lastSurah }
                     ?.let { ContinueTarget(it, prefs.lastAyah) },
             )

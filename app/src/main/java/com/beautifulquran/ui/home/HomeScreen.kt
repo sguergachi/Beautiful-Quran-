@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -34,21 +35,28 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.BuildConfig
 import com.beautifulquran.R
@@ -65,12 +73,20 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showAppInfo by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+
+    // Focus + geometry that anchor the fading dials pane just under the search
+    // field, floating over the surah list.
+    var searchFocused by remember { mutableStateOf(false) }
+    var boxTop by remember { mutableFloatStateOf(0f) }
+    var searchBottom by remember { mutableFloatStateOf(0f) }
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         Box(
             Modifier
                 .padding(padding)
-                .fillMaxSize(),
+                .fillMaxSize()
+                .onGloballyPositioned { boxTop = it.boundsInWindow().top },
         ) {
             LazyColumn(
                 modifier = Modifier
@@ -170,7 +186,9 @@ fun HomeScreen(
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp),
+                        .padding(horizontal = 24.dp)
+                        .onFocusChanged { searchFocused = it.isFocused }
+                        .onGloballyPositioned { searchBottom = it.boundsInWindow().bottom },
                 )
             }
 
@@ -192,6 +210,21 @@ fun HomeScreen(
                 )
             }
             }
+
+            SearchDialsPane(
+                surahs = uiState.allSurahs,
+                visible = searchFocused,
+                onOpen = { surahId, ayah ->
+                    focusManager.clearFocus()
+                    onOpenSurah(surahId, ayah)
+                },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .widthIn(max = 640.dp)
+                    .fillMaxWidth()
+                    .offset { IntOffset(0, (searchBottom - boxTop).roundToInt()) }
+                    .padding(horizontal = 24.dp, vertical = 10.dp),
+            )
         }
 
         if (showAppInfo) {
