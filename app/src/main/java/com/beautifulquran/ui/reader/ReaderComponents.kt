@@ -1,5 +1,7 @@
 package com.beautifulquran.ui.reader
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
@@ -17,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
@@ -45,6 +48,7 @@ import com.beautifulquran.ui.theme.HafsFontFamily
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.TranslationFontFamily
 import com.beautifulquran.ui.theme.gilded
+import com.beautifulquran.ui.theme.letterFadeIn
 import com.beautifulquran.ui.theme.starAndCrossWeave
 import com.beautifulquran.ui.theme.verticalFadingEdges
 
@@ -78,6 +82,29 @@ private fun animatedInkAlpha(state: WordVisualState): State<Float> =
         label = "inkAlpha",
     )
 
+const val MIN_SWEEP_MS = 140
+const val MAX_SWEEP_MS = 8_000
+
+/**
+ * Drives the letter-fade sweep for the active word: restarts at 0 each time
+ * the word lights up and runs linearly for [sweepMs] — the time the reciter
+ * actually spends on this word — so the last letter finishes inking exactly
+ * as the voice moves on.
+ */
+@Composable
+private fun rememberLetterSweep(active: Boolean, sweepMs: Int?): State<Float> {
+    val sweep = remember { Animatable(1f) }
+    LaunchedEffect(active, sweepMs) {
+        if (active && sweepMs != null) {
+            sweep.snapTo(0f)
+            sweep.animateTo(1f, tween(sweepMs, easing = LinearEasing))
+        } else {
+            sweep.snapTo(1f)
+        }
+    }
+    return sweep.asState()
+}
+
 /** Marks every occurrence of [query] in [text] with a soft gold wash. */
 private fun highlightMatches(text: String, query: String?, mark: Color): AnnotatedString =
     buildAnnotatedString {
@@ -95,12 +122,15 @@ fun WordUnit(
     word: Word,
     state: WordVisualState,
     fontScale: Float,
+    sweepMs: Int?,
     showGloss: Boolean,
     showTransliteration: Boolean,
     searchHit: Boolean,
     onClick: (() -> Unit)?,
 ) {
     val ink = animatedInkAlpha(state)
+    val isActive = state == WordVisualState.Active
+    val sweep = rememberLetterSweep(isActive, sweepMs)
     val interaction = remember { MutableInteractionSource() }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -120,12 +150,17 @@ fun WordUnit(
             style = ArabicWordStyle,
             fontSize = ArabicWordStyle.fontSize * fontScale,
             color = MaterialTheme.colorScheme.onBackground,
+            modifier = if (isActive) {
+                Modifier.letterFadeIn(progress = { sweep.value }, rtl = true)
+            } else {
+                Modifier
+            },
         )
         if (showGloss) {
             Text(
                 text = word.translation,
-                fontSize = 11.sp * fontScale,
-                lineHeight = 14.sp * fontScale,
+                fontSize = 12.sp * fontScale,
+                lineHeight = 15.sp * fontScale,
                 fontWeight = if (searchHit) FontWeight.Bold else null,
                 color = if (searchHit) {
                     LocalQuranAccents.current.gold
@@ -138,8 +173,8 @@ fun WordUnit(
         if (showTransliteration) {
             Text(
                 text = word.transliteration,
-                fontSize = 10.sp * fontScale,
-                lineHeight = 13.sp * fontScale,
+                fontSize = 11.sp * fontScale,
+                lineHeight = 14.sp * fontScale,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
                 textAlign = TextAlign.Center,
             )
@@ -153,16 +188,19 @@ fun EnglishWordUnit(
     word: Word,
     state: WordVisualState,
     fontScale: Float,
+    sweepMs: Int?,
     searchHit: Boolean,
     onClick: (() -> Unit)?,
 ) {
     val ink = animatedInkAlpha(state)
+    val isActive = state == WordVisualState.Active
+    val sweep = rememberLetterSweep(isActive, sweepMs)
     val interaction = remember { MutableInteractionSource() }
     Text(
         text = word.translation,
         fontFamily = TranslationFontFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 21.sp * fontScale,
+        fontSize = 22.sp * fontScale,
         lineHeight = 1.55.em,
         color = if (searchHit) {
             LocalQuranAccents.current.gold
@@ -171,6 +209,13 @@ fun EnglishWordUnit(
         },
         modifier = Modifier
             .graphicsLayer { alpha = ink.value }
+            .then(
+                if (isActive) {
+                    Modifier.letterFadeIn(progress = { sweep.value }, rtl = false)
+                } else {
+                    Modifier
+                },
+            )
             .let { m ->
                 if (onClick != null) {
                     m.clickable(interactionSource = interaction, indication = null, onClick = onClick)
@@ -209,7 +254,8 @@ fun AyahNumberMark(number: Int, fontScale: Float) {
 fun AyahBlock(
     ayah: Ayah,
     readingMode: ReadingMode,
-    activeWordPosition: Int?,
+    activeWord: ActiveWord?,
+    playbackSpeed: Float,
     isActiveAyah: Boolean,
     dimmed: Boolean,
     fontScale: Float,
@@ -229,6 +275,13 @@ fun AyahBlock(
         animationSpec = tween(600),
         label = "ayahAlpha",
     )
+
+    val activeWordPosition = activeWord?.wordPosition
+    // The letter fade paces itself to how long the reciter dwells on the
+    // word, corrected for the chosen playback speed.
+    val sweepMs = activeWord
+        ?.let { (it.durationMs / playbackSpeed).toInt() }
+        ?.coerceIn(MIN_SWEEP_MS, MAX_SWEEP_MS)
 
     fun stateFor(word: Word): WordVisualState = when {
         !isActiveAyah -> WordVisualState.Plain
@@ -251,10 +304,12 @@ fun AyahBlock(
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 ayah.words.forEach { word ->
+                    val wordState = stateFor(word)
                     EnglishWordUnit(
                         word = word,
-                        state = stateFor(word),
+                        state = wordState,
                         fontScale = fontScale,
+                        sweepMs = sweepMs.takeIf { wordState == WordVisualState.Active },
                         searchHit = hits(word),
                         onClick = onWordClick?.let { handler -> { handler(word) } },
                     )
@@ -274,10 +329,12 @@ fun AyahBlock(
                     verticalArrangement = Arrangement.spacedBy(if (showGloss) 12.dp else 4.dp),
                 ) {
                     ayah.words.forEach { word ->
+                        val wordState = stateFor(word)
                         WordUnit(
                             word = word,
-                            state = stateFor(word),
+                            state = wordState,
                             fontScale = fontScale,
+                            sweepMs = sweepMs.takeIf { wordState == WordVisualState.Active },
                             showGloss = showGloss,
                             showTransliteration = showTransliteration,
                             searchHit = hits(word),
