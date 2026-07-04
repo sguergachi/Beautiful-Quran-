@@ -137,7 +137,7 @@ fun HomeScreen(
                     onValueChange = viewModel::onQueryChange,
                     placeholder = {
                         Text(
-                            "Search surah…",
+                            "Search surah or 2:255",
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                         )
                     },
@@ -188,7 +188,7 @@ fun HomeScreen(
             items(count = uiState.surahs.size, key = { uiState.surahs[it].id }) { index ->
                 SurahRow(
                     surah = uiState.surahs[index],
-                    onClick = { onOpenSurah(uiState.surahs[index].id, null) },
+                    onClick = { onOpenSurah(uiState.surahs[index].id, uiState.ayahTarget) },
                 )
             }
             }
