@@ -1,0 +1,109 @@
+package com.beautifulquran.playback
+
+import android.net.ConnectivityManager
+import androidx.media3.common.C
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.cache.Cache
+import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.CacheWriter
+import androidx.media3.datasource.cache.ContentMetadata
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
+import java.io.IOException
+import kotlin.coroutines.coroutineContext
+
+/**
+ * Warms the audio cache ahead of the listener so per-ayah streaming never
+ * stutters and recently-heard surahs work offline. Fully automatic: driven by
+ * playback events, no user configuration.
+ *
+ * Two independent, self-superseding jobs write into the *same* [SimpleCache]
+ * the player reads from, so there is no second cache to keep consistent:
+ *
+ *  - **Read-ahead** ([readAhead]) pulls the next few ayahs on any network. It's
+ *    tiny and tied to active playback, so it runs even on cellular.
+ *  - **Surah warming** ([warmSurah]) pulls the whole surah, but only on an
+ *    unmetered network so it never eats a data plan.
+ *
+ * Cache keys default to the URI string in both the player's [CacheDataSource]
+ * and the one built here, so writes made here satisfy the player's reads.
+ */
+class AudioPrefetcher(
+    private val cache: Cache,
+    upstreamFactory: DataSource.Factory,
+    private val connectivityManager: ConnectivityManager,
+) {
+    /** Factory adds a cache-write sink by default, so CacheWriter fills it. */
+    private val cacheDataSourceFactory = CacheDataSource.Factory()
+        .setCache(cache)
+        .setUpstreamDataSourceFactory(upstreamFactory)
+        .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+
+    // Bounded parallelism so prefetch can't saturate the network the player
+    // itself is streaming over.
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO.limitedParallelism(2),
+    )
+
+    private var readAheadJob: Job? = null
+    private var warmJob: Job? = null
+
+    /** How many upcoming ayahs to keep warm during playback. */
+    private val readAheadCount = 3
+
+    /**
+     * Warm [readAheadCount] ayahs after [currentIndex]. Cancels any prior
+     * read-ahead so a skip/seek doesn't leave stale work running.
+     */
+    fun readAhead(uris: List<String>, currentIndex: Int) {
+        readAheadJob?.cancel()
+        val next = uris.drop(currentIndex + 1).take(readAheadCount)
+        if (next.isEmpty()) return
+        readAheadJob = scope.launch { cacheAll(next) }
+    }
+
+    /**
+     * Warm the entire surah on an unmetered network. Cancels any prior warm so
+     * moving to another surah/reciter supersedes rather than stacks work.
+     */
+    fun warmSurah(uris: List<String>) {
+        warmJob?.cancel()
+        if (uris.isEmpty() || connectivityManager.isActiveNetworkMetered) return
+        warmJob = scope.launch { cacheAll(uris) }
+    }
+
+    private suspend fun cacheAll(uris: List<String>) {
+        for (uri in uris) {
+            coroutineContext.ensureActive()
+            if (isFullyCached(uri)) continue
+            try {
+                val dataSource = cacheDataSourceFactory.createDataSource()
+                CacheWriter(dataSource, DataSpec.Builder().setUri(uri).build(), null, null)
+                    .cache()
+            } catch (_: IOException) {
+                // Network hiccup or eviction race — leave it for the player to
+                // fetch on demand. Prefetch is best-effort, never fatal.
+            } catch (_: InterruptedException) {
+                return // Cancelled mid-write.
+            }
+        }
+    }
+
+    /** Cheap disk check to skip files we already hold in full. */
+    private fun isFullyCached(uri: String): Boolean {
+        val metadata = cache.getContentMetadata(uri)
+        val length = ContentMetadata.getContentLength(metadata)
+        return length != C.LENGTH_UNSET.toLong() &&
+            cache.getCachedBytes(uri, 0, length) >= length
+    }
+
+    fun release() {
+        scope.cancel()
+    }
+}
