@@ -11,7 +11,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.animation.core.spring
@@ -91,6 +90,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.ui.theme.IslamicReturnToAyahButton
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.verticalFadingEdges
@@ -641,7 +641,10 @@ fun ReaderScreen(
                             )
                         }
                         is LazyItem.PageDivider -> {
-                            PageBreak(page = item.page)
+                            PageBreak(
+                                page = item.page,
+                                useArabicIndicDigits = settings.readingMode != ReadingMode.ENGLISH_ONLY,
+                            )
                         }
                     }
                 }
@@ -700,32 +703,33 @@ private suspend fun settleDialWheel(
     val min = 1f
     val max = ayahCount.toFloat()
     val anim = Animatable(start.coerceIn(min, max))
+    // Bounds stop the decay the moment it reaches either end — no invisible
+    // tail running past the range while the wheel sits frozen at the clamp.
+    anim.updateBounds(lowerBound = min, upperBound = max)
 
-    if (abs(velocity) > 0.06f && start in min..max) {
-        anim.snapTo(start)
+    val flung = abs(velocity) > 0.06f
+    if (flung) {
         anim.animateDecay(
             initialVelocity = velocity,
             animationSpec = exponentialDecay(frictionMultiplier = 1.85f),
         ) {
-            setPosition(value.coerceIn(min, max))
+            setPosition(value)
         }
-        anim.snapTo(anim.value.coerceIn(min, max))
     }
 
-    val target = anim.value.roundToInt().coerceIn(1, ayahCount).toFloat()
-    anim.snapTo(anim.value.coerceIn(min, max))
+    val target = anim.value.roundToInt().coerceIn(1, ayahCount)
     anim.animateTo(
-        targetValue = target,
+        targetValue = target.toFloat(),
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMediumLow,
         ),
-        initialVelocity = if (abs(velocity) > 0.06f) 0f else velocity,
+        initialVelocity = if (flung) 0f else velocity,
     ) {
-        setPosition(value.coerceIn(min, max))
+        setPosition(value)
     }
-    setPosition(target)
-    return target.toInt()
+    setPosition(target.toFloat())
+    return target
 }
 
 @Composable
@@ -737,10 +741,13 @@ private fun AyahSelectorRail(
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    var previewAyah by remember(ayahCount) {
+    // Owned Animatable rather than animateFloatAsState so the commit sequence
+    // can await the collapse and keep the wheel anchored on the chosen ayah
+    // the whole way out.
+    val expansion = remember { Animatable(0f) }
+    var lastHapticAyah by remember(ayahCount) {
         mutableIntStateOf(currentAyah.coerceIn(1, ayahCount))
     }
-    var lastHapticAyah by remember { mutableIntStateOf(previewAyah) }
     var dialPosition by remember(ayahCount) {
         mutableFloatStateOf(currentAyah.coerceIn(1, ayahCount).toFloat())
     }
@@ -762,32 +769,41 @@ private fun AyahSelectorRail(
                 ayahCount = ayahCount,
                 setPosition = { dialPosition = it },
             )
-            previewAyah = target
             lastHapticAyah = target
+            // Grace window: the gold underline drains for 1.5s; touching the
+            // rail again cancels this job and hands the wheel back for edits.
             commitProgress.animateTo(
                 targetValue = 1f,
                 animationSpec = tween(durationMillis = 1_500, easing = LinearEasing),
             )
+            if (target != latestCurrentAyah.coerceIn(1, ayahCount)) {
+                latestOnJumpToAyah(target)
+            }
+            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
             expanded = false
-            latestOnJumpToAyah(target)
+            // Collapse stays anchored on the committed ayah — dialPosition is
+            // not touched, so the wheel fades out where the reader left it
+            // instead of snapping back to the pre-jump scroll position.
+            expansion.animateTo(0f, spring(dampingRatio = 1f, stiffness = 200f))
             commitProgress.snapTo(0f)
             releaseJob = null
         }
     }
 
-    LaunchedEffect(currentAyah, ayahCount, expanded) {
-        if (!expanded) {
+    LaunchedEffect(currentAyah, ayahCount) {
+        // Mirror the reading position only while the wheel is fully hidden;
+        // syncing any earlier yanks a still-visible wheel to a stale ayah.
+        if (!expanded && releaseJob == null && !expansion.isRunning) {
             val ayah = currentAyah.coerceIn(1, ayahCount)
-            previewAyah = ayah
             lastHapticAyah = ayah
             dialPosition = ayah.toFloat()
         }
     }
     LaunchedEffect(expanded, ayahCount) {
+        if (!expanded) return@LaunchedEffect
         snapshotFlow { dialPosition.roundToInt().coerceIn(1, ayahCount) }
             .collect { ayah ->
-                previewAyah = ayah
-                if (expanded && ayah != lastHapticAyah) {
+                if (ayah != lastHapticAyah) {
                     val majorTick = ayah == 1 || ayah == ayahCount || ayah % 5 == 0
                     view.performHapticFeedback(
                         if (majorTick) {
@@ -800,44 +816,46 @@ private fun AyahSelectorRail(
                 }
             }
     }
-    val expansion by animateFloatAsState(
-        targetValue = if (expanded) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.85f, stiffness = 380f),
-        label = "ayahSelectorExpansion",
-    )
-    val railWidth by animateDpAsState(
-        targetValue = if (expanded) 92.dp else 58.dp,
-        animationSpec = spring(dampingRatio = 0.9f, stiffness = 380f),
-        label = "ayahSelectorWidth",
-    )
     val accents = LocalQuranAccents.current
     val onSurface = MaterialTheme.colorScheme.onSurface
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
 
     Box(
         modifier = modifier
-            .width(railWidth)
+            // Fixed width: the old expand/collapse width animation re-laid the
+            // rail out every frame. Touch gating below keeps the collapsed
+            // strip narrow so page taps near the margin still reach the text.
+            .width(92.dp)
             .graphicsLayer { alpha = chromeAlpha() }
             .pointerInput(ayahCount) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
+                    // Invisible chrome (recitation follow mode) must not
+                    // hijack page touches into a ghost selector.
+                    if (chromeAlpha() < 0.1f) return@awaitEachGesture
+                    if (!expanded && down.position.x > 44.dp.toPx()) return@awaitEachGesture
                     val tickSpacingPx = 14.dp.toPx()
                     val velocityTracker = VelocityTracker()
                     var dragged = false
-                    val wasExpanded = expanded
                     releaseJob?.cancel()
                     releaseJob = null
                     scope.launch { commitProgress.snapTo(0f) }
                     velocityTracker.addPosition(down.uptimeMillis, down.position)
                     if (!expanded) {
                         val ayah = latestCurrentAyah.coerceIn(1, ayahCount)
-                        previewAyah = ayah
                         lastHapticAyah = ayah
                         dialPosition = ayah.toFloat()
                         expanded = true
                     }
+                    scope.launch {
+                        expansion.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 340f))
+                    }
                     down.consume()
 
+                    // Band the accumulated finger position once per frame;
+                    // re-banding an already-banded value compounds the curve
+                    // and made overscroll feel erratic.
+                    var rawPosition = dialPosition
                     while (true) {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull { it.id == down.id } ?: break
@@ -845,8 +863,9 @@ private fun AyahSelectorRail(
                         val deltaAyah = -change.positionChange().y / tickSpacingPx
                         if (abs(deltaAyah) > 0.001f) {
                             dragged = true
+                            rawPosition += deltaAyah
                             dialPosition = rubberBandDialPosition(
-                                dialPosition + deltaAyah,
+                                rawPosition,
                                 1f,
                                 ayahCount.toFloat(),
                             )
@@ -854,34 +873,33 @@ private fun AyahSelectorRail(
                         velocityTracker.addPosition(change.uptimeMillis, change.position)
                         change.consume()
                     }
-                    if (dragged) {
-                        val velocityAyah = -velocityTracker.calculateVelocity().y / tickSpacingPx
-                        scheduleReleaseCommit(
-                            start = dialPosition.coerceIn(1f, ayahCount.toFloat()),
-                            velocity = velocityAyah,
-                        )
-                    } else if (wasExpanded) {
-                        scheduleReleaseCommit(
-                            start = dialPosition.coerceIn(1f, ayahCount.toFloat()),
-                            velocity = 0f,
-                        )
+                    // Every release schedules the settle + grace countdown, so
+                    // an opened wheel always resolves instead of lingering.
+                    // A no-move tap settles back onto the current ayah and the
+                    // commit becomes a no-op.
+                    val velocityAyah = if (dragged) {
+                        -velocityTracker.calculateVelocity().y / tickSpacingPx
+                    } else {
+                        0f
                     }
+                    scheduleReleaseCommit(
+                        start = dialPosition.coerceIn(1f, ayahCount.toFloat()),
+                        velocity = velocityAyah,
+                    )
                 }
             },
     ) {
         Canvas(Modifier.fillMaxSize()) {
-            val selectedPosition = if (expanded) {
-                dialPosition.coerceIn(1f, ayahCount.toFloat())
-            } else {
-                currentAyah.toFloat()
-            }
+            val expand = expansion.value
+            // Always anchored on dialPosition: while hidden it mirrors the
+            // reading position (synced above), while visible it is the finger
+            // — including the rubber-banded overshoot past either end.
+            val selectedPosition = dialPosition
             val selectedAyah = selectedPosition.roundToInt().coerceIn(1, ayahCount)
             val trackX = 10.dp.toPx()
             val collapsedX = 17.dp.toPx()
             val centerY = size.height * 0.5f
-            val barHeight = 3.dp.toPx()
-            val corner = CornerRadius(barHeight, barHeight)
-            val collapsedAlpha = 1f - expansion
+            val collapsedAlpha = 1f - expand
             val numberPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 textAlign = Paint.Align.LEFT
                 textSize = 9.sp.toPx()
@@ -889,50 +907,81 @@ private fun AyahSelectorRail(
             }
 
             drawLine(
-                color = onSurfaceVariant.copy(alpha = 0.08f + 0.08f * expansion),
+                color = onSurfaceVariant.copy(alpha = 0.08f + 0.08f * expand),
                 start = Offset(trackX, 0f),
                 end = Offset(trackX, size.height),
                 strokeWidth = 1.dp.toPx(),
             )
 
-            if (collapsedAlpha > 0.01f) {
-                val collapsedBarsCount = symbolicAyahBarCount(ayahCount)
-                val collapsedBarWidth = 12.dp.toPx()
-                val collapsedBarHeight = 2.5.dp.toPx()
-                val collapsedSpacing = (96.dp.toPx() / collapsedBarsCount)
-                    .coerceIn(6.dp.toPx(), 12.dp.toPx())
-                val collapsedCorner = CornerRadius(collapsedBarHeight, collapsedBarHeight)
+            // Collapsed-stack metrics live outside the pass because the
+            // expanded wheel's focal point blooms out of the dark bar.
+            val collapsedBarsCount = symbolicAyahBarCount(ayahCount)
+            val collapsedBarHeight = 2.5.dp.toPx()
+            val collapsedSpacing = (96.dp.toPx() / collapsedBarsCount)
+                .coerceIn(6.dp.toPx(), 12.dp.toPx())
+            val collapsedStep = collapsedBarHeight + collapsedSpacing
+            val readProgress = if (ayahCount > 1) {
+                (currentAyah - 1).toFloat() / (ayahCount - 1).toFloat()
+            } else {
+                0f
+            }
+            val collapsedActivePosition = readProgress * (collapsedBarsCount - 1)
 
-                val progress = if (ayahCount > 1) {
-                    (currentAyah - 1).toFloat() / (ayahCount - 1).toFloat()
-                } else {
-                    0f
-                }
-                val activeIndex = (progress * (collapsedBarsCount - 1)).roundToInt().coerceIn(0, collapsedBarsCount - 1)
+            if (collapsedAlpha > 0.01f) {
+                // Symbolic summary of the surah: bar count grows with ayah
+                // count (sqrt-mapped), and the glow slides through the stack
+                // as the reader moves through the surah.
+                val collapsedBarWidth = 12.dp.toPx()
+                val collapsedCorner = CornerRadius(collapsedBarHeight, collapsedBarHeight)
+                val halfSpan = ((collapsedBarsCount - 1) / 2f).coerceAtLeast(1f)
 
                 for (index in 0 until collapsedBarsCount) {
-                    val relative = index - (collapsedBarsCount - 1) / 2.0
-                    val y = centerY + relative.toFloat() * (collapsedBarHeight + collapsedSpacing)
-                    val isSelected = index == activeIndex
+                    val relative = index - (collapsedBarsCount - 1) / 2f
+                    val y = centerY + relative * collapsedStep
+                    // Staggered exit: outer bars slip out toward the track
+                    // first as the wheel opens, and return last on close.
+                    val exit = (collapsedAlpha * 1.35f - (abs(relative) / halfSpan) * 0.35f)
+                        .coerceIn(0f, 1f)
+                    if (exit <= 0.01f) continue
+                    // Continuous focus instead of one hard active index, so
+                    // the highlight glides between bars during scroll.
+                    val focus = (1f - abs(index - collapsedActivePosition)).coerceIn(0f, 1f)
                     drawRoundRect(
-                        color = if (isSelected) {
-                            onSurface.copy(alpha = 0.9f * collapsedAlpha)
-                        } else {
-                            onSurface.copy(alpha = 0.2f * collapsedAlpha)
-                        },
-                        topLeft = Offset(collapsedX, y - collapsedBarHeight / 2f),
-                        size = Size(collapsedBarWidth, collapsedBarHeight),
+                        color = onSurface.copy(alpha = (0.18f + 0.72f * focus) * exit),
+                        topLeft = Offset(
+                            collapsedX - (1f - exit) * 8.dp.toPx(),
+                            y - collapsedBarHeight / 2f,
+                        ),
+                        size = Size(collapsedBarWidth * (0.7f + 0.5f * focus), collapsedBarHeight),
                         cornerRadius = collapsedCorner,
                     )
                 }
             }
 
-            if (expansion > 0.01f) {
+            if (expand > 0.01f) {
                 val wheelX = 14.dp.toPx()
                 val tickSpacing = 14.dp.toPx()
-                val visibleRadius = (ceil(size.height / tickSpacing / 2f).toInt() + 2).coerceAtLeast(8)
-                val first = (selectedPosition - visibleRadius).toInt().coerceAtLeast(1)
-                val last = (selectedPosition + visibleRadius).toInt().coerceAtMost(ayahCount)
+                val focusRadius = (ceil(size.height / tickSpacing / 2f).toInt() + 2)
+                    .coerceAtLeast(8)
+                // The focal point rides the rail like a scrollbar thumb: its
+                // height mirrors the dark bar's relative position in the
+                // surah. On open it blooms out of the dark bar itself, then
+                // glides to (and drags along) that proportional position.
+                val anchorMargin = 72.dp.toPx()
+                val anchorTravel = (size.height - 2f * anchorMargin).coerceAtLeast(0f)
+                val dialFraction = if (ayahCount > 1) {
+                    ((selectedPosition - 1f) / (ayahCount - 1f)).coerceIn(0f, 1f)
+                } else {
+                    0.5f
+                }
+                val collapsedActiveY = centerY +
+                    (collapsedActivePosition - (collapsedBarsCount - 1) / 2f) * collapsedStep
+                val restingAnchorY = anchorMargin + dialFraction * anchorTravel
+                val anchorY = collapsedActiveY + (restingAnchorY - collapsedActiveY) * expand
+                val first = (selectedPosition - anchorY / tickSpacing).toInt()
+                    .coerceAtLeast(1)
+                val last = (selectedPosition + (size.height - anchorY) / tickSpacing + 1f).toInt()
+                    .coerceAtMost(ayahCount)
                 val verticalFade = 82.dp.toPx()
                 val minBarLength = 8.dp.toPx()
                 val maxBarLength = 44.dp.toPx()
@@ -942,17 +991,23 @@ private fun AyahSelectorRail(
 
                 for (ayah in first..last) {
                     val offset = ayah - selectedPosition
-                    val y = centerY + offset * tickSpacing
-                    val distance = (abs(offset) / visibleRadius).coerceIn(0f, 1f)
+                    val y = anchorY + offset * tickSpacing
+                    val distance = (abs(offset) / focusRadius).coerceIn(0f, 1f)
                     val focus = 1f - distance
                     val major = ayah == 1 || ayah == ayahCount || ayah % 5 == 0
-                    val arrival = ((expansion - distance * 0.24f) / 0.76f).coerceIn(0f, 1f)
+                    // Bloom outward from the focal tick on open, retract on close.
+                    val arrival = ((expand - distance * 0.3f) / 0.7f).coerceIn(0f, 1f)
+                    if (arrival <= 0.01f) continue
                     val edgeFade = (min(y, size.height - y) / verticalFade).coerceIn(0f, 1f)
+                    // Ticks scrolling in from either end grow out of the track
+                    // rather than popping in at full length; the focal tick is
+                    // exempt so it stays tallest even near the rail's ends.
+                    val grow = arrival * (0.35f + 0.65f * maxOf(edgeFade, focus * focus))
                     val length = (
                         minBarLength +
                             (maxBarLength - minBarLength) * focus * focus +
                             if (major) 6.dp.toPx() else 0f
-                        ) * arrival
+                        ) * grow
                     val tickThickness = minBarThickness + (maxBarThickness - minBarThickness) * focus
                     val tickCorner = CornerRadius(tickThickness, tickThickness)
                     val alpha = (0.1f + 0.62f * focus) * arrival * edgeFade
@@ -968,11 +1023,13 @@ private fun AyahSelectorRail(
                         cornerRadius = tickCorner,
                     )
                     if (isSelected && holdProgress > 0f) {
+                        // Grace countdown: the underline drains away; until it
+                        // empties, touching the rail reopens the selection.
                         drawRoundRect(
-                            color = accents.gold.copy(alpha = 0.32f * arrival),
-                            topLeft = Offset(wheelX, y + tickThickness * 1.8f),
-                            size = Size(length * holdProgress, 1.25.dp.toPx()),
-                            cornerRadius = CornerRadius(1.25.dp.toPx(), 1.25.dp.toPx()),
+                            color = accents.gold.copy(alpha = 0.4f * arrival),
+                            topLeft = Offset(wheelX, y + tickThickness * 1.9f),
+                            size = Size(length * (1f - holdProgress), 1.5.dp.toPx()),
+                            cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx()),
                         )
                     }
                     numberPaint.color = if (isSelected) {

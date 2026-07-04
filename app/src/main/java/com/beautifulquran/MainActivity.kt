@@ -2,25 +2,45 @@ package com.beautifulquran
 
 import android.graphics.Color
 import android.os.Bundle
+import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color as ComposeColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.zIndex
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
+import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.AppViewModelFactory
 import com.beautifulquran.ui.home.HomeScreen
 import com.beautifulquran.ui.home.HomeViewModel
@@ -29,7 +49,9 @@ import com.beautifulquran.ui.reader.ReaderViewModel
 import com.beautifulquran.ui.settings.SettingsScreen
 import com.beautifulquran.ui.settings.SettingsViewModel
 import com.beautifulquran.ui.theme.BeautifulQuranTheme
-import com.beautifulquran.data.ThemeMode
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
 
@@ -58,64 +80,247 @@ class MainActivity : ComponentActivity() {
             }
 
             BeautifulQuranTheme(themeMode = settings.themeMode) {
-                val navController = rememberNavController()
-                // Sheets are single planes viewed one at a time: the next
-                // sheet glides in from the side while the old one drifts away,
-                // both softened with a fade so nothing feels stacked.
-                NavHost(
-                    navController = navController,
-                    startDestination = "home",
-                    modifier = Modifier,
-                    enterTransition = {
-                        slideInHorizontally(tween(380)) { it / 4 } + fadeIn(tween(380))
-                    },
-                    exitTransition = {
-                        slideOutHorizontally(tween(380)) { -it / 4 } + fadeOut(tween(380))
-                    },
-                    popEnterTransition = {
-                        slideInHorizontally(tween(380)) { -it / 4 } + fadeIn(tween(380))
-                    },
-                    popExitTransition = {
-                        slideOutHorizontally(tween(380)) { it / 4 } + fadeOut(tween(380))
-                    },
-                ) {
-                    composable("home") {
-                        val vm: HomeViewModel = viewModel(factory = AppViewModelFactory)
-                        HomeScreen(
-                            viewModel = vm,
-                            onOpenSurah = { surahId, ayah ->
-                                navController.navigate(
-                                    if (ayah != null) "reader/$surahId?ayah=$ayah" else "reader/$surahId",
-                                )
-                            },
-                        )
-                    }
-                    composable("reader/{surahId}?ayah={ayah}") { backStackEntry ->
-                        val surahId =
-                            backStackEntry.arguments?.getString("surahId")?.toIntOrNull() ?: 1
-                        val startAyah = backStackEntry.arguments?.getString("ayah")?.toIntOrNull()
-                        val vm: ReaderViewModel = viewModel(factory = AppViewModelFactory)
-                        ReaderScreen(
-                            surahId = surahId,
-                            startAyah = startAyah,
-                            viewModel = vm,
-                            onBack = { navController.popBackStack() },
-                            onOpenSettings = { navController.navigate("settings") },
-                        )
-                    }
-                    composable("settings") {
-                        val vm: SettingsViewModel = viewModel(factory = AppViewModelFactory)
-                        SettingsScreen(
-                            viewModel = vm,
-                            onBack = { navController.popBackStack() },
-                        )
-                    }
-                }
+                PaperStackApp()
             }
         }
     }
 
     private companion object {
         const val NIGHTFALL_STATUS_BAR = 0xFFFAF3E8.toInt()
+    }
+}
+
+private const val COVER_LAYER = 0
+private const val AYAH_LAYER = 1
+private const val SETTINGS_LAYER = 2
+
+@Composable
+private fun PaperStackApp() {
+    val homeViewModel: HomeViewModel = viewModel(factory = AppViewModelFactory)
+    val readerViewModel: ReaderViewModel = viewModel(factory = AppViewModelFactory)
+    val settingsViewModel: SettingsViewModel = viewModel(factory = AppViewModelFactory)
+
+    var selectedSurahId by rememberSaveable { mutableIntStateOf(0) }
+    var selectedStartAyah by rememberSaveable { mutableIntStateOf(0) }
+    var settledLayer by rememberSaveable { mutableIntStateOf(COVER_LAYER) }
+    val stackPosition = remember { Animatable(settledLayer.toFloat()) }
+    val scope = rememberCoroutineScope()
+
+    suspend fun settleTo(layer: Int) {
+        val boundedLayer = layer.coerceIn(COVER_LAYER, if (selectedSurahId == 0) COVER_LAYER else SETTINGS_LAYER)
+        settledLayer = boundedLayer
+        stackPosition.animateTo(
+            targetValue = boundedLayer.toFloat(),
+            animationSpec = spring(
+                dampingRatio = 0.88f,
+                stiffness = Spring.StiffnessMediumLow,
+            ),
+        )
+    }
+
+    fun animateTo(layer: Int) {
+        scope.launch { settleTo(layer) }
+    }
+
+    BackHandler(enabled = settledLayer > COVER_LAYER || stackPosition.value > COVER_LAYER + 0.01f) {
+        animateTo((stackPosition.value.roundToInt() - 1).coerceAtLeast(COVER_LAYER))
+    }
+
+    LaunchedEffect(selectedSurahId) {
+        if (selectedSurahId == 0) settleTo(COVER_LAYER)
+    }
+
+    var dragStartPosition by remember { mutableFloatStateOf(0f) }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .paperStackDrag(
+                position = { stackPosition.value },
+                maxLayer = { if (selectedSurahId == 0) COVER_LAYER else SETTINGS_LAYER },
+                onDragStart = { dragStartPosition = stackPosition.value },
+                onDrag = { deltaPages ->
+                    scope.launch {
+                        val maxLayer = if (selectedSurahId == 0) COVER_LAYER else SETTINGS_LAYER
+                        stackPosition.snapTo(
+                            (dragStartPosition + deltaPages)
+                                .coerceIn(COVER_LAYER.toFloat(), maxLayer.toFloat()),
+                        )
+                    }
+                },
+                onSettle = { target -> animateTo(target) },
+            ),
+    ) {
+        val page = stackPosition.value
+        PaperPage(
+            layer = PaperLayer.Settings,
+            stackPosition = page,
+            modifier = Modifier.zIndex(0f),
+        ) {
+            SettingsScreen(
+                viewModel = settingsViewModel,
+                onBack = { animateTo(AYAH_LAYER) },
+            )
+        }
+
+        if (selectedSurahId != 0) {
+            PaperPage(
+                layer = PaperLayer.Ayah,
+                stackPosition = page,
+                modifier = Modifier.zIndex(1f),
+            ) {
+                key(selectedSurahId, selectedStartAyah) {
+                    ReaderScreen(
+                        surahId = selectedSurahId,
+                        startAyah = selectedStartAyah.takeIf { it > 0 },
+                        viewModel = readerViewModel,
+                        onBack = { animateTo(COVER_LAYER) },
+                        onOpenSettings = { animateTo(SETTINGS_LAYER) },
+                    )
+                }
+            }
+        }
+
+        PaperPage(
+            layer = PaperLayer.Cover,
+            stackPosition = page,
+            modifier = Modifier.zIndex(2f),
+        ) {
+            HomeScreen(
+                viewModel = homeViewModel,
+                onOpenSurah = { surahId, ayah ->
+                    selectedSurahId = surahId
+                    selectedStartAyah = ayah ?: 0
+                    animateTo(AYAH_LAYER)
+                },
+            )
+        }
+    }
+}
+
+private enum class PaperLayer {
+    Settings,
+    Ayah,
+    Cover,
+}
+
+@Composable
+private fun PaperPage(
+    layer: PaperLayer,
+    stackPosition: Float,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val turning = when (layer) {
+        PaperLayer.Cover -> stackPosition.coerceIn(0f, 1f)
+        PaperLayer.Ayah -> (stackPosition - 1f).coerceIn(0f, 1f)
+        PaperLayer.Settings -> 0f
+    }
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .paperLayerTransform(layer, stackPosition)
+            .paperEdge(turning),
+    ) {
+        content()
+    }
+}
+
+private fun Modifier.paperLayerTransform(
+    layer: PaperLayer,
+    stackPosition: Float,
+): Modifier = graphicsLayer {
+    val width = size.width
+    cameraDistance = 18f * density
+    when (layer) {
+        PaperLayer.Cover -> {
+            val turn = stackPosition.coerceIn(0f, 1f)
+            translationX = -width * turn
+            rotationY = -5f * turn
+            shadowElevation = 22f * (1f - turn)
+        }
+        PaperLayer.Ayah -> {
+            val reveal = stackPosition.coerceIn(0f, 1f)
+            val turn = (stackPosition - 1f).coerceIn(0f, 1f)
+            translationX = width * 0.055f * (1f - reveal) - width * turn
+            scaleX = 0.985f + 0.015f * reveal
+            scaleY = 0.985f + 0.015f * reveal
+            rotationY = -4f * turn
+            shadowElevation = 18f * (1f - turn)
+        }
+        PaperLayer.Settings -> {
+            val reveal = (stackPosition / SETTINGS_LAYER).coerceIn(0f, 1f)
+            translationX = width * 0.035f * (1f - reveal)
+            scaleX = 0.97f + 0.03f * reveal
+            scaleY = 0.97f + 0.03f * reveal
+        }
+    }
+}
+
+private fun Modifier.paperEdge(turning: Float): Modifier = drawWithContent {
+    drawContent()
+    if (turning > 0.01f && turning < 0.99f) {
+        val edgeWidth = 30f
+        drawRect(
+            brush = Brush.horizontalGradient(
+                colors = listOf(
+                    ComposeColor.Transparent,
+                    ComposeColor.Black.copy(alpha = 0.16f * (1f - turning)),
+                ),
+            ),
+            topLeft = Offset(size.width - edgeWidth, 0f),
+            size = Size(edgeWidth, size.height),
+        )
+    }
+}
+
+private fun Modifier.paperStackDrag(
+    position: () -> Float,
+    maxLayer: () -> Int,
+    onDragStart: () -> Unit,
+    onDrag: (deltaPages: Float) -> Unit,
+    onSettle: (targetLayer: Int) -> Unit,
+): Modifier = pointerInput(Unit) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        val velocityTracker = VelocityTracker()
+        val touchSlop = viewConfiguration.touchSlop
+        var horizontalDrag = false
+        var totalDx = 0f
+        var totalDy = 0f
+        velocityTracker.addPosition(down.uptimeMillis, down.position)
+
+        while (true) {
+            val event = awaitPointerEvent()
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            val delta = change.positionChange()
+            totalDx += delta.x
+            totalDy += delta.y
+            velocityTracker.addPosition(change.uptimeMillis, change.position)
+
+            if (!horizontalDrag) {
+                val mostlyHorizontal = abs(totalDx) > abs(totalDy) * 1.25f
+                if (abs(totalDx) > touchSlop && mostlyHorizontal) {
+                    horizontalDrag = true
+                    onDragStart()
+                }
+            }
+
+            if (horizontalDrag) {
+                val width = size.width.toFloat().coerceAtLeast(1f)
+                onDrag(-totalDx / width)
+                change.consume()
+            }
+
+            if (!change.pressed) break
+        }
+
+        if (horizontalDrag) {
+            val velocityPages = -velocityTracker.calculateVelocity().x / size.width.toFloat().coerceAtLeast(1f)
+            val projected = position() + velocityPages * 0.18f
+            val target = projected
+                .roundToInt()
+                .coerceIn(COVER_LAYER, maxLayer())
+            onSettle(target)
+        }
     }
 }
