@@ -580,6 +580,8 @@ fun ReaderScreen(
             return@Scaffold
         }
 
+        var ayahSelectorExpanded by remember { mutableStateOf(false) }
+
         // One column of text at a book-like measure: full-bleed on phones,
         // centered with air on tablets and in landscape.
         Box(
@@ -652,6 +654,7 @@ fun ReaderScreen(
                                 playbackSpeed = playerState.speed,
                                 isActiveAyah = isActive,
                                 dimmed = isThisSurahPlaying && playerState.isPlaying && !isActive,
+                                obscuredBySelector = ayahSelectorExpanded,
                                 fontScale = settings.fontScale,
                                 showGloss = settings.showWordGloss,
                                 showTransliteration = settings.showTransliteration,
@@ -700,6 +703,7 @@ fun ReaderScreen(
                 },
                 chromeAlpha = { if (isThisSurahPlaying && playerState.isPlaying) 0f else chromeAlpha.value },
                 onJumpToAyah = { requestedJumpAyah = it },
+                onExpandedChange = { ayahSelectorExpanded = it },
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .fillMaxHeight()
@@ -785,6 +789,7 @@ private fun AyahSelectorRail(
     currentPosition: () -> Float,
     chromeAlpha: () -> Float,
     onJumpToAyah: (Int) -> Unit,
+    onExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -806,6 +811,11 @@ private fun AyahSelectorRail(
     val latestCurrentAyah by rememberUpdatedState(currentAyah)
     val latestCurrentPosition by rememberUpdatedState(currentPosition)
     val latestOnJumpToAyah by rememberUpdatedState(onJumpToAyah)
+    val latestOnExpandedChange by rememberUpdatedState(onExpandedChange)
+
+    LaunchedEffect(expanded) {
+        latestOnExpandedChange(expanded)
+    }
 
     fun scheduleReleaseCommit(start: Float, velocity: Float) {
         releaseJob?.cancel()
