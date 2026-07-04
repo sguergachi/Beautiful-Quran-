@@ -1,6 +1,8 @@
 package com.beautifulquran.ui.settings
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,7 +14,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -39,10 +43,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.data.ThemeMode
+import com.beautifulquran.ui.theme.themePreviewColors
 import com.beautifulquran.ui.theme.verticalFadingEdges
 
 private val ATTRIBUTIONS = """
@@ -194,21 +201,13 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(32.dp))
             SectionLabel("Theme")
-            Spacer(Modifier.height(10.dp))
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                ThemeMode.entries.forEachIndexed { index, mode ->
-                    SegmentedButton(
-                        selected = settings.themeMode == mode,
-                        onClick = { viewModel.settings.update { it.copy(themeMode = mode) } },
-                        shape = SegmentedButtonDefaults.itemShape(index, ThemeMode.entries.size),
-                        colors = greenSegmentedButtonColors(),
-                    ) {
-                        Text(
-                            mode.name.lowercase().replaceFirstChar { it.uppercase() },
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                    }
-                }
+            Spacer(Modifier.height(8.dp))
+            ThemeMode.entries.forEach { mode ->
+                ThemeOptionRow(
+                    mode = mode,
+                    selected = settings.themeMode == mode,
+                    onClick = { viewModel.settings.update { it.copy(themeMode = mode) } },
+                )
             }
 
             Spacer(Modifier.height(48.dp))
@@ -224,6 +223,72 @@ fun SettingsScreen(
         }
     }
 }
+
+@Composable
+private fun ThemeOptionRow(
+    mode: ThemeMode,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(vertical = 4.dp),
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onClick,
+            colors = RadioButtonDefaults.colors(
+                selectedColor = MaterialTheme.colorScheme.primary,
+                unselectedColor = MaterialTheme.colorScheme.outline,
+            ),
+        )
+        Text(
+            text = mode.label,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Spacer(Modifier.weight(1f))
+        ThemeColorPreview(colors = themePreviewColors(mode))
+    }
+}
+
+@Composable
+private fun ThemeColorPreview(colors: List<Color>) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+                shape = RoundedCornerShape(8.dp),
+            )
+            .padding(3.dp),
+    ) {
+        colors.forEach { color ->
+            Box(
+                modifier = Modifier
+                    .size(width = 16.dp, height = 22.dp)
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(color),
+            )
+        }
+    }
+}
+
+private val ThemeMode.label: String
+    get() = when (this) {
+        ThemeMode.SYSTEM -> "System"
+        ThemeMode.LIGHT -> "Paper"
+        ThemeMode.DARK -> "Nightfall"
+        ThemeMode.ROYAL_GREEN -> "Royal green"
+    }
 
 @Composable
 private fun SectionLabel(text: String) {

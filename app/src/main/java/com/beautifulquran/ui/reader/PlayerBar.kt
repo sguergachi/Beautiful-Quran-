@@ -105,9 +105,7 @@ fun PlayerBar(
                 IconButton(
                     onClick = onFastBackward,
                     enabled = isThisSurahLoaded,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .graphicsLayer { alpha = chromeAlpha() },
+                    modifier = Modifier.size(48.dp),
                 ) {
                     Icon(
                         Icons.Rounded.FastRewind,
@@ -138,9 +136,7 @@ fun PlayerBar(
                 IconButton(
                     onClick = onFastForward,
                     enabled = isThisSurahLoaded,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .graphicsLayer { alpha = chromeAlpha() },
+                    modifier = Modifier.size(48.dp),
                 ) {
                     Icon(
                         Icons.Rounded.FastForward,

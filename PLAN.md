@@ -229,11 +229,13 @@ A Python script (run manually, output committed or attached to releases):
 
 ### Theme
 
-- **Light "Paper"**: warm off-white `#FAF6EF`, ink `#1C1B18`, accent **deep teal-green
+- **Paper**: warm sepia off-white `#FAF3E8`, ink `#1C1B18`, accent **deep teal-green
   `#0E5C4A`**, highlight gold `#C9A227` (active word pill uses a soft translucent
   gold/teal wash, never pure yellow).
-- **Dark "Night prayer"**: near-black `#12140F`, warm parchment text `#E8E2D5`, same
-  accents desaturated. True dark, OLED-friendly.
+- **Nightfall**: near-black green `#010F0C`, warm parchment text `#E8E2D5`, same
+  accents desaturated.
+- **Royal green**: the previous green dark palette, `#062C24`, with the same
+  parchment text and desaturated accents.
 - Arabic: KFGQPC Uthmanic Hafs, base 26–34 sp, line height ~2.1× (Uthmani diacritics
   need air). English gloss: 11–12 sp, muted. Translation paragraph: 15–16 sp serif.
 - Ornament: a single thin geometric divider + octagonal ayah-number medallion

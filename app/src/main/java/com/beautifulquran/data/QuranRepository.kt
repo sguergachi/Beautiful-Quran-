@@ -55,13 +55,13 @@ class QuranRepository(private val database: QuranDatabase) {
             map
         }
         val ayahs = database.db.rawQuery(
-            "SELECT ayah_number, text_uthmani, translation_en FROM ayahs WHERE surah_id = ? ORDER BY ayah_number",
+            "SELECT ayah_number, text_uthmani, translation_en, page FROM ayahs WHERE surah_id = ? ORDER BY ayah_number",
             arrayOf(surahId.toString()),
         ).use { c ->
             buildList {
                 while (c.moveToNext()) {
                     val n = c.getInt(0)
-                    add(Ayah(surahId, n, c.getString(1), c.getString(2), words[n].orEmpty()))
+                    add(Ayah(surahId, n, c.getString(1), c.getString(2), c.getInt(3), words[n].orEmpty()))
                 }
             }
         }

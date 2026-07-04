@@ -1,7 +1,9 @@
 package com.beautifulquran
 
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.tween
@@ -9,6 +11,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -25,6 +29,7 @@ import com.beautifulquran.ui.reader.ReaderViewModel
 import com.beautifulquran.ui.settings.SettingsScreen
 import com.beautifulquran.ui.settings.SettingsViewModel
 import com.beautifulquran.ui.theme.BeautifulQuranTheme
+import com.beautifulquran.data.ThemeMode
 
 class MainActivity : ComponentActivity() {
 
@@ -37,6 +42,20 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val settings by app.settings.settings.collectAsStateWithLifecycle()
+            val systemDark = isSystemInDarkTheme()
+            val usesNightfall = settings.themeMode == ThemeMode.DARK ||
+                (settings.themeMode == ThemeMode.SYSTEM && systemDark)
+
+            SideEffect {
+                val statusBarStyle = if (usesNightfall) {
+                    SystemBarStyle.light(NIGHTFALL_STATUS_BAR, NIGHTFALL_STATUS_BAR)
+                } else {
+                    SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) {
+                        settings.themeMode == ThemeMode.ROYAL_GREEN
+                    }
+                }
+                enableEdgeToEdge(statusBarStyle = statusBarStyle)
+            }
 
             BeautifulQuranTheme(themeMode = settings.themeMode) {
                 val navController = rememberNavController()
@@ -94,5 +113,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private companion object {
+        const val NIGHTFALL_STATUS_BAR = 0xFFFAF3E8.toInt()
     }
 }

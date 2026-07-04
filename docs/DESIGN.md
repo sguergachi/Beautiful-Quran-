@@ -45,20 +45,22 @@ finishes as the voice moves on. It is drawn as a one-word offscreen mask
 whose progress is read only at draw time; nothing recomposes per frame
 (`Modifier.letterFadeIn` in `ui/theme/Fade.kt`).
 
-While reciting, all chrome — top-bar icons, reciter name, prev/next,
-repeat, speed — fades to 8 % over a slow 900 ms, leaving only the words and
-the pause button on the page. Pause, and it breathes back.
+While reciting, the top bar, reciter name, repeat, and speed fade to 8 % over
+a slow 900 ms, leaving the words plus play/pause and rewind/forward controls
+on the page. Pause, and it breathes back.
 
 ## Color
 
 Two themes, both "paper":
 
-- **Light — Paper**: warm off-white `#FAF6EF`, ink `#1C1B18`,
+- **Paper**: warm sepia off-white `#FAF3E8`, ink `#1C1B18`,
   deep green `#0E5C4A` as the single interactive accent,
   muted gold `#B8901C` reserved for Quranic ornament (ayah marks, surah
   numbers, the ۞).
-- **Dark — Night**: near-black `#12140F` (OLED-friendly), parchment ink
-  `#E8E2D5`, soft green `#7FB8A4`, warmer gold `#D9B44A`.
+- **Nightfall**: near-black green `#010F0C`, parchment ink `#E8E2D5`,
+  soft green `#7FB8A4`, warmer gold `#D9B44A`.
+- **Royal green**: deep green `#062C24`, parchment ink `#E8E2D5`,
+  soft green `#7FB8A4`, warmer gold `#D9B44A`.
 
 Gold never marks interaction; green never decorates. One accent each.
 

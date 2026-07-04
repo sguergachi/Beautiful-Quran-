@@ -11,9 +11,9 @@ import androidx.compose.ui.graphics.Color
 import com.beautifulquran.data.ThemeMode
 
 // "Paper" light palette
-private val PaperBackground = Color(0xFFFAF6EF)
-private val PaperSurface = Color(0xFFFFFDF7)
-private val PaperSurfaceHigh = Color(0xFFF3EDE0)
+private val PaperBackground = Color(0xFFFAF3E8)
+private val PaperSurface = Color(0xFFFFFBF2)
+private val PaperSurfaceHigh = Color(0xFFF2E7D5)
 private val Ink = Color(0xFF1C1B18)
 private val InkMuted = Color(0xFF6E6858)
 private val DeepGreen = Color(0xFF0E5C4A)
@@ -22,12 +22,17 @@ private val DeepGreenPale = Color(0xFFD7E8E1)
 private val DeepGreenFaint = Color(0xFFE8F3EE)
 
 // "Night prayer" dark palette
-private val NightBackground = Color(0xFF12140F)
-private val NightSurface = Color(0xFF1A1D17)
-private val NightSurfaceHigh = Color(0xFF232720)
+private val NightBackground = Color(0xFF010F0C)
+private val NightSurface = Color(0xFF031813)
+private val NightSurfaceHigh = Color(0xFF05241D)
 private val Parchment = Color(0xFFE8E2D5)
 private val ParchmentMuted = Color(0xFF97917F)
 private val SoftGreen = Color(0xFF7FB8A4)
+
+// "Royal green" dark palette
+private val RoyalGreenBackground = Color(0xFF062C24)
+private val RoyalGreenSurface = Color(0xFF0A382E)
+private val RoyalGreenSurfaceHigh = Color(0xFF10483B)
 
 /**
  * Accent colors that sit outside the Material scheme.
@@ -75,21 +80,21 @@ private val LightColors: ColorScheme = lightColorScheme(
     onSurfaceVariant = InkMuted,
     surfaceTint = DeepGreen,
     inverseSurface = Color(0xFF32302A),
-    inverseOnSurface = Color(0xFFF5EFE5),
+    inverseOnSurface = Color(0xFFF5ECDC),
     error = Color(0xFFB3261E),
     onError = Color.White,
     errorContainer = Color(0xFFF9DEDC),
     onErrorContainer = Color(0xFF410E0B),
-    outline = Color(0xFFBFB8A6),
-    outlineVariant = Color(0xFFD9D0BE),
+    outline = Color(0xFFC0B49E),
+    outlineVariant = Color(0xFFDACCB6),
     scrim = Color.Black,
     surfaceBright = PaperSurface,
-    surfaceDim = Color(0xFFE7DFCC),
+    surfaceDim = Color(0xFFE8DCC5),
     surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFFCF8F1),
+    surfaceContainerLow = Color(0xFFFCF5E9),
     surfaceContainer = PaperSurfaceHigh,
-    surfaceContainerHigh = Color(0xFFEDE6D6),
-    surfaceContainerHighest = Color(0xFFE7DFCC),
+    surfaceContainerHigh = Color(0xFFEDE1CC),
+    surfaceContainerHighest = Color(0xFFE8DCC5),
 )
 
 private val DarkColors: ColorScheme = darkColorScheme(
@@ -119,16 +124,55 @@ private val DarkColors: ColorScheme = darkColorScheme(
     onError = Color(0xFF601410),
     errorContainer = Color(0xFF8C1D18),
     onErrorContainer = Color(0xFFF9DEDC),
-    outline = Color(0xFF4A4E44),
-    outlineVariant = Color(0xFF3B4038),
+    outline = Color(0xFF365F55),
+    outlineVariant = Color(0xFF153D34),
     scrim = Color.Black,
-    surfaceBright = Color(0xFF383C33),
+    surfaceBright = Color(0xFF0B3B31),
     surfaceDim = NightBackground,
-    surfaceContainerLowest = Color(0xFF0D0F0B),
-    surfaceContainerLow = Color(0xFF171A14),
+    surfaceContainerLowest = Color(0xFF000907),
+    surfaceContainerLow = Color(0xFF02130F),
     surfaceContainer = NightSurfaceHigh,
-    surfaceContainerHigh = Color(0xFF2A2E26),
-    surfaceContainerHighest = Color(0xFF31352C),
+    surfaceContainerHigh = Color(0xFF082F27),
+    surfaceContainerHighest = Color(0xFF0B3B31),
+)
+
+private val RoyalGreenColors: ColorScheme = darkColorScheme(
+    primary = SoftGreen,
+    onPrimary = Color(0xFF06382D),
+    primaryContainer = Color(0xFF0E5C4A),
+    onPrimaryContainer = Color(0xFFD7E8E1),
+    inversePrimary = DeepGreen,
+    secondary = SoftGreen,
+    onSecondary = RoyalGreenBackground,
+    secondaryContainer = Color(0xFF244E43),
+    onSecondaryContainer = Color(0xFFD7E8E1),
+    tertiary = Color(0xFF9BC9B8),
+    onTertiary = Color(0xFF0B332A),
+    tertiaryContainer = Color(0xFF21493E),
+    onTertiaryContainer = Color(0xFFE0EFE9),
+    background = RoyalGreenBackground,
+    onBackground = Parchment,
+    surface = RoyalGreenSurface,
+    onSurface = Parchment,
+    surfaceVariant = RoyalGreenSurfaceHigh,
+    onSurfaceVariant = ParchmentMuted,
+    surfaceTint = SoftGreen,
+    inverseSurface = Color(0xFFE8E2D5),
+    inverseOnSurface = Color(0xFF2F332B),
+    error = Color(0xFFF2B8B5),
+    onError = Color(0xFF601410),
+    errorContainer = Color(0xFF8C1D18),
+    onErrorContainer = Color(0xFFF9DEDC),
+    outline = Color(0xFF568276),
+    outlineVariant = Color(0xFF2C5E51),
+    scrim = Color.Black,
+    surfaceBright = Color(0xFF1C5E4E),
+    surfaceDim = RoyalGreenBackground,
+    surfaceContainerLowest = Color(0xFF04221C),
+    surfaceContainerLow = Color(0xFF083229),
+    surfaceContainer = RoyalGreenSurfaceHigh,
+    surfaceContainerHigh = Color(0xFF155242),
+    surfaceContainerHighest = Color(0xFF1A5D4B),
 )
 
 private val LightAccents = QuranAccents(
@@ -148,20 +192,43 @@ private val DarkAccents = QuranAccents(
 )
 
 @Composable
+fun themePreviewColors(themeMode: ThemeMode): List<Color> {
+    val systemDark = isSystemInDarkTheme()
+    return when (themeMode) {
+        ThemeMode.SYSTEM -> if (systemDark) {
+            listOf(NightBackground, NightSurfaceHigh, SoftGreen, Parchment)
+        } else {
+            listOf(PaperBackground, PaperSurfaceHigh, DeepGreen, Ink)
+        }
+        ThemeMode.LIGHT -> listOf(PaperBackground, PaperSurfaceHigh, DeepGreen, Ink)
+        ThemeMode.DARK -> listOf(NightBackground, NightSurfaceHigh, SoftGreen, Parchment)
+        ThemeMode.ROYAL_GREEN -> listOf(RoyalGreenBackground, RoyalGreenSurfaceHigh, SoftGreen, Parchment)
+    }
+}
+
+@Composable
 fun BeautifulQuranTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     content: @Composable () -> Unit,
 ) {
-    val dark = when (themeMode) {
-        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+    val systemDark = isSystemInDarkTheme()
+    val darkAccents = when (themeMode) {
+        ThemeMode.SYSTEM -> systemDark
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
+        ThemeMode.ROYAL_GREEN -> true
+    }
+    val colors = when (themeMode) {
+        ThemeMode.SYSTEM -> if (systemDark) DarkColors else LightColors
+        ThemeMode.LIGHT -> LightColors
+        ThemeMode.DARK -> DarkColors
+        ThemeMode.ROYAL_GREEN -> RoyalGreenColors
     }
     androidx.compose.runtime.CompositionLocalProvider(
-        LocalQuranAccents provides if (dark) DarkAccents else LightAccents,
+        LocalQuranAccents provides if (darkAccents) DarkAccents else LightAccents,
     ) {
         MaterialTheme(
-            colorScheme = if (dark) DarkColors else LightColors,
+            colorScheme = colors,
             typography = QuranTypography,
             content = content,
         )

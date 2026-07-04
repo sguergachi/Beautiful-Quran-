@@ -11,7 +11,7 @@ Apple Music lyrics view.
 - 🈯 Word-by-word English gloss + Saheeh International translation
 - 🔁 Repeat one ayah, the whole surah, or any ayah range you choose
 - 🔍 Search the English translation and word glosses within a surah
-- 🌙 Warm paper light theme and OLED-friendly dark theme
+- 🌙 Warm paper light theme and deep green dark theme
 - 📴 All text and timing data bundled offline; audio streams and caches
 - 🚫 No ads, no accounts, no analytics
 
