@@ -4,7 +4,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -39,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.drop
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.BuildConfig
 import com.beautifulquran.R
@@ -71,6 +72,9 @@ import com.beautifulquran.ui.theme.verticalFadingEdges
 
 /** Position of the search field in the list (after the title) — the row we lift to the top on focus. */
 private const val SEARCH_ITEM_INDEX = 1
+
+/** How far (px) the list must scroll past the lifted search before a scroll counts as "dismiss". */
+private const val DISMISS_SCROLL_THRESHOLD_PX = 24
 
 @Composable
 fun HomeScreen(
@@ -89,18 +93,21 @@ fun HomeScreen(
     val listState = rememberLazyListState()
 
     // When the search takes focus, lift it to the top of the list so the title
-    // slides away and the dials pane has room above the keyboard.
+    // slides away and the dials pane has room above the keyboard. Once lifted,
+    // a deliberate scroll of the list dismisses the search — clearing focus
+    // hides the keyboard and fades the dials pane out. We watch the settled
+    // scroll position rather than a drag gesture, so the tiny movement in a
+    // focus tap (which never actually scrolls the list) can't self-dismiss.
     LaunchedEffect(searchFocused) {
-        if (searchFocused) listState.animateScrollToItem(SEARCH_ITEM_INDEX)
-    }
-
-    // Dragging the list dismisses the search: clearing focus hides the keyboard
-    // and fades the dials pane out. Only real touch drags emit here — the
-    // programmatic scroll above does not — so lifting to the top never
-    // self-dismisses.
-    val listDragged by listState.interactionSource.collectIsDraggedAsState()
-    LaunchedEffect(listDragged) {
-        if (listDragged) focusManager.clearFocus()
+        if (!searchFocused) return@LaunchedEffect
+        listState.animateScrollToItem(SEARCH_ITEM_INDEX)
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .drop(1)
+            .collect { (index, offset) ->
+                if (index != SEARCH_ITEM_INDEX || offset > DISMISS_SCROLL_THRESHOLD_PX) {
+                    focusManager.clearFocus()
+                }
+            }
     }
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
