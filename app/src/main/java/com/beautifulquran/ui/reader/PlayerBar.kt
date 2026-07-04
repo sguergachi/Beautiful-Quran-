@@ -79,7 +79,7 @@ fun PlayerBar(
                 modifier = Modifier
                     .widthIn(max = 680.dp)
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, bottom = 4.dp),
+                    .padding(start = 12.dp, end = 12.dp, bottom = 4.dp),
             ) {
                 val rangeActive = state.repeatRange != null
                 IconButton(
