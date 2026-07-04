@@ -64,6 +64,22 @@ android {
     }
 }
 
+val checkQuranDbAsset by tasks.registering {
+    val dbAsset = layout.projectDirectory.file("src/main/assets/quran.db")
+    doLast {
+        if (!dbAsset.asFile.isFile) {
+            throw GradleException(
+                "Missing bundled Quran database: ${dbAsset.asFile}. " +
+                    "Run `python3 tools/build_db.py` from the repo root before building locally.",
+            )
+        }
+    }
+}
+
+tasks.named("preBuild") {
+    dependsOn(checkQuranDbAsset)
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.splashscreen)

@@ -411,7 +411,7 @@ fun ReaderScreen(
                         } else {
                             ensureNotifPermission()
                             followEnabled = true
-                            viewModel.playFromAyah(1)
+                            viewModel.playFromAyah(startAyah ?: 1)
                         }
                     },
                     onPrevious = viewModel.player::previous,
