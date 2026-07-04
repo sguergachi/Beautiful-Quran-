@@ -94,16 +94,16 @@ private fun SearchDials(
         shadowElevation = 10.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
             Row(Modifier.fillMaxWidth()) {
                 WheelLabel("Surah", Modifier.weight(1.7f))
                 Spacer(Modifier.padding(horizontal = 6.dp))
                 WheelLabel("Ayah", Modifier.weight(1f))
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
 
-            val itemHeight = 44.dp
-            val visibleItems = 5
+            val itemHeight = 42.dp
+            val visibleItems = 3
             val wheelHeight = itemHeight * visibleItems
             Box(
                 modifier = Modifier
@@ -144,7 +144,7 @@ private fun SearchDials(
                 }
             }
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(10.dp))
             GoRow(
                 surah = currentSurah,
                 ayah = ayah,
