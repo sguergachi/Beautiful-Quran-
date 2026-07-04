@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -91,6 +92,15 @@ fun HomeScreen(
     // slides away and the dials pane has room above the keyboard.
     LaunchedEffect(searchFocused) {
         if (searchFocused) listState.animateScrollToItem(SEARCH_ITEM_INDEX)
+    }
+
+    // Dragging the list dismisses the search: clearing focus hides the keyboard
+    // and fades the dials pane out. Only real touch drags emit here — the
+    // programmatic scroll above does not — so lifting to the top never
+    // self-dismisses.
+    val listDragged by listState.interactionSource.collectIsDraggedAsState()
+    LaunchedEffect(listDragged) {
+        if (listDragged) focusManager.clearFocus()
     }
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
