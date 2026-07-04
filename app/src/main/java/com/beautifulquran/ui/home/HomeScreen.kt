@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,6 +36,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +69,9 @@ import com.beautifulquran.ui.theme.GildedRosette
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.verticalFadingEdges
 
+/** Position of the search field in the list (after the title) — the row we lift to the top on focus. */
+private const val SEARCH_ITEM_INDEX = 1
+
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
@@ -80,6 +86,22 @@ fun HomeScreen(
     var searchFocused by remember { mutableStateOf(false) }
     var boxTop by remember { mutableFloatStateOf(0f) }
     var searchBottom by remember { mutableFloatStateOf(0f) }
+    val listState = rememberLazyListState()
+
+    // When the search takes focus, lift it to the top of the list so the title
+    // slides away and the dials pane has room above the keyboard.
+    LaunchedEffect(searchFocused) {
+        if (searchFocused) listState.animateScrollToItem(SEARCH_ITEM_INDEX)
+    }
+
+    // Dragging the list dismisses the search: clearing focus hides the keyboard
+    // and fades the dials pane out. Only real touch drags emit here — the
+    // programmatic scroll above does not — so lifting to the top never
+    // self-dismisses.
+    val listDragged by listState.interactionSource.collectIsDraggedAsState()
+    LaunchedEffect(listDragged) {
+        if (listDragged) focusManager.clearFocus()
+    }
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         Box(
@@ -89,6 +111,7 @@ fun HomeScreen(
                 .onGloballyPositioned { boxTop = it.boundsInWindow().top },
         ) {
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxHeight()
