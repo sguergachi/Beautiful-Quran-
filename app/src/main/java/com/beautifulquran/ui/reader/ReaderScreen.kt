@@ -868,7 +868,6 @@ private fun AyahSelectorRail(
     }
     val accents = LocalQuranAccents.current
     val onSurface = MaterialTheme.colorScheme.onSurface
-    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
 
     Box(
         modifier = modifier
@@ -945,7 +944,6 @@ private fun AyahSelectorRail(
             // — including the rubber-banded overshoot past either end.
             val selectedPosition = dialPosition
             val selectedAyah = selectedPosition.roundToInt().coerceIn(1, ayahCount)
-            val trackX = 10.dp.toPx()
             val collapsedX = 0f
             val centerY = size.height * 0.5f
             val collapsedAlpha = 1f - expand
@@ -953,15 +951,6 @@ private fun AyahSelectorRail(
                 textAlign = Paint.Align.LEFT
                 textSize = 9.sp.toPx()
                 typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
-            }
-
-            if (expand > 0.01f) {
-                drawLine(
-                    color = onSurfaceVariant.copy(alpha = 0.08f + 0.08f * expand),
-                    start = Offset(trackX, 0f),
-                    end = Offset(trackX, size.height),
-                    strokeWidth = 1.dp.toPx(),
-                )
             }
 
             // Collapsed-stack metrics live outside the pass because the
@@ -989,28 +978,34 @@ private fun AyahSelectorRail(
                 for (index in 0 until collapsedBarsCount) {
                     val relative = index - (collapsedBarsCount - 1) / 2f
                     val y = centerY + relative * collapsedStep
-                    // Staggered exit: outer bars slip out toward the track
-                    // first as the wheel opens, and return last on close.
+                    // Staggered exit: outer bars slip off the edge first as
+                    // the wheel opens, and return last on close.
                     val exit = (collapsedAlpha * 1.35f - (abs(relative) / halfSpan) * 0.35f)
                         .coerceIn(0f, 1f)
                     if (exit <= 0.01f) continue
                     // Continuous focus instead of one hard active index, so
                     // the highlight glides between bars during scroll.
                     val focus = (1f - abs(index - collapsedActivePosition)).coerceIn(0f, 1f)
+                    // Left cap hidden behind the screen edge so the bars read
+                    // as flush at x = 0 despite the rounded corners.
                     drawRoundRect(
                         color = onSurface.copy(alpha = (0.18f + 0.72f * focus) * exit),
                         topLeft = Offset(
-                            collapsedX - (1f - exit) * 4.dp.toPx(),
+                            collapsedX - collapsedBarHeight - (1f - exit) * 4.dp.toPx(),
                             y - collapsedBarHeight / 2f,
                         ),
-                        size = Size(collapsedBarWidth * (0.7f + 0.45f * focus), collapsedBarHeight),
+                        size = Size(
+                            collapsedBarWidth * (0.7f + 0.45f * focus) + collapsedBarHeight,
+                            collapsedBarHeight,
+                        ),
                         cornerRadius = collapsedCorner,
                     )
                 }
             }
 
             if (expand > 0.01f) {
-                val wheelX = 14.dp.toPx()
+                // Flush with the screen edge, matching the collapsed stack.
+                val wheelX = 0f
                 val tickSpacing = 14.dp.toPx()
                 val focusRadius = (ceil(size.height / tickSpacing / 2f).toInt() + 2)
                     .coerceAtLeast(8)
@@ -1050,7 +1045,7 @@ private fun AyahSelectorRail(
                     val arrival = ((expand - distance * 0.3f) / 0.7f).coerceIn(0f, 1f)
                     if (arrival <= 0.01f) continue
                     val edgeFade = (min(y, size.height - y) / verticalFade).coerceIn(0f, 1f)
-                    // Ticks scrolling in from either end grow out of the track
+                    // Ticks scrolling in from either end grow out of the edge
                     // rather than popping in at full length; the focal tick is
                     // exempt so it stays tallest even near the rail's ends.
                     val grow = arrival * (0.35f + 0.65f * maxOf(edgeFade, focus * focus))
@@ -1063,14 +1058,16 @@ private fun AyahSelectorRail(
                     val tickCorner = CornerRadius(tickThickness, tickThickness)
                     val alpha = (0.1f + 0.62f * focus) * arrival * edgeFade
                     val isSelected = ayah == selectedAyah
+                    // Start behind the screen edge so the rounded left cap is
+                    // hidden and the visible end sits truly flush at x = 0.
                     drawRoundRect(
                         color = if (isSelected) {
                             accents.gold.copy(alpha = 0.96f * arrival)
                         } else {
                             onSurface.copy(alpha = alpha)
                         },
-                        topLeft = Offset(wheelX, y - tickThickness / 2f),
-                        size = Size(length, tickThickness),
+                        topLeft = Offset(wheelX - tickThickness, y - tickThickness / 2f),
+                        size = Size(length + tickThickness, tickThickness),
                         cornerRadius = tickCorner,
                     )
                     if (isSelected && holdProgress > 0f) {
@@ -1078,8 +1075,11 @@ private fun AyahSelectorRail(
                         // empties, touching the rail reopens the selection.
                         drawRoundRect(
                             color = accents.gold.copy(alpha = 0.4f * arrival),
-                            topLeft = Offset(wheelX, y + tickThickness * 1.9f),
-                            size = Size(length * (1f - holdProgress), 1.5.dp.toPx()),
+                            topLeft = Offset(wheelX - 1.5.dp.toPx(), y + tickThickness * 1.9f),
+                            size = Size(
+                                length * (1f - holdProgress) + 1.5.dp.toPx(),
+                                1.5.dp.toPx(),
+                            ),
                             cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx()),
                         )
                     }
