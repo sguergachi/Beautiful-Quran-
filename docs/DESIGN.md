@@ -32,9 +32,18 @@ lyrics treatment, never a background block:
 |---|---|
 | Plain (no recitation) | 100 % |
 | Upcoming (in the active ayah) | 30 % |
-| **Active (being recited)** | breathes in to 100 % over 250 ms |
+| **Active (being recited)** | letters ink in one by one (below) |
 | Recited | settles to 80 % over 450 ms |
 | Non-active ayahs during playback | whole block recedes to 32 % |
+
+The active word doesn't switch on — it is *written*: a soft alpha band
+sweeps across the glyphs (right-to-left for Arabic, left-to-right for the
+English lyric), each letter fading from 35 % to full ink as the band passes.
+The sweep is timed to the word's own timing segment — exactly the span the
+reciter dwells on it, corrected for playback speed — so the last letter
+finishes as the voice moves on. It is drawn as a one-word offscreen mask
+whose progress is read only at draw time; nothing recomposes per frame
+(`Modifier.letterFadeIn` in `ui/theme/Fade.kt`).
 
 While reciting, all chrome — top-bar icons, reciter name, prev/next,
 repeat, speed — fades to 8 % over a slow 900 ms, leaving only the words and
@@ -57,10 +66,16 @@ Gold never marks interaction; green never decorates. One accent each.
 
 - **Arabic**: KFGQPC HAFS Uthmanic Script — the King Fahd Complex reference
   typeface — at 30 sp base with 1.9 em leading (Uthmani diacritics need air).
-- **English lyric mode**: serif, semibold, 21 sp — reading-first.
-- **Translations**: serif, 16 sp, 26 sp leading, at 66 % ink.
-- **UI text**: system sans at small sizes and reduced alpha; labels never
-  compete with scripture.
+- **English text face**: EB Garamond, bundled (regular, medium, semibold,
+  true italic; latin + latin-ext merged so transliteration diacritics — ḥ, ā,
+  ū — never fall back to a system face). Kerning, ligatures, and old-style
+  figures on in running text (`'kern', 'liga', 'onum'`).
+- **Display face**: Cormorant Garamond semibold for surah titles and
+  headlines, where its tall fine-stroked capitals can breathe.
+- **English lyric mode**: EB Garamond semibold, 22 sp — reading-first.
+- **Translations**: EB Garamond, 17 sp, 26 sp leading, at 66 % ink.
+- **UI text**: the same serif at small sizes with letterspacing and reduced
+  alpha; labels never compete with scripture. Nothing in the app is sans.
 - Ayah markers are typographic — gold `﴿٧﴾` ornate brackets in the Hafs
   face — not drawn ornaments.
 

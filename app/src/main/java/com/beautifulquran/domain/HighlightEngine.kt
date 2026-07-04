@@ -12,7 +12,12 @@ import com.beautifulquran.data.model.Segment
  */
 object HighlightEngine {
 
-    fun activeWord(segments: List<Segment>, positionMs: Long): Int? {
+    fun activeWord(segments: List<Segment>, positionMs: Long): Int? =
+        activeSegment(segments, positionMs)?.position
+
+    /** The full segment behind [activeWord] — its start/end also time the
+     * letter-by-letter fade of the lit word. */
+    fun activeSegment(segments: List<Segment>, positionMs: Long): Segment? {
         if (segments.isEmpty()) return null
         if (positionMs < segments.first().startMs) return null
         if (positionMs >= segments.last().endMs) return null
@@ -24,6 +29,6 @@ object HighlightEngine {
             val mid = (lo + hi + 1) ushr 1
             if (segments[mid].startMs <= positionMs) lo = mid else hi = mid - 1
         }
-        return segments[lo].position
+        return segments[lo]
     }
 }

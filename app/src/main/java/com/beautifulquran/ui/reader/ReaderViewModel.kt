@@ -24,8 +24,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** The word currently being recited: ayah number + 1-based word position. */
-data class ActiveWord(val ayah: Int, val wordPosition: Int)
+/** The word currently being recited: ayah number + 1-based word position.
+ * [durationMs] is how long the reciter dwells on it (at 1× speed) and paces
+ * the letter-by-letter fade. */
+data class ActiveWord(val ayah: Int, val wordPosition: Int, val durationMs: Long)
 
 data class ReaderUiState(
     val content: SurahContent? = null,
@@ -66,10 +68,10 @@ class ReaderViewModel(
                 flow<ActiveWord?> {
                     while (true) {
                         val segments = timings[np.ayah]
-                        val pos = segments?.let {
-                            HighlightEngine.activeWord(it, player.positionMs)
+                        val seg = segments?.let {
+                            HighlightEngine.activeSegment(it, player.positionMs)
                         }
-                        emit(pos?.let { ActiveWord(np.ayah, it) })
+                        emit(seg?.let { ActiveWord(np.ayah, it.position, it.endMs - it.startMs) })
                         // Position is frozen while paused; poll gently.
                         delay(if (player.state.value.isPlaying) TICK_MS else PAUSED_TICK_MS)
                     }

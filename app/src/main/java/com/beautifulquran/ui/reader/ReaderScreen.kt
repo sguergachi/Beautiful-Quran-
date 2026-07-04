@@ -463,17 +463,16 @@ fun ReaderScreen(
                 ) { index ->
                     val ayah = content.ayahs[index]
                     val isActive = activeAyah == ayah.number
-                    val activeWordPosition by remember(ayah.number) {
+                    val activeWord by remember(ayah.number) {
                         derivedStateOf {
-                            activeWordState.value
-                                ?.takeIf { it.ayah == ayah.number }
-                                ?.wordPosition
+                            activeWordState.value?.takeIf { it.ayah == ayah.number }
                         }
                     }
                     AyahBlock(
                         ayah = ayah,
                         readingMode = settings.readingMode,
-                        activeWordPosition = activeWordPosition,
+                        activeWord = activeWord,
+                        playbackSpeed = playerState.speed,
                         isActiveAyah = isActive,
                         dimmed = isThisSurahPlaying && playerState.isPlaying && !isActive,
                         fontScale = settings.fontScale,
