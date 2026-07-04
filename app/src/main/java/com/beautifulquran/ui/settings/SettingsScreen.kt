@@ -47,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.theme.themePreviewColors
@@ -197,6 +198,28 @@ fun SettingsScreen(
                     checked = settings.showTranslation,
                     onChange = { v -> viewModel.settings.update { it.copy(showTranslation = v) } },
                 )
+            }
+
+            Spacer(Modifier.height(24.dp))
+            SectionLabel("Ayah selector")
+            Spacer(Modifier.height(10.dp))
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                AyahSelectorSide.entries.forEachIndexed { index, side ->
+                    SegmentedButton(
+                        selected = settings.ayahSelectorSide == side,
+                        onClick = { viewModel.settings.update { it.copy(ayahSelectorSide = side) } },
+                        shape = SegmentedButtonDefaults.itemShape(index, AyahSelectorSide.entries.size),
+                        colors = greenSegmentedButtonColors(),
+                    ) {
+                        Text(
+                            text = when (side) {
+                                AyahSelectorSide.LEFT -> "Left side"
+                                AyahSelectorSide.RIGHT -> "Right side"
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
+                }
             }
 
             Spacer(Modifier.height(32.dp))
