@@ -32,6 +32,8 @@ data class PlayerUiState(
     val isBuffering: Boolean = false,
     val nowPlaying: NowPlaying? = null,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
+    /** Ayah numbers (inclusive) playback is confined to, or null. */
+    val repeatRange: IntRange? = null,
     val speed: Float = 1f,
     val error: String? = null,
 )
@@ -48,6 +50,10 @@ class PlayerController(private val context: Context) {
 
     private val _state = MutableStateFlow(PlayerUiState())
     val state: StateFlow<PlayerUiState> = _state
+
+    /** Set synchronously (not in the launch bodies) so callers can sequence
+     * playSurah + setRepeatRange without the coroutines racing the field. */
+    private var repeatRange: IntRange? = null
 
     val positionMs: Long
         get() = controller?.currentPosition ?: 0L
@@ -76,6 +82,7 @@ class PlayerController(private val context: Context) {
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             syncFromController(player)
+            loopRangeIfNeeded(player)
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -100,6 +107,7 @@ class PlayerController(private val context: Context) {
             isBuffering = player.playbackState == Player.STATE_BUFFERING,
             nowPlaying = player.currentMediaItem?.mediaId?.let(::parseMediaId),
             repeatMode = player.repeatMode,
+            repeatRange = repeatRange,
             speed = player.playbackParameters.speed,
             // Playing again means we recovered; retire any stale error line.
             error = if (player.isPlaying) null else _state.value.error,
@@ -110,8 +118,46 @@ class PlayerController(private val context: Context) {
         _state.value = _state.value.copy(error = null)
     }
 
+    /**
+     * Keeps playback inside [repeatRange]: when the player crosses past the
+     * range's last ayah (auto-advance, "next", or reaching the end of the
+     * playlist) it wraps back to the range's first ayah.
+     */
+    private fun loopRangeIfNeeded(player: Player) {
+        val range = repeatRange ?: return
+        if (player.mediaItemCount == 0) return
+        val lastIdx = (range.last - 1).coerceAtMost(player.mediaItemCount - 1)
+        val firstIdx = (range.first - 1).coerceIn(0, player.mediaItemCount - 1)
+        val idx = player.currentMediaItemIndex
+        if (idx > lastIdx || (player.playbackState == Player.STATE_ENDED && idx >= lastIdx)) {
+            player.seekTo(firstIdx, 0L)
+        }
+    }
+
+    /** Repeats ayahs [startAyah]..[endAyah] (inclusive) of the loaded surah. */
+    fun setRepeatRange(startAyah: Int, endAyah: Int) {
+        repeatRange = startAyah..endAyah
+        _state.value = _state.value.copy(repeatRange = repeatRange, repeatMode = Player.REPEAT_MODE_OFF)
+        scope.launch {
+            val c = ensureController()
+            c.repeatMode = Player.REPEAT_MODE_OFF
+            val idx = c.currentMediaItemIndex
+            if (c.mediaItemCount > 0 && (idx < startAyah - 1 || idx > endAyah - 1)) {
+                c.seekTo((startAyah - 1).coerceIn(0, c.mediaItemCount - 1), 0L)
+            }
+        }
+    }
+
+    fun clearRepeatRange() {
+        repeatRange = null
+        _state.value = _state.value.copy(repeatRange = null)
+    }
+
     /** Loads the whole surah as a playlist and starts from [startAyah]. */
     fun playSurah(surahId: Int, ayahCount: Int, startAyah: Int, reciter: Reciter, surahName: String) {
+        // A new playlist invalidates any ayah range chosen for the old one.
+        repeatRange = null
+        _state.value = _state.value.copy(repeatRange = null)
         scope.launch {
             val c = ensureController()
             val items = (1..ayahCount).map { ayah ->
@@ -172,6 +218,8 @@ class PlayerController(private val context: Context) {
     }
 
     fun stop() {
+        repeatRange = null
+        _state.value = _state.value.copy(repeatRange = null)
         scope.launch {
             controller?.let {
                 it.stop()

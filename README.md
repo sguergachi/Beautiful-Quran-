@@ -6,8 +6,10 @@ with the audio — with its English meaning right beneath it — like a karaoke 
 Apple Music lyrics view.
 
 - 📖 Full Quran, Uthmani script, in the KFGQPC Hafs typeface
-- ✨ Word-by-word highlighting synced to the recitation (6 reciters)
+- ✨ Word-by-word highlighting synced to the recitation (7 reciters)
 - 🈯 Word-by-word English gloss + Saheeh International translation
+- 🔁 Repeat one ayah, the whole surah, or any ayah range you choose
+- 🔍 Search the English translation and word glosses within a surah
 - 🌙 Warm paper light theme and OLED-friendly dark theme
 - 📴 All text and timing data bundled offline; audio streams and caches
 - 🚫 No ads, no accounts, no analytics

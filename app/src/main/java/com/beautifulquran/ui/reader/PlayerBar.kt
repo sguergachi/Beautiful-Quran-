@@ -1,6 +1,8 @@
 package com.beautifulquran.ui.reader
 
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -33,6 +35,10 @@ import com.beautifulquran.playback.PlayerUiState
 /**
  * Flat playback controls that sit on the same sheet of paper as the text —
  * no elevation, no card. The reading column fades out just above it.
+ *
+ * The reciter name gets its own centered line above the transport row, so the
+ * row itself stays symmetric — two controls either side of play — and the
+ * play button lands exactly on the page's center line.
  */
 @Composable
 fun PlayerBar(
@@ -43,29 +49,21 @@ fun PlayerBar(
     onPlayPause: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
-    onRepeat: () -> Unit,
+    onRepeatClick: () -> Unit,
     onSpeed: () -> Unit,
     onReciterClick: () -> Unit,
 ) {
     Surface(color = MaterialTheme.colorScheme.background) {
-        Box(
-            Modifier
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding(),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .widthIn(max = 680.dp)
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
-            ) {
             TextButton(
                 onClick = onReciterClick,
-                modifier = Modifier
-                    .weight(1f)
-                    .graphicsLayer { alpha = chromeAlpha() },
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
+                modifier = Modifier.graphicsLayer { alpha = chromeAlpha() },
             ) {
                 Text(
                     text = reciterName,
@@ -75,74 +73,98 @@ fun PlayerBar(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            IconButton(
-                onClick = onPrevious,
-                enabled = isThisSurahLoaded,
-                modifier = Modifier.graphicsLayer { alpha = chromeAlpha() },
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                modifier = Modifier
+                    .widthIn(max = 680.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, bottom = 4.dp),
             ) {
-                Icon(
-                    Icons.Rounded.SkipPrevious,
-                    contentDescription = "Previous ayah",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconButton(onClick = onPlayPause, modifier = Modifier.size(56.dp)) {
-                if (state.isBuffering && isThisSurahLoaded) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                } else {
+                val rangeActive = state.repeatRange != null
+                IconButton(
+                    onClick = onRepeatClick,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .graphicsLayer { alpha = chromeAlpha() },
+                ) {
                     Icon(
-                        imageVector = if (state.isPlaying && isThisSurahLoaded) {
-                            Icons.Rounded.Pause
+                        imageVector = if (state.repeatMode == Player.REPEAT_MODE_ONE) {
+                            Icons.Rounded.RepeatOne
                         } else {
-                            Icons.Rounded.PlayArrow
+                            Icons.Rounded.Repeat
                         },
-                        contentDescription = if (state.isPlaying) "Pause" else "Play",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(34.dp),
+                        contentDescription = "Repeat",
+                        tint = if (state.repeatMode == Player.REPEAT_MODE_OFF && !rangeActive) {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
                     )
                 }
-            }
-            IconButton(
-                onClick = onNext,
-                enabled = isThisSurahLoaded,
-                modifier = Modifier.graphicsLayer { alpha = chromeAlpha() },
-            ) {
-                Icon(
-                    Icons.Rounded.SkipNext,
-                    contentDescription = "Next ayah",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconButton(onClick = onRepeat, modifier = Modifier.graphicsLayer { alpha = chromeAlpha() }) {
-                Icon(
-                    imageVector = if (state.repeatMode == Player.REPEAT_MODE_ONE) {
-                        Icons.Rounded.RepeatOne
+                IconButton(
+                    onClick = onPrevious,
+                    enabled = isThisSurahLoaded,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .graphicsLayer { alpha = chromeAlpha() },
+                ) {
+                    Icon(
+                        Icons.Rounded.SkipPrevious,
+                        contentDescription = "Previous ayah",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(onClick = onPlayPause, modifier = Modifier.size(56.dp)) {
+                    if (state.isBuffering && isThisSurahLoaded) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
                     } else {
-                        Icons.Rounded.Repeat
-                    },
-                    contentDescription = "Repeat mode",
-                    tint = if (state.repeatMode == Player.REPEAT_MODE_OFF) {
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
-                    } else {
-                        MaterialTheme.colorScheme.primary
-                    },
-                )
-            }
-            TextButton(onClick = onSpeed, modifier = Modifier.graphicsLayer { alpha = chromeAlpha() }) {
-                Text(
-                    text = "${if (state.speed % 1f == 0f) state.speed.toInt() else state.speed}×",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (state.speed == 1f) {
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
-                    } else {
-                        MaterialTheme.colorScheme.primary
-                    },
-                )
-            }
+                        Icon(
+                            imageVector = if (state.isPlaying && isThisSurahLoaded) {
+                                Icons.Rounded.Pause
+                            } else {
+                                Icons.Rounded.PlayArrow
+                            },
+                            contentDescription = if (state.isPlaying) "Pause" else "Play",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(34.dp),
+                        )
+                    }
+                }
+                IconButton(
+                    onClick = onNext,
+                    enabled = isThisSurahLoaded,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .graphicsLayer { alpha = chromeAlpha() },
+                ) {
+                    Icon(
+                        Icons.Rounded.SkipNext,
+                        contentDescription = "Next ayah",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(
+                    onClick = onSpeed,
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier
+                        .size(48.dp)
+                        .graphicsLayer { alpha = chromeAlpha() },
+                ) {
+                    Text(
+                        text = "${if (state.speed % 1f == 0f) state.speed.toInt() else state.speed}×",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (state.speed == 1f) {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                    )
+                }
             }
         }
     }

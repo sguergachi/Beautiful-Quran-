@@ -22,7 +22,12 @@ import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
@@ -34,6 +39,7 @@ import com.beautifulquran.data.model.Ayah
 import com.beautifulquran.data.model.Word
 import com.beautifulquran.ui.theme.ArabicTitleStyle
 import com.beautifulquran.ui.theme.ArabicWordStyle
+import com.beautifulquran.ui.theme.GildedFlourish
 import com.beautifulquran.ui.theme.GildedRosette
 import com.beautifulquran.ui.theme.HafsFontFamily
 import com.beautifulquran.ui.theme.LocalQuranAccents
@@ -72,6 +78,18 @@ private fun animatedInkAlpha(state: WordVisualState): State<Float> =
         label = "inkAlpha",
     )
 
+/** Marks every occurrence of [query] in [text] with a soft gold wash. */
+private fun highlightMatches(text: String, query: String?, mark: Color): AnnotatedString =
+    buildAnnotatedString {
+        append(text)
+        if (query.isNullOrEmpty()) return@buildAnnotatedString
+        var i = text.indexOf(query, ignoreCase = true)
+        while (i >= 0) {
+            addStyle(SpanStyle(background = mark), i, i + query.length)
+            i = text.indexOf(query, i + query.length, ignoreCase = true)
+        }
+    }
+
 @Composable
 fun WordUnit(
     word: Word,
@@ -79,6 +97,7 @@ fun WordUnit(
     fontScale: Float,
     showGloss: Boolean,
     showTransliteration: Boolean,
+    searchHit: Boolean,
     onClick: (() -> Unit)?,
 ) {
     val ink = animatedInkAlpha(state)
@@ -107,7 +126,12 @@ fun WordUnit(
                 text = word.translation,
                 fontSize = 11.sp * fontScale,
                 lineHeight = 14.sp * fontScale,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                fontWeight = if (searchHit) FontWeight.Bold else null,
+                color = if (searchHit) {
+                    LocalQuranAccents.current.gold
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                },
                 textAlign = TextAlign.Center,
             )
         }
@@ -129,6 +153,7 @@ fun EnglishWordUnit(
     word: Word,
     state: WordVisualState,
     fontScale: Float,
+    searchHit: Boolean,
     onClick: (() -> Unit)?,
 ) {
     val ink = animatedInkAlpha(state)
@@ -139,7 +164,11 @@ fun EnglishWordUnit(
         fontWeight = FontWeight.SemiBold,
         fontSize = 21.sp * fontScale,
         lineHeight = 1.55.em,
-        color = MaterialTheme.colorScheme.onBackground,
+        color = if (searchHit) {
+            LocalQuranAccents.current.gold
+        } else {
+            MaterialTheme.colorScheme.onBackground
+        },
         modifier = Modifier
             .graphicsLayer { alpha = ink.value }
             .let { m ->
@@ -187,9 +216,12 @@ fun AyahBlock(
     showGloss: Boolean,
     showTransliteration: Boolean,
     showTranslation: Boolean,
+    searchQuery: String? = null,
     onWordClick: ((Word) -> Unit)?,
     onAyahClick: () -> Unit,
 ) {
+    fun hits(word: Word) =
+        searchQuery != null && word.translation.contains(searchQuery, ignoreCase = true)
     // Non-active ayahs recede softly while another is being recited.
     // State is read inside graphicsLayer so the dim animates draw-phase-only.
     val blockAlpha = animateFloatAsState(
@@ -223,6 +255,7 @@ fun AyahBlock(
                         word = word,
                         state = stateFor(word),
                         fontScale = fontScale,
+                        searchHit = hits(word),
                         onClick = onWordClick?.let { handler -> { handler(word) } },
                     )
                 }
@@ -247,6 +280,7 @@ fun AyahBlock(
                             fontScale = fontScale,
                             showGloss = showGloss,
                             showTransliteration = showTransliteration,
+                            searchHit = hits(word),
                             onClick = onWordClick?.let { handler -> { handler(word) } },
                         )
                     }
@@ -262,7 +296,11 @@ fun AyahBlock(
         if (showTranslation && readingMode == ReadingMode.ARABIC_ENGLISH) {
             Spacer(Modifier.height(12.dp))
             Text(
-                text = ayah.translation,
+                text = highlightMatches(
+                    text = ayah.translation,
+                    query = searchQuery,
+                    mark = LocalQuranAccents.current.gold.copy(alpha = 0.28f),
+                ),
                 style = MaterialTheme.typography.bodyLarge.copy(
                     fontFamily = TranslationFontFamily,
                     fontSize = MaterialTheme.typography.bodyLarge.fontSize * (0.9f + 0.1f * fontScale),
@@ -336,6 +374,64 @@ fun SurahHeader(
             text = "${revelationPlace.replaceFirstChar { it.uppercase() }} · $ayahCount ayahs",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+        )
+    }
+}
+
+/**
+ * The surah name as it reappears in the top bar once the opening header has
+ * scrolled off the page: flanked by gilded khatam flourishes, with the
+ * transliteration whispered beneath. [sheen] keeps the gold lit in step with
+ * the header rosette.
+ */
+@Composable
+fun OrnateSurahTitle(
+    nameArabic: String,
+    nameTransliteration: String,
+    sheen: State<Float>,
+) {
+    val accents = LocalQuranAccents.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        GildedFlourish(
+            width = 36.dp,
+            height = 13.dp,
+            brightGold = accents.goldBright,
+            deepGold = accents.goldDeep,
+            embossDark = accents.embossDark,
+            embossLight = accents.embossLight,
+            sheen = sheen,
+        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        ) {
+            Text(
+                text = "سُورَةُ $nameArabic",
+                style = ArabicTitleStyle,
+                fontSize = 19.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+            )
+            Text(
+                text = nameTransliteration.uppercase(),
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 2.sp),
+                fontSize = 9.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                maxLines = 1,
+            )
+        }
+        GildedFlourish(
+            width = 36.dp,
+            height = 13.dp,
+            brightGold = accents.goldBright,
+            deepGold = accents.goldDeep,
+            embossDark = accents.embossDark,
+            embossLight = accents.embossLight,
+            sheen = sheen,
+            mirrored = true,
         )
     }
 }
