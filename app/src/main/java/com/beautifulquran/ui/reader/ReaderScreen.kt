@@ -76,6 +76,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
@@ -1126,16 +1127,16 @@ private fun AyahSelectorRail(
                         cornerRadius = tickCorner,
                     )
                     if (isSelected && holdProgress > 0f) {
-                        // Grace countdown: the underline drains away; until it
-                        // empties, touching the rail reopens the selection.
+                        // Grace countdown: the selected yellow bar fills with
+                        // black before the ayah jump commits.
                         drawRoundRect(
-                            color = accents.gold.copy(alpha = 0.4f * arrival),
-                            topLeft = Offset(wheelX - 1.5.dp.toPx(), y + tickThickness * 1.9f),
+                            color = Color.Black.copy(alpha = 0.82f * arrival),
+                            topLeft = Offset(wheelX - tickThickness, y - tickThickness / 2f),
                             size = Size(
-                                length * (1f - holdProgress) + 1.5.dp.toPx(),
-                                1.5.dp.toPx(),
+                                (length + tickThickness) * holdProgress,
+                                tickThickness,
                             ),
-                            cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx()),
+                            cornerRadius = tickCorner,
                         )
                     }
                     numberPaint.color = if (isSelected) {
