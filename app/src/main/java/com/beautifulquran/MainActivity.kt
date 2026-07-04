@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -226,7 +227,7 @@ private fun PaperPage(
         modifier = modifier
             .fillMaxSize()
             .paperLayerTransform(layer, stackPosition)
-            .paperEdge(turning),
+            .paperDropShadow(turning),
     ) {
         content()
     }
@@ -263,19 +264,26 @@ private fun Modifier.paperLayerTransform(
     }
 }
 
-private fun Modifier.paperEdge(turning: Float): Modifier = drawWithContent {
+// A lifted sheet casts a soft shadow onto the page beneath it, spilling just
+// past its leading edge rather than darkening the sheet's own edge. The cast
+// is strongest mid-swipe and fades to nothing once either sheet settles.
+private fun Modifier.paperDropShadow(turning: Float): Modifier = drawWithContent {
     drawContent()
-    if (turning > 0.01f && turning < 0.99f) {
-        val edgeWidth = 30f
+    val depth = (4f * turning * (1f - turning)).coerceIn(0f, 1f)
+    if (depth > 0.01f) {
+        val shadowWidth = 24.dp.toPx()
         drawRect(
             brush = Brush.horizontalGradient(
                 colors = listOf(
+                    ComposeColor.Black.copy(alpha = 0.26f * depth),
+                    ComposeColor.Black.copy(alpha = 0.09f * depth),
                     ComposeColor.Transparent,
-                    ComposeColor.Black.copy(alpha = 0.16f * (1f - turning)),
                 ),
+                startX = size.width,
+                endX = size.width + shadowWidth,
             ),
-            topLeft = Offset(size.width - edgeWidth, 0f),
-            size = Size(edgeWidth, size.height),
+            topLeft = Offset(size.width, 0f),
+            size = Size(shadowWidth, size.height),
         )
     }
 }
