@@ -30,7 +30,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -72,7 +71,6 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.drop
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.beautifulquran.BuildConfig
 import com.beautifulquran.R
 import com.beautifulquran.data.model.Surah
 import com.beautifulquran.ui.theme.ArabicTitleStyle
@@ -90,9 +88,9 @@ private const val DISMISS_SCROLL_THRESHOLD_PX = 24
 fun HomeScreen(
     viewModel: HomeViewModel,
     onOpenSurah: (surahId: Int, ayah: Int?) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var showAppInfo by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
 
     // Focus + geometry that anchor the fading dials pane just under the search
@@ -213,9 +211,9 @@ fun HomeScreen(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
                                 role = Role.Button,
-                                onClick = { showAppInfo = true },
+                                onClick = onOpenSettings,
                             )
-                            .semantics { contentDescription = "About Beautiful Quran" },
+                            .semantics { contentDescription = "Open settings" },
                     ) {
                         GildedRosette(
                             size = 30.dp,
@@ -318,43 +316,7 @@ fun HomeScreen(
                     .onGloballyPositioned { searchPaneBounds = it.boundsInRoot() },
             )
         }
-
-        if (showAppInfo) {
-            AppInfoDialog(onDismiss = { showAppInfo = false })
-        }
     }
-}
-
-@Composable
-private fun AppInfoDialog(onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = {
-            Image(
-                painter = painterResource(R.drawable.ic_launcher_foreground),
-                contentDescription = null,
-                modifier = Modifier.size(56.dp),
-            )
-        },
-        title = {
-            Text(
-                text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.titleLarge,
-            )
-        },
-        text = {
-            Text(
-                text = "Version ${BuildConfig.VERSION_NAME}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Done")
-            }
-        },
-    )
 }
 
 @Composable

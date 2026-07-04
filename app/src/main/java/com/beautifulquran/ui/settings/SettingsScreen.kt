@@ -45,8 +45,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.beautifulquran.BuildConfig
+import com.beautifulquran.R
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.data.ThemeMode
@@ -108,141 +112,180 @@ fun SettingsScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 28.dp),
             ) {
-            Spacer(Modifier.height(32.dp))
+                AppHeader()
 
-            SectionLabel("Reciter")
-            reciters.forEach { reciter ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) { viewModel.selectReciter(reciter) }
-                        .padding(vertical = 4.dp),
-                ) {
-                    RadioButton(
-                        selected = reciter.id == settings.reciterId,
-                        onClick = { viewModel.selectReciter(reciter) },
-                        colors = RadioButtonDefaults.colors(
-                            selectedColor = MaterialTheme.colorScheme.primary,
-                            unselectedColor = MaterialTheme.colorScheme.outline,
-                        ),
-                    )
-                    Column {
-                        Text(reciter.name, style = MaterialTheme.typography.bodyLarge)
-                        if (!reciter.hasTimings) {
+                Spacer(Modifier.height(32.dp))
+
+                SectionLabel("Reciter")
+                reciters.forEach { reciter ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) { viewModel.selectReciter(reciter) }
+                            .padding(vertical = 4.dp),
+                    ) {
+                        RadioButton(
+                            selected = reciter.id == settings.reciterId,
+                            onClick = { viewModel.selectReciter(reciter) },
+                            colors = RadioButtonDefaults.colors(
+                                selectedColor = MaterialTheme.colorScheme.primary,
+                                unselectedColor = MaterialTheme.colorScheme.outline,
+                            ),
+                        )
+                        Column {
+                            Text(reciter.name, style = MaterialTheme.typography.bodyLarge)
+                            if (!reciter.hasTimings) {
+                                Text(
+                                    "No word highlighting",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(32.dp))
+                SectionLabel("Reading")
+                Spacer(Modifier.height(10.dp))
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    ReadingMode.entries.forEachIndexed { index, mode ->
+                        SegmentedButton(
+                            selected = settings.readingMode == mode,
+                            onClick = { viewModel.settings.update { it.copy(readingMode = mode) } },
+                            shape = SegmentedButtonDefaults.itemShape(index, ReadingMode.entries.size),
+                            colors = greenSegmentedButtonColors(),
+                        ) {
                             Text(
-                                "No word highlighting",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                text = when (mode) {
+                                    ReadingMode.ARABIC_ENGLISH -> "Arabic & English"
+                                    ReadingMode.ENGLISH_ONLY -> "English"
+                                },
+                                style = MaterialTheme.typography.labelMedium,
                             )
                         }
                     }
                 }
-            }
 
-            Spacer(Modifier.height(32.dp))
-            SectionLabel("Reading")
-            Spacer(Modifier.height(10.dp))
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                ReadingMode.entries.forEachIndexed { index, mode ->
-                    SegmentedButton(
-                        selected = settings.readingMode == mode,
-                        onClick = { viewModel.settings.update { it.copy(readingMode = mode) } },
-                        shape = SegmentedButtonDefaults.itemShape(index, ReadingMode.entries.size),
-                        colors = greenSegmentedButtonColors(),
-                    ) {
-                        Text(
-                            text = when (mode) {
-                                ReadingMode.ARABIC_ENGLISH -> "Arabic & English"
-                                ReadingMode.ENGLISH_ONLY -> "English"
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                        )
+                Spacer(Modifier.height(24.dp))
+                SectionLabel("Text size")
+                Slider(
+                    value = settings.fontScale,
+                    onValueChange = { v -> viewModel.settings.update { it.copy(fontScale = v) } },
+                    valueRange = 0.8f..1.6f,
+                    steps = 7,
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                        activeTickColor = MaterialTheme.colorScheme.onPrimary,
+                        inactiveTrackColor = MaterialTheme.colorScheme.primaryContainer,
+                        inactiveTickColor = MaterialTheme.colorScheme.primary,
+                    ),
+                )
+
+                Spacer(Modifier.height(20.dp))
+                if (settings.readingMode == ReadingMode.ARABIC_ENGLISH) {
+                    SettingToggle(
+                        label = "Word-by-word translation",
+                        checked = settings.showWordGloss,
+                        onChange = { v -> viewModel.settings.update { it.copy(showWordGloss = v) } },
+                    )
+                    SettingToggle(
+                        label = "Transliteration",
+                        checked = settings.showTransliteration,
+                        onChange = { v -> viewModel.settings.update { it.copy(showTransliteration = v) } },
+                    )
+                    SettingToggle(
+                        label = "Ayah translation",
+                        checked = settings.showTranslation,
+                        onChange = { v -> viewModel.settings.update { it.copy(showTranslation = v) } },
+                    )
+                }
+
+                Spacer(Modifier.height(24.dp))
+                SectionLabel("Ayah selector")
+                Spacer(Modifier.height(10.dp))
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    AyahSelectorSide.entries.forEachIndexed { index, side ->
+                        SegmentedButton(
+                            selected = settings.ayahSelectorSide == side,
+                            onClick = { viewModel.settings.update { it.copy(ayahSelectorSide = side) } },
+                            shape = SegmentedButtonDefaults.itemShape(index, AyahSelectorSide.entries.size),
+                            colors = greenSegmentedButtonColors(),
+                        ) {
+                            Text(
+                                text = when (side) {
+                                    AyahSelectorSide.LEFT -> "Left side"
+                                    AyahSelectorSide.RIGHT -> "Right side"
+                                },
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        }
                     }
                 }
-            }
 
-            Spacer(Modifier.height(24.dp))
-            SectionLabel("Text size")
-            Slider(
-                value = settings.fontScale,
-                onValueChange = { v -> viewModel.settings.update { it.copy(fontScale = v) } },
-                valueRange = 0.8f..1.6f,
-                steps = 7,
-                colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                    activeTickColor = MaterialTheme.colorScheme.onPrimary,
-                    inactiveTrackColor = MaterialTheme.colorScheme.primaryContainer,
-                    inactiveTickColor = MaterialTheme.colorScheme.primary,
-                ),
+                Spacer(Modifier.height(32.dp))
+                SectionLabel("Theme")
+                Spacer(Modifier.height(8.dp))
+                ThemeMode.entries.forEach { mode ->
+                    ThemeOptionRow(
+                        mode = mode,
+                        selected = settings.themeMode == mode,
+                        onClick = { viewModel.settings.update { it.copy(themeMode = mode) } },
+                    )
+                }
+
+                Spacer(Modifier.height(48.dp))
+                SectionLabel("About & attributions")
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = ATTRIBUTIONS,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                )
+                Spacer(Modifier.height(56.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppHeader() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)),
+        ) {
+            androidx.compose.foundation.Image(
+                painter = painterResource(R.drawable.ic_launcher_foreground),
+                contentDescription = null,
+                modifier = Modifier.size(34.dp),
             )
-
-            Spacer(Modifier.height(20.dp))
-            if (settings.readingMode == ReadingMode.ARABIC_ENGLISH) {
-                SettingToggle(
-                    label = "Word-by-word translation",
-                    checked = settings.showWordGloss,
-                    onChange = { v -> viewModel.settings.update { it.copy(showWordGloss = v) } },
-                )
-                SettingToggle(
-                    label = "Transliteration",
-                    checked = settings.showTransliteration,
-                    onChange = { v -> viewModel.settings.update { it.copy(showTransliteration = v) } },
-                )
-                SettingToggle(
-                    label = "Ayah translation",
-                    checked = settings.showTranslation,
-                    onChange = { v -> viewModel.settings.update { it.copy(showTranslation = v) } },
-                )
-            }
-
-            Spacer(Modifier.height(24.dp))
-            SectionLabel("Ayah selector")
-            Spacer(Modifier.height(10.dp))
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                AyahSelectorSide.entries.forEachIndexed { index, side ->
-                    SegmentedButton(
-                        selected = settings.ayahSelectorSide == side,
-                        onClick = { viewModel.settings.update { it.copy(ayahSelectorSide = side) } },
-                        shape = SegmentedButtonDefaults.itemShape(index, AyahSelectorSide.entries.size),
-                        colors = greenSegmentedButtonColors(),
-                    ) {
-                        Text(
-                            text = when (side) {
-                                AyahSelectorSide.LEFT -> "Left side"
-                                AyahSelectorSide.RIGHT -> "Right side"
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(32.dp))
-            SectionLabel("Theme")
-            Spacer(Modifier.height(8.dp))
-            ThemeMode.entries.forEach { mode ->
-                ThemeOptionRow(
-                    mode = mode,
-                    selected = settings.themeMode == mode,
-                    onClick = { viewModel.settings.update { it.copy(themeMode = mode) } },
-                )
-            }
-
-            Spacer(Modifier.height(48.dp))
-            SectionLabel("About & attributions")
-            Spacer(Modifier.height(12.dp))
+        }
+        Column(modifier = Modifier.padding(start = 16.dp)) {
             Text(
-                text = ATTRIBUTIONS,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                text = stringResource(R.string.app_name),
+                style = MaterialTheme.typography.titleLarge,
             )
-            Spacer(Modifier.height(56.dp))
-            }
+            Text(
+                text = "Version ${BuildConfig.VERSION_NAME}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+            )
         }
     }
 }
