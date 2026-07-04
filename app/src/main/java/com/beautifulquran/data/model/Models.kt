@@ -21,6 +21,7 @@ data class Ayah(
     val number: Int,
     val text: String,
     val translation: String,
+    val page: Int = 0,
     val words: List<Word>,
 )
 

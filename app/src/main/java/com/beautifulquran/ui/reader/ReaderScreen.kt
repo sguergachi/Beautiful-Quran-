@@ -1,24 +1,37 @@
 package com.beautifulquran.ui.reader
 
 import android.Manifest
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.os.Build
+import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicTextField
@@ -44,9 +57,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -54,18 +69,47 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.beautifulquran.ui.theme.IslamicReturnToAyahButton
+import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.verticalFadingEdges
 import kotlinx.coroutines.delay
+import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.min
+import kotlin.math.roundToInt
 
-private const val ITEMS_BEFORE_AYAHS = 1 // surah header
+private sealed interface LazyItem {
+    val key: String
+    data object Header : LazyItem {
+        override val key = "header"
+    }
+    data class AyahItem(val ayahIndex: Int) : LazyItem {
+        override val key = "ayah_$ayahIndex"
+    }
+    data class PageDivider(val page: Int) : LazyItem {
+        override val key = "page_$page"
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -100,8 +144,8 @@ fun ReaderScreen(
         }
     }
     var followEnabled by remember { mutableStateOf(true) }
-    var programmaticScroll by remember { mutableStateOf(false) }
     var showRepeatDialog by remember { mutableStateOf(false) }
+    var requestedJumpAyah by remember { mutableIntStateOf(0) }
 
     // In-surah English search: matches are ayahs whose translation or any
     // word gloss contains the query.
@@ -125,13 +169,50 @@ fun ReaderScreen(
     val isThisSurahPlaying = playerState.nowPlaying?.surahId == surahId
     val activeAyah = if (isThisSurahPlaying) playerState.nowPlaying?.ayah else null
 
-    // While reciting, all chrome recedes into the paper — only the words
-    // and the pause button stay present. Read inside graphicsLayer blocks so
+    val readerItems = remember(uiState.content) {
+        val c = uiState.content
+        if (c == null) emptyList() else buildList {
+            add(LazyItem.Header)
+            var lastPage = 0
+            c.ayahs.forEachIndexed { i, ayah ->
+                val page = ayah.page
+                if (page != 0 && page != lastPage && lastPage != 0) {
+                    add(LazyItem.PageDivider(page))
+                }
+                lastPage = page
+                add(LazyItem.AyahItem(i))
+            }
+        }
+    }
+
+    val ayahToItemIndex = remember(readerItems) {
+        readerItems.mapIndexedNotNull { index, item ->
+            if (item is LazyItem.AyahItem) item.ayahIndex to index else null
+        }.toMap()
+    }
+
+    val scrolledAyah = remember(readerItems) {
+        derivedStateOf {
+            val item = readerItems.getOrNull(listState.firstVisibleItemIndex)
+            when (item) {
+                is LazyItem.AyahItem -> item.ayahIndex + 1
+                else -> 1
+            }
+        }
+    }
+
+    // While reciting, chrome recedes into the paper — the words and core
+    // transport controls stay present. Read inside graphicsLayer blocks so
     // the fade is draw-phase-only.
     val chromeAlpha = animateFloatAsState(
         targetValue = if (isThisSurahPlaying && playerState.isPlaying) 0.08f else 1f,
         animationSpec = tween(900),
         label = "chromeAlpha",
+    )
+    val topBarAlpha = animateFloatAsState(
+        targetValue = if (isThisSurahPlaying && playerState.isPlaying) 0f else 1f,
+        animationSpec = tween(900),
+        label = "topBarAlpha",
     )
 
     // Ask for notification permission (playback controls) right before first play.
@@ -144,14 +225,18 @@ fun ReaderScreen(
         }
     }
 
-    // Reading by hand pauses the follow mode.
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
-            if (scrolling && !programmaticScroll) followEnabled = false
+    // Reading by hand pauses the follow mode via pointerInput.
+
+    val density = LocalDensity.current
+    val readingAnchorOffsetPx = remember(listState.layoutInfo.viewportSize.height, density) {
+        val viewportHeight = listState.layoutInfo.viewportSize.height
+        if (viewportHeight > 0) {
+            (viewportHeight * 0.28f).toInt()
+        } else {
+            with(density) { 120.dp.roundToPx() }
         }
     }
-
-    val topOffsetPx = with(LocalDensity.current) { 120.dp.roundToPx() }
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     // A fresh query restarts from its first match…
     LaunchedEffect(activeQuery) { searchIndex = 0 }
@@ -159,15 +244,28 @@ fun ReaderScreen(
     LaunchedEffect(searchMatches, currentMatch) {
         val target = searchMatches.getOrNull(currentMatch) ?: return@LaunchedEffect
         followEnabled = false
-        programmaticScroll = true
-        try {
-            listState.animateScrollToItem(
-                index = target - 1 + ITEMS_BEFORE_AYAHS,
-                scrollOffset = -topOffsetPx,
-            )
-        } finally {
-            programmaticScroll = false
-        }
+        val itemIndex = ayahToItemIndex[target - 1] ?: return@LaunchedEffect
+        listState.animateScrollToItem(
+            index = itemIndex,
+            scrollOffset = -readingAnchorOffsetPx,
+        )
+    }
+
+    LaunchedEffect(requestedJumpAyah) {
+        val content = uiState.content ?: return@LaunchedEffect
+        val target = requestedJumpAyah
+            .takeIf { it > 0 }
+            ?.coerceIn(1, content.surah.ayahCount)
+            ?: return@LaunchedEffect
+        followEnabled = isThisSurahPlaying
+        viewModel.onAyahBecameActive(target)
+        if (isThisSurahPlaying) viewModel.player.seekToAyah(target)
+        val itemIndex = ayahToItemIndex[target - 1] ?: return@LaunchedEffect
+        listState.animateScrollToItem(
+            index = itemIndex,
+            scrollOffset = -readingAnchorOffsetPx,
+        )
+        requestedJumpAyah = 0
     }
 
     // Lyric-style auto scroll: keep the active ayah in the upper third.
@@ -175,15 +273,11 @@ fun ReaderScreen(
         val ayah = activeAyah ?: return@LaunchedEffect
         viewModel.onAyahBecameActive(ayah)
         if (!followEnabled) return@LaunchedEffect
-        programmaticScroll = true
-        try {
-            listState.animateScrollToItem(
-                index = ayah - 1 + ITEMS_BEFORE_AYAHS,
-                scrollOffset = -topOffsetPx,
-            )
-        } finally {
-            programmaticScroll = false
-        }
+        val itemIndex = ayahToItemIndex[ayah - 1] ?: return@LaunchedEffect
+        listState.animateScrollToItem(
+            index = itemIndex,
+            scrollOffset = -readingAnchorOffsetPx,
+        )
     }
 
     // Opening from "Continue listening": settle on the saved ayah once.
@@ -193,9 +287,10 @@ fun ReaderScreen(
         if (!didInitialScroll) {
             didInitialScroll = true
             if (startAyah != null && startAyah in 2..content.ayahs.size) {
+                val itemIndex = ayahToItemIndex[startAyah - 1] ?: return@LaunchedEffect
                 listState.scrollToItem(
-                    index = startAyah - 1 + ITEMS_BEFORE_AYAHS,
-                    scrollOffset = -topOffsetPx,
+                    index = itemIndex,
+                    scrollOffset = -readingAnchorOffsetPx,
                 )
             }
         }
@@ -228,6 +323,9 @@ fun ReaderScreen(
             // here between gilded flourishes. In search, the bar becomes the
             // search field with match navigation.
             CenterAlignedTopAppBar(
+                modifier = Modifier.graphicsLayer {
+                    alpha = if (searchActive) 1f else topBarAlpha.value
+                },
                 title = {
                     if (searchActive) {
                         BasicTextField(
@@ -269,7 +367,7 @@ fun ReaderScreen(
                             exit = fadeOut(tween(350)),
                         ) {
                             if (surah != null) {
-                                Box(Modifier.graphicsLayer { alpha = chromeAlpha.value }) {
+                                Box {
                                     OrnateSurahTitle(
                                         nameArabic = surah.nameArabic,
                                         nameTransliteration = surah.nameTransliteration,
@@ -283,9 +381,7 @@ fun ReaderScreen(
                 navigationIcon = {
                     IconButton(
                         onClick = { if (searchActive) closeSearch() else onBack() },
-                        modifier = Modifier.graphicsLayer {
-                            alpha = if (searchActive) 1f else chromeAlpha.value
-                        },
+                        enabled = searchActive || !(isThisSurahPlaying && playerState.isPlaying),
                     ) {
                         Icon(
                             imageVector = if (searchActive) {
@@ -343,7 +439,7 @@ fun ReaderScreen(
                     } else {
                         IconButton(
                             onClick = { searchActive = true },
-                            modifier = Modifier.graphicsLayer { alpha = chromeAlpha.value },
+                            enabled = !(isThisSurahPlaying && playerState.isPlaying),
                         ) {
                             Icon(
                                 Icons.Rounded.Search,
@@ -353,7 +449,7 @@ fun ReaderScreen(
                         }
                         IconButton(
                             onClick = onOpenSettings,
-                            modifier = Modifier.graphicsLayer { alpha = chromeAlpha.value },
+                            enabled = !(isThisSurahPlaying && playerState.isPlaying),
                         ) {
                             Icon(
                                 Icons.Rounded.Tune,
@@ -370,35 +466,45 @@ fun ReaderScreen(
         },
         bottomBar = {
             Column {
-                // In-plane status line: an error, or the way back to following
-                // the recitation. Part of the sheet, nothing floats.
-                val statusText = playerState.error
-                    ?: "Return to the recitation".takeIf {
-                        !followEnabled && isThisSurahPlaying && playerState.isPlaying
-                    }
+                // In-plane status: errors stay textual; returning to the
+                // active ayah is a textless ornamented control.
+                val showReturnToAyah =
+                    playerState.error == null &&
+                        !followEnabled &&
+                        isThisSurahPlaying &&
+                        playerState.isPlaying
                 AnimatedVisibility(
-                    visible = statusText != null,
+                    visible = playerState.error != null,
                     enter = fadeIn(),
                     exit = fadeOut(),
                 ) {
                     Text(
-                        text = statusText.orEmpty(),
+                        text = playerState.error.orEmpty(),
                         style = MaterialTheme.typography.labelMedium,
-                        color = if (playerState.error != null) {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        } else {
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
-                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                enabled = playerState.error == null,
-                            ) { followEnabled = true }
                             .padding(vertical = 6.dp),
                     )
+                }
+                AnimatedVisibility(
+                    visible = showReturnToAyah,
+                    enter = fadeIn(tween(220)),
+                    exit = fadeOut(tween(220)),
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp, bottom = 6.dp),
+                    ) {
+                        val pointUp = activeAyah != null && activeAyah < scrolledAyah.value
+                        IslamicReturnToAyahButton(
+                            pointUp = pointUp,
+                            onClick = { followEnabled = true },
+                        )
+                    }
                 }
                 PlayerBar(
                     state = playerState,
@@ -431,75 +537,121 @@ fun ReaderScreen(
             return@Scaffold
         }
 
+        val selectorAyah = (activeAyah ?: scrolledAyah.value).coerceIn(1, content.surah.ayahCount)
+
         // One column of text at a book-like measure: full-bleed on phones,
         // centered with air on tablets and in landscape.
         Box(
             Modifier
-                .padding(padding)
+                .padding(bottom = padding.calculateBottomPadding())
                 .fillMaxSize(),
         ) {
             LazyColumn(
                 state = listState,
+                contentPadding = PaddingValues(top = padding.calculateTopPadding()),
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxHeight()
                     .widthIn(max = 680.dp)
                     .fillMaxWidth()
-                    .verticalFadingEdges(color = MaterialTheme.colorScheme.background, top = 32.dp, bottom = 64.dp),
-            ) {
-                item(key = "header") {
-                    SurahHeader(
-                        nameArabic = content.surah.nameArabic,
-                        nameTransliteration = content.surah.nameTransliteration,
-                        nameTranslation = content.surah.nameTranslation,
-                        revelationPlace = content.surah.revelationPlace,
-                        ayahCount = content.surah.ayahCount,
-                        sheen = sheen,
-                    )
-                }
-                items(
-                    count = content.ayahs.size,
-                    key = { content.ayahs[it].number },
-                ) { index ->
-                    val ayah = content.ayahs[index]
-                    val isActive = activeAyah == ayah.number
-                    val activeWord by remember(ayah.number) {
-                        derivedStateOf {
-                            activeWordState.value?.takeIf { it.ayah == ayah.number }
+                    .pointerInput(Unit) {
+                        val touchSlop = viewConfiguration.touchSlop
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            var dragStarted = false
+                            do {
+                                val event = awaitPointerEvent()
+                                if (!dragStarted) {
+                                    val change = event.changes.firstOrNull { it.id == down.id }
+                                    if (change != null) {
+                                        val distance = (change.position - down.position).getDistance()
+                                        if (distance > touchSlop) {
+                                            dragStarted = true
+                                            followEnabled = false
+                                        }
+                                    }
+                                }
+                            } while (event.changes.any { it.pressed })
                         }
                     }
-                    AyahBlock(
-                        ayah = ayah,
-                        readingMode = settings.readingMode,
-                        activeWord = activeWord,
-                        playbackSpeed = playerState.speed,
-                        isActiveAyah = isActive,
-                        dimmed = isThisSurahPlaying && playerState.isPlaying && !isActive,
-                        fontScale = settings.fontScale,
-                        showGloss = settings.showWordGloss,
-                        showTransliteration = settings.showTransliteration,
-                        showTranslation = settings.showTranslation,
-                        searchQuery = activeQuery,
-                        keepActiveWordInView = followEnabled && isThisSurahPlaying && playerState.isPlaying,
-                        onWordClick = { word ->
-                            val segment = viewModel.segmentsFor(ayah.number)
-                                ?.firstOrNull { it.position == word.position }
-                            if (isThisSurahPlaying && segment != null) {
-                                viewModel.player.seekToWord(ayah.number, segment.startMs)
-                            } else {
-                                ensureNotifPermission()
-                                followEnabled = true
-                                viewModel.playFromAyah(ayah.number)
+                    .verticalFadingEdges(
+                        color = MaterialTheme.colorScheme.background,
+                        top = 32.dp,
+                        bottom = 64.dp,
+                        topInset = statusBarTop,
+                    ),
+            ) {
+                items(
+                    count = readerItems.size,
+                    key = { readerItems[it].key },
+                ) { index ->
+                    when (val item = readerItems[index]) {
+                        LazyItem.Header -> {
+                            SurahHeader(
+                                nameArabic = content.surah.nameArabic,
+                                nameTransliteration = content.surah.nameTransliteration,
+                                nameTranslation = content.surah.nameTranslation,
+                                revelationPlace = content.surah.revelationPlace,
+                                ayahCount = content.surah.ayahCount,
+                                sheen = sheen,
+                            )
+                        }
+                        is LazyItem.AyahItem -> {
+                            val ayah = content.ayahs[item.ayahIndex]
+                            val isActive = activeAyah == ayah.number
+                            val activeWord by remember(ayah.number) {
+                                derivedStateOf {
+                                    activeWordState.value?.takeIf { it.ayah == ayah.number }
+                                }
                             }
-                        },
-                        onAyahClick = {
-                            ensureNotifPermission()
-                            followEnabled = true
-                            viewModel.playFromAyah(ayah.number)
-                        },
-                    )
+                            AyahBlock(
+                                ayah = ayah,
+                                readingMode = settings.readingMode,
+                                activeWord = activeWord,
+                                playbackSpeed = playerState.speed,
+                                isActiveAyah = isActive,
+                                dimmed = isThisSurahPlaying && playerState.isPlaying && !isActive,
+                                fontScale = settings.fontScale,
+                                showGloss = settings.showWordGloss,
+                                showTransliteration = settings.showTransliteration,
+                                showTranslation = settings.showTranslation,
+                                searchQuery = activeQuery,
+                                keepActiveWordInView = followEnabled && isThisSurahPlaying && playerState.isPlaying,
+                                onWordClick = { word ->
+                                    val segment = viewModel.segmentsFor(ayah.number)
+                                        ?.firstOrNull { it.position == word.position }
+                                    if (isThisSurahPlaying && segment != null) {
+                                        viewModel.player.seekToWord(ayah.number, segment.startMs)
+                                    } else {
+                                        ensureNotifPermission()
+                                        followEnabled = true
+                                        viewModel.playFromAyah(ayah.number)
+                                    }
+                                },
+                                onAyahClick = {
+                                    ensureNotifPermission()
+                                    followEnabled = true
+                                    viewModel.playFromAyah(ayah.number)
+                                },
+                            )
+                        }
+                        is LazyItem.PageDivider -> {
+                            PageBreak(page = item.page)
+                        }
+                    }
+                }
             }
-            }
+            AyahSelectorRail(
+                ayahCount = content.surah.ayahCount,
+                currentAyah = selectorAyah,
+                chromeAlpha = { if (isThisSurahPlaying && playerState.isPlaying) 0f else chromeAlpha.value },
+                onJumpToAyah = { requestedJumpAyah = it },
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .fillMaxHeight()
+                    .padding(top = padding.calculateTopPadding())
+                    .zIndex(1f),
+            )
         }
     }
 
@@ -518,5 +670,290 @@ fun ReaderScreen(
                 viewModel.setRepeatRange(from, to)
             },
         )
+    }
+}
+
+private fun rubberBandDialPosition(value: Float, min: Float, max: Float): Float {
+    if (value in min..max) return value
+    return if (value < min) {
+        min - (min - value) * 0.32f
+    } else {
+        max + (value - max) * 0.32f
+    }
+}
+
+private suspend fun settleDialWheel(
+    start: Float,
+    velocity: Float,
+    ayahCount: Int,
+    setPosition: (Float) -> Unit,
+): Int {
+    val min = 1f
+    val max = ayahCount.toFloat()
+    val anim = Animatable(start.coerceIn(min, max))
+
+    if (abs(velocity) > 0.06f && start in min..max) {
+        anim.snapTo(start)
+        anim.animateDecay(
+            initialVelocity = velocity,
+            animationSpec = exponentialDecay(frictionMultiplier = 1.85f),
+        ) {
+            setPosition(value.coerceIn(min, max))
+        }
+        anim.snapTo(anim.value.coerceIn(min, max))
+    }
+
+    val target = anim.value.roundToInt().coerceIn(1, ayahCount).toFloat()
+    anim.snapTo(anim.value.coerceIn(min, max))
+    anim.animateTo(
+        targetValue = target,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
+        initialVelocity = if (abs(velocity) > 0.06f) 0f else velocity,
+    ) {
+        setPosition(value.coerceIn(min, max))
+    }
+    setPosition(target)
+    return target.toInt()
+}
+
+@Composable
+private fun AyahSelectorRail(
+    ayahCount: Int,
+    currentAyah: Int,
+    chromeAlpha: () -> Float,
+    onJumpToAyah: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    var previewAyah by rememberSaveable(ayahCount) {
+        mutableIntStateOf(currentAyah.coerceIn(1, ayahCount))
+    }
+    var lastHapticAyah by remember { mutableIntStateOf(previewAyah) }
+    var dialPosition by rememberSaveable(ayahCount) {
+        mutableFloatStateOf(currentAyah.coerceIn(1, ayahCount).toFloat())
+    }
+    var settleRequest by remember { mutableIntStateOf(0) }
+    var settleStart by remember { mutableFloatStateOf(1f) }
+    var settleVelocity by remember { mutableFloatStateOf(0f) }
+    val view = LocalView.current
+    val latestCurrentAyah by rememberUpdatedState(currentAyah)
+    LaunchedEffect(currentAyah, ayahCount, expanded) {
+        if (!expanded) {
+            val ayah = currentAyah.coerceIn(1, ayahCount)
+            previewAyah = ayah
+            lastHapticAyah = ayah
+            dialPosition = ayah.toFloat()
+        }
+    }
+    LaunchedEffect(expanded, ayahCount) {
+        snapshotFlow { dialPosition.roundToInt().coerceIn(1, ayahCount) }
+            .collect { ayah ->
+                previewAyah = ayah
+                if (expanded && ayah != lastHapticAyah) {
+                    val majorTick = ayah == 1 || ayah == ayahCount || ayah % 5 == 0
+                    view.performHapticFeedback(
+                        if (majorTick) {
+                            HapticFeedbackConstants.CONTEXT_CLICK
+                        } else {
+                            HapticFeedbackConstants.CLOCK_TICK
+                        },
+                    )
+                    lastHapticAyah = ayah
+                }
+            }
+    }
+    LaunchedEffect(settleRequest) {
+        if (settleRequest == 0) return@LaunchedEffect
+        val settledAyah = settleDialWheel(
+            start = settleStart,
+            velocity = settleVelocity,
+            ayahCount = ayahCount,
+            setPosition = { dialPosition = it },
+        )
+        previewAyah = settledAyah
+        view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+        onJumpToAyah(settledAyah)
+        expanded = false
+    }
+
+    val expansion by animateFloatAsState(
+        targetValue = if (expanded) 1f else 0f,
+        animationSpec = tween(240),
+        label = "ayahSelectorExpansion",
+    )
+    val railWidth by animateDpAsState(
+        targetValue = if (expanded) 92.dp else 58.dp,
+        animationSpec = tween(240),
+        label = "ayahSelectorWidth",
+    )
+    val accents = LocalQuranAccents.current
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+
+    Box(
+        modifier = modifier
+            .width(railWidth)
+            .graphicsLayer { alpha = chromeAlpha() }
+            .pointerInput(expanded, ayahCount) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val tickSpacingPx = 14.dp.toPx()
+                    val velocityTracker = VelocityTracker()
+                    var dragged = false
+                    val wasExpanded = expanded
+                    velocityTracker.addPosition(down.uptimeMillis, down.position)
+                    if (!expanded) {
+                        val ayah = latestCurrentAyah.coerceIn(1, ayahCount)
+                        previewAyah = ayah
+                        lastHapticAyah = ayah
+                        dialPosition = ayah.toFloat()
+                        expanded = true
+                    }
+                    down.consume()
+
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) break
+                        val deltaAyah = -change.positionChange().y / tickSpacingPx
+                        if (abs(deltaAyah) > 0.001f) {
+                            dragged = true
+                            dialPosition = rubberBandDialPosition(
+                                dialPosition + deltaAyah,
+                                1f,
+                                ayahCount.toFloat(),
+                            )
+                        }
+                        velocityTracker.addPosition(change.uptimeMillis, change.position)
+                        change.consume()
+                    }
+                    if (dragged) {
+                        val velocityAyah = -velocityTracker.calculateVelocity().y / tickSpacingPx
+                        settleStart = dialPosition.coerceIn(1f, ayahCount.toFloat())
+                        settleVelocity = velocityAyah
+                        settleRequest += 1
+                    } else if (wasExpanded) {
+                        expanded = false
+                        onJumpToAyah(previewAyah)
+                    }
+                }
+            },
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val selectedPosition = if (expanded) {
+                dialPosition.coerceIn(1f, ayahCount.toFloat())
+            } else {
+                currentAyah.toFloat()
+            }
+            val selectedAyah = selectedPosition.roundToInt().coerceIn(1, ayahCount)
+            val trackX = 10.dp.toPx()
+            val collapsedX = 17.dp.toPx()
+            val centerY = size.height * 0.5f
+            val barHeight = 3.dp.toPx()
+            val corner = CornerRadius(barHeight, barHeight)
+            val collapsedAlpha = 1f - expansion
+            val numberPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                textAlign = Paint.Align.LEFT
+                textSize = 9.sp.toPx()
+                typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+            }
+
+            drawLine(
+                color = onSurfaceVariant.copy(alpha = 0.08f + 0.08f * expansion),
+                start = Offset(trackX, 0f),
+                end = Offset(trackX, size.height),
+                strokeWidth = 1.dp.toPx(),
+            )
+
+            if (collapsedAlpha > 0.01f) {
+                val collapsedBarsCount = 10
+                val collapsedBarWidth = 12.dp.toPx()
+                val collapsedBarHeight = 2.5.dp.toPx()
+                val collapsedSpacing = 10.dp.toPx()
+                val collapsedCorner = CornerRadius(collapsedBarHeight, collapsedBarHeight)
+
+                val progress = if (ayahCount > 1) {
+                    (currentAyah - 1).toFloat() / (ayahCount - 1).toFloat()
+                } else {
+                    0f
+                }
+                val activeIndex = (progress * (collapsedBarsCount - 1)).roundToInt().coerceIn(0, collapsedBarsCount - 1)
+
+                for (index in 0 until collapsedBarsCount) {
+                    val relative = index - (collapsedBarsCount - 1) / 2.0
+                    val y = centerY + relative.toFloat() * (collapsedBarHeight + collapsedSpacing)
+                    val isSelected = index == activeIndex
+                    drawRoundRect(
+                        color = if (isSelected) {
+                            onSurface.copy(alpha = 0.9f * collapsedAlpha)
+                        } else {
+                            onSurface.copy(alpha = 0.2f * collapsedAlpha)
+                        },
+                        topLeft = Offset(collapsedX, y - collapsedBarHeight / 2f),
+                        size = Size(collapsedBarWidth, collapsedBarHeight),
+                        cornerRadius = collapsedCorner,
+                    )
+                }
+            }
+
+            if (expansion > 0.01f) {
+                val wheelX = 14.dp.toPx()
+                val tickSpacing = 14.dp.toPx()
+                val visibleRadius = (ceil(size.height / tickSpacing / 2f).toInt() + 2).coerceAtLeast(8)
+                val first = (selectedPosition - visibleRadius).toInt().coerceAtLeast(1)
+                val last = (selectedPosition + visibleRadius).toInt().coerceAtMost(ayahCount)
+                val verticalFade = 82.dp.toPx()
+                val minBarLength = 8.dp.toPx()
+                val maxBarLength = 44.dp.toPx()
+                val minBarThickness = 2.dp.toPx()
+                val maxBarThickness = 4.dp.toPx()
+
+                for (ayah in first..last) {
+                    val offset = ayah - selectedPosition
+                    val y = centerY + offset * tickSpacing
+                    val distance = (abs(offset) / visibleRadius).coerceIn(0f, 1f)
+                    val focus = 1f - distance
+                    val major = ayah == 1 || ayah == ayahCount || ayah % 5 == 0
+                    val arrival = ((expansion - distance * 0.18f) / 0.82f).coerceIn(0f, 1f)
+                    val edgeFade = (min(y, size.height - y) / verticalFade).coerceIn(0f, 1f)
+                    val length = (
+                        minBarLength +
+                            (maxBarLength - minBarLength) * focus * focus +
+                            if (major) 6.dp.toPx() else 0f
+                        ) * arrival
+                    val tickThickness = minBarThickness + (maxBarThickness - minBarThickness) * focus
+                    val tickCorner = CornerRadius(tickThickness, tickThickness)
+                    val alpha = (0.1f + 0.62f * focus) * arrival * edgeFade
+                    val isSelected = ayah == selectedAyah
+                    drawRoundRect(
+                        color = if (isSelected) {
+                            accents.gold.copy(alpha = 0.96f * arrival)
+                        } else {
+                            onSurface.copy(alpha = alpha)
+                        },
+                        topLeft = Offset(wheelX, y - tickThickness / 2f),
+                        size = Size(length, tickThickness),
+                        cornerRadius = tickCorner,
+                    )
+                    numberPaint.color = if (isSelected) {
+                        accents.gold.copy(alpha = 0.95f * arrival).toArgb()
+                    } else {
+                        onSurface.copy(alpha = (0.18f + 0.46f * focus) * arrival * edgeFade).toArgb()
+                    }
+                    numberPaint.textSize = if (isSelected) 11.sp.toPx() else 8.5.sp.toPx()
+                    drawIntoCanvas { canvas ->
+                        canvas.nativeCanvas.drawText(
+                            ayah.toString(),
+                            wheelX + length + 6.dp.toPx(),
+                            y + numberPaint.textSize * 0.34f,
+                            numberPaint,
+                        )
+                    }
+                }
+            }
+        }
     }
 }

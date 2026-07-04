@@ -104,19 +104,24 @@ def load_wbw(tgz: Path):
     """verse_key -> list of (gloss, transliteration) ordered by word position."""
     pages = json.loads(read_tar_member(tgz, "package/data.json"))
     out = {}
+    page_of = {}
     for page in pages:
+        pnum = page["page"]
         for ay in page["ayahs"]:
             for w in ay["words"]:
                 if w["char_type_name"] != "word":
                     continue
                 sk, ak = w["parentAyahVerseKey"].split(":")
-                out.setdefault((int(sk), int(ak)), []).append(
+                key = (int(sk), int(ak))
+                out.setdefault(key, []).append(
                     (
                         w.get("translation", {}).get("text") or "",
                         w.get("transliteration", {}).get("text") or "",
                     )
                 )
-    return out
+                if key not in page_of:
+                    page_of[key] = pnum
+    return out, page_of
 
 
 def load_timings(zip_path: Path, slug: str):
@@ -205,6 +210,7 @@ CREATE TABLE ayahs (
   ayah_number INTEGER NOT NULL,
   text_uthmani TEXT NOT NULL,
   translation_en TEXT NOT NULL,
+  page INTEGER NOT NULL,
   PRIMARY KEY (surah_id, ayah_number)
 );
 CREATE TABLE words (
@@ -245,7 +251,7 @@ def main():
 
     print("[2/4] fetching word-by-word gloss")
     wbw_tgz = fetch(WBW_TGZ, "wbw.tgz")
-    wbw = load_wbw(wbw_tgz)
+    wbw, page_of = load_wbw(wbw_tgz)
 
     print("[3/4] building words table")
     words = []
@@ -305,8 +311,8 @@ def main():
     db.executescript(DDL)
     db.executemany("INSERT INTO surahs VALUES (?,?,?,?,?,?)", surahs)
     db.executemany(
-        "INSERT INTO ayahs VALUES (?,?,?,?)",
-        [(s, a, t, tr) for (s, a), (t, tr) in sorted(ayahs.items())],
+        "INSERT INTO ayahs VALUES (?,?,?,?,?)",
+        [(s, a, t, tr, page_of.get((s, a), 0)) for (s, a), (t, tr) in sorted(ayahs.items())],
     )
     db.executemany("INSERT INTO words VALUES (?,?,?,?,?,?)", words)
     db.executemany("INSERT INTO reciters VALUES (?,?,?,?,?)", reciter_rows)

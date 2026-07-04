@@ -1,22 +1,42 @@
 package com.beautifulquran.ui.theme
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.size
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.min
@@ -229,3 +249,219 @@ fun Modifier.gilded(bright: Color, deep: Color): Modifier =
                 blendMode = BlendMode.SrcAtop,
             )
         }
+
+/**
+ * A textless "return to ayah" control drawn as the ornament every mushaf
+ * reader already knows: the illuminated ayah-marker roundel — a corolla of
+ * twelve pointed petals with a pearl nestled in each notch — embossed and
+ * gilded like the rest of the page. Inside it, a reed-pen (qalam) arrow in
+ * three thick calligraphic strokes: the shaft, then each barb of the head,
+ * each wiped in with a soft ink edge in the order a hand would draw them.
+ */
+@Composable
+fun IslamicReturnToAyahButton(
+    pointUp: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    size: Dp = 44.dp,
+) {
+    val accents = LocalQuranAccents.current
+    val colors = MaterialTheme.colorScheme
+    val interaction = remember { MutableInteractionSource() }
+    val ink = remember { Animatable(0f) }
+    val rotation by animateFloatAsState(
+        targetValue = if (pointUp) 180f else 0f,
+        animationSpec = tween(
+            durationMillis = 300,
+            easing = FastOutSlowInEasing,
+        ),
+        label = "arrowRotation",
+    )
+
+    // Re-draw the arrow from a dry page whenever the direction flips.
+    LaunchedEffect(pointUp) {
+        ink.snapTo(0f)
+        ink.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 1100, delayMillis = 120, easing = LinearEasing),
+        )
+    }
+
+    Canvas(
+        modifier
+            .size(size)
+            .semantics {
+                contentDescription = "Return to ayah"
+                role = Role.Button
+            }
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick,
+            ),
+    ) {
+        val s = min(this.size.width, this.size.height)
+        val c = s / 2f
+        val center = Offset(c, c)
+
+        fun polar(degrees: Float, radius: Float) = Offset(
+            c + radius * kotlin.math.cos(Math.toRadians(degrees.toDouble())).toFloat(),
+            c + radius * kotlin.math.sin(Math.toRadians(degrees.toDouble())).toFloat(),
+        )
+
+        // ── The roundel: twelve pointed petals, cusp-to-tip-to-cusp, each
+        // edge leaving the notch radially and arriving at the tip radially,
+        // which is what gives mushaf markers their soft ogee lobes.
+        val petals = 12
+        val cuspR = s * 0.365f
+        val tipR = s * 0.475f
+        val reach = tipR - cuspR
+        val corolla = Path().apply {
+            val step = 360f / petals
+            for (k in 0 until petals) {
+                val cuspA = k * step - 90f
+                val tipA = cuspA + step / 2f
+                val nextA = cuspA + step
+                val cusp = polar(cuspA, cuspR)
+                val tip = polar(tipA, tipR)
+                val next = polar(nextA, cuspR)
+                if (k == 0) moveTo(cusp.x, cusp.y)
+                val outFromCusp = polar(cuspA, cuspR + reach * 0.55f)
+                val inToTip = polar(tipA, tipR - reach * 0.45f)
+                cubicTo(outFromCusp.x, outFromCusp.y, inToTip.x, inToTip.y, tip.x, tip.y)
+                val outFromTip = polar(tipA, tipR - reach * 0.45f)
+                val inToNext = polar(nextA, cuspR + reach * 0.55f)
+                cubicTo(outFromTip.x, outFromTip.y, inToNext.x, inToNext.y, next.x, next.y)
+            }
+            close()
+        }
+
+        val gold = Brush.linearGradient(
+            colors = listOf(accents.goldBright, accents.gold, accents.goldDeep),
+            start = Offset(c, 0f),
+            end = Offset(c, s),
+        )
+        val edge = Stroke(width = s * 0.020f, join = StrokeJoin.Round)
+
+        // Paper body with a faint gilt bloom toward the rim, then the
+        // embossed, gilded edge — the marker sits on the page as one piece.
+        drawPath(
+            corolla,
+            Brush.radialGradient(
+                0.0f to colors.background,
+                0.62f to colors.background,
+                1.0f to accents.gold.copy(alpha = 0.14f),
+                center = center,
+                radius = tipR,
+            ),
+        )
+        embossed(corolla, edge, accents.embossDark, accents.embossLight)
+        drawPath(corolla, gold, style = edge)
+
+        // A pearl in each notch between petals.
+        for (k in 0 until petals) {
+            drawCircle(gold, radius = s * 0.016f, center = polar(k * 360f / petals - 90f, s * 0.44f))
+        }
+
+        // Hairline ring framing the ink field.
+        drawCircle(
+            color = accents.gold.copy(alpha = 0.45f),
+            radius = s * 0.285f,
+            center = center,
+            style = Stroke(width = s * 0.009f),
+        )
+
+        // ── The qalam arrow: three filled strokes with real pen weight.
+        fun pt(x: Float, y: Float) = Offset(c + x * s, c + y * s)
+
+        // Stroke 1 — the shaft, cut at the top like a nib entry, swelling
+        // through the middle and running all the way down to the tip.
+        val shaft = Path().apply {
+            val a = pt(-0.034f, -0.150f)
+            moveTo(a.x, a.y)
+            val nib = pt(0.030f, -0.184f)
+            lineTo(nib.x, nib.y)
+            val c1 = pt(0.044f, -0.060f)
+            val c2 = pt(0.012f, 0.020f)
+            val br = pt(0.015f, 0.150f)
+            cubicTo(c1.x, c1.y, c2.x, c2.y, br.x, br.y)
+            val tip = pt(0.000f, 0.192f)
+            cubicTo(pt(0.012f, 0.172f).x, pt(0.012f, 0.172f).y, pt(0.006f, 0.187f).x, pt(0.006f, 0.187f).y, tip.x, tip.y)
+            val bl = pt(-0.017f, 0.148f)
+            cubicTo(pt(-0.008f, 0.187f).x, pt(-0.008f, 0.187f).y, pt(-0.015f, 0.172f).x, pt(-0.015f, 0.172f).y, bl.x, bl.y)
+            val c3 = pt(-0.032f, 0.020f)
+            val c4 = pt(-0.046f, -0.060f)
+            cubicTo(c3.x, c3.y, c4.x, c4.y, a.x, a.y)
+            close()
+        }
+
+        // Strokes 2 and 3 — the barbs: rooted thick at the tip itself, each
+        // swept up and outward like a pen flick, tapering to a point.
+        fun barb(side: Float) = Path().apply {
+            val tip = pt(side * 0.004f, 0.192f)
+            moveTo(tip.x, tip.y)
+            val o1 = pt(side * -0.070f, 0.158f)
+            val o2 = pt(side * -0.118f, 0.100f)
+            val end = pt(side * -0.150f, 0.038f)
+            cubicTo(o1.x, o1.y, o2.x, o2.y, end.x, end.y)
+            val i1 = pt(side * -0.100f, 0.058f)
+            val i2 = pt(side * -0.055f, 0.100f)
+            val root = pt(side * -0.012f, 0.128f)
+            cubicTo(i1.x, i1.y, i2.x, i2.y, root.x, root.y)
+            close()
+        }
+
+        val arrowInk = colors.primary
+        val p = ink.value
+        fun span(from: Float, to: Float): Float =
+            FastOutSlowInEasing.transform(((p - from) / (to - from)).coerceIn(0f, 1f))
+
+        rotate(rotation, center) {
+            inkStroke(shaft, arrowInk, span(0.00f, 0.48f), pt(0f, -0.19f), pt(0f, 0.20f))
+            inkStroke(barb(1f), arrowInk, span(0.42f, 0.74f), pt(0f, 0.18f), pt(-0.16f, 0.03f))
+            inkStroke(barb(-1f), arrowInk, span(0.66f, 1.00f), pt(0f, 0.18f), pt(0.16f, 0.03f))
+        }
+    }
+}
+
+/**
+ * Reveals a filled calligraphic stroke as if inked: an alpha wipe advances
+ * from [from] toward [to] with a soft feathered frontier — the wet edge of
+ * the stroke — instead of a hard clip.
+ */
+private fun DrawScope.inkStroke(
+    path: Path,
+    color: Color,
+    progress: Float,
+    from: Offset,
+    to: Offset,
+) {
+    if (progress <= 0f) return
+    val feather = 0.28f
+    val head = progress * (1f + feather)
+    if (head - feather >= 1f) {
+        drawPath(path, color)
+        return
+    }
+    val bounds = path.getBounds()
+    val pad = 4f
+    drawContext.canvas.saveLayer(
+        Rect(bounds.left - pad, bounds.top - pad, bounds.right + pad, bounds.bottom + pad),
+        Paint(),
+    )
+    drawPath(path, color)
+    drawRect(
+        brush = Brush.linearGradient(
+            0f to Color.Black,
+            (head - feather).coerceIn(0f, 1f) to Color.Black,
+            head.coerceAtMost(1f) to Color.Transparent,
+            1f to Color.Transparent,
+            start = from,
+            end = to,
+        ),
+        topLeft = Offset(bounds.left - pad, bounds.top - pad),
+        size = Size(bounds.width + pad * 2, bounds.height + pad * 2),
+        blendMode = BlendMode.DstIn,
+    )
+    drawContext.canvas.restore()
+}

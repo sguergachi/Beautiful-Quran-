@@ -6,7 +6,7 @@ import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-enum class ThemeMode { SYSTEM, LIGHT, DARK }
+enum class ThemeMode { SYSTEM, LIGHT, DARK, ROYAL_GREEN }
 
 /** What flows on the sheet: Arabic with English under each word, or English only. */
 enum class ReadingMode { ARABIC_ENGLISH, ENGLISH_ONLY }
@@ -38,7 +38,7 @@ class SettingsRepository(context: Context) {
         showWordGloss = prefs.getBoolean("showWordGloss", true),
         showTransliteration = prefs.getBoolean("showTransliteration", false),
         showTranslation = prefs.getBoolean("showTranslation", true),
-        themeMode = ThemeMode.entries[prefs.getInt("themeMode", 0)],
+        themeMode = ThemeMode.entries.getOrNull(prefs.getInt("themeMode", 0)) ?: ThemeMode.SYSTEM,
         lastSurah = prefs.getInt("lastSurah", 0),
         lastAyah = prefs.getInt("lastAyah", 1),
     )

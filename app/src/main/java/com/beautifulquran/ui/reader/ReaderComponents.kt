@@ -1,7 +1,7 @@
 package com.beautifulquran.ui.reader
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -12,12 +12,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,17 +28,24 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -72,6 +82,11 @@ private fun WordVisualState.inkAlpha(): Float = when (this) {
     WordVisualState.Recited -> 0.8f
 }
 
+private fun wordFadeAlpha(progress: Float): Float {
+    val resting = WordVisualState.Upcoming.inkAlpha()
+    return resting + (WordVisualState.Active.inkAlpha() - resting) * progress.coerceIn(0f, 1f)
+}
+
 /**
  * Returns the ink alpha as [State] so callers can defer the read to the draw
  * phase (inside a graphicsLayer block): the fade animates every frame without
@@ -89,10 +104,19 @@ const val MIN_SWEEP_MS = 140
 const val MAX_SWEEP_MS = 8_000
 
 /**
+ * The wash moves at an unhurried, deliberate pace: essentially a steady
+ * glide, softened only at the very ends so it never snaps into or out of
+ * motion. All the slowness lives in the width of the ink feather (see
+ * [com.beautifulquran.ui.theme.letterFadeIn]); the curve still lands on 1 at
+ * exactly the word's duration, so the reveal stays locked to the recitation.
+ */
+private val InkSweepEasing = CubicBezierEasing(0.3f, 0.24f, 0.7f, 0.78f)
+
+/**
  * Drives the letter-fade sweep for the active word: restarts at 0 each time
- * the word lights up and runs linearly for [sweepMs] — the time the reciter
- * actually spends on this word — so the last letter finishes inking exactly
- * as the voice moves on.
+ * the word lights up and runs for [sweepMs] — the time the reciter actually
+ * spends on this word — so the last letter finishes inking exactly as the
+ * voice moves on.
  */
 @Composable
 private fun rememberLetterSweep(active: Boolean, sweepMs: Int?): State<Float> {
@@ -101,7 +125,7 @@ private fun rememberLetterSweep(active: Boolean, sweepMs: Int?): State<Float> {
     LaunchedEffect(active, sweepMs) {
         if (active && sweepMs != null) {
             sweep.snapTo(0f)
-            sweep.animateTo(1f, tween(sweepMs, easing = LinearEasing))
+            sweep.animateTo(1f, tween(sweepMs, easing = InkSweepEasing))
         } else {
             sweep.snapTo(1f)
         }
@@ -134,21 +158,32 @@ fun WordUnit(
     keepInView: Boolean,
     onClick: (() -> Unit)?,
 ) {
-    val ink = animatedInkAlpha(state)
     val isActive = state == WordVisualState.Active
+    val lyricInk = animatedInkAlpha(state)
     val sweep = rememberLetterSweep(isActive, sweepMs)
     val interaction = remember { MutableInteractionSource() }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
-    LaunchedEffect(isActive, keepInView) {
-        if (isActive && keepInView) {
-            bringIntoViewRequester.bringIntoView()
+    val density = LocalDensity.current
+    val activeWordTopMarginPx = with(density) { 144.dp.toPx() }
+    val activeWordBottomMarginPx = with(density) { 132.dp.toPx() }
+    var wordSize by remember { mutableStateOf(IntSize.Zero) }
+    LaunchedEffect(isActive, keepInView, wordSize) {
+        if (isActive && keepInView && wordSize != IntSize.Zero) {
+            bringIntoViewRequester.bringIntoView(
+                Rect(
+                    left = 0f,
+                    top = -activeWordTopMarginPx,
+                    right = wordSize.width.toFloat(),
+                    bottom = wordSize.height + activeWordBottomMarginPx,
+                ),
+            )
         }
     }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .bringIntoViewRequester(bringIntoViewRequester)
-            .graphicsLayer { alpha = ink.value }
+            .onSizeChanged { wordSize = it }
             .let { m ->
                 if (onClick != null) {
                     m.clickable(interactionSource = interaction, indication = null, onClick = onClick)
@@ -164,9 +199,13 @@ fun WordUnit(
             fontSize = ArabicWordStyle.fontSize * fontScale,
             color = MaterialTheme.colorScheme.onBackground,
             modifier = if (isActive) {
-                Modifier.letterFadeIn(progress = { sweep.value }, rtl = true)
+                Modifier.letterFadeIn(
+                    progress = { sweep.value },
+                    rtl = true,
+                    restingAlpha = WordVisualState.Upcoming.inkAlpha(),
+                )
             } else {
-                Modifier
+                Modifier.graphicsLayer { alpha = lyricInk.value }
             },
         )
         if (showGloss) {
@@ -181,6 +220,9 @@ fun WordUnit(
                     MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                 },
                 textAlign = TextAlign.Center,
+                modifier = Modifier.graphicsLayer {
+                    alpha = if (isActive) wordFadeAlpha(sweep.value) else lyricInk.value
+                },
             )
         }
         if (showTransliteration) {
@@ -190,6 +232,9 @@ fun WordUnit(
                 lineHeight = 14.sp * fontScale,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
                 textAlign = TextAlign.Center,
+                modifier = Modifier.graphicsLayer {
+                    alpha = if (isActive) wordFadeAlpha(sweep.value) else lyricInk.value
+                },
             )
         }
     }
@@ -207,14 +252,25 @@ fun EnglishWordUnit(
     keepInView: Boolean,
     onClick: (() -> Unit)?,
 ) {
-    val ink = animatedInkAlpha(state)
     val isActive = state == WordVisualState.Active
+    val lyricInk = animatedInkAlpha(state)
     val sweep = rememberLetterSweep(isActive, sweepMs)
     val interaction = remember { MutableInteractionSource() }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
-    LaunchedEffect(isActive, keepInView) {
-        if (isActive && keepInView) {
-            bringIntoViewRequester.bringIntoView()
+    val density = LocalDensity.current
+    val activeWordTopMarginPx = with(density) { 144.dp.toPx() }
+    val activeWordBottomMarginPx = with(density) { 132.dp.toPx() }
+    var wordSize by remember { mutableStateOf(IntSize.Zero) }
+    LaunchedEffect(isActive, keepInView, wordSize) {
+        if (isActive && keepInView && wordSize != IntSize.Zero) {
+            bringIntoViewRequester.bringIntoView(
+                Rect(
+                    left = 0f,
+                    top = -activeWordTopMarginPx,
+                    right = wordSize.width.toFloat(),
+                    bottom = wordSize.height + activeWordBottomMarginPx,
+                ),
+            )
         }
     }
     Text(
@@ -230,12 +286,16 @@ fun EnglishWordUnit(
         },
         modifier = Modifier
             .bringIntoViewRequester(bringIntoViewRequester)
-            .graphicsLayer { alpha = ink.value }
+            .onSizeChanged { wordSize = it }
             .then(
                 if (isActive) {
-                    Modifier.letterFadeIn(progress = { sweep.value }, rtl = false)
+                    Modifier.letterFadeIn(
+                        progress = { sweep.value },
+                        rtl = false,
+                        restingAlpha = WordVisualState.Upcoming.inkAlpha(),
+                    )
                 } else {
-                    Modifier
+                    Modifier.graphicsLayer { alpha = lyricInk.value }
                 },
             )
             .let { m ->
@@ -515,5 +575,38 @@ fun OrnateSurahTitle(
             sheen = sheen,
             mirrored = true,
         )
+    }
+}
+
+/**
+ * Subtle page break: a thin gold line across the sheet with the page number
+ * set in small Arabic-Indic digits on the right — marking the division
+ * between mushaf pages without breaking the continuous scroll.
+ */
+@Composable
+fun PageBreak(page: Int) {
+    val accents = LocalQuranAccents.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 28.dp, vertical = 10.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            HorizontalDivider(
+                modifier = Modifier.weight(1f),
+                thickness = 0.5.dp,
+                color = accents.gold.copy(alpha = 0.2f),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = page.toArabicIndic(),
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 10.sp,
+                color = accents.gold.copy(alpha = 0.45f),
+            )
+        }
     }
 }
