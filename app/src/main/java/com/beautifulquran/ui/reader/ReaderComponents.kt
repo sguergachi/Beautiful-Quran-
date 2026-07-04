@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -334,6 +335,25 @@ fun AyahNumberMark(
     )
 }
 
+@Composable
+private fun ArabicAyahNumberUnit(
+    number: Int,
+    fontScale: Float,
+) {
+    val density = LocalDensity.current
+    val arabicLineHeight = with(density) {
+        (ArabicWordStyle.fontSize * fontScale * 1.9f).toDp()
+    }
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 6.dp)
+            .requiredHeight(arabicLineHeight),
+        contentAlignment = Alignment.Center,
+    ) {
+        AyahNumberMark(number, fontScale)
+    }
+}
+
 /**
  * One ayah on the sheet. In Arabic mode the words flow right-to-left with the
  * English gloss beneath each word; in English mode the gloss itself becomes
@@ -445,12 +465,7 @@ fun AyahBlock(
                             onClick = onWordClick?.let { handler -> { handler(word) } },
                         )
                     }
-                    Box(
-                        modifier = Modifier.padding(horizontal = 6.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        AyahNumberMark(ayah.number, fontScale)
-                    }
+                    ArabicAyahNumberUnit(ayah.number, fontScale)
                 }
             }
         }

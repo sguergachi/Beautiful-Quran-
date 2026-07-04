@@ -224,6 +224,7 @@ private fun PaperStackApp() {
             HomeScreen(
                 viewModel = homeViewModel,
                 onOpenSurah = { surahId, ayah ->
+                    readerViewModel.load(surahId)
                     selectedSurahId = surahId
                     selectedStartAyah = ayah ?: 0
                     animateTo(AYAH_LAYER)
