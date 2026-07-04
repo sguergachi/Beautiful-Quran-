@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.clickable
@@ -35,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -45,6 +47,9 @@ import com.beautifulquran.ui.theme.ArabicTitleStyle
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.abs
+
+/** Dark ink for text sitting on the flat gold Open button — readable on both light and dark gold. */
+private val OnGold = Color(0xFF241B00)
 
 /**
  * A quiet pane of two dials that fades in beneath the search field while it
@@ -90,8 +95,7 @@ private fun SearchDials(
     Surface(
         shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 3.dp,
-        shadowElevation = 10.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
@@ -241,7 +245,7 @@ private fun GoRow(surah: Surah, ayah: Int, onClick: () -> Unit) {
         Text(
             text = "Open",
             style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onPrimary,
+            color = OnGold,
             modifier = Modifier
                 .clip(RoundedCornerShape(50))
                 .clickable(
@@ -249,11 +253,7 @@ private fun GoRow(surah: Surah, ayah: Int, onClick: () -> Unit) {
                     indication = null,
                     onClick = onClick,
                 )
-                .background(
-                    Brush.horizontalGradient(
-                        listOf(accents.goldBright, accents.goldDeep),
-                    ),
-                )
+                .background(accents.gold)
                 .padding(horizontal = 22.dp, vertical = 9.dp),
         )
     }
