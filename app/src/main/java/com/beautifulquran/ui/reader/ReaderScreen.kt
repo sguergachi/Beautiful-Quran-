@@ -94,6 +94,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.ui.theme.IslamicReturnToAyahButton
 import com.beautifulquran.ui.theme.LocalQuranAccents
@@ -724,8 +725,10 @@ fun ReaderScreen(
                         },
                 )
             }
+            val selectorSide = settings.ayahSelectorSide
             AyahSelectorRail(
                 ayahCount = content.surah.ayahCount,
+                side = selectorSide,
                 // Lambdas, not values: the scrolled position changes on every
                 // frame of a scroll, and reading it here would recompose this
                 // whole content lambda per frame. The rail reads it at draw
@@ -742,7 +745,13 @@ fun ReaderScreen(
                 onExpandedChange = { ayahSelectorExpanded = it },
                 dismissRequests = ayahSelectorDismissRequests,
                 modifier = Modifier
-                    .align(Alignment.CenterStart)
+                    .align(
+                        if (selectorSide == AyahSelectorSide.RIGHT) {
+                            Alignment.CenterEnd
+                        } else {
+                            Alignment.CenterStart
+                        },
+                    )
                     .fillMaxHeight()
                     .padding(top = padding.calculateTopPadding())
                     .zIndex(1f),
@@ -822,6 +831,7 @@ private suspend fun settleDialWheel(
 @Composable
 private fun AyahSelectorRail(
     ayahCount: Int,
+    side: AyahSelectorSide,
     currentAyah: () -> Int,
     currentPosition: () -> Float,
     chromeAlpha: () -> Float,
@@ -830,6 +840,7 @@ private fun AyahSelectorRail(
     dismissRequests: Int,
     modifier: Modifier = Modifier,
 ) {
+    val mirrored = side == AyahSelectorSide.RIGHT
     var expanded by remember { mutableStateOf(false) }
     // Owned Animatable rather than animateFloatAsState so the commit sequence
     // can await the collapse and keep the wheel anchored on the chosen ayah
@@ -938,7 +949,16 @@ private fun AyahSelectorRail(
                     // Invisible chrome (recitation follow mode) must not
                     // hijack page touches into a ghost selector.
                     if (chromeAlpha() < 0.1f) return@awaitEachGesture
-                    if (!expanded && down.position.x > 44.dp.toPx()) return@awaitEachGesture
+                    // Collapsed strip hugs whichever edge the rail sits on, so
+                    // the live touch zone mirrors with it.
+                    if (!expanded) {
+                        val nearEdge = if (mirrored) {
+                            down.position.x > size.width - 44.dp.toPx()
+                        } else {
+                            down.position.x < 44.dp.toPx()
+                        }
+                        if (!nearEdge) return@awaitEachGesture
+                    }
                     val tickSpacingPx = 14.dp.toPx()
                     val velocityTracker = VelocityTracker()
                     var dragged = false
@@ -995,6 +1015,12 @@ private fun AyahSelectorRail(
     ) {
         Canvas(Modifier.fillMaxSize()) {
             val expand = expansion.value
+            // The right-side rail is the left layout mirrored across the rail's
+            // own width: bar rects flip so their hidden cap lands under the far
+            // edge, and numbers hang off the inner end instead.
+            val railWidth = size.width
+            fun rectLeft(x: Float, width: Float) = if (mirrored) railWidth - x - width else x
+            fun textAnchor(x: Float) = if (mirrored) railWidth - x else x
             // Always anchored on dialPosition: while hidden it mirrors the
             // reading position (synced above), while visible it is the finger
             // — including the rubber-banded overshoot past either end.
@@ -1004,7 +1030,7 @@ private fun AyahSelectorRail(
             val centerY = size.height * 0.5f
             val collapsedAlpha = 1f - expand
             val numberPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                textAlign = Paint.Align.LEFT
+                textAlign = if (mirrored) Paint.Align.RIGHT else Paint.Align.LEFT
                 textSize = 9.sp.toPx()
                 typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
             }
@@ -1044,16 +1070,17 @@ private fun AyahSelectorRail(
                     val focus = (1f - abs(index - collapsedActivePosition)).coerceIn(0f, 1f)
                     // Left cap hidden behind the screen edge so the bars read
                     // as flush at x = 0 despite the rounded corners.
+                    val collapsedBarW = collapsedBarWidth * (0.7f + 0.45f * focus) + collapsedBarHeight
                     drawRoundRect(
                         color = onSurface.copy(alpha = (0.18f + 0.72f * focus) * exit),
                         topLeft = Offset(
-                            collapsedX - collapsedBarHeight - (1f - exit) * 4.dp.toPx(),
+                            rectLeft(
+                                collapsedX - collapsedBarHeight - (1f - exit) * 4.dp.toPx(),
+                                collapsedBarW,
+                            ),
                             y - collapsedBarHeight / 2f,
                         ),
-                        size = Size(
-                            collapsedBarWidth * (0.7f + 0.45f * focus) + collapsedBarHeight,
-                            collapsedBarHeight,
-                        ),
+                        size = Size(collapsedBarW, collapsedBarHeight),
                         cornerRadius = collapsedCorner,
                     )
                 }
@@ -1116,26 +1143,31 @@ private fun AyahSelectorRail(
                     val isSelected = ayah == selectedAyah
                     // Start behind the screen edge so the rounded left cap is
                     // hidden and the visible end sits truly flush at x = 0.
+                    val tickFullWidth = length + tickThickness
                     drawRoundRect(
                         color = if (isSelected) {
                             accents.gold.copy(alpha = 0.96f * arrival)
                         } else {
                             onSurface.copy(alpha = alpha)
                         },
-                        topLeft = Offset(wheelX - tickThickness, y - tickThickness / 2f),
-                        size = Size(length + tickThickness, tickThickness),
+                        topLeft = Offset(
+                            rectLeft(wheelX - tickThickness, tickFullWidth),
+                            y - tickThickness / 2f,
+                        ),
+                        size = Size(tickFullWidth, tickThickness),
                         cornerRadius = tickCorner,
                     )
                     if (isSelected && holdProgress > 0f) {
                         // Grace countdown: the selected yellow bar fills with
-                        // black before the ayah jump commits.
+                        // black from the edge cap before the ayah jump commits.
+                        val holdWidth = tickFullWidth * holdProgress
                         drawRoundRect(
                             color = Color.Black.copy(alpha = 0.82f * arrival),
-                            topLeft = Offset(wheelX - tickThickness, y - tickThickness / 2f),
-                            size = Size(
-                                (length + tickThickness) * holdProgress,
-                                tickThickness,
+                            topLeft = Offset(
+                                rectLeft(wheelX - tickThickness, holdWidth),
+                                y - tickThickness / 2f,
                             ),
+                            size = Size(holdWidth, tickThickness),
                             cornerRadius = tickCorner,
                         )
                     }
@@ -1148,7 +1180,7 @@ private fun AyahSelectorRail(
                     drawIntoCanvas { canvas ->
                         canvas.nativeCanvas.drawText(
                             ayah.toString(),
-                            wheelX + length + 6.dp.toPx(),
+                            textAnchor(wheelX + length + 6.dp.toPx()),
                             y + numberPaint.textSize * 0.34f,
                             numberPaint,
                         )
