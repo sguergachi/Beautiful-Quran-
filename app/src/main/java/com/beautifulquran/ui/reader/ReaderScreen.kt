@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -18,6 +19,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
@@ -33,6 +35,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -102,6 +105,32 @@ import kotlin.math.ceil
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+
+// LazyColumn's animateScrollToItem estimates the heights of every unmeasured
+// ayah block along the way and re-anchors as the real ones compose in, which
+// reads as stutter on long jumps. Instead: teleport to just outside the
+// viewport on the approach side, then glide the last stretch by exact pixels.
+private suspend fun LazyListState.smoothScrollToItem(index: Int, scrollOffset: Int) {
+    val visibleCount = layoutInfo.visibleItemsInfo.size.coerceAtLeast(1)
+    if (abs(index - firstVisibleItemIndex) > visibleCount + 2) {
+        val doorstep = if (index > firstVisibleItemIndex) {
+            index - visibleCount
+        } else {
+            index + visibleCount
+        }
+        // scrollToItem forces a synchronous remeasure, so layoutInfo below is fresh.
+        scrollToItem(doorstep.coerceIn(0, (layoutInfo.totalItemsCount - 1).coerceAtLeast(0)))
+    }
+    val target = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+    if (target != null) {
+        animateScrollBy(
+            value = (target.offset + scrollOffset).toFloat(),
+            animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
+        )
+    } else {
+        animateScrollToItem(index, scrollOffset)
+    }
+}
 
 private sealed interface LazyItem {
     val key: String
@@ -242,6 +271,21 @@ fun ReaderScreen(
         }
     }
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val scrolledAyahPosition = remember(readerItems) {
+        derivedStateOf {
+            val visibleAyah = listState.layoutInfo.visibleItemsInfo.firstOrNull {
+                readerItems.getOrNull(it.index) is LazyItem.AyahItem
+            } ?: return@derivedStateOf scrolledAyah.value.toFloat()
+            val ayahItem = readerItems[visibleAyah.index] as LazyItem.AyahItem
+            val itemScroll = (-visibleAyah.offset).coerceIn(0, visibleAyah.size)
+            val itemProgress = if (visibleAyah.size > 0) {
+                itemScroll.toFloat() / visibleAyah.size.toFloat()
+            } else {
+                0f
+            }
+            ayahItem.ayahIndex + 1f + itemProgress
+        }
+    }
 
     // A fresh query restarts from its first match…
     LaunchedEffect(activeQuery) { searchIndex = 0 }
@@ -250,10 +294,7 @@ fun ReaderScreen(
         val target = searchMatches.getOrNull(currentMatch) ?: return@LaunchedEffect
         followEnabled = false
         val itemIndex = ayahToItemIndex[target - 1] ?: return@LaunchedEffect
-        listState.animateScrollToItem(
-            index = itemIndex,
-            scrollOffset = -readingAnchorOffsetPx,
-        )
+        listState.smoothScrollToItem(itemIndex, -readingAnchorOffsetPx)
     }
 
     LaunchedEffect(requestedJumpAyah) {
@@ -266,10 +307,7 @@ fun ReaderScreen(
         viewModel.onAyahBecameActive(target)
         if (isThisSurahPlaying) viewModel.player.seekToAyah(target)
         val itemIndex = ayahToItemIndex[target - 1] ?: return@LaunchedEffect
-        listState.animateScrollToItem(
-            index = itemIndex,
-            scrollOffset = -readingAnchorOffsetPx,
-        )
+        listState.smoothScrollToItem(itemIndex, -readingAnchorOffsetPx)
         requestedJumpAyah = 0
     }
 
@@ -542,8 +580,6 @@ fun ReaderScreen(
             return@Scaffold
         }
 
-        val selectorAyah = (activeAyah ?: scrolledAyah.value).coerceIn(1, content.surah.ayahCount)
-
         // One column of text at a book-like measure: full-bleed on phones,
         // centered with air on tablets and in landscape.
         Box(
@@ -651,7 +687,17 @@ fun ReaderScreen(
             }
             AyahSelectorRail(
                 ayahCount = content.surah.ayahCount,
-                currentAyah = selectorAyah,
+                // Lambdas, not values: the scrolled position changes on every
+                // frame of a scroll, and reading it here would recompose this
+                // whole content lambda per frame. The rail reads it at draw
+                // and effect scope only.
+                currentAyah = {
+                    (activeAyah ?: scrolledAyah.value).coerceIn(1, content.surah.ayahCount)
+                },
+                currentPosition = {
+                    (activeAyah?.toFloat() ?: scrolledAyahPosition.value)
+                        .coerceIn(1f, content.surah.ayahCount.toFloat())
+                },
                 chromeAlpha = { if (isThisSurahPlaying && playerState.isPlaying) 0f else chromeAlpha.value },
                 onJumpToAyah = { requestedJumpAyah = it },
                 modifier = Modifier
@@ -735,7 +781,8 @@ private suspend fun settleDialWheel(
 @Composable
 private fun AyahSelectorRail(
     ayahCount: Int,
-    currentAyah: Int,
+    currentAyah: () -> Int,
+    currentPosition: () -> Float,
     chromeAlpha: () -> Float,
     onJumpToAyah: (Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -746,10 +793,10 @@ private fun AyahSelectorRail(
     // the whole way out.
     val expansion = remember { Animatable(0f) }
     var lastHapticAyah by remember(ayahCount) {
-        mutableIntStateOf(currentAyah.coerceIn(1, ayahCount))
+        mutableIntStateOf(currentAyah().coerceIn(1, ayahCount))
     }
     var dialPosition by remember(ayahCount) {
-        mutableFloatStateOf(currentAyah.coerceIn(1, ayahCount).toFloat())
+        mutableFloatStateOf(currentPosition().coerceIn(1f, ayahCount.toFloat()))
     }
     // Runs settle + grace countdown + commit after a release; cancelled by the next touch.
     var releaseJob by remember { mutableStateOf<Job?>(null) }
@@ -757,6 +804,7 @@ private fun AyahSelectorRail(
     val scope = rememberCoroutineScope()
     val view = LocalView.current
     val latestCurrentAyah by rememberUpdatedState(currentAyah)
+    val latestCurrentPosition by rememberUpdatedState(currentPosition)
     val latestOnJumpToAyah by rememberUpdatedState(onJumpToAyah)
 
     fun scheduleReleaseCommit(start: Float, velocity: Float) {
@@ -776,7 +824,7 @@ private fun AyahSelectorRail(
                 targetValue = 1f,
                 animationSpec = tween(durationMillis = 1_500, easing = LinearEasing),
             )
-            if (target != latestCurrentAyah.coerceIn(1, ayahCount)) {
+            if (target != latestCurrentAyah().coerceIn(1, ayahCount)) {
                 latestOnJumpToAyah(target)
             }
             view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
@@ -790,14 +838,16 @@ private fun AyahSelectorRail(
         }
     }
 
-    LaunchedEffect(currentAyah, ayahCount) {
+    LaunchedEffect(ayahCount) {
         // Mirror the reading position only while the wheel is fully hidden;
         // syncing any earlier yanks a still-visible wheel to a stale ayah.
-        if (!expanded && releaseJob == null && !expansion.isRunning) {
-            val ayah = currentAyah.coerceIn(1, ayahCount)
-            lastHapticAyah = ayah
-            dialPosition = ayah.toFloat()
-        }
+        snapshotFlow { latestCurrentAyah() to latestCurrentPosition() }
+            .collect { (ayah, position) ->
+                if (!expanded && releaseJob == null && !expansion.isRunning) {
+                    lastHapticAyah = ayah.coerceIn(1, ayahCount)
+                    dialPosition = position.coerceIn(1f, ayahCount.toFloat())
+                }
+            }
     }
     LaunchedEffect(expanded, ayahCount) {
         if (!expanded) return@LaunchedEffect
@@ -842,9 +892,8 @@ private fun AyahSelectorRail(
                     scope.launch { commitProgress.snapTo(0f) }
                     velocityTracker.addPosition(down.uptimeMillis, down.position)
                     if (!expanded) {
-                        val ayah = latestCurrentAyah.coerceIn(1, ayahCount)
-                        lastHapticAyah = ayah
-                        dialPosition = ayah.toFloat()
+                        lastHapticAyah = latestCurrentAyah().coerceIn(1, ayahCount)
+                        dialPosition = latestCurrentPosition().coerceIn(1f, ayahCount.toFloat())
                         expanded = true
                     }
                     scope.launch {
@@ -897,7 +946,7 @@ private fun AyahSelectorRail(
             val selectedPosition = dialPosition
             val selectedAyah = selectedPosition.roundToInt().coerceIn(1, ayahCount)
             val trackX = 10.dp.toPx()
-            val collapsedX = 17.dp.toPx()
+            val collapsedX = 0f
             val centerY = size.height * 0.5f
             val collapsedAlpha = 1f - expand
             val numberPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -906,22 +955,24 @@ private fun AyahSelectorRail(
                 typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
             }
 
-            drawLine(
-                color = onSurfaceVariant.copy(alpha = 0.08f + 0.08f * expand),
-                start = Offset(trackX, 0f),
-                end = Offset(trackX, size.height),
-                strokeWidth = 1.dp.toPx(),
-            )
+            if (expand > 0.01f) {
+                drawLine(
+                    color = onSurfaceVariant.copy(alpha = 0.08f + 0.08f * expand),
+                    start = Offset(trackX, 0f),
+                    end = Offset(trackX, size.height),
+                    strokeWidth = 1.dp.toPx(),
+                )
+            }
 
             // Collapsed-stack metrics live outside the pass because the
             // expanded wheel's focal point blooms out of the dark bar.
             val collapsedBarsCount = symbolicAyahBarCount(ayahCount)
-            val collapsedBarHeight = 2.5.dp.toPx()
-            val collapsedSpacing = (96.dp.toPx() / collapsedBarsCount)
-                .coerceIn(6.dp.toPx(), 12.dp.toPx())
+            val collapsedBarHeight = 1.5.dp.toPx()
+            val collapsedSpacing = (72.dp.toPx() / collapsedBarsCount)
+                .coerceIn(4.dp.toPx(), 8.dp.toPx())
             val collapsedStep = collapsedBarHeight + collapsedSpacing
             val readProgress = if (ayahCount > 1) {
-                (currentAyah - 1).toFloat() / (ayahCount - 1).toFloat()
+                ((latestCurrentPosition() - 1f) / (ayahCount - 1).toFloat()).coerceIn(0f, 1f)
             } else {
                 0f
             }
@@ -931,7 +982,7 @@ private fun AyahSelectorRail(
                 // Symbolic summary of the surah: bar count grows with ayah
                 // count (sqrt-mapped), and the glow slides through the stack
                 // as the reader moves through the surah.
-                val collapsedBarWidth = 12.dp.toPx()
+                val collapsedBarWidth = 7.dp.toPx()
                 val collapsedCorner = CornerRadius(collapsedBarHeight, collapsedBarHeight)
                 val halfSpan = ((collapsedBarsCount - 1) / 2f).coerceAtLeast(1f)
 
@@ -949,10 +1000,10 @@ private fun AyahSelectorRail(
                     drawRoundRect(
                         color = onSurface.copy(alpha = (0.18f + 0.72f * focus) * exit),
                         topLeft = Offset(
-                            collapsedX - (1f - exit) * 8.dp.toPx(),
+                            collapsedX - (1f - exit) * 4.dp.toPx(),
                             y - collapsedBarHeight / 2f,
                         ),
-                        size = Size(collapsedBarWidth * (0.7f + 0.5f * focus), collapsedBarHeight),
+                        size = Size(collapsedBarWidth * (0.7f + 0.45f * focus), collapsedBarHeight),
                         cornerRadius = collapsedCorner,
                     )
                 }
