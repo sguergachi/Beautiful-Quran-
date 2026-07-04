@@ -144,9 +144,13 @@ private fun PaperStackApp() {
                 onDrag = { deltaPages ->
                     scope.launch {
                         val maxLayer = if (selectedSurahId == 0) COVER_LAYER else SETTINGS_LAYER
+                        // A single gesture may advance at most one layer, so a hard swipe
+                        // from the cover lands on the reader instead of overshooting to settings.
+                        val startLayer = dragStartPosition.roundToInt()
+                        val lower = (startLayer - 1).coerceAtLeast(COVER_LAYER).toFloat()
+                        val upper = (startLayer + 1).coerceAtMost(maxLayer).toFloat()
                         stackPosition.snapTo(
-                            (dragStartPosition + deltaPages)
-                                .coerceIn(COVER_LAYER.toFloat(), maxLayer.toFloat()),
+                            (dragStartPosition + deltaPages).coerceIn(lower, upper),
                         )
                     }
                 },
@@ -288,6 +292,7 @@ private fun Modifier.paperStackDrag(
         val velocityTracker = VelocityTracker()
         val touchSlop = viewConfiguration.touchSlop
         var horizontalDrag = false
+        var startLayer = position().roundToInt()
         var totalDx = 0f
         var totalDy = 0f
         velocityTracker.addPosition(down.uptimeMillis, down.position)
@@ -304,6 +309,7 @@ private fun Modifier.paperStackDrag(
                 val mostlyHorizontal = abs(totalDx) > abs(totalDy) * 1.25f
                 if (abs(totalDx) > touchSlop && mostlyHorizontal) {
                     horizontalDrag = true
+                    startLayer = position().roundToInt()
                     onDragStart()
                 }
             }
@@ -320,9 +326,13 @@ private fun Modifier.paperStackDrag(
         if (horizontalDrag) {
             val velocityPages = -velocityTracker.calculateVelocity().x / size.width.toFloat().coerceAtLeast(1f)
             val projected = position() + velocityPages * 0.18f
+            // Clamp the fling to one layer per gesture so a hard swipe settles on the
+            // adjacent page rather than overshooting past it.
+            val lower = (startLayer - 1).coerceAtLeast(COVER_LAYER)
+            val upper = (startLayer + 1).coerceAtMost(maxLayer())
             val target = projected
                 .roundToInt()
-                .coerceIn(COVER_LAYER, maxLayer())
+                .coerceIn(lower, upper)
             onSettle(target)
         }
     }
