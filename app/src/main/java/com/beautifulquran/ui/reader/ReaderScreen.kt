@@ -593,6 +593,18 @@ fun ReaderScreen(
         },
     ) { padding ->
         val content = uiState.content
+        val readerContentAlpha = remember(surahId, startAyah) { Animatable(0f) }
+        LaunchedEffect(content?.surah?.id, startAyah) {
+            if (content == null) {
+                readerContentAlpha.snapTo(0f)
+            } else {
+                readerContentAlpha.snapTo(0f)
+                readerContentAlpha.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(durationMillis = 220),
+                )
+            }
+        }
         if (content == null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
@@ -608,7 +620,8 @@ fun ReaderScreen(
         Box(
             Modifier
                 .padding(bottom = padding.calculateBottomPadding())
-                .fillMaxSize(),
+                .fillMaxSize()
+                .graphicsLayer { alpha = readerContentAlpha.value },
         ) {
             LazyColumn(
                 state = listState,
@@ -763,11 +776,19 @@ fun ReaderScreen(
 
     val dialogContent = uiState.content
     if (showRepeatDialog && dialogContent != null) {
+        val repeatRangeForThisSurah = playerState.repeatRange
+            .takeIf { playerState.nowPlaying?.surahId == surahId }
+        val repeatStartAyah = (
+            activeAyah
+                ?: requestedJumpAyah.takeIf { it > 0 }
+                ?: startAyah
+                ?: scrolledAyah.value
+            ).coerceIn(1, dialogContent.surah.ayahCount)
         RepeatDialog(
             ayahCount = dialogContent.surah.ayahCount,
             repeatMode = playerState.repeatMode,
-            repeatRange = playerState.repeatRange,
-            currentAyah = activeAyah,
+            repeatRange = repeatRangeForThisSurah,
+            currentAyah = repeatStartAyah,
             onDismiss = { showRepeatDialog = false },
             onRepeatMode = viewModel::setRepeatMode,
             onRepeatRange = { from, to ->

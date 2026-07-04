@@ -3,16 +3,21 @@ package com.beautifulquran.ui.home
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
@@ -46,9 +51,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -89,22 +99,43 @@ fun HomeScreen(
     // field, floating over the surah list.
     var searchFocused by remember { mutableStateOf(false) }
     var boxTop by remember { mutableFloatStateOf(0f) }
+    var boxHeight by remember { mutableFloatStateOf(0f) }
     var searchBottom by remember { mutableFloatStateOf(0f) }
+    var searchBounds by remember { mutableStateOf<Rect?>(null) }
+    var searchPaneBounds by remember { mutableStateOf<Rect?>(null) }
     val listState = rememberLazyListState()
+    val searchPaneVisible = searchFocused && uiState.query.isEmpty()
+    val density = LocalDensity.current
+    val imeBottom = WindowInsets.ime.getBottom(density).toFloat()
+    val searchPaneTopGap = 10.dp
+    val searchPaneBottomGap = 10.dp
+    val searchPaneTopGapPx = with(density) { searchPaneTopGap.toPx() }
+    val searchPaneBottomGapPx = with(density) { searchPaneBottomGap.toPx() }
+    val searchPaneHeight = with(density) {
+        val paneTop = searchBottom - boxTop + searchPaneTopGapPx
+        val paneBottom = boxHeight - imeBottom - searchPaneBottomGapPx
+        (paneBottom - paneTop).coerceAtLeast(0f).toDp()
+    }
 
     // When the search takes focus, lift it to the top of the list so the title
     // slides away and the dials pane has room above the keyboard. Once lifted,
     // a deliberate scroll of the list dismisses the search — clearing focus
-    // hides the keyboard and fades the dials pane out. We watch the settled
-    // scroll position rather than a drag gesture, so the tiny movement in a
-    // focus tap (which never actually scrolls the list) can't self-dismiss.
+    // hides the keyboard and fades the dials pane out. We only react while the
+    // list is actively scrolling, so search result changes from typing don't
+    // steal focus or dismiss the keyboard.
     LaunchedEffect(searchFocused) {
         if (!searchFocused) return@LaunchedEffect
         listState.animateScrollToItem(SEARCH_ITEM_INDEX)
-        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+        snapshotFlow {
+            Triple(
+                listState.isScrollInProgress,
+                listState.firstVisibleItemIndex,
+                listState.firstVisibleItemScrollOffset,
+            )
+        }
             .drop(1)
-            .collect { (index, offset) ->
-                if (index != SEARCH_ITEM_INDEX || offset > DISMISS_SCROLL_THRESHOLD_PX) {
+            .collect { (isScrolling, index, offset) ->
+                if (isScrolling && (index != SEARCH_ITEM_INDEX || offset > DISMISS_SCROLL_THRESHOLD_PX)) {
                     focusManager.clearFocus()
                 }
             }
@@ -115,7 +146,28 @@ fun HomeScreen(
             Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .onGloballyPositioned { boxTop = it.boundsInWindow().top },
+                .pointerInput(searchFocused, searchPaneVisible, searchBounds, searchPaneBounds) {
+                    if (!searchFocused) return@pointerInput
+                    awaitEachGesture {
+                        awaitFirstDown(
+                            requireUnconsumed = false,
+                            pass = PointerEventPass.Initial,
+                        )
+                        val up = waitForUpOrCancellation(pass = PointerEventPass.Initial)
+                            ?: return@awaitEachGesture
+                        val tappedSearch = searchBounds?.contains(up.position) == true
+                        val tappedPane = searchPaneVisible &&
+                            searchPaneBounds?.contains(up.position) == true
+                        if (!tappedSearch && !tappedPane) {
+                            up.consume()
+                            focusManager.clearFocus()
+                        }
+                    }
+                }
+                .onGloballyPositioned {
+                    boxTop = it.boundsInWindow().top
+                    boxHeight = it.size.height.toFloat()
+                },
         ) {
             LazyColumn(
                 state = listState,
@@ -218,7 +270,10 @@ fun HomeScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 24.dp)
                         .onFocusChanged { searchFocused = it.isFocused }
-                        .onGloballyPositioned { searchBottom = it.boundsInWindow().bottom },
+                        .onGloballyPositioned {
+                            searchBottom = it.boundsInWindow().bottom
+                            searchBounds = it.boundsInRoot()
+                        },
                 )
             }
 
@@ -236,14 +291,17 @@ fun HomeScreen(
             items(count = uiState.surahs.size, key = { uiState.surahs[it].id }) { index ->
                 SurahRow(
                     surah = uiState.surahs[index],
-                    onClick = { onOpenSurah(uiState.surahs[index].id, uiState.ayahTarget) },
+                    onClick = {
+                        focusManager.clearFocus()
+                        onOpenSurah(uiState.surahs[index].id, uiState.ayahTarget)
+                    },
                 )
             }
             }
 
             SearchDialsPane(
                 surahs = uiState.allSurahs,
-                visible = searchFocused,
+                visible = searchPaneVisible,
                 onOpen = { surahId, ayah ->
                     focusManager.clearFocus()
                     onOpenSurah(surahId, ayah)
@@ -252,8 +310,12 @@ fun HomeScreen(
                     .align(Alignment.TopCenter)
                     .widthIn(max = 640.dp)
                     .fillMaxWidth()
-                    .offset { IntOffset(0, (searchBottom - boxTop).roundToInt()) }
-                    .padding(horizontal = 24.dp, vertical = 10.dp),
+                    .offset {
+                        IntOffset(0, (searchBottom - boxTop + searchPaneTopGapPx).roundToInt())
+                    }
+                    .padding(horizontal = 24.dp)
+                    .height(searchPaneHeight)
+                    .onGloballyPositioned { searchPaneBounds = it.boundsInRoot() },
             )
         }
 

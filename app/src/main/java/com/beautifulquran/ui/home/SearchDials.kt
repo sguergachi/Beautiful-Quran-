@@ -9,14 +9,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -50,6 +53,9 @@ import kotlin.math.abs
 
 /** Dark ink for text sitting on the flat gold Open button — readable on both light and dark gold. */
 private val OnGold = Color(0xFF241B00)
+private val SurahWheelHorizontalPadding = 8.dp
+private val SurahNumberColumnWidth = 22.dp
+private val SurahNameGap = 8.dp
 
 /**
  * A quiet pane of two dials that fades in beneath the search field while it
@@ -96,24 +102,23 @@ private fun SearchDials(
         shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxSize(),
     ) {
-        Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-            Row(Modifier.fillMaxWidth()) {
-                WheelLabel("Surah", Modifier.weight(1.7f))
-                Spacer(Modifier.padding(horizontal = 6.dp))
-                WheelLabel("Ayah", Modifier.weight(1f))
-            }
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 18.dp, vertical = 12.dp),
+        ) {
+            WheelHeader()
             Spacer(Modifier.height(4.dp))
 
             val itemHeight = 42.dp
-            val visibleItems = 3
-            val wheelHeight = itemHeight * visibleItems
-            Box(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(wheelHeight),
+                    .weight(1f),
             ) {
+                val wheelEdgePadding = ((maxHeight - itemHeight) / 2).coerceAtLeast(0.dp)
                 // A single gilded band marks the centre selection across both dials.
                 Box(
                     modifier = Modifier
@@ -124,22 +129,22 @@ private fun SearchDials(
                         .background(accents.gold.copy(alpha = 0.12f)),
                 )
                 Row(Modifier.fillMaxWidth()) {
-                    Wheel(
+                    SearchDialWheel(
                         itemCount = surahs.size,
                         selectedIndex = surahIndex,
                         itemHeight = itemHeight,
-                        visibleItems = visibleItems,
+                        edgePadding = wheelEdgePadding,
                         onSelectedIndexChange = { surahIndex = it },
                         modifier = Modifier.weight(1.7f),
                     ) { index, selected ->
                         SurahItem(surahs[index], selected)
                     }
                     Spacer(Modifier.padding(horizontal = 6.dp))
-                    Wheel(
+                    SearchDialWheel(
                         itemCount = currentSurah.ayahCount,
                         selectedIndex = ayah - 1,
                         itemHeight = itemHeight,
-                        visibleItems = visibleItems,
+                        edgePadding = wheelEdgePadding,
                         onSelectedIndexChange = { ayah = it + 1 },
                         modifier = Modifier.weight(1f),
                     ) { index, selected ->
@@ -159,12 +164,33 @@ private fun SearchDials(
 }
 
 @Composable
-private fun WheelLabel(text: String, modifier: Modifier = Modifier) {
+private fun WheelHeader() {
+    Row(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .weight(1.7f)
+                .padding(horizontal = SurahWheelHorizontalPadding),
+        ) {
+            Spacer(Modifier.width(SurahNumberColumnWidth))
+            Spacer(Modifier.width(SurahNameGap))
+            WheelLabel("Surah")
+        }
+        Spacer(Modifier.padding(horizontal = 6.dp))
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.weight(1f),
+        ) {
+            WheelLabel("Ayah")
+        }
+    }
+}
+
+@Composable
+private fun WheelLabel(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-        modifier = modifier,
     )
 }
 
@@ -175,14 +201,19 @@ private fun SurahItem(surah: Surah, selected: Boolean) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = SurahWheelHorizontalPadding),
     ) {
-        Text(
-            text = surah.id.toString(),
-            style = MaterialTheme.typography.labelMedium,
-            color = accents.gold.copy(alpha = if (selected) 0.95f else 0.6f),
-            modifier = Modifier.padding(end = 10.dp),
-        )
+        Box(
+            contentAlignment = Alignment.CenterStart,
+            modifier = Modifier.width(SurahNumberColumnWidth),
+        ) {
+            Text(
+                text = surah.id.toString(),
+                style = MaterialTheme.typography.labelMedium,
+                color = accents.gold.copy(alpha = if (selected) 0.95f else 0.6f),
+            )
+        }
+        Spacer(Modifier.width(SurahNameGap))
         Text(
             text = surah.nameTransliteration,
             style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
@@ -267,11 +298,11 @@ private fun GoRow(surah: Surah, ayah: Int, onClick: () -> Unit) {
  * the draw phase, so spinning the dial never triggers recomposition upstream.
  */
 @Composable
-private fun Wheel(
+internal fun SearchDialWheel(
     itemCount: Int,
     selectedIndex: Int,
     itemHeight: Dp,
-    visibleItems: Int,
+    edgePadding: Dp,
     onSelectedIndexChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
     itemContent: @Composable (index: Int, selected: Boolean) -> Unit,
@@ -281,7 +312,6 @@ private fun Wheel(
         initialFirstVisibleItemIndex = selectedIndex.coerceIn(0, maxIndex),
     )
     val snapBehavior = rememberSnapFlingBehavior(lazyListState = listState)
-    val edgePadding = itemHeight * (visibleItems / 2)
     val fadeColor = MaterialTheme.colorScheme.surface
     val clearColor = MaterialTheme.colorScheme.surface.copy(alpha = 0f)
 

@@ -11,6 +11,7 @@ import com.beautifulquran.domain.HighlightEngine
 import com.beautifulquran.playback.PlayerController
 import com.beautifulquran.playback.PlayerUiState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -50,6 +51,7 @@ class ReaderViewModel(
 
     private var surahId: Int = 0
     private var timings: Map<Int, List<Segment>> = emptyMap()
+    private var loadJob: Job? = null
 
     /** Emits the active word ~30x/sec while this surah is playing, but only
      * publishes on change, so the UI recomposes once per word. */
@@ -130,17 +132,36 @@ class ReaderViewModel(
     }
 
     fun load(surahId: Int) {
-        if (this.surahId == surahId && _uiState.value.content != null) return
+        if (
+            this.surahId == surahId &&
+            (_uiState.value.content != null || _uiState.value.isLoading)
+        ) {
+            return
+        }
         this.surahId = surahId
-        viewModelScope.launch {
+        timings = emptyMap()
+        _uiState.value = ReaderUiState(
+            reciters = _uiState.value.reciters,
+            currentReciter = _uiState.value.currentReciter,
+            isLoading = true,
+        )
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             val reciters = repository.reciters()
             val reciter = currentReciter(reciters)
-            timings = if (reciter.hasTimings) repository.timings(reciter.id, surahId) else emptyMap()
+            val loadedTimings = if (reciter.hasTimings) {
+                repository.timings(reciter.id, surahId)
+            } else {
+                emptyMap()
+            }
+            val content = repository.surahContent(surahId)
+            if (this@ReaderViewModel.surahId != surahId) return@launch
+            timings = loadedTimings
             _uiState.value = ReaderUiState(
-                content = repository.surahContent(surahId),
+                content = content,
                 reciters = reciters,
                 currentReciter = reciter,
-                hasTimings = timings.isNotEmpty(),
+                hasTimings = loadedTimings.isNotEmpty(),
                 isLoading = false,
             )
         }
