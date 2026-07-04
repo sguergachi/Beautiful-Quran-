@@ -340,6 +340,7 @@ fun AyahBlock(
     playbackSpeed: Float,
     isActiveAyah: Boolean,
     dimmed: Boolean,
+    obscuredBySelector: Boolean,
     fontScale: Float,
     showGloss: Boolean,
     showTransliteration: Boolean,
@@ -354,7 +355,11 @@ fun AyahBlock(
     // Non-active ayahs recede softly while another is being recited.
     // State is read inside graphicsLayer so the dim animates draw-phase-only.
     val blockAlpha = animateFloatAsState(
-        targetValue = if (dimmed) 0.32f else 1f,
+        targetValue = when {
+            obscuredBySelector -> 0.07f
+            dimmed -> 0.32f
+            else -> 1f
+        },
         animationSpec = tween(600),
         label = "ayahAlpha",
     )
