@@ -982,7 +982,7 @@ private fun AyahSelectorRail(
                 // Symbolic summary of the surah: bar count grows with ayah
                 // count (sqrt-mapped), and the glow slides through the stack
                 // as the reader moves through the surah.
-                val collapsedBarWidth = 7.dp.toPx()
+                val collapsedBarWidth = 10.dp.toPx()
                 val collapsedCorner = CornerRadius(collapsedBarHeight, collapsedBarHeight)
                 val halfSpan = ((collapsedBarsCount - 1) / 2f).coerceAtLeast(1f)
 
