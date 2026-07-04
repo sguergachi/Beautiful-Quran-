@@ -10,11 +10,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -70,7 +72,7 @@ class MainActivity : ComponentActivity() {
 
             SideEffect {
                 val statusBarStyle = if (usesNightfall) {
-                    SystemBarStyle.light(NIGHTFALL_STATUS_BAR, NIGHTFALL_STATUS_BAR)
+                    SystemBarStyle.dark(NIGHTFALL_STATUS_BAR)
                 } else {
                     SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) {
                         settings.themeMode == ThemeMode.ROYAL_GREEN
@@ -86,7 +88,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private companion object {
-        const val NIGHTFALL_STATUS_BAR = 0xFFFAF3E8.toInt()
+        const val NIGHTFALL_STATUS_BAR = 0xFF010F0C.toInt()
     }
 }
 
@@ -134,6 +136,7 @@ private fun PaperStackApp() {
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
             .paperStackDrag(
                 position = { stackPosition.value },
                 maxLayer = { if (selectedSurahId == 0) COVER_LAYER else SETTINGS_LAYER },
