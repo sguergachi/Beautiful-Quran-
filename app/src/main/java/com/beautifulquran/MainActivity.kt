@@ -29,10 +29,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -208,10 +214,16 @@ private fun PaperPage(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
+    val turning = when (layer) {
+        PaperLayer.Cover -> stackPosition.coerceIn(0f, 1f)
+        PaperLayer.Ayah -> (stackPosition - 1f).coerceIn(0f, 1f)
+        PaperLayer.Settings -> 0f
+    }
     Box(
         modifier = modifier
             .fillMaxSize()
-            .paperLayerTransform(layer, stackPosition),
+            .paperLayerTransform(layer, stackPosition)
+            .paperDropShadow(turning),
     ) {
         content()
     }
@@ -245,6 +257,30 @@ private fun Modifier.paperLayerTransform(
             scaleX = 0.97f + 0.03f * reveal
             scaleY = 0.97f + 0.03f * reveal
         }
+    }
+}
+
+// A lifted sheet casts a soft shadow onto the page beneath it, spilling just
+// past its leading edge rather than darkening the sheet's own edge. The cast
+// is strongest mid-swipe and fades to nothing once either sheet settles.
+private fun Modifier.paperDropShadow(turning: Float): Modifier = drawWithContent {
+    drawContent()
+    val depth = (4f * turning * (1f - turning)).coerceIn(0f, 1f)
+    if (depth > 0.01f) {
+        val shadowWidth = 24.dp.toPx()
+        drawRect(
+            brush = Brush.horizontalGradient(
+                colors = listOf(
+                    ComposeColor.Black.copy(alpha = 0.26f * depth),
+                    ComposeColor.Black.copy(alpha = 0.09f * depth),
+                    ComposeColor.Transparent,
+                ),
+                startX = size.width,
+                endX = size.width + shadowWidth,
+            ),
+            topLeft = Offset(size.width, 0f),
+            size = Size(shadowWidth, size.height),
+        )
     }
 }
 
