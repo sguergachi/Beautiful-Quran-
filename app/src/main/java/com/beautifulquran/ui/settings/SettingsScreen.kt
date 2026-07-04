@@ -108,7 +108,7 @@ fun SettingsScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 28.dp),
             ) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(32.dp))
 
             SectionLabel("Reciter")
             reciters.forEach { reciter ->
