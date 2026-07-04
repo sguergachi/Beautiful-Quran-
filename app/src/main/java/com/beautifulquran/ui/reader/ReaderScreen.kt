@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -61,6 +62,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -92,11 +94,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.ui.theme.IslamicReturnToAyahButton
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.verticalFadingEdges
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 private sealed interface LazyItem {
     val key: String
@@ -682,6 +687,10 @@ private fun rubberBandDialPosition(value: Float, min: Float, max: Float): Float 
     }
 }
 
+private fun symbolicAyahBarCount(ayahCount: Int): Int {
+    return ceil(sqrt(ayahCount.toFloat())).roundToInt().coerceIn(4, 18)
+}
+
 private suspend fun settleDialWheel(
     start: Float,
     velocity: Float,
@@ -727,19 +736,45 @@ private fun AyahSelectorRail(
     onJumpToAyah: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    var previewAyah by rememberSaveable(ayahCount) {
+    var expanded by remember { mutableStateOf(false) }
+    var previewAyah by remember(ayahCount) {
         mutableIntStateOf(currentAyah.coerceIn(1, ayahCount))
     }
     var lastHapticAyah by remember { mutableIntStateOf(previewAyah) }
-    var dialPosition by rememberSaveable(ayahCount) {
+    var dialPosition by remember(ayahCount) {
         mutableFloatStateOf(currentAyah.coerceIn(1, ayahCount).toFloat())
     }
-    var settleRequest by remember { mutableIntStateOf(0) }
-    var settleStart by remember { mutableFloatStateOf(1f) }
-    var settleVelocity by remember { mutableFloatStateOf(0f) }
+    // Runs settle + grace countdown + commit after a release; cancelled by the next touch.
+    var releaseJob by remember { mutableStateOf<Job?>(null) }
+    val commitProgress = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
     val view = LocalView.current
     val latestCurrentAyah by rememberUpdatedState(currentAyah)
+    val latestOnJumpToAyah by rememberUpdatedState(onJumpToAyah)
+
+    fun scheduleReleaseCommit(start: Float, velocity: Float) {
+        releaseJob?.cancel()
+        releaseJob = scope.launch {
+            commitProgress.snapTo(0f)
+            val target = settleDialWheel(
+                start = start,
+                velocity = velocity,
+                ayahCount = ayahCount,
+                setPosition = { dialPosition = it },
+            )
+            previewAyah = target
+            lastHapticAyah = target
+            commitProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 1_500, easing = LinearEasing),
+            )
+            expanded = false
+            latestOnJumpToAyah(target)
+            commitProgress.snapTo(0f)
+            releaseJob = null
+        }
+    }
+
     LaunchedEffect(currentAyah, ayahCount, expanded) {
         if (!expanded) {
             val ayah = currentAyah.coerceIn(1, ayahCount)
@@ -765,28 +800,14 @@ private fun AyahSelectorRail(
                 }
             }
     }
-    LaunchedEffect(settleRequest) {
-        if (settleRequest == 0) return@LaunchedEffect
-        val settledAyah = settleDialWheel(
-            start = settleStart,
-            velocity = settleVelocity,
-            ayahCount = ayahCount,
-            setPosition = { dialPosition = it },
-        )
-        previewAyah = settledAyah
-        view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-        onJumpToAyah(settledAyah)
-        expanded = false
-    }
-
     val expansion by animateFloatAsState(
         targetValue = if (expanded) 1f else 0f,
-        animationSpec = tween(240),
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 380f),
         label = "ayahSelectorExpansion",
     )
     val railWidth by animateDpAsState(
         targetValue = if (expanded) 92.dp else 58.dp,
-        animationSpec = tween(240),
+        animationSpec = spring(dampingRatio = 0.9f, stiffness = 380f),
         label = "ayahSelectorWidth",
     )
     val accents = LocalQuranAccents.current
@@ -797,13 +818,16 @@ private fun AyahSelectorRail(
         modifier = modifier
             .width(railWidth)
             .graphicsLayer { alpha = chromeAlpha() }
-            .pointerInput(expanded, ayahCount) {
+            .pointerInput(ayahCount) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     val tickSpacingPx = 14.dp.toPx()
                     val velocityTracker = VelocityTracker()
                     var dragged = false
                     val wasExpanded = expanded
+                    releaseJob?.cancel()
+                    releaseJob = null
+                    scope.launch { commitProgress.snapTo(0f) }
                     velocityTracker.addPosition(down.uptimeMillis, down.position)
                     if (!expanded) {
                         val ayah = latestCurrentAyah.coerceIn(1, ayahCount)
@@ -832,12 +856,15 @@ private fun AyahSelectorRail(
                     }
                     if (dragged) {
                         val velocityAyah = -velocityTracker.calculateVelocity().y / tickSpacingPx
-                        settleStart = dialPosition.coerceIn(1f, ayahCount.toFloat())
-                        settleVelocity = velocityAyah
-                        settleRequest += 1
+                        scheduleReleaseCommit(
+                            start = dialPosition.coerceIn(1f, ayahCount.toFloat()),
+                            velocity = velocityAyah,
+                        )
                     } else if (wasExpanded) {
-                        expanded = false
-                        onJumpToAyah(previewAyah)
+                        scheduleReleaseCommit(
+                            start = dialPosition.coerceIn(1f, ayahCount.toFloat()),
+                            velocity = 0f,
+                        )
                     }
                 }
             },
@@ -869,10 +896,11 @@ private fun AyahSelectorRail(
             )
 
             if (collapsedAlpha > 0.01f) {
-                val collapsedBarsCount = 10
+                val collapsedBarsCount = symbolicAyahBarCount(ayahCount)
                 val collapsedBarWidth = 12.dp.toPx()
                 val collapsedBarHeight = 2.5.dp.toPx()
-                val collapsedSpacing = 10.dp.toPx()
+                val collapsedSpacing = (96.dp.toPx() / collapsedBarsCount)
+                    .coerceIn(6.dp.toPx(), 12.dp.toPx())
                 val collapsedCorner = CornerRadius(collapsedBarHeight, collapsedBarHeight)
 
                 val progress = if (ayahCount > 1) {
@@ -910,6 +938,7 @@ private fun AyahSelectorRail(
                 val maxBarLength = 44.dp.toPx()
                 val minBarThickness = 2.dp.toPx()
                 val maxBarThickness = 4.dp.toPx()
+                val holdProgress = commitProgress.value
 
                 for (ayah in first..last) {
                     val offset = ayah - selectedPosition
@@ -917,7 +946,7 @@ private fun AyahSelectorRail(
                     val distance = (abs(offset) / visibleRadius).coerceIn(0f, 1f)
                     val focus = 1f - distance
                     val major = ayah == 1 || ayah == ayahCount || ayah % 5 == 0
-                    val arrival = ((expansion - distance * 0.18f) / 0.82f).coerceIn(0f, 1f)
+                    val arrival = ((expansion - distance * 0.24f) / 0.76f).coerceIn(0f, 1f)
                     val edgeFade = (min(y, size.height - y) / verticalFade).coerceIn(0f, 1f)
                     val length = (
                         minBarLength +
@@ -938,6 +967,14 @@ private fun AyahSelectorRail(
                         size = Size(length, tickThickness),
                         cornerRadius = tickCorner,
                     )
+                    if (isSelected && holdProgress > 0f) {
+                        drawRoundRect(
+                            color = accents.gold.copy(alpha = 0.32f * arrival),
+                            topLeft = Offset(wheelX, y + tickThickness * 1.8f),
+                            size = Size(length * holdProgress, 1.25.dp.toPx()),
+                            cornerRadius = CornerRadius(1.25.dp.toPx(), 1.25.dp.toPx()),
+                        )
+                    }
                     numberPaint.color = if (isSelected) {
                         accents.gold.copy(alpha = 0.95f * arrival).toArgb()
                     } else {

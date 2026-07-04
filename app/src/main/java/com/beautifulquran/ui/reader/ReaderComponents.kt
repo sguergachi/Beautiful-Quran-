@@ -77,7 +77,7 @@ private fun Int.toArabicIndic(): String =
  */
 private fun WordVisualState.inkAlpha(): Float = when (this) {
     WordVisualState.Plain -> 1f
-    WordVisualState.Upcoming -> 0.3f
+    WordVisualState.Upcoming -> 0.22f
     WordVisualState.Active -> 1f
     WordVisualState.Recited -> 0.8f
 }
