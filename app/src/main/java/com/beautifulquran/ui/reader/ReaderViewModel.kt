@@ -177,6 +177,25 @@ class ReaderViewModel(
         rememberPosition(ayah)
     }
 
+    fun playFromWord(ayah: Int, positionMs: Long) {
+        val content = _uiState.value.content ?: return
+        val reciter = _uiState.value.currentReciter ?: return
+        val np = playerState.value.nowPlaying
+        if (np != null && np.surahId == surahId && np.reciterId == reciter.id) {
+            player.seekToWordAndPlay(ayah, positionMs)
+        } else {
+            player.playSurah(
+                surahId = content.surah.id,
+                ayahCount = content.surah.ayahCount,
+                startAyah = ayah,
+                reciter = reciter,
+                surahName = content.surah.nameTransliteration,
+                startPositionMs = positionMs,
+            )
+        }
+        rememberPosition(ayah)
+    }
+
     fun onAyahBecameActive(ayah: Int) {
         rememberPosition(ayah)
     }

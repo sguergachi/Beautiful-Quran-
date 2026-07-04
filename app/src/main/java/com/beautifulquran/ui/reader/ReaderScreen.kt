@@ -76,6 +76,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
@@ -309,6 +310,12 @@ fun ReaderScreen(
         val itemIndex = ayahToItemIndex[target - 1] ?: return@LaunchedEffect
         listState.smoothScrollToItem(itemIndex, -readingAnchorOffsetPx)
         requestedJumpAyah = 0
+    }
+
+    fun selectedPlaybackAyah(): Int {
+        val ayahCount = uiState.content?.surah?.ayahCount ?: return startAyah ?: 1
+        return (requestedJumpAyah.takeIf { it > 0 } ?: scrolledAyah.value)
+            .coerceIn(1, ayahCount)
     }
 
     // Lyric-style auto scroll: keep the active ayah in the upper third.
@@ -556,11 +563,21 @@ fun ReaderScreen(
                     reciterName = uiState.currentReciter?.name.orEmpty(),
                     onPlayPause = {
                         if (isThisSurahPlaying) {
-                            viewModel.player.togglePlayPause()
+                            if (playerState.isPlaying) {
+                                viewModel.player.togglePlayPause()
+                            } else {
+                                val selectedAyah = selectedPlaybackAyah()
+                                followEnabled = true
+                                if (requestedJumpAyah > 0 || playerState.nowPlaying?.ayah != selectedAyah) {
+                                    viewModel.player.playLoadedFromAyah(selectedAyah)
+                                } else {
+                                    viewModel.player.togglePlayPause()
+                                }
+                            }
                         } else {
                             ensureNotifPermission()
                             followEnabled = true
-                            viewModel.playFromAyah(startAyah ?: 1)
+                            viewModel.playFromAyah(selectedPlaybackAyah())
                         }
                     },
                     onFastBackward = viewModel::fastBackward,
@@ -581,6 +598,7 @@ fun ReaderScreen(
         }
 
         var ayahSelectorExpanded by remember { mutableStateOf(false) }
+        var ayahSelectorDismissRequests by remember { mutableIntStateOf(0) }
 
         // One column of text at a book-like measure: full-bleed on phones,
         // centered with air on tablets and in landscape.
@@ -664,11 +682,11 @@ fun ReaderScreen(
                                 onWordClick = { word ->
                                     val segment = viewModel.segmentsFor(ayah.number)
                                         ?.firstOrNull { it.position == word.position }
-                                    if (isThisSurahPlaying && segment != null) {
-                                        viewModel.player.seekToWord(ayah.number, segment.startMs)
+                                    ensureNotifPermission()
+                                    followEnabled = true
+                                    if (segment != null) {
+                                        viewModel.playFromWord(ayah.number, segment.startMs)
                                     } else {
-                                        ensureNotifPermission()
-                                        followEnabled = true
                                         viewModel.playFromAyah(ayah.number)
                                     }
                                 },
@@ -688,6 +706,24 @@ fun ReaderScreen(
                     }
                 }
             }
+            if (ayahSelectorExpanded) {
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .zIndex(0.5f)
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                ayahSelectorDismissRequests += 1
+                                down.consume()
+                                do {
+                                    val event = awaitPointerEvent()
+                                    event.changes.forEach { it.consume() }
+                                } while (event.changes.any { it.pressed })
+                            }
+                        },
+                )
+            }
             AyahSelectorRail(
                 ayahCount = content.surah.ayahCount,
                 // Lambdas, not values: the scrolled position changes on every
@@ -704,6 +740,7 @@ fun ReaderScreen(
                 chromeAlpha = { if (isThisSurahPlaying && playerState.isPlaying) 0f else chromeAlpha.value },
                 onJumpToAyah = { requestedJumpAyah = it },
                 onExpandedChange = { ayahSelectorExpanded = it },
+                dismissRequests = ayahSelectorDismissRequests,
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .fillMaxHeight()
@@ -790,6 +827,7 @@ private fun AyahSelectorRail(
     chromeAlpha: () -> Float,
     onJumpToAyah: (Int) -> Unit,
     onExpandedChange: (Boolean) -> Unit,
+    dismissRequests: Int,
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -815,6 +853,14 @@ private fun AyahSelectorRail(
 
     LaunchedEffect(expanded) {
         latestOnExpandedChange(expanded)
+    }
+    LaunchedEffect(dismissRequests) {
+        if (dismissRequests == 0 || !expanded) return@LaunchedEffect
+        releaseJob?.cancel()
+        releaseJob = null
+        commitProgress.snapTo(0f)
+        expanded = false
+        expansion.animateTo(0f, spring(dampingRatio = 1f, stiffness = 200f))
     }
 
     fun scheduleReleaseCommit(start: Float, velocity: Float) {
@@ -1081,16 +1127,16 @@ private fun AyahSelectorRail(
                         cornerRadius = tickCorner,
                     )
                     if (isSelected && holdProgress > 0f) {
-                        // Grace countdown: the underline drains away; until it
-                        // empties, touching the rail reopens the selection.
+                        // Grace countdown: the selected yellow bar fills with
+                        // black before the ayah jump commits.
                         drawRoundRect(
-                            color = accents.gold.copy(alpha = 0.4f * arrival),
-                            topLeft = Offset(wheelX - 1.5.dp.toPx(), y + tickThickness * 1.9f),
+                            color = Color.Black.copy(alpha = 0.82f * arrival),
+                            topLeft = Offset(wheelX - tickThickness, y - tickThickness / 2f),
                             size = Size(
-                                length * (1f - holdProgress) + 1.5.dp.toPx(),
-                                1.5.dp.toPx(),
+                                (length + tickThickness) * holdProgress,
+                                tickThickness,
                             ),
-                            cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx()),
+                            cornerRadius = tickCorner,
                         )
                     }
                     numberPaint.color = if (isSelected) {
