@@ -58,6 +58,12 @@ class PlayerController(private val context: Context) {
     val positionMs: Long
         get() = controller?.currentPosition ?: 0L
 
+    /** Duration of the ayah currently loaded, or 0 while it is still unknown
+     * (buffering / not prepared). Media3 reports an unset duration as a large
+     * sentinel, so anything non-positive is treated as "not yet known". */
+    val durationMs: Long
+        get() = controller?.duration?.takeIf { it > 0L } ?: 0L
+
     private suspend fun ensureController(): MediaController = connectMutex.withLock {
         controller?.let { return it }
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
