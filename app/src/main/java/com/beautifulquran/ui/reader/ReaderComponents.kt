@@ -73,13 +73,13 @@ private fun Int.toArabicIndic(): String =
 /**
  * Apple-Music-lyrics treatment: the letters themselves carry the highlight.
  * Upcoming words rest faint on the page; the word being recited breathes in
- * to full ink; words already recited settle just below full strength.
+ * to full ink; words already recited hold that full strength.
  */
 private fun WordVisualState.inkAlpha(): Float = when (this) {
     WordVisualState.Plain -> 1f
-    WordVisualState.Upcoming -> 0.3f
+    WordVisualState.Upcoming -> 0.22f
     WordVisualState.Active -> 1f
-    WordVisualState.Recited -> 0.8f
+    WordVisualState.Recited -> 1f
 }
 
 private fun wordFadeAlpha(progress: Float): Float {
@@ -217,7 +217,7 @@ fun WordUnit(
                 color = if (searchHit) {
                     LocalQuranAccents.current.gold
                 } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    MaterialTheme.colorScheme.onBackground
                 },
                 textAlign = TextAlign.Center,
                 modifier = Modifier.graphicsLayer {
@@ -580,11 +580,11 @@ fun OrnateSurahTitle(
 
 /**
  * Subtle page break: a thin gold line across the sheet with the page number
- * set in small Arabic-Indic digits on the right — marking the division
+ * set in small digits on the right — marking the division
  * between mushaf pages without breaking the continuous scroll.
  */
 @Composable
-fun PageBreak(page: Int) {
+fun PageBreak(page: Int, useArabicIndicDigits: Boolean = true) {
     val accents = LocalQuranAccents.current
     Column(
         modifier = Modifier
@@ -602,7 +602,7 @@ fun PageBreak(page: Int) {
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = page.toArabicIndic(),
+                text = if (useArabicIndicDigits) page.toArabicIndic() else page.toString(),
                 style = MaterialTheme.typography.labelSmall,
                 fontSize = 10.sp,
                 color = accents.gold.copy(alpha = 0.45f),
