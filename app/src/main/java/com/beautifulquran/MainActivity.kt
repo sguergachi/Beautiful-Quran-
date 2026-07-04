@@ -29,11 +29,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -213,16 +208,10 @@ private fun PaperPage(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    val turning = when (layer) {
-        PaperLayer.Cover -> stackPosition.coerceIn(0f, 1f)
-        PaperLayer.Ayah -> (stackPosition - 1f).coerceIn(0f, 1f)
-        PaperLayer.Settings -> 0f
-    }
     Box(
         modifier = modifier
             .fillMaxSize()
-            .paperLayerTransform(layer, stackPosition)
-            .paperEdge(turning),
+            .paperLayerTransform(layer, stackPosition),
     ) {
         content()
     }
@@ -256,23 +245,6 @@ private fun Modifier.paperLayerTransform(
             scaleX = 0.97f + 0.03f * reveal
             scaleY = 0.97f + 0.03f * reveal
         }
-    }
-}
-
-private fun Modifier.paperEdge(turning: Float): Modifier = drawWithContent {
-    drawContent()
-    if (turning > 0.01f && turning < 0.99f) {
-        val edgeWidth = 30f
-        drawRect(
-            brush = Brush.horizontalGradient(
-                colors = listOf(
-                    ComposeColor.Transparent,
-                    ComposeColor.Black.copy(alpha = 0.16f * (1f - turning)),
-                ),
-            ),
-            topLeft = Offset(size.width - edgeWidth, 0f),
-            size = Size(edgeWidth, size.height),
-        )
     }
 }
 
