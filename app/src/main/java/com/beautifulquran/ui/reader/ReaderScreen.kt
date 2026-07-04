@@ -70,6 +70,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -762,9 +763,9 @@ fun ReaderScreen(
                 modifier = Modifier
                     .align(
                         if (selectorSide == AyahSelectorSide.RIGHT) {
-                            Alignment.CenterEnd
+                            AbsoluteAlignment.CenterRight
                         } else {
-                            Alignment.CenterStart
+                            AbsoluteAlignment.CenterLeft
                         },
                     )
                     .fillMaxHeight()
@@ -961,80 +962,12 @@ private fun AyahSelectorRail(
 
     Box(
         modifier = modifier
-            // Fixed width: the old expand/collapse width animation re-laid the
-            // rail out every frame. Touch gating below keeps the collapsed
-            // strip narrow so page taps near the margin still reach the text.
+            // Fixed drawing width: the old expand/collapse width animation
+            // re-laid the rail out every frame. Touch handling is split into
+            // a child below so the collapsed hit target is only the visible
+            // edge strip, letting nearby ayah text receive taps.
             .width(92.dp)
-            .graphicsLayer { alpha = chromeAlpha() }
-            .pointerInput(ayahCount) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    // Invisible chrome (recitation follow mode) must not
-                    // hijack page touches into a ghost selector.
-                    if (chromeAlpha() < 0.1f) return@awaitEachGesture
-                    // Collapsed strip hugs whichever edge the rail sits on, so
-                    // the live touch zone mirrors with it.
-                    if (!expanded) {
-                        val nearEdge = if (mirrored) {
-                            down.position.x > size.width - 44.dp.toPx()
-                        } else {
-                            down.position.x < 44.dp.toPx()
-                        }
-                        if (!nearEdge) return@awaitEachGesture
-                    }
-                    val tickSpacingPx = 14.dp.toPx()
-                    val velocityTracker = VelocityTracker()
-                    var dragged = false
-                    releaseJob?.cancel()
-                    releaseJob = null
-                    scope.launch { commitProgress.snapTo(0f) }
-                    velocityTracker.addPosition(down.uptimeMillis, down.position)
-                    if (!expanded) {
-                        lastHapticAyah = latestCurrentAyah().coerceIn(1, ayahCount)
-                        dialPosition = latestCurrentPosition().coerceIn(1f, ayahCount.toFloat())
-                        expanded = true
-                    }
-                    scope.launch {
-                        expansion.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 340f))
-                    }
-                    down.consume()
-
-                    // Band the accumulated finger position once per frame;
-                    // re-banding an already-banded value compounds the curve
-                    // and made overscroll feel erratic.
-                    var rawPosition = dialPosition
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                        if (!change.pressed) break
-                        val deltaAyah = -change.positionChange().y / tickSpacingPx
-                        if (abs(deltaAyah) > 0.001f) {
-                            dragged = true
-                            rawPosition += deltaAyah
-                            dialPosition = rubberBandDialPosition(
-                                rawPosition,
-                                1f,
-                                ayahCount.toFloat(),
-                            )
-                        }
-                        velocityTracker.addPosition(change.uptimeMillis, change.position)
-                        change.consume()
-                    }
-                    // Every release schedules the settle + grace countdown, so
-                    // an opened wheel always resolves instead of lingering.
-                    // A no-move tap settles back onto the current ayah and the
-                    // commit becomes a no-op.
-                    val velocityAyah = if (dragged) {
-                        -velocityTracker.calculateVelocity().y / tickSpacingPx
-                    } else {
-                        0f
-                    }
-                    scheduleReleaseCommit(
-                        start = dialPosition.coerceIn(1f, ayahCount.toFloat()),
-                        velocity = velocityAyah,
-                    )
-                }
-            },
+            .graphicsLayer { alpha = chromeAlpha() },
     ) {
         Canvas(Modifier.fillMaxSize()) {
             val expand = expansion.value
@@ -1212,6 +1145,74 @@ private fun AyahSelectorRail(
                     }
                 }
             }
+        }
+
+        if (expanded || chromeAlpha() >= 0.1f) {
+            Box(
+                Modifier
+                    .align(if (mirrored) AbsoluteAlignment.CenterRight else AbsoluteAlignment.CenterLeft)
+                    .fillMaxHeight()
+                    .width(if (expanded) 92.dp else 44.dp)
+                    .pointerInput(ayahCount) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            // Invisible chrome (recitation follow mode) must not
+                            // hijack page touches into a ghost selector.
+                            if (chromeAlpha() < 0.1f) return@awaitEachGesture
+                            val tickSpacingPx = 14.dp.toPx()
+                            val velocityTracker = VelocityTracker()
+                            var dragged = false
+                            releaseJob?.cancel()
+                            releaseJob = null
+                            scope.launch { commitProgress.snapTo(0f) }
+                            velocityTracker.addPosition(down.uptimeMillis, down.position)
+                            if (!expanded) {
+                                lastHapticAyah = latestCurrentAyah().coerceIn(1, ayahCount)
+                                dialPosition = latestCurrentPosition().coerceIn(1f, ayahCount.toFloat())
+                                expanded = true
+                            }
+                            scope.launch {
+                                expansion.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 340f))
+                            }
+                            down.consume()
+
+                            // Band the accumulated finger position once per frame;
+                            // re-banding an already-banded value compounds the curve
+                            // and made overscroll feel erratic.
+                            var rawPosition = dialPosition
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                if (!change.pressed) break
+                                val deltaAyah = -change.positionChange().y / tickSpacingPx
+                                if (abs(deltaAyah) > 0.001f) {
+                                    dragged = true
+                                    rawPosition += deltaAyah
+                                    dialPosition = rubberBandDialPosition(
+                                        rawPosition,
+                                        1f,
+                                        ayahCount.toFloat(),
+                                    )
+                                }
+                                velocityTracker.addPosition(change.uptimeMillis, change.position)
+                                change.consume()
+                            }
+                            // Every release schedules the settle + grace countdown, so
+                            // an opened wheel always resolves instead of lingering.
+                            // A no-move tap settles back onto the current ayah and the
+                            // commit becomes a no-op.
+                            val velocityAyah = if (dragged) {
+                                -velocityTracker.calculateVelocity().y / tickSpacingPx
+                            } else {
+                                0f
+                            }
+                            scheduleReleaseCommit(
+                                start = dialPosition.coerceIn(1f, ayahCount.toFloat()),
+                                velocity = velocityAyah,
+                            )
+                        }
+                    },
+            )
         }
     }
 }
