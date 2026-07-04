@@ -76,7 +76,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
@@ -1161,11 +1160,13 @@ private fun AyahSelectorRail(
                         cornerRadius = tickCorner,
                     )
                     if (isSelected && holdProgress > 0f) {
-                        // Grace countdown: the selected yellow bar fills with
-                        // black from the edge cap before the ayah jump commits.
+                        // Grace countdown: the selected yellow bar fills from
+                        // the edge cap before the ayah jump commits, tinted with
+                        // the same theme onSurface ink as the collapsed
+                        // highlight (light grey on dark, dark grey on paper).
                         val holdWidth = tickFullWidth * holdProgress
                         drawRoundRect(
-                            color = Color.Black.copy(alpha = 0.82f * arrival),
+                            color = onSurface.copy(alpha = 0.82f * arrival),
                             topLeft = Offset(
                                 rectLeft(wheelX - tickThickness, holdWidth),
                                 y - tickThickness / 2f,
