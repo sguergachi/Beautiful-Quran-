@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +16,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -118,6 +121,7 @@ private fun highlightMatches(text: String, query: String?, mark: Color): Annotat
     }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun WordUnit(
     word: Word,
     state: WordVisualState,
@@ -126,15 +130,23 @@ fun WordUnit(
     showGloss: Boolean,
     showTransliteration: Boolean,
     searchHit: Boolean,
+    keepInView: Boolean,
     onClick: (() -> Unit)?,
 ) {
     val ink = animatedInkAlpha(state)
     val isActive = state == WordVisualState.Active
     val sweep = rememberLetterSweep(isActive, sweepMs)
     val interaction = remember { MutableInteractionSource() }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    LaunchedEffect(isActive, keepInView) {
+        if (isActive && keepInView) {
+            bringIntoViewRequester.bringIntoView()
+        }
+    }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
+            .bringIntoViewRequester(bringIntoViewRequester)
             .graphicsLayer { alpha = ink.value }
             .let { m ->
                 if (onClick != null) {
@@ -184,18 +196,26 @@ fun WordUnit(
 
 /** One word of the English-only lyric flow. */
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun EnglishWordUnit(
     word: Word,
     state: WordVisualState,
     fontScale: Float,
     sweepMs: Int?,
     searchHit: Boolean,
+    keepInView: Boolean,
     onClick: (() -> Unit)?,
 ) {
     val ink = animatedInkAlpha(state)
     val isActive = state == WordVisualState.Active
     val sweep = rememberLetterSweep(isActive, sweepMs)
     val interaction = remember { MutableInteractionSource() }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    LaunchedEffect(isActive, keepInView) {
+        if (isActive && keepInView) {
+            bringIntoViewRequester.bringIntoView()
+        }
+    }
     Text(
         text = word.translation,
         fontFamily = TranslationFontFamily,
@@ -208,6 +228,7 @@ fun EnglishWordUnit(
             MaterialTheme.colorScheme.onBackground
         },
         modifier = Modifier
+            .bringIntoViewRequester(bringIntoViewRequester)
             .graphicsLayer { alpha = ink.value }
             .then(
                 if (isActive) {
@@ -263,6 +284,7 @@ fun AyahBlock(
     showTransliteration: Boolean,
     showTranslation: Boolean,
     searchQuery: String? = null,
+    keepActiveWordInView: Boolean = false,
     onWordClick: ((Word) -> Unit)?,
     onAyahClick: () -> Unit,
 ) {
@@ -311,6 +333,7 @@ fun AyahBlock(
                         fontScale = fontScale,
                         sweepMs = sweepMs.takeIf { wordState == WordVisualState.Active },
                         searchHit = hits(word),
+                        keepInView = keepActiveWordInView && wordState == WordVisualState.Active,
                         onClick = onWordClick?.let { handler -> { handler(word) } },
                     )
                 }
@@ -338,6 +361,7 @@ fun AyahBlock(
                             showGloss = showGloss,
                             showTransliteration = showTransliteration,
                             searchHit = hits(word),
+                            keepInView = keepActiveWordInView && wordState == WordVisualState.Active,
                             onClick = onWordClick?.let { handler -> { handler(word) } },
                         )
                     }

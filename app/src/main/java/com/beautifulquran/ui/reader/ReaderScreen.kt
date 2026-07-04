@@ -480,6 +480,7 @@ fun ReaderScreen(
                         showTransliteration = settings.showTransliteration,
                         showTranslation = settings.showTranslation,
                         searchQuery = activeQuery,
+                        keepActiveWordInView = followEnabled && isThisSurahPlaying && playerState.isPlaying,
                         onWordClick = { word ->
                             val segment = viewModel.segmentsFor(ayah.number)
                                 ?.firstOrNull { it.position == word.position }
