@@ -11,6 +11,9 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK, ROYAL_GREEN }
 /** What flows on the sheet: Arabic with English under each word, or English only. */
 enum class ReadingMode { ARABIC_ENGLISH, ENGLISH_ONLY }
 
+/** Which screen edge the ayah selector rail lives on. */
+enum class AyahSelectorSide { LEFT, RIGHT }
+
 data class Settings(
     val reciterId: Int = 1,
     val fontScale: Float = 1f,
@@ -19,6 +22,7 @@ data class Settings(
     val showTransliteration: Boolean = false,
     val showTranslation: Boolean = true,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val ayahSelectorSide: AyahSelectorSide = AyahSelectorSide.LEFT,
     val lastSurah: Int = 0,
     val lastAyah: Int = 1,
 )
@@ -39,6 +43,8 @@ class SettingsRepository(context: Context) {
         showTransliteration = prefs.getBoolean("showTransliteration", false),
         showTranslation = prefs.getBoolean("showTranslation", true),
         themeMode = ThemeMode.entries.getOrNull(prefs.getInt("themeMode", 0)) ?: ThemeMode.SYSTEM,
+        ayahSelectorSide = AyahSelectorSide.entries.getOrNull(prefs.getInt("ayahSelectorSide", 0))
+            ?: AyahSelectorSide.LEFT,
         lastSurah = prefs.getInt("lastSurah", 0),
         lastAyah = prefs.getInt("lastAyah", 1),
     )
@@ -54,6 +60,7 @@ class SettingsRepository(context: Context) {
             putBoolean("showTransliteration", next.showTransliteration)
             putBoolean("showTranslation", next.showTranslation)
             putInt("themeMode", next.themeMode.ordinal)
+            putInt("ayahSelectorSide", next.ayahSelectorSide.ordinal)
             putInt("lastSurah", next.lastSurah)
             putInt("lastAyah", next.lastAyah)
         }

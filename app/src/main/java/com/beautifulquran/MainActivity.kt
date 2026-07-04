@@ -40,6 +40,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
@@ -172,9 +173,13 @@ private fun PaperStackApp() {
                 onDrag = { deltaPages ->
                     scope.launch {
                         val maxLayer = if (selectedSurahId == 0) COVER_LAYER else SETTINGS_LAYER
+                        // A single gesture may advance at most one layer, so a hard swipe
+                        // from the cover lands on the reader instead of overshooting to settings.
+                        val startLayer = dragStartPosition.roundToInt()
+                        val lower = (startLayer - 1).coerceAtLeast(COVER_LAYER).toFloat()
+                        val upper = (startLayer + 1).coerceAtMost(maxLayer).toFloat()
                         stackPosition.snapTo(
-                            (dragStartPosition + deltaPages)
-                                .coerceIn(COVER_LAYER.toFloat(), maxLayer.toFloat()),
+                            (dragStartPosition + deltaPages).coerceIn(lower, upper),
                         )
                     }
                 },
@@ -250,7 +255,7 @@ private fun PaperPage(
         modifier = modifier
             .fillMaxSize()
             .paperLayerTransform(layer, stackPosition)
-            .paperEdge(turning),
+            .paperDropShadow(turning),
     ) {
         content()
     }
@@ -287,19 +292,26 @@ private fun Modifier.paperLayerTransform(
     }
 }
 
-private fun Modifier.paperEdge(turning: Float): Modifier = drawWithContent {
+// A lifted sheet casts a soft shadow onto the page beneath it, spilling just
+// past its leading edge rather than darkening the sheet's own edge. The cast
+// is strongest mid-swipe and fades to nothing once either sheet settles.
+private fun Modifier.paperDropShadow(turning: Float): Modifier = drawWithContent {
     drawContent()
-    if (turning > 0.01f && turning < 0.99f) {
-        val edgeWidth = 30f
+    val depth = (4f * turning * (1f - turning)).coerceIn(0f, 1f)
+    if (depth > 0.01f) {
+        val shadowWidth = 24.dp.toPx()
         drawRect(
             brush = Brush.horizontalGradient(
                 colors = listOf(
+                    ComposeColor.Black.copy(alpha = 0.26f * depth),
+                    ComposeColor.Black.copy(alpha = 0.09f * depth),
                     ComposeColor.Transparent,
-                    ComposeColor.Black.copy(alpha = 0.16f * (1f - turning)),
                 ),
+                startX = size.width,
+                endX = size.width + shadowWidth,
             ),
-            topLeft = Offset(size.width - edgeWidth, 0f),
-            size = Size(edgeWidth, size.height),
+            topLeft = Offset(size.width, 0f),
+            size = Size(shadowWidth, size.height),
         )
     }
 }
@@ -316,6 +328,7 @@ private fun Modifier.paperStackDrag(
         val velocityTracker = VelocityTracker()
         val touchSlop = viewConfiguration.touchSlop
         var horizontalDrag = false
+        var startLayer = position().roundToInt()
         var totalDx = 0f
         var totalDy = 0f
         velocityTracker.addPosition(down.uptimeMillis, down.position)
@@ -332,6 +345,7 @@ private fun Modifier.paperStackDrag(
                 val mostlyHorizontal = abs(totalDx) > abs(totalDy) * 1.25f
                 if (abs(totalDx) > touchSlop && mostlyHorizontal) {
                     horizontalDrag = true
+                    startLayer = position().roundToInt()
                     onDragStart()
                 }
             }
@@ -348,9 +362,13 @@ private fun Modifier.paperStackDrag(
         if (horizontalDrag) {
             val velocityPages = -velocityTracker.calculateVelocity().x / size.width.toFloat().coerceAtLeast(1f)
             val projected = position() + velocityPages * 0.18f
+            // Clamp the fling to one layer per gesture so a hard swipe settles on the
+            // adjacent page rather than overshooting past it.
+            val lower = (startLayer - 1).coerceAtLeast(COVER_LAYER)
+            val upper = (startLayer + 1).coerceAtMost(maxLayer())
             val target = projected
                 .roundToInt()
-                .coerceIn(COVER_LAYER, maxLayer())
+                .coerceIn(lower, upper)
             onSettle(target)
         }
     }

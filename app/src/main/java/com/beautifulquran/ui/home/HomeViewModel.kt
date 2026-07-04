@@ -17,8 +17,26 @@ data class ContinueTarget(val surah: Surah, val ayah: Int)
 data class HomeUiState(
     val query: String = "",
     val surahs: List<Surah> = emptyList(),
+    /** Every surah, unfiltered — the jump dials scroll across the whole book. */
+    val allSurahs: List<Surah> = emptyList(),
     val continueTarget: ContinueTarget? = null,
+    /** When the query is a `surah:ayah` reference, the ayah to open the matched surah at. */
+    val ayahTarget: Int? = null,
 )
+
+/** A `surah:ayah` reference parsed from a search query, e.g. `2:255`. Ayah is null for `2:`. */
+internal data class AyahReference(val surah: Int, val ayah: Int?)
+
+/** Matches `aa:bb` or `aa:` (surah number, optional ayah number), ignoring surrounding space. */
+private val ayahReferenceRegex = Regex("""^\s*(\d+)\s*:\s*(\d+)?\s*$""")
+
+internal fun parseAyahReference(query: String): AyahReference? =
+    ayahReferenceRegex.matchEntire(query)?.let { match ->
+        AyahReference(
+            surah = match.groupValues[1].toInt(),
+            ayah = match.groupValues[2].takeIf { it.isNotEmpty() }?.toInt(),
+        )
+    }
 
 class HomeViewModel(
     private val repository: QuranRepository,
@@ -30,10 +48,22 @@ class HomeViewModel(
 
     val uiState: StateFlow<HomeUiState> =
         combine(query, allSurahs, settings.settings) { q, surahs, prefs ->
-            val filtered = if (q.isBlank()) {
-                surahs
-            } else {
-                surahs.filter {
+            val reference = parseAyahReference(q)
+            var ayahTarget: Int? = null
+            val filtered = when {
+                q.isBlank() -> surahs
+                reference != null -> {
+                    val surah = surahs.firstOrNull { it.id == reference.surah }
+                    val ayahInRange = reference.ayah == null ||
+                        reference.ayah in 1..(surah?.ayahCount ?: 0)
+                    if (surah != null && ayahInRange) {
+                        ayahTarget = reference.ayah
+                        listOf(surah)
+                    } else {
+                        emptyList()
+                    }
+                }
+                else -> surahs.filter {
                     it.nameTransliteration.contains(q, ignoreCase = true) ||
                         it.nameTranslation.contains(q, ignoreCase = true) ||
                         it.nameArabic.contains(q) ||
@@ -43,8 +73,10 @@ class HomeViewModel(
             HomeUiState(
                 query = q,
                 surahs = filtered,
+                allSurahs = surahs,
                 continueTarget = surahs.firstOrNull { it.id == prefs.lastSurah }
                     ?.let { ContinueTarget(it, prefs.lastAyah) },
+                ayahTarget = ayahTarget,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 

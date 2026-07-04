@@ -81,6 +81,42 @@ class ReaderViewModel(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(1_000), null)
 
+    /** The ayah whose block is lit on the sheet. Normally the playing ayah,
+     * but the highlight crosses to the next ayah [FADE_LEAD_MS] before the
+     * current one's audio ends, so the fade onto the next ayah begins a touch
+     * early and the transition feels anticipatory rather than abrupt. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val activeAyah: StateFlow<Int?> = player.state
+        .map { it.nowPlaying?.takeIf { np -> np.surahId == surahId }?.ayah }
+        .distinctUntilChanged()
+        .flatMapLatest { ayah ->
+            if (ayah == null) {
+                flowOf<Int?>(null)
+            } else {
+                flow<Int?> {
+                    while (true) {
+                        emit(ayahWithFadeLead(ayah))
+                        delay(if (player.state.value.isPlaying) TICK_MS else PAUSED_TICK_MS)
+                    }
+                }
+            }
+        }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(1_000), null)
+
+    /** Advances the lit ayah to the next one during the final [FADE_LEAD_MS] of
+     * the current ayah's audio, so its fade-in leads the audio boundary. Only
+     * while playing (a paused position must not jump the highlight forward). */
+    private fun ayahWithFadeLead(ayah: Int): Int {
+        if (!player.state.value.isPlaying) return ayah
+        val ayahCount = _uiState.value.content?.surah?.ayahCount ?: return ayah
+        if (ayah >= ayahCount) return ayah
+        val duration = player.durationMs
+        if (duration <= 0L) return ayah
+        val remaining = duration - player.positionMs
+        return if (remaining in 0..FADE_LEAD_MS) ayah + 1 else ayah
+    }
+
     init {
         // React when the reciter is changed on the settings sheet: reload the
         // timing data and, if this surah is playing, continue with the new voice.
@@ -231,6 +267,8 @@ class ReaderViewModel(
     companion object {
         private const val TICK_MS = 33L
         private const val PAUSED_TICK_MS = 250L
+        /** How early the block fade jumps to the next ayah, in ms. */
+        private const val FADE_LEAD_MS = 500L
         private const val LONG_AYAH_MIN_WORDS = 20
         private const val MIDPOINT_SEEK_GRACE_MS = 1_000L
         private const val START_SEEK_GRACE_MS = 1_500L

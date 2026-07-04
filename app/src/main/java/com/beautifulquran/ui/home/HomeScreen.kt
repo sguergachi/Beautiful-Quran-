@@ -13,11 +13,13 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -33,22 +35,32 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.drop
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.BuildConfig
 import com.beautifulquran.R
@@ -58,6 +70,12 @@ import com.beautifulquran.ui.theme.GildedRosette
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.verticalFadingEdges
 
+/** Position of the search field in the list (after the title) — the row we lift to the top on focus. */
+private const val SEARCH_ITEM_INDEX = 1
+
+/** How far (px) the list must scroll past the lifted search before a scroll counts as "dismiss". */
+private const val DISMISS_SCROLL_THRESHOLD_PX = 24
+
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
@@ -65,14 +83,42 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showAppInfo by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+
+    // Focus + geometry that anchor the fading dials pane just under the search
+    // field, floating over the surah list.
+    var searchFocused by remember { mutableStateOf(false) }
+    var boxTop by remember { mutableFloatStateOf(0f) }
+    var searchBottom by remember { mutableFloatStateOf(0f) }
+    val listState = rememberLazyListState()
+
+    // When the search takes focus, lift it to the top of the list so the title
+    // slides away and the dials pane has room above the keyboard. Once lifted,
+    // a deliberate scroll of the list dismisses the search — clearing focus
+    // hides the keyboard and fades the dials pane out. We watch the settled
+    // scroll position rather than a drag gesture, so the tiny movement in a
+    // focus tap (which never actually scrolls the list) can't self-dismiss.
+    LaunchedEffect(searchFocused) {
+        if (!searchFocused) return@LaunchedEffect
+        listState.animateScrollToItem(SEARCH_ITEM_INDEX)
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .drop(1)
+            .collect { (index, offset) ->
+                if (index != SEARCH_ITEM_INDEX || offset > DISMISS_SCROLL_THRESHOLD_PX) {
+                    focusManager.clearFocus()
+                }
+            }
+    }
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         Box(
             Modifier
                 .padding(padding)
-                .fillMaxSize(),
+                .fillMaxSize()
+                .onGloballyPositioned { boxTop = it.boundsInWindow().top },
         ) {
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxHeight()
@@ -137,7 +183,7 @@ fun HomeScreen(
                     onValueChange = viewModel::onQueryChange,
                     placeholder = {
                         Text(
-                            "Search surah…",
+                            "Search surah or 2:255",
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                         )
                     },
@@ -170,7 +216,9 @@ fun HomeScreen(
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp),
+                        .padding(horizontal = 24.dp)
+                        .onFocusChanged { searchFocused = it.isFocused }
+                        .onGloballyPositioned { searchBottom = it.boundsInWindow().bottom },
                 )
             }
 
@@ -188,10 +236,25 @@ fun HomeScreen(
             items(count = uiState.surahs.size, key = { uiState.surahs[it].id }) { index ->
                 SurahRow(
                     surah = uiState.surahs[index],
-                    onClick = { onOpenSurah(uiState.surahs[index].id, null) },
+                    onClick = { onOpenSurah(uiState.surahs[index].id, uiState.ayahTarget) },
                 )
             }
             }
+
+            SearchDialsPane(
+                surahs = uiState.allSurahs,
+                visible = searchFocused,
+                onOpen = { surahId, ayah ->
+                    focusManager.clearFocus()
+                    onOpenSurah(surahId, ayah)
+                },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .widthIn(max = 640.dp)
+                    .fillMaxWidth()
+                    .offset { IntOffset(0, (searchBottom - boxTop).roundToInt()) }
+                    .padding(horizontal = 24.dp, vertical = 10.dp),
+            )
         }
 
         if (showAppInfo) {
