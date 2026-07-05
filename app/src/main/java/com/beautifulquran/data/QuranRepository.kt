@@ -44,13 +44,29 @@ class QuranRepository(private val database: QuranDatabase) {
     suspend fun surahContent(surahId: Int): SurahContent = withContext(Dispatchers.IO) {
         val surah = surahs().first { it.id == surahId }
         val words = database.db.rawQuery(
-            "SELECT ayah_number, position, arabic, translation_en, transliteration FROM words WHERE surah_id = ? ORDER BY ayah_number, position",
+            """
+            SELECT ayah_number, position, arabic, translation_en, transliteration, qcf_v2, qcf_page, qcf_line, qcf_span_end
+            FROM words
+            WHERE surah_id = ?
+            ORDER BY ayah_number, position
+            """.trimIndent(),
             arrayOf(surahId.toString()),
         ).use { c ->
             val map = HashMap<Int, MutableList<Word>>()
             while (c.moveToNext()) {
                 map.getOrPut(c.getInt(0)) { mutableListOf() }
-                    .add(Word(c.getInt(1), c.getString(2), c.getString(3), c.getString(4)))
+                    .add(
+                        Word(
+                            position = c.getInt(1),
+                            arabic = c.getString(2),
+                            translation = c.getString(3),
+                            transliteration = c.getString(4),
+                            qcfV2 = c.getString(5),
+                            qcfPage = c.getInt(6),
+                            qcfLine = c.getInt(7),
+                            qcfSpanEnd = c.getInt(8),
+                        ),
+                    )
             }
             map
         }

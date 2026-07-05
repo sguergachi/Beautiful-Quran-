@@ -137,6 +137,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.beautifulquran.R
+import com.beautifulquran.QuranApp
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.ui.theme.DisplayFontFamily
@@ -335,6 +336,38 @@ fun ReaderScreen(
     )
 
     val context = LocalContext.current
+    val qcfFontProvider = remember(context) {
+        (context.applicationContext as QuranApp).qcfFontProvider
+    }
+    val needsQcfFonts =
+        settings.readingMode != ReadingMode.ENGLISH_ONLY && !settings.showWordGloss
+    var qcfFontsReady by remember(surahId) { mutableStateOf(false) }
+    var qcfFontError by remember(surahId) { mutableStateOf<String?>(null) }
+    LaunchedEffect(uiState.content, needsQcfFonts) {
+        val content = uiState.content
+        if (content == null) {
+            qcfFontsReady = false
+            qcfFontError = null
+            return@LaunchedEffect
+        }
+        if (!needsQcfFonts) {
+            qcfFontsReady = true
+            qcfFontError = null
+            return@LaunchedEffect
+        }
+        qcfFontsReady = false
+        qcfFontError = null
+        val pages = content.ayahs
+            .flatMap { ayah -> ayah.words.map { it.qcfPage } }
+            .filter { it in 1..604 }
+            .distinct()
+        val failed = qcfFontProvider.preload(pages)
+        if (failed.isEmpty()) {
+            qcfFontsReady = true
+        } else {
+            qcfFontError = "Could not load Mushaf font pages: ${failed.sorted().joinToString()}"
+        }
+    }
     val notifPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { }
@@ -707,9 +740,23 @@ fun ReaderScreen(
                 )
             }
         }
-        if (content == null) {
+        if (content == null || !qcfFontsReady) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    CircularProgressIndicator()
+                    if (qcfFontError != null) {
+                        Text(
+                            text = qcfFontError.orEmpty(),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 28.dp),
+                        )
+                    }
+                }
             }
             return@Scaffold
         }
