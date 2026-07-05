@@ -28,8 +28,17 @@ import kotlinx.coroutines.launch
 
 /** The word currently being recited: ayah number + 1-based word position.
  * [durationMs] is how long the reciter dwells on it (at 1× speed) and paces
- * the letter-by-letter fade. */
-data class ActiveWord(val ayah: Int, val wordPosition: Int, val durationMs: Long)
+ * the letter-by-letter fade. [isRepeat] is true when the reciter is re-reciting
+ * a word from an earlier pass (drives the orange fade); [highWater] is the
+ * furthest word reached in the ayah, so words already recited hold their ink
+ * instead of dimming when the recitation jumps backward for a repeat. */
+data class ActiveWord(
+    val ayah: Int,
+    val wordPosition: Int,
+    val durationMs: Long,
+    val isRepeat: Boolean = false,
+    val highWater: Int = wordPosition,
+)
 
 data class ReaderUiState(
     val content: SurahContent? = null,
@@ -71,10 +80,18 @@ class ReaderViewModel(
                 flow<ActiveWord?> {
                     while (true) {
                         val segments = timings[np.ayah]
-                        val seg = segments?.let {
-                            HighlightEngine.activeSegment(it, player.positionMs)
+                        val info = segments?.let {
+                            HighlightEngine.activeInfo(it, player.positionMs)
                         }
-                        emit(seg?.let { ActiveWord(np.ayah, it.position, it.endMs - it.startMs) })
+                        emit(info?.let {
+                            ActiveWord(
+                                ayah = np.ayah,
+                                wordPosition = it.position,
+                                durationMs = it.endMs - it.startMs,
+                                isRepeat = it.isRepeat,
+                                highWater = it.highWater,
+                            )
+                        })
                         // Position is frozen while paused; poll gently.
                         delay(if (player.state.value.isPlaying) TICK_MS else PAUSED_TICK_MS)
                     }

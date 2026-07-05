@@ -121,6 +121,28 @@ const val MAX_SWEEP_MS = 8_000
  */
 private val InkSweepEasing = CubicBezierEasing(0.3f, 0.24f, 0.7f, 0.78f)
 
+// The repeat tint blooms in quickly to ride the recitation, then dissolves back
+// to normal ink slowly once the recitation moves past the repeated word.
+private const val REPEAT_FADE_IN_MS = 200
+private const val REPEAT_FADE_OUT_MS = 900
+
+/**
+ * Animates a word's ink toward the warm [QuranAccents.repeatInk] while the
+ * reciter is repeating it, then back to [base] once [repeat] clears — the
+ * second, orange fade the reader shows on re-recited words. Read as [State] so
+ * the colour can be deferred to draw where needed.
+ */
+@Composable
+private fun repeatTint(repeat: Boolean, base: Color): State<Color> =
+    animateColorAsState(
+        targetValue = if (repeat) LocalQuranAccents.current.repeatInk else base,
+        animationSpec = tween(
+            durationMillis = if (repeat) REPEAT_FADE_IN_MS else REPEAT_FADE_OUT_MS,
+            easing = InkSweepEasing,
+        ),
+        label = "repeatInk",
+    )
+
 /**
  * Drives the letter-fade sweep for the active word: restarts at 0 each time
  * the word lights up and runs for [sweepMs] — the time the reciter actually
@@ -147,6 +169,7 @@ private fun rememberLetterSweep(active: Boolean, sweepMs: Int?): State<Float> {
 fun WordUnit(
     word: Word,
     state: WordVisualState,
+    repeat: Boolean,
     fontScale: Float,
     sweepMs: Int?,
     showGloss: Boolean,
@@ -157,6 +180,7 @@ fun WordUnit(
 ) {
     val isActive = state == WordVisualState.Active
     val lyricInk = animatedInkAlpha(state)
+    val arabicInk = repeatTint(repeat, MaterialTheme.colorScheme.onBackground)
     val sweep = rememberLetterSweep(isActive, sweepMs)
     val interaction = remember { MutableInteractionSource() }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
@@ -194,7 +218,7 @@ fun WordUnit(
             text = word.arabic,
             style = ArabicWordStyle,
             fontSize = ArabicWordStyle.fontSize * fontScale,
-            color = MaterialTheme.colorScheme.onBackground,
+            color = arabicInk.value,
             modifier = if (isActive) {
                 Modifier.letterFadeIn(
                     progress = { sweep.value },
@@ -248,6 +272,7 @@ fun WordUnit(
 fun ConnectedArabicWordUnit(
     word: Word,
     state: WordVisualState,
+    repeat: Boolean,
     fontScale: Float,
     sweepMs: Int?,
     keepInView: Boolean,
@@ -255,6 +280,7 @@ fun ConnectedArabicWordUnit(
 ) {
     val isActive = state == WordVisualState.Active
     val lyricInk = animatedInkAlpha(state)
+    val arabicInk = repeatTint(repeat, MaterialTheme.colorScheme.onBackground)
     val sweep = rememberLetterSweep(isActive, sweepMs)
     val interaction = remember { MutableInteractionSource() }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
@@ -278,7 +304,7 @@ fun ConnectedArabicWordUnit(
         text = word.arabic,
         style = ArabicWordStyle,
         fontSize = ArabicWordStyle.fontSize * fontScale,
-        color = MaterialTheme.colorScheme.onBackground,
+        color = arabicInk.value,
         modifier = Modifier
             .bringIntoViewRequester(bringIntoViewRequester)
             .onSizeChanged { wordSize = it }
@@ -310,6 +336,7 @@ fun ConnectedArabicWordUnit(
 fun EnglishWordUnit(
     word: Word,
     state: WordVisualState,
+    repeat: Boolean,
     fontScale: Float,
     sweepMs: Int?,
     searchHit: Boolean,
@@ -318,6 +345,10 @@ fun EnglishWordUnit(
 ) {
     val isActive = state == WordVisualState.Active
     val lyricInk = animatedInkAlpha(state)
+    val lyricColor = repeatTint(
+        repeat,
+        if (searchHit) LocalQuranAccents.current.gold else MaterialTheme.colorScheme.onBackground,
+    )
     val sweep = rememberLetterSweep(isActive, sweepMs)
     val interaction = remember { MutableInteractionSource() }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
@@ -343,11 +374,7 @@ fun EnglishWordUnit(
         fontWeight = FontWeight.SemiBold,
         fontSize = 22.sp * fontScale,
         lineHeight = 1.55.em,
-        color = if (searchHit) {
-            LocalQuranAccents.current.gold
-        } else {
-            MaterialTheme.colorScheme.onBackground
-        },
+        color = lyricColor.value,
         modifier = Modifier
             .bringIntoViewRequester(bringIntoViewRequester)
             .onSizeChanged { wordSize = it }
@@ -378,6 +405,7 @@ fun EnglishWordUnit(
 private fun QcfGlyphWordUnit(
     word: Word,
     state: WordVisualState,
+    repeat: Boolean,
     fontScale: Float,
     sweepMs: Int?,
     keepInView: Boolean,
@@ -399,15 +427,19 @@ private fun QcfGlyphWordUnit(
     val fadedInk = fullInk
         .copy(alpha = WordVisualState.Upcoming.inkAlpha())
         .compositeOver(MaterialTheme.colorScheme.background)
+    val repeatInk = LocalQuranAccents.current.repeatInk
     val color by animateColorAsState(
-        targetValue = when (state) {
-            WordVisualState.Upcoming -> fadedInk
-            WordVisualState.Plain,
-            WordVisualState.Active,
-            WordVisualState.Recited -> fullInk
+        targetValue = when {
+            repeat -> repeatInk
+            state == WordVisualState.Upcoming -> fadedInk
+            else -> fullInk
         },
         animationSpec = tween(
-            durationMillis = if (state == WordVisualState.Active) sweepMs ?: 450 else 450,
+            durationMillis = when {
+                repeat -> REPEAT_FADE_IN_MS
+                state == WordVisualState.Active -> sweepMs ?: 450
+                else -> 450
+            },
             easing = InkSweepEasing,
         ),
         label = "qcfGlyphColor",
@@ -546,6 +578,13 @@ fun AyahBlock(
     )
 
     val activeWordPosition = activeWord?.wordPosition
+    // Furthest word reached in this ayah. During a repeat the active word jumps
+    // backward, but everything up to the high-water mark was already recited, so
+    // it must hold full ink rather than dimming back to "upcoming".
+    val highWater = activeWord?.highWater ?: 0
+    // True while the reciter is re-reciting an earlier word: the active word
+    // then carries a second, orange fade.
+    val isRepeatActive = activeWord?.isRepeat == true
     // The letter fade paces itself to how long the reciter dwells on the
     // word, corrected for the chosen playback speed.
     val sweepMs = activeWord
@@ -557,6 +596,7 @@ fun AyahBlock(
         activeWordPosition == null -> WordVisualState.Upcoming
         word.position == activeWordPosition -> WordVisualState.Active
         word.position < activeWordPosition -> WordVisualState.Recited
+        word.position <= highWater -> WordVisualState.Recited
         else -> WordVisualState.Upcoming
     }
 
@@ -565,8 +605,14 @@ fun AyahBlock(
         activeWordPosition == null -> WordVisualState.Upcoming
         activeWordPosition in word.position..word.qcfSpanEnd -> WordVisualState.Active
         word.qcfSpanEnd < activeWordPosition -> WordVisualState.Recited
+        word.qcfSpanEnd <= highWater -> WordVisualState.Recited
         else -> WordVisualState.Upcoming
     }
+
+    // The active word is "repeating" only when the recitation has jumped back
+    // to it; that word (and its orange fade) is keyed off this per-word flag.
+    fun isRepeat(state: WordVisualState) =
+        state == WordVisualState.Active && isRepeatActive
 
     Column(
         modifier = Modifier
@@ -585,6 +631,7 @@ fun AyahBlock(
                     EnglishWordUnit(
                         word = word,
                         state = wordState,
+                        repeat = isRepeat(wordState),
                         fontScale = fontScale,
                         sweepMs = sweepMs.takeIf { wordState == WordVisualState.Active },
                         searchHit = hits(word),
@@ -616,6 +663,7 @@ fun AyahBlock(
                         WordUnit(
                             word = word,
                             state = wordState,
+                            repeat = isRepeat(wordState),
                             fontScale = fontScale,
                             sweepMs = sweepMs.takeIf { wordState == WordVisualState.Active },
                             showGloss = showGloss,
@@ -640,6 +688,7 @@ fun AyahBlock(
                         QcfGlyphWordUnit(
                             word = word,
                             state = wordState,
+                            repeat = isRepeat(wordState),
                             fontScale = fontScale,
                             sweepMs = sweepMs.takeIf { wordState == WordVisualState.Active },
                             keepInView = keepActiveWordInView && wordState == WordVisualState.Active,

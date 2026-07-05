@@ -46,6 +46,9 @@ data class QuranAccents(
     val goldDeep: Color,
     val embossDark: Color,
     val embossLight: Color,
+    /** Warm ink for words the reciter is repeating — a second, orange fade that
+     * dissolves back to normal ink once the recitation moves past the repeat. */
+    val repeatInk: Color,
 )
 
 val LocalQuranAccents = staticCompositionLocalOf {
@@ -55,6 +58,7 @@ val LocalQuranAccents = staticCompositionLocalOf {
         goldDeep = Color(0xFF8A6B1E),
         embossDark = Color(0x24000000),
         embossLight = Color(0x59FFFFFF),
+        repeatInk = Color(0xFFC2622A),
     )
 }
 
@@ -181,6 +185,7 @@ private val LightAccents = QuranAccents(
     goldDeep = Color(0xFF8A6B1E),
     embossDark = Color(0x24000000),
     embossLight = Color(0x59FFFFFF),
+    repeatInk = Color(0xFFB4551E),
 )
 
 private val DarkAccents = QuranAccents(
@@ -189,6 +194,7 @@ private val DarkAccents = QuranAccents(
     goldDeep = Color(0xFF9A7B2A),
     embossDark = Color(0x66000000),
     embossLight = Color(0x1FFFFFFF),
+    repeatInk = Color(0xFFE0904E),
 )
 
 @Composable

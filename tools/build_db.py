@@ -62,6 +62,19 @@ RECITERS = [
 
 BASMALAH_WORDS = 4  # words in bismillah, prefixed to audio of every first ayah
 
+# quran.com's `qdc` audio API serves segment data that PRESERVES repeats: when a
+# reciter re-recites a phrase, later segments point back at an earlier word index
+# (the reader renders these as a second, orange fade). quran-align cannot express
+# this (one monotonic span per word), so for the reciters below we take timings
+# from quran.com instead. The audio is the same everyayah recording we stream, so
+# the per-verse windows line up; we rebase each verse's gapless-file offsets to
+# ayah-relative ms. Map: our reciter id -> quran.com recitation id.
+QDC_URL = (
+    "https://api.quran.com/api/qdc/audio/reciters/{rid}"
+    "/audio_files?chapter_number={ch}&segments=true"
+)
+QDC_REPEAT_RECITERS = {1: 7}  # Mishary Alafasy (murattal)
+
 
 def fetch(url: str, name: str) -> Path:
     CACHE.mkdir(parents=True, exist_ok=True)
@@ -282,6 +295,67 @@ def load_timings(zip_path: Path, slug: str):
     return out
 
 
+def load_qdc_timings(qdc_id: int):
+    """Fetch quran.com qdc segments for all 114 surahs and return
+    {(surah, ayah): [[word_pos, start_ms, end_ms], ...]} with times rebased to
+    ayah-relative ms and repeated words preserved (word_pos may go backward).
+    The assembled result is cached so a rebuild needs no network."""
+    cache = CACHE / f"qdc_{qdc_id}.json"
+    if cache.exists() and cache.stat().st_size > 0:
+        raw = json.loads(cache.read_text(encoding="utf-8"))
+        return {tuple(int(x) for x in k.split(":")): v for k, v in raw.items()}
+    out = {}
+    for ch in range(1, 115):
+        path = fetch(QDC_URL.format(rid=qdc_id, ch=ch), f"qdc_{qdc_id}_ch{ch}.json")
+        data = json.loads(path.read_text(encoding="utf-8"))
+        afs = data.get("audio_files") or []
+        if not afs:
+            continue
+        for vt in afs[0].get("verse_timings", []):
+            s, a = (int(x) for x in vt["verse_key"].split(":"))
+            base = vt["timestamp_from"]
+            segs = [
+                [int(seg[0]), int(seg[1]) - base, int(seg[2]) - base]
+                for seg in (vt.get("segments") or [])
+                if len(seg) >= 3
+            ]
+            if segs:
+                out[(s, a)] = segs
+    CACHE.mkdir(parents=True, exist_ok=True)
+    cache.write_text(
+        json.dumps({f"{s}:{a}": v for (s, a), v in out.items()}, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    # clean up the per-chapter files now that they're assembled
+    for ch in range(1, 115):
+        (CACHE / f"qdc_{qdc_id}_ch{ch}.json").unlink(missing_ok=True)
+    return out
+
+
+def adjust_qdc_segments(segs, n_words, stats):
+    """Clamp quran.com segments (already 1-based, ayah-relative) to our canonical
+    word count while PRESERVING repeats; count the re-recited spans."""
+    if not segs:
+        return None
+    adjusted = []
+    for pos, start, end in sorted(segs, key=lambda s: s[1]):
+        if end <= start:
+            stats["zero_len"] += 1
+            continue
+        if pos < 1 or pos > n_words:
+            stats["clamped"] += 1
+            pos = max(1, min(pos, n_words))
+        adjusted.append([pos, start, end])
+    if not adjusted:
+        return None
+    running_max = -1
+    for pos, _, _ in adjusted:
+        if pos <= running_max:
+            stats["repeats"] += 1
+        running_max = max(running_max, pos)
+    return adjusted
+
+
 def adjust_segments(segs, n_words, surah, ayah, stats):
     """Map quran-align 0-based word indices onto 1-based positions of our
     canonical words; strip basmalah words prefixed to first-ayah audio."""
@@ -413,6 +487,30 @@ def main():
         for s, a, pos, *_ in words:
             word_counts[(s, a)] = max(word_counts.get((s, a), 0), pos)
         for rid, slug, name, style in RECITERS:
+            qdc_id = QDC_REPEAT_RECITERS.get(rid)
+            if qdc_id is not None:
+                # Repeat-aware timings from quran.com instead of quran-align.
+                print(f"  {slug}: repeat-aware timings from quran.com (qdc {qdc_id})")
+                data = load_qdc_timings(qdc_id)
+                stats = {"zero_len": 0, "clamped": 0, "repeats": 0, "missing": 0}
+                covered = 0
+                for (s, a), n in word_counts.items():
+                    segs = adjust_qdc_segments(data.get((s, a)), n, stats)
+                    if segs:
+                        timing_rows.append((rid, s, a, json.dumps(segs, separators=(",", ":"))))
+                        covered += 1
+                    else:
+                        stats["missing"] += 1
+                print(
+                    f"  {slug}: ayahs covered {covered}/6236, "
+                    f"repeat spans {stats['repeats']}, clamped {stats['clamped']}, "
+                    f"zero-len {stats['zero_len']}, missing {stats['missing']}"
+                )
+                if covered < 6000:
+                    print(f"  !! coverage below threshold for {slug}", file=sys.stderr)
+                    sys.exit(1)
+                reciter_rows.append((rid, slug, name, style, 1))
+                continue
             data = load_timings(zp, slug)
             if data is None:
                 print(f"  !! no timing file matched slug {slug}")

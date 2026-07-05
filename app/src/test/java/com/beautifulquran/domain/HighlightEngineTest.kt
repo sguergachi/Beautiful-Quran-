@@ -55,4 +55,39 @@ class HighlightEngineTest {
         assertEquals(2, HighlightEngine.activeWord(segments, 970))
         assertEquals(3, HighlightEngine.activeWord(segments, 1430))
     }
+
+    // Reciter recites words 1,2,3 then repeats 2,3 before moving to 4:
+    // positions 1,2,3,2,3,4 with the repeated spans pointing back.
+    private val withRepeat = listOf(
+        Segment(position = 1, startMs = 0, endMs = 1000),
+        Segment(position = 2, startMs = 1000, endMs = 2000),
+        Segment(position = 3, startMs = 2000, endMs = 3000),
+        Segment(position = 2, startMs = 3000, endMs = 4000),
+        Segment(position = 3, startMs = 4000, endMs = 5000),
+        Segment(position = 4, startMs = 5000, endMs = 6000),
+    )
+
+    @Test
+    fun `first pass is not flagged as a repeat`() {
+        val info = HighlightEngine.activeInfo(withRepeat, 2500)!!
+        assertEquals(3, info.position)
+        assertEquals(false, info.isRepeat)
+        assertEquals(3, info.highWater)
+    }
+
+    @Test
+    fun `re-recited word is flagged as a repeat and holds the high-water mark`() {
+        val info = HighlightEngine.activeInfo(withRepeat, 3500)!!
+        assertEquals(2, info.position)      // jumped back to word 2
+        assertEquals(true, info.isRepeat)
+        assertEquals(3, info.highWater)     // word 3 was already reached
+    }
+
+    @Test
+    fun `advancing past the repeat clears the repeat flag`() {
+        val info = HighlightEngine.activeInfo(withRepeat, 5500)!!
+        assertEquals(4, info.position)
+        assertEquals(false, info.isRepeat)
+        assertEquals(4, info.highWater)
+    }
 }
