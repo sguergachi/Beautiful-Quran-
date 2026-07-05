@@ -105,7 +105,7 @@ fun Modifier.letterFadeIn(
 }
 
 private const val InkProfileStops = 9
-private val FadeLayerBleed = 8.dp
+private val FadeLayerBleed = 9.dp
 
 fun Modifier.verticalFadingEdges(
     color: Color,
