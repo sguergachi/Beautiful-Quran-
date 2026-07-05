@@ -11,7 +11,9 @@ import androidx.media3.session.SessionToken
 import com.beautifulquran.data.model.Reciter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.guava.await
@@ -54,6 +56,9 @@ class PlayerController(private val context: Context) {
     /** Set synchronously (not in the launch bodies) so callers can sequence
      * playSurah + setRepeatRange without the coroutines racing the field. */
     private var repeatRange: IntRange? = null
+    private var repeatEndPositionMs: Long? = null
+    private var endedLoopHandledIndex: Int? = null
+    private var repeatBoundaryJob: Job? = null
 
     val positionMs: Long
         get() = controller?.currentPosition ?: 0L
@@ -87,9 +92,14 @@ class PlayerController(private val context: Context) {
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
-            syncFromController(player)
-            loopSingleAyahIfNeeded(player)
-            loopRangeIfNeeded(player)
+            if (player.playbackState != Player.STATE_ENDED) {
+                endedLoopHandledIndex = null
+            }
+            val loopRestarted = loopSingleAyahIfNeeded(player) || loopRangeIfNeeded(player)
+            syncFromController(player, forcePlaying = loopRestarted)
+            if (repeatRange != null && (player.isPlaying || loopRestarted)) {
+                startRepeatBoundaryMonitor()
+            }
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -108,9 +118,9 @@ class PlayerController(private val context: Context) {
         PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
     )
 
-    private fun syncFromController(player: Player) {
+    private fun syncFromController(player: Player, forcePlaying: Boolean = false) {
         _state.value = _state.value.copy(
-            isPlaying = player.isPlaying,
+            isPlaying = player.isPlaying || forcePlaying,
             isBuffering = player.playbackState == Player.STATE_BUFFERING,
             nowPlaying = player.currentMediaItem?.mediaId?.let(::parseMediaId),
             repeatMode = player.repeatMode,
@@ -131,15 +141,18 @@ class PlayerController(private val context: Context) {
      * restart the current item explicitly so the UI does not sit at the ayah's
      * final timestamp.
      */
-    private fun loopSingleAyahIfNeeded(player: Player) {
-        if (repeatRange != null) return
-        if (player.repeatMode != Player.REPEAT_MODE_ONE) return
-        if (player.playbackState != Player.STATE_ENDED) return
-        if (player.mediaItemCount == 0) return
+    private fun loopSingleAyahIfNeeded(player: Player): Boolean {
+        if (repeatRange != null) return false
+        if (player.repeatMode != Player.REPEAT_MODE_ONE) return false
+        if (player.playbackState != Player.STATE_ENDED) return false
+        if (player.mediaItemCount == 0) return false
 
         val idx = player.currentMediaItemIndex.coerceIn(0, player.mediaItemCount - 1)
+        if (endedLoopHandledIndex == idx) return false
+        endedLoopHandledIndex = idx
         player.seekTo(idx, 0L)
         player.play()
+        return true
     }
 
     /**
@@ -147,21 +160,29 @@ class PlayerController(private val context: Context) {
      * range's last ayah (auto-advance, "next", or reaching the end of the
      * playlist) it wraps back to the range's first ayah.
      */
-    private fun loopRangeIfNeeded(player: Player) {
-        val range = repeatRange ?: return
-        if (player.mediaItemCount == 0) return
+    private fun loopRangeIfNeeded(player: Player): Boolean {
+        val range = repeatRange ?: return false
+        if (player.mediaItemCount == 0) return false
         val lastIdx = (range.last - 1).coerceAtMost(player.mediaItemCount - 1)
         val firstIdx = (range.first - 1).coerceIn(0, player.mediaItemCount - 1)
         val idx = player.currentMediaItemIndex
-        if (idx > lastIdx || (player.playbackState == Player.STATE_ENDED && idx >= lastIdx)) {
+        val endedAtRangeEnd = player.playbackState == Player.STATE_ENDED && idx >= lastIdx
+        if (idx > lastIdx || endedAtRangeEnd) {
+            if (endedAtRangeEnd) {
+                if (endedLoopHandledIndex == idx) return false
+                endedLoopHandledIndex = idx
+            }
             player.seekTo(firstIdx, 0L)
             player.play()
+            return true
         }
+        return false
     }
 
     /** Repeats ayahs [startAyah]..[endAyah] (inclusive) of the loaded surah. */
-    fun setRepeatRange(startAyah: Int, endAyah: Int) {
+    fun setRepeatRange(startAyah: Int, endAyah: Int, endPositionMs: Long? = null) {
         repeatRange = startAyah..endAyah
+        repeatEndPositionMs = endPositionMs
         _state.value = _state.value.copy(repeatRange = repeatRange, repeatMode = Player.REPEAT_MODE_OFF)
         scope.launch {
             val c = ensureController()
@@ -170,11 +191,15 @@ class PlayerController(private val context: Context) {
             if (c.mediaItemCount > 0 && (idx < startAyah - 1 || idx > endAyah - 1)) {
                 c.seekTo((startAyah - 1).coerceIn(0, c.mediaItemCount - 1), 0L)
             }
+            if (c.isPlaying) startRepeatBoundaryMonitor()
         }
     }
 
     fun clearRepeatRange() {
         repeatRange = null
+        repeatEndPositionMs = null
+        repeatBoundaryJob?.cancel()
+        repeatBoundaryJob = null
         _state.value = _state.value.copy(repeatRange = null)
     }
 
@@ -186,10 +211,18 @@ class PlayerController(private val context: Context) {
         reciter: Reciter,
         surahName: String,
         startPositionMs: Long = 0L,
+        preserveRepeatRange: Boolean = true,
     ) {
-        // A new playlist invalidates any ayah range chosen for the old one.
-        repeatRange = null
-        _state.value = _state.value.copy(repeatRange = null)
+        val boundedRange = repeatRange
+            ?.takeIf { preserveRepeatRange }
+            ?.let { range ->
+                val first = range.first.coerceIn(1, ayahCount)
+                val last = range.last.coerceIn(first, ayahCount)
+                first..last
+            }
+        repeatRange = boundedRange
+        if (boundedRange == null) repeatEndPositionMs = null
+        _state.value = _state.value.copy(repeatRange = boundedRange)
         scope.launch {
             val c = ensureController()
             val items = (1..ayahCount).map { ayah ->
@@ -204,9 +237,13 @@ class PlayerController(private val context: Context) {
                     )
                     .build()
             }
-            c.setMediaItems(items, startAyah - 1, startPositionMs)
+            val effectiveStartAyah = boundedRange
+                ?.let { startAyah.coerceIn(it.first, it.last) }
+                ?: startAyah
+            c.setMediaItems(items, effectiveStartAyah - 1, startPositionMs)
             c.prepare()
             c.play()
+            if (boundedRange != null) startRepeatBoundaryMonitor()
         }
     }
 
@@ -273,6 +310,9 @@ class PlayerController(private val context: Context) {
 
     fun stop() {
         repeatRange = null
+        repeatEndPositionMs = null
+        repeatBoundaryJob?.cancel()
+        repeatBoundaryJob = null
         _state.value = _state.value.copy(repeatRange = null)
         scope.launch {
             controller?.let {
@@ -282,7 +322,60 @@ class PlayerController(private val context: Context) {
         }
     }
 
+    private fun startRepeatBoundaryMonitor() {
+        if (repeatBoundaryJob?.isActive == true) return
+        repeatBoundaryJob = scope.launch {
+            while (true) {
+                val c = controller ?: break
+                val range = repeatRange ?: break
+                if (c.mediaItemCount == 0) {
+                    delay(REPEAT_BOUNDARY_POLL_MS)
+                    continue
+                }
+
+                val firstIdx = (range.first - 1).coerceIn(0, c.mediaItemCount - 1)
+                val lastIdx = (range.last - 1).coerceAtMost(c.mediaItemCount - 1)
+                val idx = c.currentMediaItemIndex
+                if (!c.isPlaying) {
+                    delay(REPEAT_BOUNDARY_PAUSED_POLL_MS)
+                    continue
+                }
+
+                if (idx > lastIdx) {
+                    c.seekTo(firstIdx, 0L)
+                    c.play()
+                    syncFromController(c, forcePlaying = true)
+                    delay(REPEAT_SEEK_SETTLE_MS)
+                    continue
+                }
+
+                if (idx == lastIdx && c.currentPosition >= repeatBoundary(c)) {
+                    endedLoopHandledIndex = idx
+                    c.seekTo(firstIdx, 0L)
+                    c.play()
+                    syncFromController(c, forcePlaying = true)
+                    delay(REPEAT_SEEK_SETTLE_MS)
+                    continue
+                }
+
+                delay(REPEAT_BOUNDARY_POLL_MS)
+            }
+            repeatBoundaryJob = null
+        }
+    }
+
+    private fun repeatBoundary(player: Player): Long {
+        repeatEndPositionMs?.let { return it }
+        val duration = player.duration.takeIf { it > 0L } ?: return Long.MAX_VALUE
+        return (duration - REPEAT_DURATION_GUARD_MS).coerceAtLeast(0L)
+    }
+
     companion object {
+        private const val REPEAT_BOUNDARY_POLL_MS = 16L
+        private const val REPEAT_BOUNDARY_PAUSED_POLL_MS = 250L
+        private const val REPEAT_SEEK_SETTLE_MS = 120L
+        private const val REPEAT_DURATION_GUARD_MS = 80L
+
         fun mediaId(surah: Int, ayah: Int, reciterId: Int) = "$surah:$ayah:$reciterId"
 
         fun parseMediaId(id: String): NowPlaying? {

@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -144,6 +145,7 @@ private fun PaperStackApp() {
     }
 
     var dragStartPosition by remember { mutableFloatStateOf(0f) }
+    var dragSnapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -153,25 +155,31 @@ private fun PaperStackApp() {
                 maxLayer = {
                     if (selectedSurahId == 0 && stackPosition.value <= COVER_LAYER + 0.01f) COVER_LAYER else settingsLayer
                 },
-                onDragStart = { dragStartPosition = stackPosition.value },
+                onDragStart = {
+                    dragStartPosition = stackPosition.value
+                },
                 onDrag = { deltaPages ->
-                    scope.launch {
-                        val maxLayer = if (selectedSurahId == 0 && dragStartPosition <= COVER_LAYER + 0.01f) {
-                            COVER_LAYER
-                        } else {
-                            settingsLayer
-                        }
-                        // A single gesture may advance at most one layer, so a hard swipe
-                        // from the cover lands on the reader instead of overshooting to settings.
-                        val startLayer = dragStartPosition.roundToInt()
-                        val lower = (startLayer - 1).coerceAtLeast(COVER_LAYER).toFloat()
-                        val upper = (startLayer + 1).coerceAtMost(maxLayer).toFloat()
+                    val maxLayer = if (selectedSurahId == 0 && dragStartPosition <= COVER_LAYER + 0.01f) {
+                        COVER_LAYER
+                    } else {
+                        settingsLayer
+                    }
+                    // A single gesture may advance at most one layer, so a hard swipe
+                    // from the cover lands on the reader instead of overshooting to settings.
+                    val startLayer = dragStartPosition.roundToInt()
+                    val lower = (startLayer - 1).coerceAtLeast(COVER_LAYER).toFloat()
+                    val upper = (startLayer + 1).coerceAtMost(maxLayer).toFloat()
+                    dragSnapJob?.cancel()
+                    dragSnapJob = scope.launch {
                         stackPosition.snapTo(
                             (dragStartPosition + deltaPages).coerceIn(lower, upper),
                         )
                     }
                 },
-                onSettle = { target -> animateTo(target) },
+                onSettle = { target ->
+                    dragSnapJob?.cancel()
+                    animateTo(target)
+                },
             ),
     ) {
         val page = stackPosition.value

@@ -2,6 +2,7 @@ package com.beautifulquran.ui.reader
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.Player
 import com.beautifulquran.data.QuranRepository
 import com.beautifulquran.data.SettingsRepository
 import com.beautifulquran.data.model.Reciter
@@ -111,6 +112,8 @@ class ReaderViewModel(
      * while playing (a paused position must not jump the highlight forward). */
     private fun ayahWithFadeLead(ayah: Int): Int {
         if (!player.state.value.isPlaying) return ayah
+        val repeatRange = player.state.value.repeatRange
+        if (repeatRange != null && ayah >= repeatRange.last) return ayah
         val ayahCount = _uiState.value.content?.surah?.ayahCount ?: return ayah
         if (ayah >= ayahCount) return ayah
         val duration = player.durationMs
@@ -178,13 +181,14 @@ class ReaderViewModel(
         )
         val np = player.state.value.nowPlaying
         if (np != null && np.surahId == surahId && np.reciterId != reciter.id) {
-            // Switching voices must never drop the chosen loop range: restarting
-            // the surah with the new reciter clears it (playSurah rebuilds the
-            // playlist), so capture it first and re-apply it afterwards.
             val preservedRange = player.state.value.repeatRange
             playFromAyah(np.ayah)
             if (preservedRange != null) {
-                player.setRepeatRange(preservedRange.first, preservedRange.last)
+                player.setRepeatRange(
+                    preservedRange.first,
+                    preservedRange.last,
+                    repeatEndPositionFor(preservedRange.last),
+                )
             }
         }
     }
@@ -270,6 +274,14 @@ class ReaderViewModel(
 
     /** One of Player.REPEAT_MODE_*; always leaves range-repeat behind. */
     fun setRepeatMode(mode: Int) {
+        if (mode == Player.REPEAT_MODE_ONE) {
+            val ayah = playerState.value.nowPlaying
+                ?.takeIf { it.surahId == surahId }
+                ?.ayah
+                ?: settings.settings.value.lastAyah
+            setRepeatRange(ayah, ayah)
+            return
+        }
         player.clearRepeatRange()
         player.setRepeatMode(mode)
     }
@@ -279,9 +291,21 @@ class ReaderViewModel(
         val content = _uiState.value.content ?: return
         val start = from.coerceIn(1, content.surah.ayahCount)
         val end = to.coerceIn(start, content.surah.ayahCount)
-        playFromAyah(start)
-        player.setRepeatRange(start, end)
+        val reciter = _uiState.value.currentReciter ?: return
+        player.playSurah(
+            surahId = content.surah.id,
+            ayahCount = content.surah.ayahCount,
+            startAyah = start,
+            reciter = reciter,
+            surahName = content.surah.nameTransliteration,
+            preserveRepeatRange = false,
+        )
+        player.setRepeatRange(start, end, repeatEndPositionFor(end))
+        rememberPosition(start)
     }
+
+    private fun repeatEndPositionFor(ayah: Int): Long? =
+        timings[ayah]?.lastOrNull()?.endMs
 
     fun cycleSpeed() {
         val speeds = listOf(0.75f, 1f, 1.25f, 1.5f)

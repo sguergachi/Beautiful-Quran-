@@ -56,6 +56,7 @@ fun RepeatDialog(
     var choice by remember {
         mutableStateOf(
             when {
+                repeatRange != null && repeatRange.first == repeatRange.last -> RepeatChoice.ONE_AYAH
                 repeatRange != null -> RepeatChoice.AYAH_RANGE
                 repeatMode == Player.REPEAT_MODE_ONE -> RepeatChoice.ONE_AYAH
                 repeatMode == Player.REPEAT_MODE_ALL -> RepeatChoice.WHOLE_SURAH

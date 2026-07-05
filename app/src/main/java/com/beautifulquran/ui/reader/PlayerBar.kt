@@ -82,6 +82,7 @@ fun PlayerBar(
                     .padding(start = 12.dp, end = 12.dp, bottom = 4.dp),
             ) {
                 val rangeActive = state.repeatRange != null
+                val singleAyahRange = state.repeatRange?.let { it.first == it.last } == true
                 IconButton(
                     onClick = onRepeatClick,
                     modifier = Modifier
@@ -89,7 +90,7 @@ fun PlayerBar(
                         .graphicsLayer { alpha = chromeAlpha() },
                 ) {
                     Icon(
-                        imageVector = if (state.repeatMode == Player.REPEAT_MODE_ONE) {
+                        imageVector = if (state.repeatMode == Player.REPEAT_MODE_ONE || singleAyahRange) {
                             Icons.Rounded.RepeatOne
                         } else {
                             Icons.Rounded.Repeat

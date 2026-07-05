@@ -1,6 +1,9 @@
 package com.beautifulquran.ui.reader
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import android.graphics.Paint
 import android.graphics.Typeface
@@ -30,6 +33,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -43,6 +47,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -72,6 +77,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -127,6 +133,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import com.beautifulquran.R
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ReadingMode
@@ -185,7 +193,7 @@ private sealed interface LazyItem {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ReaderScreen(
     surahId: Int,
@@ -260,6 +268,22 @@ fun ReaderScreen(
         } else {
             delay(350)
             recitingActive = false
+        }
+    }
+    val view = LocalView.current
+    DisposableEffect(view, recitingActive) {
+        val window = view.context.findActivity()?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        if (recitingActive) {
+            controller?.hide(WindowInsetsCompat.Type.statusBars())
+            controller?.systemBarsBehavior =
+                androidx.core.view.WindowInsetsControllerCompat
+                    .BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        } else {
+            controller?.show(WindowInsetsCompat.Type.statusBars())
+        }
+        onDispose {
+            controller?.show(WindowInsetsCompat.Type.statusBars())
         }
     }
 
@@ -346,7 +370,7 @@ fun ReaderScreen(
             with(density) { 120.dp.roundToPx() }
         }
     }
-    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val statusBarTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
     val scrolledAyahPosition = remember(readerItems) {
         derivedStateOf {
             val visibleAyah = listState.layoutInfo.visibleItemsInfo.firstOrNull {
@@ -644,9 +668,9 @@ fun ReaderScreen(
                                 viewModel.player.togglePlayPause()
                             } else {
                                 requestPlaybackNotificationPermission {
-                                    val selectedAyah = selectedPlaybackAyah()
                                     followEnabled = true
-                                    if (requestedJumpAyah > 0 || playerState.nowPlaying?.ayah != selectedAyah) {
+                                    if (requestedJumpAyah > 0) {
+                                        val selectedAyah = selectedPlaybackAyah()
                                         viewModel.player.playLoadedFromAyah(selectedAyah)
                                     } else {
                                         viewModel.player.togglePlayPause()
@@ -700,18 +724,6 @@ fun ReaderScreen(
                 .fillMaxSize()
                 .graphicsLayer { alpha = readerContentAlpha.value },
         ) {
-            // Opaque bar over the status-bar strip while reciting, so the verse
-            // scrolling up never shows beneath the notch/camera. Held steady
-            // across loop restarts via recitingActive.
-            if (recitingActive && statusBarTop > 0.dp) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(statusBarTop)
-                        .background(MaterialTheme.colorScheme.background)
-                        .zIndex(100f),
-                )
-            }
             LazyColumn(
                 state = listState,
                 contentPadding = PaddingValues(top = padding.calculateTopPadding()),
@@ -867,6 +879,19 @@ fun ReaderScreen(
         }
     }
 
+        // Opaque bar over the status-bar strip while reciting, so the verse
+        // scrolling up never shows beneath the notch/camera. Held steady
+        // across loop restarts via recitingActive.
+        if (recitingActive && statusBarTop > 0.dp) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(statusBarTop)
+                    .background(MaterialTheme.colorScheme.background)
+                    .zIndex(1.5f),
+            )
+        }
+
         // The notification-permission prompt: ink bleeds across this sheet and
         // it becomes the question. Answering runs the bleed in reverse, back
         // into the pressed button (the sheet owns that exit), then hands off —
@@ -914,6 +939,12 @@ fun ReaderScreen(
             },
         )
     }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 // A gentle, near-symmetric ease for the word fade: it drifts in slowly, never

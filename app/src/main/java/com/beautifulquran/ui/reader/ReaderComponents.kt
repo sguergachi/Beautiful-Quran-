@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -36,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -46,6 +48,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
@@ -536,29 +539,86 @@ fun AyahBlock(
                 }
             }
         } else {
-            // Connected script: continuous Arabic words with no gloss, but the
-            // same recitation letter-fade as the word-for-word view (a single
-            // static Text would lose that fade). Centered so short verses sit
-            // mid-line like a mushaf.
+            // Connected script must be one shaped text run. Rendering each
+            // word as its own Text breaks Arabic joining even if spacing is 0.
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterHorizontally),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    ayah.words.forEach { word ->
-                        val wordState = stateFor(word)
-                        ConnectedArabicWordUnit(
-                            word = word,
-                            state = wordState,
-                            fontScale = fontScale,
-                            sweepMs = sweepMs.takeIf { wordState == WordVisualState.Active },
-                            keepInView = keepActiveWordInView && wordState == WordVisualState.Active,
-                            onClick = onWordClick?.let { handler -> { handler(word) } },
+                val fullInk = MaterialTheme.colorScheme.onBackground
+                val fadedInk = fullInk
+                    .copy(alpha = WordVisualState.Upcoming.inkAlpha())
+                    .compositeOver(MaterialTheme.colorScheme.background)
+                val wordColors = ayah.words.map { word ->
+                    val wordState = stateFor(word)
+                    animateColorAsState(
+                        targetValue = when (wordState) {
+                            WordVisualState.Upcoming -> fadedInk
+                            WordVisualState.Plain,
+                            WordVisualState.Active,
+                            WordVisualState.Recited -> fullInk
+                        },
+                        animationSpec = tween(
+                            durationMillis = if (wordState == WordVisualState.Active) {
+                                sweepMs ?: 450
+                            } else {
+                                450
+                            },
+                            easing = InkSweepEasing,
+                        ),
+                        label = "connectedArabicWordColor",
+                    )
+                }
+                val text = buildAnnotatedString {
+                    append(ayah.text)
+                    var wordIndex = 0
+                    var rangeStart: Int? = null
+                    ayah.text.forEachIndexed { index, char ->
+                        if (char.isWhitespace()) {
+                            val start = rangeStart
+                            if (start != null && wordIndex < wordColors.size) {
+                                addStyle(
+                                    SpanStyle(color = wordColors[wordIndex].value),
+                                    start,
+                                    index,
+                                )
+                                wordIndex += 1
+                                rangeStart = null
+                            }
+                        } else if (rangeStart == null) {
+                            rangeStart = index
+                        }
+                    }
+                    val start = rangeStart
+                    if (start != null && wordIndex < wordColors.size) {
+                        addStyle(
+                            SpanStyle(color = wordColors[wordIndex].value),
+                            start,
+                            ayah.text.length,
                         )
                     }
-                    ArabicAyahNumberUnit(ayah.number, fontScale)
+                    append(" ")
+                    withStyle(
+                        SpanStyle(
+                            color = LocalQuranAccents.current.gold,
+                            fontSize = 20.sp * fontScale,
+                        ),
+                    ) {
+                        append("﴿${ayah.number.toArabicIndic()}﴾")
+                    }
                 }
+                Text(
+                    text = text,
+                    style = ArabicWordStyle.copy(
+                        fontSize = ArabicWordStyle.fontSize * fontScale,
+                        lineHeight = 2.05.em,
+                    ),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onAyahClick,
+                        ),
+                )
             }
         }
         if (showTranslation && readingMode == ReadingMode.ARABIC_ENGLISH) {
