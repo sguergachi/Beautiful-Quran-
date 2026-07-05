@@ -132,9 +132,9 @@ private const val ARABIC_ONLY_QCF_FONT_MULTIPLIER = 1.3f
  */
 private val InkSweepEasing = CubicBezierEasing(0.3f, 0.24f, 0.7f, 0.78f)
 
-// The repeat tint blooms in quickly to ride the recitation, then dissolves back
-// to normal ink slowly once the recitation moves past the repeated word.
-private const val REPEAT_FADE_IN_MS = 200
+// The repeat tint uses the same word-paced sweep as the initial ink reveal,
+// then dissolves back to normal ink slowly once the repeated phrase releases.
+private const val DEFAULT_REPEAT_SWEEP_MS = 450
 private const val REPEAT_FADE_OUT_MS = 900
 
 private data class RepeatWash(
@@ -143,14 +143,17 @@ private data class RepeatWash(
 )
 
 @Composable
-private fun rememberRepeatWash(repeat: Boolean): RepeatWash {
+private fun rememberRepeatWash(repeat: Boolean, sweepMs: Int?): RepeatWash {
     val progress = remember { Animatable(if (repeat) 0f else 1f) }
     val alpha = remember { Animatable(if (repeat) 1f else 0f) }
-    LaunchedEffect(repeat) {
+    LaunchedEffect(repeat, sweepMs) {
         if (repeat) {
             alpha.snapTo(1f)
             progress.snapTo(0f)
-            progress.animateTo(1f, tween(REPEAT_FADE_IN_MS, easing = InkSweepEasing))
+            progress.animateTo(
+                1f,
+                tween(sweepMs ?: DEFAULT_REPEAT_SWEEP_MS, easing = InkSweepEasing),
+            )
         } else {
             progress.snapTo(1f)
             alpha.animateTo(0f, tween(REPEAT_FADE_OUT_MS, easing = InkSweepEasing))
@@ -212,7 +215,7 @@ fun WordUnit(
 ) {
     val isActive = state == WordVisualState.Active
     val lyricInk = animatedInkAlpha(state)
-    val repeatWash = rememberRepeatWash(repeat)
+    val repeatWash = rememberRepeatWash(repeat, sweepMs.takeIf { isActive })
     val arabicInk = MaterialTheme.colorScheme.onBackground
     val repeatInk = LocalQuranAccents.current.repeatInk
     val sweep = rememberLetterSweep(isActive, sweepMs)
@@ -318,7 +321,7 @@ fun ConnectedArabicWordUnit(
 ) {
     val isActive = state == WordVisualState.Active
     val lyricInk = animatedInkAlpha(state)
-    val repeatWash = rememberRepeatWash(repeat)
+    val repeatWash = rememberRepeatWash(repeat, sweepMs.takeIf { isActive })
     val arabicInk = MaterialTheme.colorScheme.onBackground
     val repeatInk = LocalQuranAccents.current.repeatInk
     val sweep = rememberLetterSweep(isActive, sweepMs)
@@ -387,7 +390,7 @@ fun EnglishWordUnit(
 ) {
     val isActive = state == WordVisualState.Active
     val lyricInk = animatedInkAlpha(state)
-    val repeatWash = rememberRepeatWash(repeat)
+    val repeatWash = rememberRepeatWash(repeat, sweepMs.takeIf { isActive })
     val lyricColor = if (searchHit) LocalQuranAccents.current.gold else MaterialTheme.colorScheme.onBackground
     val repeatInk = LocalQuranAccents.current.repeatInk
     val sweep = rememberLetterSweep(isActive, sweepMs)
@@ -474,7 +477,12 @@ private fun QcfGlyphLine(
         )
     }
     val repeatInk = LocalQuranAccents.current.repeatInk
-    val repeatWashes = repeats.map { rememberRepeatWash(it) }
+    val repeatWashes = repeats.mapIndexed { index, repeat ->
+        rememberRepeatWash(
+            repeat = repeat,
+            sweepMs = activeSweepMs.takeIf { states.getOrNull(index) == WordVisualState.Active },
+        )
+    }
     val style = ArabicWordStyle.merge(
         TextStyle(
             fontFamily = fontFamily,
