@@ -272,9 +272,7 @@ class ReaderViewModel(
         val content = _uiState.value.content ?: return
         val start = from.coerceIn(1, content.surah.ayahCount)
         val end = to.coerceIn(start, content.surah.ayahCount)
-        if (playerState.value.nowPlaying?.surahId != surahId) {
-            playFromAyah(start)
-        }
+        playFromAyah(start)
         player.setRepeatRange(start, end)
     }
 

@@ -155,6 +155,7 @@ class PlayerController(private val context: Context) {
         val idx = player.currentMediaItemIndex
         if (idx > lastIdx || (player.playbackState == Player.STATE_ENDED && idx >= lastIdx)) {
             player.seekTo(firstIdx, 0L)
+            player.play()
         }
     }
 
