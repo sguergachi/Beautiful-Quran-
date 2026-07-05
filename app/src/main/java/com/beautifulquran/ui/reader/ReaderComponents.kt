@@ -417,6 +417,7 @@ private fun QcfGlyphLine(
     repeats: List<Boolean>,
     fontSize: TextUnit,
     activeSweepMs: Int?,
+    onWordClick: ((Word) -> Unit)?,
 ) {
     val context = LocalContext.current
     val provider = remember(context) {
@@ -447,27 +448,6 @@ private fun QcfGlyphLine(
             label = "qcfLineGlyphColor",
         )
     }
-    val text = buildAnnotatedString {
-        words.forEachIndexed { index, word ->
-            if (index > 0) append(" ")
-            val pauseMarks = word.arabic.quranPauseMarks()
-            val qcfText = word.qcfV2.withoutTrailingQcfPauseGlyphs(pauseMarks.length)
-            withStyle(SpanStyle(color = colors[index].value)) {
-                append(qcfText)
-            }
-            if (pauseMarks.isNotEmpty()) {
-                withStyle(
-                    SpanStyle(
-                        color = colors[index].value,
-                        fontFamily = HafsFontFamily,
-                    ),
-                ) {
-                    append(" ")
-                    append(pauseMarks)
-                }
-            }
-        }
-    }
     val style = ArabicWordStyle.merge(
         TextStyle(
             fontFamily = fontFamily,
@@ -477,12 +457,44 @@ private fun QcfGlyphLine(
         ),
     )
 
-    Text(
-        text = text,
-        style = style,
-        softWrap = true,
+    Row(
         modifier = Modifier.fillMaxWidth(),
-    )
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        words.forEachIndexed { index, word ->
+            val pauseMarks = word.arabic.quranPauseMarks()
+            val qcfText = word.qcfV2.withoutTrailingQcfPauseGlyphs(pauseMarks.length)
+            val wordText = buildAnnotatedString {
+                withStyle(SpanStyle(color = colors[index].value)) {
+                    append(qcfText)
+                }
+                if (pauseMarks.isNotEmpty()) {
+                    withStyle(
+                        SpanStyle(
+                            color = colors[index].value,
+                            fontFamily = HafsFontFamily,
+                        ),
+                    ) {
+                        append(" ")
+                        append(pauseMarks)
+                    }
+                }
+            }
+            Text(
+                text = wordText,
+                style = style,
+                modifier = Modifier
+                    .clickable(
+                        interactionSource = null,
+                        indication = null,
+                        onClick = { onWordClick?.invoke(word) },
+                    ),
+            )
+            if (index < words.lastIndex) {
+                Spacer(Modifier.width(4.dp))
+            }
+        }
+    }
 }
 
 @Composable
@@ -495,6 +507,7 @@ private fun QcfGlyphAyah(
     fontSize: TextUnit,
     sweepMs: Int?,
     onAyahClick: () -> Unit,
+    onWordClick: ((Word) -> Unit)?,
 ) {
     fun qcfStateFor(word: Word): WordVisualState = when {
         !isActiveAyah -> WordVisualState.Plain
@@ -537,6 +550,7 @@ private fun QcfGlyphAyah(
                 repeats = lineWords.map { isRepeat(qcfStateFor(it)) },
                 fontSize = fontSize,
                 activeSweepMs = sweepMs,
+                onWordClick = onWordClick,
             )
         }
     }
@@ -745,6 +759,7 @@ fun AyahBlock(
                     fontSize = ArabicWordStyle.fontSize * fontScale * ARABIC_ONLY_QCF_FONT_MULTIPLIER,
                     sweepMs = sweepMs,
                     onAyahClick = onAyahClick,
+                    onWordClick = onWordClick?.let { handler -> { word -> handler(word) } },
                 )
             }
         }
