@@ -575,6 +575,7 @@ fun ReaderScreen(
                             if (surah != null) {
                                 Box {
                                     OrnateSurahTitle(
+                                        chapterNumber = surah.id,
                                         nameArabic = surah.nameArabic,
                                         nameTransliteration = surah.nameTransliteration,
                                         sheen = sheen,
@@ -859,6 +860,7 @@ fun ReaderScreen(
                     when (val item = readerItems[index]) {
                         LazyItem.Header -> {
                             SurahHeader(
+                                chapterNumber = content.surah.id,
                                 nameArabic = content.surah.nameArabic,
                                 nameTransliteration = content.surah.nameTransliteration,
                                 nameTranslation = content.surah.nameTranslation,
