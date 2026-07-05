@@ -79,6 +79,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -846,20 +847,24 @@ fun ReaderScreen(
                 )
             }
             val selectorSide = settings.ayahSelectorSide
+            val latestActiveAyahForRail by rememberUpdatedState(activeAyah)
+            val railCurrentAyah = remember(content.surah.ayahCount) {
+                derivedStateOf {
+                    (latestActiveAyahForRail ?: scrolledAyah.value)
+                        .coerceIn(1, content.surah.ayahCount)
+                }
+            }
+            val railCurrentPosition = remember(content.surah.ayahCount) {
+                derivedStateOf {
+                    (latestActiveAyahForRail?.toFloat() ?: scrolledAyahPosition.value)
+                        .coerceIn(1f, content.surah.ayahCount.toFloat())
+                }
+            }
             AyahSelectorRail(
                 ayahCount = content.surah.ayahCount,
                 side = selectorSide,
-                // Lambdas, not values: the scrolled position changes on every
-                // frame of a scroll, and reading it here would recompose this
-                // whole content lambda per frame. The rail reads it at draw
-                // and effect scope only.
-                currentAyah = {
-                    (activeAyah ?: scrolledAyah.value).coerceIn(1, content.surah.ayahCount)
-                },
-                currentPosition = {
-                    (activeAyah?.toFloat() ?: scrolledAyahPosition.value)
-                        .coerceIn(1f, content.surah.ayahCount.toFloat())
-                },
+                currentAyah = railCurrentAyah,
+                currentPosition = railCurrentPosition,
                 chromeAlpha = { if (recitingActive) 0f else chromeAlpha.value },
                 onJumpToAyah = { requestedJumpAyah = it },
                 onExpandedChange = { ayahSelectorExpanded = it },
@@ -1287,8 +1292,8 @@ private suspend fun settleDialWheel(
 private fun AyahSelectorRail(
     ayahCount: Int,
     side: AyahSelectorSide,
-    currentAyah: () -> Int,
-    currentPosition: () -> Float,
+    currentAyah: State<Int>,
+    currentPosition: State<Float>,
     chromeAlpha: () -> Float,
     onJumpToAyah: (Int) -> Unit,
     onExpandedChange: (Boolean) -> Unit,
@@ -1302,18 +1307,16 @@ private fun AyahSelectorRail(
     // the whole way out.
     val expansion = remember { Animatable(0f) }
     var lastHapticAyah by remember(ayahCount) {
-        mutableIntStateOf(currentAyah().coerceIn(1, ayahCount))
+        mutableIntStateOf(currentAyah.value.coerceIn(1, ayahCount))
     }
     var dialPosition by remember(ayahCount) {
-        mutableFloatStateOf(currentPosition().coerceIn(1f, ayahCount.toFloat()))
+        mutableFloatStateOf(currentPosition.value.coerceIn(1f, ayahCount.toFloat()))
     }
     // Runs settle + grace countdown + commit after a release; cancelled by the next touch.
     var releaseJob by remember { mutableStateOf<Job?>(null) }
     val commitProgress = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val view = LocalView.current
-    val latestCurrentAyah by rememberUpdatedState(currentAyah)
-    val latestCurrentPosition by rememberUpdatedState(currentPosition)
     val latestOnJumpToAyah by rememberUpdatedState(onJumpToAyah)
     val latestOnExpandedChange by rememberUpdatedState(onExpandedChange)
 
@@ -1346,7 +1349,7 @@ private fun AyahSelectorRail(
                 targetValue = 1f,
                 animationSpec = tween(durationMillis = 1_500, easing = LinearEasing),
             )
-            if (target != latestCurrentAyah().coerceIn(1, ayahCount)) {
+            if (target != currentAyah.value.coerceIn(1, ayahCount)) {
                 latestOnJumpToAyah(target)
             }
             view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
@@ -1363,7 +1366,7 @@ private fun AyahSelectorRail(
     LaunchedEffect(ayahCount) {
         // Mirror the reading position only while the wheel is fully hidden;
         // syncing any earlier yanks a still-visible wheel to a stale ayah.
-        snapshotFlow { latestCurrentAyah() to latestCurrentPosition() }
+        snapshotFlow { currentAyah.value to currentPosition.value }
             .collect { (ayah, position) ->
                 if (!expanded && releaseJob == null && !expansion.isRunning) {
                     lastHapticAyah = ayah.coerceIn(1, ayahCount)
@@ -1430,7 +1433,7 @@ private fun AyahSelectorRail(
                 .coerceIn(4.dp.toPx(), 8.dp.toPx())
             val collapsedStep = collapsedBarHeight + collapsedSpacing
             val readProgress = if (ayahCount > 1) {
-                ((latestCurrentPosition() - 1f) / (ayahCount - 1).toFloat()).coerceIn(0f, 1f)
+                ((currentPosition.value - 1f) / (ayahCount - 1).toFloat()).coerceIn(0f, 1f)
             } else {
                 0f
             }
@@ -1598,8 +1601,8 @@ private fun AyahSelectorRail(
                             scope.launch { commitProgress.snapTo(0f) }
                             velocityTracker.addPosition(down.uptimeMillis, down.position)
                             if (!expanded) {
-                                lastHapticAyah = latestCurrentAyah().coerceIn(1, ayahCount)
-                                dialPosition = latestCurrentPosition().coerceIn(1f, ayahCount.toFloat())
+                                lastHapticAyah = currentAyah.value.coerceIn(1, ayahCount)
+                                dialPosition = currentPosition.value.coerceIn(1f, ayahCount.toFloat())
                                 expanded = true
                             }
                             scope.launch {
