@@ -203,8 +203,12 @@ fun ReaderScreen(
     viewModel: ReaderViewModel,
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
+    onAyahSelectorExpandedChange: (Boolean) -> Unit = {},
 ) {
     LaunchedEffect(surahId) { viewModel.load(surahId) }
+    DisposableEffect(onAyahSelectorExpandedChange) {
+        onDispose { onAyahSelectorExpandedChange(false) }
+    }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
@@ -781,6 +785,9 @@ fun ReaderScreen(
 
         var ayahSelectorExpanded by remember { mutableStateOf(false) }
         var ayahSelectorDismissRequests by remember { mutableIntStateOf(0) }
+        LaunchedEffect(ayahSelectorExpanded) {
+            onAyahSelectorExpandedChange(ayahSelectorExpanded)
+        }
 
         // One column of text at a book-like measure: full-bleed on phones,
         // centered with air on tablets and in landscape.

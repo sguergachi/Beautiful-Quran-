@@ -105,6 +105,7 @@ private const val SETTINGS_LAYER = 2
 private const val STACK_PAGE_DURATION_MS = 460
 private const val STACK_PAGE_TURN_THRESHOLD = 0.18f
 private const val STACK_PAGE_FLING_THRESHOLD = 0.35f
+private const val STACK_PAGE_PULL_RESISTANCE_DP = 34
 private val StackMotionEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
 
 @Composable
@@ -116,6 +117,7 @@ private fun PaperStackApp() {
     var selectedSurahId by rememberSaveable { mutableIntStateOf(0) }
     var selectedStartAyah by rememberSaveable { mutableIntStateOf(0) }
     var settledLayer by rememberSaveable { mutableIntStateOf(COVER_LAYER) }
+    var ayahSelectorExpanded by remember { mutableStateOf(false) }
     val stackPosition = remember { Animatable(settledLayer.toFloat()) }
     val scope = rememberCoroutineScope()
     val settingsLayer = if (selectedSurahId == 0) AYAH_LAYER else SETTINGS_LAYER
@@ -143,6 +145,7 @@ private fun PaperStackApp() {
     }
 
     LaunchedEffect(selectedSurahId) {
+        ayahSelectorExpanded = false
         if (selectedSurahId == 0) settleTo(COVER_LAYER)
     }
 
@@ -158,6 +161,7 @@ private fun PaperStackApp() {
                 maxLayer = {
                     if (selectedSurahId == 0 && stackPosition.value <= COVER_LAYER + 0.01f) COVER_LAYER else settingsLayer
                 },
+                gesturesBlocked = { ayahSelectorExpanded },
                 onDragStart = {
                     dragStartPosition = stackPosition.value
                 },
@@ -214,6 +218,7 @@ private fun PaperStackApp() {
                         viewModel = readerViewModel,
                         onBack = { animateTo(COVER_LAYER) },
                         onOpenSettings = { animateTo(SETTINGS_LAYER) },
+                        onAyahSelectorExpandedChange = { ayahSelectorExpanded = it },
                     )
                 }
             }
@@ -328,6 +333,7 @@ private fun Modifier.paperStackDrag(
     gestureKey: Any,
     position: () -> Float,
     maxLayer: () -> Int,
+    gesturesBlocked: () -> Boolean,
     onDragStart: () -> Unit,
     onDrag: (deltaPages: Float) -> Unit,
     onSettle: (targetLayer: Int) -> Unit,
@@ -335,10 +341,21 @@ private fun Modifier.paperStackDrag(
     awaitEachGesture {
         val down = awaitFirstDown(
             requireUnconsumed = false,
-            pass = PointerEventPass.Initial,
+            pass = PointerEventPass.Main,
         )
+        if (gesturesBlocked()) {
+            do {
+                val event = awaitPointerEvent(PointerEventPass.Main)
+            } while (event.changes.any { it.pressed })
+            return@awaitEachGesture
+        }
         val velocityTracker = VelocityTracker()
         val touchSlop = viewConfiguration.touchSlop
+        val width = size.width.toFloat().coerceAtLeast(1f)
+        val pullResistance = maxOf(
+            touchSlop * 2.5f,
+            minOf(STACK_PAGE_PULL_RESISTANCE_DP.dp.toPx(), width * 0.08f),
+        )
         var horizontalDrag = false
         var startLayer = position().roundToInt()
         var startPosition = position()
@@ -347,21 +364,21 @@ private fun Modifier.paperStackDrag(
         velocityTracker.addPosition(down.uptimeMillis, down.position)
 
         while (true) {
-            // Watch the gesture in the Initial pass — ahead of the reader's
-            // vertical scroll and the ayah rail — so a horizontal page turn is
-            // claimed here instead of being swallowed by whatever sits below.
-            // Vertical drags are never consumed, so scrolling still reaches the
-            // list in the Main pass.
-            val event = awaitPointerEvent(PointerEventPass.Initial)
+            if (gesturesBlocked()) break
+            // Watch the Main pass so child controls get first claim. This keeps
+            // controls such as the text-size slider from becoming page swipes.
+            // The sheet only claims a gesture after a clear horizontal pull.
+            val event = awaitPointerEvent(PointerEventPass.Main)
             val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            if (!horizontalDrag && change.isConsumed) break
             val delta = change.positionChange()
             totalDx += delta.x
             totalDy += delta.y
             velocityTracker.addPosition(change.uptimeMillis, change.position)
 
             if (!horizontalDrag) {
-                val mostlyHorizontal = abs(totalDx) > abs(totalDy) * 1.05f
-                if (abs(totalDx) > touchSlop && mostlyHorizontal) {
+                val mostlyHorizontal = abs(totalDx) > abs(totalDy) * 1.35f
+                if (abs(totalDx) > pullResistance && mostlyHorizontal) {
                     horizontalDrag = true
                     startPosition = position()
                     startLayer = startPosition.roundToInt()
@@ -370,8 +387,7 @@ private fun Modifier.paperStackDrag(
             }
 
             if (horizontalDrag) {
-                val width = size.width.toFloat().coerceAtLeast(1f)
-                onDrag(-totalDx / width)
+                onDrag(-resistedSwipeDistance(totalDx, pullResistance) / width)
                 change.consume()
             }
 
@@ -379,8 +395,7 @@ private fun Modifier.paperStackDrag(
         }
 
         if (horizontalDrag) {
-            val width = size.width.toFloat().coerceAtLeast(1f)
-            val dragPages = -totalDx / width
+            val dragPages = -resistedSwipeDistance(totalDx, pullResistance) / width
             val draggedPosition = startPosition + dragPages
             val velocityPages = -velocityTracker.calculateVelocity().x / width
             val turnDirection = when {
@@ -402,4 +417,10 @@ private fun Modifier.paperStackDrag(
             onSettle(target)
         }
     }
+}
+
+private fun resistedSwipeDistance(distance: Float, resistance: Float): Float = when {
+    distance > resistance -> distance - resistance
+    distance < -resistance -> distance + resistance
+    else -> 0f
 }
