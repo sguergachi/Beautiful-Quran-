@@ -19,14 +19,25 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Cache source data
-        uses: actions/cache@v4
-        with:
-          path: tools/.cache
-          key: quran-data-${{ hashFiles('tools/build_db.py') }}
+      - name: Verify bundled Quran database asset
+        run: python3 - <<'PY'
+          from pathlib import Path
+          import sqlite3
 
-      - name: Build Quran database (text + word-by-word + timings)
-        run: python3 tools/build_db.py
+          db_path = Path("app/src/main/assets/quran.db")
+          if not db_path.is_file():
+              raise SystemExit("missing bundled database: app/src/main/assets/quran.db")
+
+          with sqlite3.connect(db_path) as db:
+              checks = {
+                  "surahs": 114,
+                  "ayahs": 6236,
+              }
+              for table, expected in checks.items():
+                  actual = db.execute(f"select count(*) from {table}").fetchone()[0]
+                  if actual != expected:
+                      raise SystemExit(f"{table}: expected {expected}, got {actual}")
+        PY
 
       - name: Accept Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true

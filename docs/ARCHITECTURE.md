@@ -168,8 +168,8 @@ current ayah in the new voice when it changes on the settings sheet.
 
 ## Build & delivery
 
-CI (`.github/workflows/build.yml`) on every push: build `quran.db` (with
-network access to all three sources) → unit tests → **assembleRelease**
+CI (`.github/workflows/build.yml`) on every push: verify the committed
+`app/src/main/assets/quran.db` asset → unit tests → **assembleRelease**
 (R8-minified, resource-shrunk; see docs/PERFORMANCE.md) → upload artifact →
 publish the APK to the rolling `latest` GitHub release. Release builds are
 signed with the repo's debug keystore so sideloaded installs update in place;
