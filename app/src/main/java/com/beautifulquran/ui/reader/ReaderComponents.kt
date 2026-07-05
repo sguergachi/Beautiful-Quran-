@@ -412,6 +412,7 @@ fun EnglishWordUnit(
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun QcfGlyphLine(
     words: List<Word>,
@@ -459,9 +460,13 @@ private fun QcfGlyphLine(
         ),
     )
 
-    Row(
+    // A mushaf line can be wider than a phone screen; FlowRow wraps the words
+    // onto extra rows instead of a plain Row overflowing (and, with centred
+    // arrangement, spilling off both edges).
+    FlowRow(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center,
+        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         words.forEachIndexed { index, word ->
             val pauseMarks = word.arabic.quranPauseMarks()
@@ -492,9 +497,6 @@ private fun QcfGlyphLine(
                         onClick = { onWordClick?.invoke(word) },
                     ),
             )
-            if (index < words.lastIndex) {
-                Spacer(Modifier.width(4.dp))
-            }
         }
     }
 }
