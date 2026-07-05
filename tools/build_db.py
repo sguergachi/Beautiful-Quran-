@@ -75,7 +75,13 @@ QDC_URL = (
 )
 QDC_REPEAT_RECITERS = {
     1: 7,  # Mishary Alafasy (murattal)
+    2: 6,  # Mahmoud Khalil Al-Husary (murattal)
+    3: 2,  # AbdulBaset AbdulSamad (murattal)
+    4: 9,  # Mohamed Siddiq El-Minshawi (murattal)
+    5: 3,  # Abdurrahman As-Sudais (also fills the missing quran-align timings)
     7: 5,  # Hani ar-Rifai (murattal)
+    # Saud Ash-Shuraym (qdc 10) is one-pass on quran.com too — no repeats to add,
+    # so he stays on quran-align.
 }
 
 
