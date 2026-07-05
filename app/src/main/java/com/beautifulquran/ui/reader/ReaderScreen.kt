@@ -33,6 +33,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
@@ -44,7 +45,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.statusBars
@@ -1050,6 +1053,7 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 // A gentle, near-symmetric ease for the word fade: it drifts in slowly, never
 // snapping to full ink, so text feels light as it soaks into the paper.
 private val SoftInkEasing = CubicBezierEasing(0.33f, 0.0f, 0.15f, 1.0f)
+private val PlaybackNotificationOverscan = 12.dp
 
 // A circle of ink centred at an origin (a fraction of the sheet, so it is
 // size-agnostic); the radius reaches the farthest corner exactly at
@@ -1185,108 +1189,115 @@ private fun PlaybackNotificationSheet(
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .onGloballyPositioned { sheetBounds = it.boundsInWindow() }
-            .graphicsLayer {
-                clip = true
-                shape = if (closing) {
-                    // Hole opens at the pressed button, growing to reveal the reader.
-                    InkRevealShape(originX, originY, revealHole.value, punchHole = true)
-                } else {
-                    // Ink fills a circle spreading up from the play control.
-                    InkRevealShape(originX, originY, inkSpread.value, punchHole = false)
-                }
-            }
-            .background(colors.background)
-            // Absorb every touch so the recitation sheet beneath never reacts.
-            .pointerInput(Unit) {
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    do {
-                        val event = awaitPointerEvent()
-                        event.changes.forEach { it.consume() }
-                    } while (event.changes.any { it.pressed })
-                }
-            }
-            .padding(
-                start = 32.dp,
-                end = 32.dp,
-                top = statusBarTop + 48.dp,
-                bottom = navBarBottom + 40.dp,
-            ),
-    ) {
-        // Top — the title opens the sheet like a chapter.
-        WordFadeText(
-            text = stringResource(R.string.notification_permission_title),
-            style = titleStyle,
-            color = colors.onBackground,
-            initialDelayMs = 260,
-            wordDelayMs = 120,
-        )
-        // Middle — the body, written in word by word, resting in the sheet.
-        Box(
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val overscan = PlaybackNotificationOverscan
+        Column(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(top = 28.dp),
-            contentAlignment = Alignment.TopStart,
+                .offset(x = -overscan, y = -overscan)
+                .requiredSize(
+                    width = maxWidth + overscan * 2,
+                    height = maxHeight + overscan * 2,
+                )
+                .onGloballyPositioned { sheetBounds = it.boundsInWindow() }
+                .graphicsLayer {
+                    clip = true
+                    shape = if (closing) {
+                        // Hole opens at the pressed button, growing to reveal the reader.
+                        InkRevealShape(originX, originY, revealHole.value, punchHole = true)
+                    } else {
+                        // Ink fills a circle spreading up from the play control.
+                        InkRevealShape(originX, originY, inkSpread.value, punchHole = false)
+                    }
+                }
+                .background(colors.background)
+                // Absorb every touch so the recitation sheet beneath never reacts.
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        do {
+                            val event = awaitPointerEvent()
+                            event.changes.forEach { it.consume() }
+                        } while (event.changes.any { it.pressed })
+                    }
+                }
+                .padding(
+                    start = 32.dp + overscan,
+                    end = 32.dp + overscan,
+                    top = statusBarTop + 48.dp + overscan,
+                    bottom = navBarBottom + 40.dp + overscan,
+                ),
         ) {
+            // Top — the title opens the sheet like a chapter.
             WordFadeText(
-                text = stringResource(R.string.notification_permission_message),
-                style = bodyStyle,
-                color = colors.onBackground.copy(alpha = 0.82f),
-                initialDelayMs = 760,
-                wordDelayMs = 96,
+                text = stringResource(R.string.notification_permission_title),
+                style = titleStyle,
+                color = colors.onBackground,
+                initialDelayMs = 260,
+                wordDelayMs = 120,
             )
-        }
-        // Bottom — the two answers, fading up after the words have landed.
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .graphicsLayer { alpha = actionAlpha.value },
-        ) {
-            TextButton(
-                onClick = { answer(dismissCentre, onDismiss) },
-                shape = RoundedCornerShape(8.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            // Middle — the body, written in word by word, resting in the sheet.
+            Box(
                 modifier = Modifier
-                    .defaultMinSize(minWidth = 0.dp, minHeight = 48.dp)
-                    .onGloballyPositioned { dismissCentre = it.boundsInWindow().center },
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(top = 28.dp),
+                contentAlignment = Alignment.TopStart,
             ) {
-                Text(
-                    text = stringResource(R.string.notification_permission_not_now),
-                    style = actionStyle,
-                    color = colors.onBackground.copy(alpha = 0.5f),
+                WordFadeText(
+                    text = stringResource(R.string.notification_permission_message),
+                    style = bodyStyle,
+                    color = colors.onBackground.copy(alpha = 0.82f),
+                    initialDelayMs = 760,
+                    wordDelayMs = 96,
                 )
             }
-            Button(
-                onClick = { answer(allowCentre, onAllow) },
-                shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = colors.primary,
-                    contentColor = colors.onPrimary,
-                ),
-                // Flat: nothing casts a shadow on the paper.
-                elevation = ButtonDefaults.buttonElevation(
-                    defaultElevation = 0.dp,
-                    pressedElevation = 0.dp,
-                    focusedElevation = 0.dp,
-                    hoveredElevation = 0.dp,
-                ),
-                contentPadding = PaddingValues(horizontal = 28.dp, vertical = 14.dp),
+            // Bottom — the two answers, fading up after the words have landed.
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .defaultMinSize(minWidth = 96.dp, minHeight = 52.dp)
-                    .onGloballyPositioned { allowCentre = it.boundsInWindow().center },
+                    .fillMaxWidth()
+                    .graphicsLayer { alpha = actionAlpha.value },
             ) {
-                Text(
-                    text = stringResource(R.string.notification_permission_allow),
-                    style = actionStyle,
-                    color = colors.onPrimary,
-                )
+                TextButton(
+                    onClick = { answer(dismissCentre, onDismiss) },
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    modifier = Modifier
+                        .defaultMinSize(minWidth = 0.dp, minHeight = 48.dp)
+                        .onGloballyPositioned { dismissCentre = it.boundsInWindow().center },
+                ) {
+                    Text(
+                        text = stringResource(R.string.notification_permission_not_now),
+                        style = actionStyle,
+                        color = colors.onBackground.copy(alpha = 0.5f),
+                    )
+                }
+                Button(
+                    onClick = { answer(allowCentre, onAllow) },
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = colors.primary,
+                        contentColor = colors.onPrimary,
+                    ),
+                    // Flat: nothing casts a shadow on the paper.
+                    elevation = ButtonDefaults.buttonElevation(
+                        defaultElevation = 0.dp,
+                        pressedElevation = 0.dp,
+                        focusedElevation = 0.dp,
+                        hoveredElevation = 0.dp,
+                    ),
+                    contentPadding = PaddingValues(horizontal = 28.dp, vertical = 14.dp),
+                    modifier = Modifier
+                        .defaultMinSize(minWidth = 96.dp, minHeight = 52.dp)
+                        .onGloballyPositioned { allowCentre = it.boundsInWindow().center },
+                ) {
+                    Text(
+                        text = stringResource(R.string.notification_permission_allow),
+                        style = actionStyle,
+                        color = colors.onPrimary,
+                    )
+                }
             }
         }
     }
