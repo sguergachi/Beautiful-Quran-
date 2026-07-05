@@ -229,14 +229,16 @@ fun WordUnit(
             style = ArabicWordStyle,
             fontSize = ArabicWordStyle.fontSize * fontScale,
             color = arabicInk.value,
-            modifier = if (isActive) {
-                Modifier.letterFadeIn(
+            // A repeated word was already recited, so it holds full read ink and
+            // only its colour blooms to orange — no dim letter sweep.
+            modifier = when {
+                repeat -> Modifier.graphicsLayer { alpha = 1f }
+                isActive -> Modifier.letterFadeIn(
                     progress = { sweep.value },
                     rtl = true,
                     restingAlpha = WordVisualState.Upcoming.inkAlpha(),
                 )
-            } else {
-                Modifier.graphicsLayer { alpha = lyricInk.value }
+                else -> Modifier.graphicsLayer { alpha = lyricInk.value }
             },
         )
         if (showGloss) {
@@ -252,7 +254,7 @@ fun WordUnit(
                 },
                 textAlign = TextAlign.Center,
                 modifier = Modifier.graphicsLayer {
-                    alpha = if (isActive) wordFadeAlpha(sweep.value) else lyricInk.value
+                    alpha = if (isActive && !repeat) wordFadeAlpha(sweep.value) else lyricInk.value
                 },
             )
         }
@@ -264,7 +266,7 @@ fun WordUnit(
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.graphicsLayer {
-                    alpha = if (isActive) wordFadeAlpha(sweep.value) else lyricInk.value
+                    alpha = if (isActive && !repeat) wordFadeAlpha(sweep.value) else lyricInk.value
                 },
             )
         }
@@ -319,14 +321,14 @@ fun ConnectedArabicWordUnit(
             .bringIntoViewRequester(bringIntoViewRequester)
             .onSizeChanged { wordSize = it }
             .then(
-                if (isActive) {
-                    Modifier.letterFadeIn(
+                when {
+                    repeat -> Modifier.graphicsLayer { alpha = 1f }
+                    isActive -> Modifier.letterFadeIn(
                         progress = { sweep.value },
                         rtl = true,
                         restingAlpha = WordVisualState.Upcoming.inkAlpha(),
                     )
-                } else {
-                    Modifier.graphicsLayer { alpha = lyricInk.value }
+                    else -> Modifier.graphicsLayer { alpha = lyricInk.value }
                 },
             )
             .let { m ->
@@ -389,14 +391,14 @@ fun EnglishWordUnit(
             .bringIntoViewRequester(bringIntoViewRequester)
             .onSizeChanged { wordSize = it }
             .then(
-                if (isActive) {
-                    Modifier.letterFadeIn(
+                when {
+                    repeat -> Modifier.graphicsLayer { alpha = 1f }
+                    isActive -> Modifier.letterFadeIn(
                         progress = { sweep.value },
                         rtl = false,
                         restingAlpha = WordVisualState.Upcoming.inkAlpha(),
                     )
-                } else {
-                    Modifier.graphicsLayer { alpha = lyricInk.value }
+                    else -> Modifier.graphicsLayer { alpha = lyricInk.value }
                 },
             )
             .let { m ->
@@ -503,6 +505,7 @@ private fun QcfGlyphAyah(
     activeWordPosition: Int?,
     highWater: Int,
     repeatActive: Boolean,
+    repeatStart: Int,
     isActiveAyah: Boolean,
     fontSize: TextUnit,
     sweepMs: Int?,
@@ -517,8 +520,14 @@ private fun QcfGlyphAyah(
         word.qcfSpanEnd <= highWater -> WordVisualState.Recited
         else -> WordVisualState.Upcoming
     }
-    fun isRepeat(state: WordVisualState) =
-        state == WordVisualState.Active && repeatActive
+    // A glyph belongs to the active repeat chain when its word span overlaps
+    // [repeatStart, activeWordPosition]; the whole re-recited section then holds
+    // orange until the chain completes.
+    fun inRepeatChain(word: Word): Boolean =
+        repeatActive &&
+            activeWordPosition != null &&
+            word.position <= activeWordPosition &&
+            word.qcfSpanEnd >= repeatStart
 
     val interaction = remember { MutableInteractionSource() }
     val lines = remember(ayah.words) {
@@ -547,7 +556,7 @@ private fun QcfGlyphAyah(
             QcfGlyphLine(
                 words = lineWords,
                 states = lineWords.map(::qcfStateFor),
-                repeats = lineWords.map { isRepeat(qcfStateFor(it)) },
+                repeats = lineWords.map(::inRepeatChain),
                 fontSize = fontSize,
                 activeSweepMs = sweepMs,
                 onWordClick = onWordClick,
@@ -654,9 +663,11 @@ fun AyahBlock(
     // backward, but everything up to the high-water mark was already recited, so
     // it must hold full ink rather than dimming back to "upcoming".
     val highWater = activeWord?.highWater ?: 0
-    // True while the reciter is re-reciting an earlier word: the active word
-    // then carries a second, orange fade.
+    // True while the reciter is re-reciting an earlier word.
     val isRepeatActive = activeWord?.isRepeat == true
+    // First word of the active repeat chain. Every word from here through the
+    // word now being re-recited holds the orange fade until the chain completes.
+    val repeatStart = activeWord?.repeatStart ?: 0
     // The letter fade paces itself to how long the reciter dwells on the
     // word, corrected for the chosen playback speed.
     val sweepMs = activeWord
@@ -681,10 +692,15 @@ fun AyahBlock(
         else -> WordVisualState.Upcoming
     }
 
-    // The active word is "repeating" only when the recitation has jumped back
-    // to it; that word (and its orange fade) is keyed off this per-word flag.
-    fun isRepeat(state: WordVisualState) =
-        state == WordVisualState.Active && isRepeatActive
+    // A word wears the orange fade while it belongs to the active repeat chain:
+    // from the word the reciter jumped back to (repeatStart) through the word
+    // now being re-recited (activeWordPosition). The whole section holds orange
+    // together and only releases once the chain completes and the recitation
+    // moves on to new, unread words.
+    fun inRepeatChain(word: Word): Boolean =
+        isRepeatActive &&
+            activeWordPosition != null &&
+            word.position in repeatStart..activeWordPosition
 
     Column(
         modifier = Modifier
@@ -703,7 +719,7 @@ fun AyahBlock(
                     EnglishWordUnit(
                         word = word,
                         state = wordState,
-                        repeat = isRepeat(wordState),
+                        repeat = inRepeatChain(word),
                         fontScale = fontScale,
                         sweepMs = sweepMs.takeIf { wordState == WordVisualState.Active },
                         searchHit = hits(word),
@@ -735,7 +751,7 @@ fun AyahBlock(
                         WordUnit(
                             word = word,
                             state = wordState,
-                            repeat = isRepeat(wordState),
+                            repeat = inRepeatChain(word),
                             fontScale = fontScale,
                             sweepMs = sweepMs.takeIf { wordState == WordVisualState.Active },
                             showGloss = showGloss,
@@ -755,6 +771,7 @@ fun AyahBlock(
                     activeWordPosition = activeWordPosition,
                     highWater = highWater,
                     repeatActive = isRepeatActive,
+                    repeatStart = repeatStart,
                     isActiveAyah = isActiveAyah,
                     fontSize = ArabicWordStyle.fontSize * fontScale * ARABIC_ONLY_QCF_FONT_MULTIPLIER,
                     sweepMs = sweepMs,

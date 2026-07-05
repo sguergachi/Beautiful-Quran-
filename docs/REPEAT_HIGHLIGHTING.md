@@ -82,11 +82,20 @@ its word position is ≤ the maximum position already seen earlier in the ayah.
 returns:
 
 - `isRepeat` — the active word points back at an earlier position;
-- `highWater` — the furthest word reached so far in the ayah.
+- `highWater` — the furthest word reached so far in the ayah;
+- `repeatStart` — the first word of the **current repeat chain** (the word the
+  reciter jumped back to). Equals the active position when not repeating.
 
 `highWater` is what keeps the display sane during a repeat: when the active word
 jumps backward, every word up to the high-water mark was *already recited*, so it
 must **hold full ink** instead of reverting to the dim "upcoming" state.
+
+`repeatStart` is what makes the highlight a **chain, not a flash**. While a
+reciter re-recites a stretch, every word from `repeatStart` through the word now
+being said is a member of the chain and holds orange together; the chain releases
+only when the recitation advances past `highWater` onto new, unread words. The
+chain start is found by walking back from the active segment over the contiguous
+run of backtracked segments and taking the minimum position (see `activeInfo`).
 
 ## The build pipeline (`tools/build_db.py`)
 
@@ -108,24 +117,35 @@ still uses quran-align exactly as before.
 
 ```
 HighlightEngine.activeInfo(segments, positionMs)
-    → ActiveWord(wordPosition, durationMs, isRepeat, highWater)   (ReaderViewModel, polled ~30/s)
-    → AyahBlock: stateFor() uses highWater to hold already-recited words lit
-    → word units tint toward QuranAccents.repeatInk while repeating
+    → ActiveWord(wordPosition, durationMs, isRepeat, highWater, repeatStart)   (ReaderViewModel, ~30/s)
+    → AyahBlock: stateFor() uses highWater to hold already-recited words lit;
+                 inRepeatChain(word) = repeatStart..activeWordPosition membership
+    → word units bloom to QuranAccents.repeatInk for chain members, from full ink
 ```
 
 - `stateFor` / `qcfStateFor` add a `word.position <= highWater → Recited` clause
   so a backward jump doesn't dim the words ahead of the active one.
-- `repeatTint(repeat, base)` (and the equivalent branch in the QCF line renderer)
-  animates a word's colour toward `repeatInk` when it is the active repeated word,
-  then back to normal ink when it isn't. The timing is **fast bloom-in**
-  (`REPEAT_FADE_IN_MS`, 200 ms) so the orange rides the recitation, and **slow
-  dissolve** (`REPEAT_FADE_OUT_MS`, 900 ms) so it trails off gently.
-- This is a **per-word trail** model: the orange follows the active word with a
-  fading tail rather than the whole phrase glowing until the repeat region ends.
-  It reuses the existing per-word animation. (If a whole-phrase hold is ever
-  wanted, that's a region-tracking change, not a colour change.)
+- **Chain membership, not a single word.** `AyahBlock.inRepeatChain(word)` is
+  true when `repeatStart ≤ word.position ≤ activeWordPosition` (for QCF glyphs,
+  when the word's span overlaps that range). Every member holds orange until the
+  chain releases together, so a repeated *section* stays highlighted as one unit.
+- **The orange blooms from the read (full-ink) colour, not the dim unread one.**
+  A repeated word was already recited, so its members render at **full alpha**
+  (`graphicsLayer { alpha = 1f }`) and only their *colour* animates — they do not
+  re-run the `letterFadeIn` dim→ink sweep that first-pass active words use. Colour
+  is driven by `repeatTint` (non-QCF) or the `animateColorAsState` branch in
+  `QcfGlyphLine` (QCF): **fast bloom-in** (`REPEAT_FADE_IN_MS`, 200 ms) toward
+  `repeatInk`, **slow dissolve** (`REPEAT_FADE_OUT_MS`, 900 ms) back to normal ink
+  when the chain releases.
 - `repeatInk` is defined per theme in `QuranAccents` — `#B4551E` (light),
   `#E0904E` (dark).
+
+Worked example (Al-Baqarah 2:14, `… 7 8 9 10 11 [7 8 9 10 11] 12 …`): the first
+pass 1–11 is normal white karaoke. On the jump back to 7 the chain opens
+(`repeatStart = 7`); as the reciter re-says 7, 8, 9, 10, 11 each turns orange
+**and stays orange**, so by word 11 the whole phrase 7–11 glows. When the voice
+reaches word 12 (past `highWater = 11`) the chain closes and 7–11 dissolve back to
+read ink together while 12 fades in white as a new word.
 
 ## Traps we hit (read before touching this)
 

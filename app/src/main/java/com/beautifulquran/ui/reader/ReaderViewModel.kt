@@ -38,6 +38,10 @@ data class ActiveWord(
     val durationMs: Long,
     val isRepeat: Boolean = false,
     val highWater: Int = wordPosition,
+    /** First word of the active repeat chain: while repeating, words
+     * [repeatStart]..[wordPosition] all hold the orange fade until the chain
+     * completes. Equals [wordPosition] when not repeating. */
+    val repeatStart: Int = wordPosition,
 )
 
 data class ReaderUiState(
@@ -90,6 +94,7 @@ class ReaderViewModel(
                                 durationMs = it.endMs - it.startMs,
                                 isRepeat = it.isRepeat,
                                 highWater = it.highWater,
+                                repeatStart = it.repeatStart,
                             )
                         })
                         // Position is frozen while paused; poll gently.
