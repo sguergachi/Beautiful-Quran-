@@ -3,6 +3,14 @@
 The design brief, in the owner's words: *one sheet of paper, calm and pure,
 butter smooth.* Everything below serves that sentence.
 
+**The metaphor is PAPER.** This is the single governing idea, and every
+decision answers to it. The app is not a screen showing pages — it *is* a
+sheet of paper. Nothing floats above the paper, nothing is layered on top of
+it, nothing casts a shadow onto it. When something new must be said, the
+paper itself changes: ink spreads across the sheet, the words settle in, and
+the same sheet now carries the new message. There are no dialogs, no cards,
+no trays — only paper, and ink on paper.
+
 ## The sheet
 
 The whole app is **three flat sheets** — Chapters, Reader, Settings — viewed
@@ -16,12 +24,36 @@ Hard rules:
   spacing, size, and ink strength (text alpha) only.
 - **Nothing floats.** No FABs, no snackbars, no modal sheets, no dialogs.
   Anything that would traditionally float becomes a line *in* the page (the
-  "Return to the recitation" line, error messages) or its own sheet
-  (Settings).
+  "Return to the recitation" line, error messages), its own sheet
+  (Settings), or an **ink bleed** that turns the current sheet into the
+  message (system prompts — see below).
 - **Edges dissolve.** Scrolling content fades out at the top and bottom of
   every sheet — ink fading off the page, not content clipped by a boundary.
 - **Taps have no ripple.** Touch feedback is the content's own motion
   (a word lighting, a page turning), never Material ink splash.
+
+## The ink bleed
+
+When the app must ask the reader something the system would normally raise in
+a floating dialog — the one case today is the notification-permission prompt
+before the first recitation — it never floats a box. Instead **the sheet you
+are already on becomes the question.** Ink bleeds outward from the point of
+touch (the play control) as a soft-edged circle, soaking the whole paper, and
+when it settles the same sheet reads as the message:
+
+- **Top** — a large display-face title (Cormorant Garamond), the way a
+  chapter opens.
+- **Middle** — the body, written in word by word with the Apple-Music lyric
+  fade, so the ink literally *arrives* on the page.
+- **Bottom** — the two answers, *Not now* (quiet, ink-only) and *Allow*
+  (the single green accent), which fade up only after the words have landed,
+  so the reader reads before deciding.
+
+Both directions are a seamless fade on the one sheet: the bleed reveals it,
+and answering dissolves it straight back to the recitation underneath — no
+push, no stack, no window. This is the *only* place the app borrows Material's
+ink-spread gesture, and it is justified because here the spreading ink *is* the
+paper metaphor, not a tap ripple (taps still never ripple — see Motion).
 
 ## Ink
 
