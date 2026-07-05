@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -46,8 +47,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.layout.onSizeChanged
@@ -436,6 +439,9 @@ private fun QcfGlyphLine(
             label = "qcfLineGlyphColor",
         )
     }
+    val measureText = remember(words) {
+        words.joinToString(" ") { it.qcfV2 }
+    }
     val text = buildAnnotatedString {
         words.forEachIndexed { index, word ->
             if (index > 0) append(" ")
@@ -444,15 +450,41 @@ private fun QcfGlyphLine(
             }
         }
     }
-    Text(
-        text = text,
-        fontFamily = fontFamily,
-        fontSize = ArabicWordStyle.fontSize * fontScale * 1.18f,
-        lineHeight = 1.75.em,
-        textAlign = TextAlign.Center,
-        softWrap = false,
-        modifier = Modifier.fillMaxWidth(),
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val baseFontSize = ArabicWordStyle.fontSize * fontScale * 1.18f
+    val baseStyle = ArabicWordStyle.merge(
+        TextStyle(
+            fontFamily = fontFamily,
+            fontSize = baseFontSize,
+            lineHeight = 1.75.em,
+            textAlign = TextAlign.Center,
+        ),
     )
+
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val availableWidthPx = with(density) { maxWidth.toPx() }
+        val measuredWidthPx = remember(measureText, baseStyle, availableWidthPx) {
+            textMeasurer.measure(
+                text = measureText,
+                style = baseStyle,
+                softWrap = false,
+            ).size.width
+        }
+        val fitScale = remember(measuredWidthPx, availableWidthPx) {
+            if (measuredWidthPx > 0 && availableWidthPx > 0f) {
+                (availableWidthPx / measuredWidthPx).coerceAtMost(1f)
+            } else {
+                1f
+            }
+        }
+        Text(
+            text = text,
+            style = baseStyle.copy(fontSize = baseFontSize * fitScale),
+            softWrap = false,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
 }
 
 @Composable

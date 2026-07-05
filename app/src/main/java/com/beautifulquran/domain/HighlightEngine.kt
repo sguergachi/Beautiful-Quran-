@@ -28,6 +28,11 @@ object HighlightEngine {
         val endMs: Long,
         val isRepeat: Boolean,
         val highWater: Int,
+        /** First word of the current repeat chain: while the reciter is
+         * repeating, every word in [repeatStart]..[position] holds the orange
+         * fade until the chain completes (playback advances past [highWater]).
+         * Equals [position] when not repeating. */
+        val repeatStart: Int,
     )
 
     fun activeWord(segments: List<Segment>, positionMs: Long): Int? =
