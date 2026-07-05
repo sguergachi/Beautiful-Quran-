@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.HorizontalDivider
@@ -62,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.beautifulquran.QuranApp
+import com.beautifulquran.data.ArabicRenderMode
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.data.model.Ayah
 import com.beautifulquran.data.model.Word
@@ -128,6 +130,7 @@ private fun animatedInkAlpha(state: WordVisualState): State<Float> =
 const val MIN_SWEEP_MS = 140
 const val MAX_SWEEP_MS = 8_000
 private const val ARABIC_ONLY_QCF_FONT_MULTIPLIER = 1.3f
+private const val ARABIC_ONLY_HAFS_FONT_MULTIPLIER = 1.25f
 
 /**
  * The wash moves at an unhurried, deliberate pace: essentially a steady
@@ -638,6 +641,99 @@ private fun QcfGlyphAyah(
     }
 }
 
+@Composable
+private fun ResponsiveHafsAyah(
+    ayah: Ayah,
+    states: List<WordVisualState>,
+    repeats: List<Boolean>,
+    fontSize: TextUnit,
+    activeSweepMs: Int?,
+    onAyahClick: () -> Unit,
+    onWordClick: ((Word) -> Unit)?,
+) {
+    val fullInk = MaterialTheme.colorScheme.onBackground
+    val paper = MaterialTheme.colorScheme.background
+    val fadedInk = fullInk
+        .copy(alpha = WordVisualState.Upcoming.inkAlpha())
+        .compositeOver(paper)
+    val repeatInk = LocalQuranAccents.current.repeatInk
+    val ayahMarkInk = LocalQuranAccents.current.gold
+    val sweeps = states.map { state ->
+        rememberLetterSweep(
+            active = state == WordVisualState.Active,
+            sweepMs = activeSweepMs.takeIf { state == WordVisualState.Active },
+        )
+    }
+    val style = ArabicWordStyle.merge(
+        TextStyle(
+            fontFamily = HafsFontFamily,
+            fontSize = fontSize,
+            lineHeight = 1.95.em,
+            textAlign = TextAlign.Center,
+        ),
+    )
+    var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val interaction = remember { MutableInteractionSource() }
+
+    val wordRanges = mutableListOf<IntRange>()
+    val annotatedText = buildAnnotatedString {
+        ayah.words.forEachIndexed { index, word ->
+            val state = states.getOrElse(index) { WordVisualState.Plain }
+            val repeat = repeats.getOrElse(index) { false }
+            val wordColor = when {
+                repeat -> repeatInk
+                state == WordVisualState.Active -> fullInk
+                    .copy(alpha = wordFadeAlpha(sweeps[index].value))
+                    .compositeOver(paper)
+                state == WordVisualState.Upcoming -> fadedInk
+                else -> fullInk
+            }
+            val start = length
+            withStyle(SpanStyle(color = wordColor)) {
+                append(word.arabic)
+            }
+            wordRanges += start until length
+            append(" ")
+        }
+        withStyle(SpanStyle(color = ayahMarkInk)) {
+            append("﴿")
+            append(ayah.number.toArabicIndic())
+            append("﴾")
+        }
+    }
+    val lineText = QcfLineText(annotatedText, wordRanges)
+
+    Text(
+        text = lineText.text,
+        style = style,
+        modifier = Modifier
+            .fillMaxWidth()
+            .widthIn(max = 560.dp)
+            .then(
+                if (onWordClick == null) {
+                    Modifier.clickable(
+                        interactionSource = interaction,
+                        indication = null,
+                        onClick = onAyahClick,
+                    )
+                } else {
+                    Modifier.pointerInput(lineText.wordRanges, ayah.words, layoutResult) {
+                        detectTapGestures { tap ->
+                            val offset = layoutResult?.getOffsetForPosition(tap) ?: return@detectTapGestures
+                            val wordIndex = lineText.wordRanges.indexOfFirst { offset in it }
+                            if (wordIndex >= 0) {
+                                onWordClick.invoke(ayah.words[wordIndex])
+                            } else {
+                                onAyahClick()
+                            }
+                        }
+                    }
+                },
+            ),
+        onTextLayout = { layoutResult = it },
+    )
+}
+
 /** Marks every occurrence of [query] in [text] with a soft gold wash. */
 private fun highlightMatches(text: String, query: String?, mark: Color): AnnotatedString =
     buildAnnotatedString {
@@ -712,6 +808,7 @@ fun AyahBlock(
     showGloss: Boolean,
     showTransliteration: Boolean,
     showTranslation: Boolean,
+    arabicRenderMode: ArabicRenderMode,
     searchQuery: String? = null,
     keepActiveWordInView: Boolean = false,
     onWordClick: ((Word) -> Unit)?,
@@ -839,18 +936,29 @@ fun AyahBlock(
             }
         } else {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                QcfGlyphAyah(
-                    ayah = ayah,
-                    activeWordPosition = activeWordPosition,
-                    highWater = highWater,
-                    repeatActive = isRepeatActive,
-                    repeatStart = repeatStart,
-                    isActiveAyah = isActiveAyah,
-                    fontSize = ArabicWordStyle.fontSize * fontScale * ARABIC_ONLY_QCF_FONT_MULTIPLIER,
-                    sweepMs = sweepMs,
-                    onAyahClick = onAyahClick,
-                    onWordClick = onWordClick?.let { handler -> { word -> handler(word) } },
-                )
+                when (arabicRenderMode) {
+                    ArabicRenderMode.RESPONSIVE_HAFS -> ResponsiveHafsAyah(
+                        ayah = ayah,
+                        states = ayah.words.map(::stateFor),
+                        repeats = ayah.words.map(::inRepeatChain),
+                        fontSize = ArabicWordStyle.fontSize * fontScale * ARABIC_ONLY_HAFS_FONT_MULTIPLIER,
+                        activeSweepMs = sweepMs,
+                        onAyahClick = onAyahClick,
+                        onWordClick = onWordClick?.let { handler -> { word -> handler(word) } },
+                    )
+                    ArabicRenderMode.QCF_MUSHAF -> QcfGlyphAyah(
+                        ayah = ayah,
+                        activeWordPosition = activeWordPosition,
+                        highWater = highWater,
+                        repeatActive = isRepeatActive,
+                        repeatStart = repeatStart,
+                        isActiveAyah = isActiveAyah,
+                        fontSize = ArabicWordStyle.fontSize * fontScale * ARABIC_ONLY_QCF_FONT_MULTIPLIER,
+                        sweepMs = sweepMs,
+                        onAyahClick = onAyahClick,
+                        onWordClick = onWordClick?.let { handler -> { word -> handler(word) } },
+                    )
+                }
             }
         }
         if (showTranslation && readingMode == ReadingMode.ARABIC_ENGLISH) {
