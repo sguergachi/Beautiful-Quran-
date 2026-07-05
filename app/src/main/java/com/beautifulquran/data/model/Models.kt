@@ -14,6 +14,10 @@ data class Word(
     val arabic: String,
     val translation: String,
     val transliteration: String,
+    val qcfV2: String = "",
+    val qcfPage: Int = 0,
+    val qcfLine: Int = 0,
+    val qcfSpanEnd: Int = position,
 )
 
 data class Ayah(

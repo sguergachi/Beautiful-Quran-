@@ -76,8 +76,27 @@ was tried and rejected: it preserved one full ayah text run internally, but the
 visual motion was worse than the previous fade and still did not satisfy the
 connected-script requirement.
 
-The app is therefore back on the simpler Unicode ayah text path while we move
-the real solution to a modern Quran rendering pipeline.
+The app now has an initial QCF/QPC V2 implementation path:
+
+- `tools/build_db.py` imports public precomputed Mushaf page JSON from
+  `zonetecde/mushaf-layout`.
+- The `words` table stores `qcf_v2`, `qcf_page`, `qcf_line`, and
+  `qcf_span_end`.
+- The alignment step supports many-to-many differences between canonical timing
+  words and QCF visual words.
+- Arabic-only no-gloss mode renders QCF V2 glyph tokens using bundled QCF page
+  fonts fetched by `scripts/fetch_qcf_v2_fonts.sh`.
+- The active/recited/upcoming states use opaque color animation only.
+- The reader preloads all QCF page fonts needed for the current surah before
+  mounting Arabic-only no-gloss content. This prevents the visible Hafs-to-QCF
+  font swap that caused sudden text rearrangement while scrolling.
+- QCF glyph words no longer render Hafs fallback text. They render only after
+  the matching QCF page font is cached.
+
+Remaining validation:
+
+- Visual screenshots on device/emulator.
+- Licensing/provenance review before release distribution.
 
 ## Recommended Direction
 
@@ -85,15 +104,291 @@ For Arabic-only mode, stop trying to solve this with Compose styling over the
 current Unicode ayah text. The accepted target is a modern Quran rendering
 pipeline:
 
-1. Evaluate QCF V2 glyph data and Digital Khatt v2 with screenshots.
-2. Pick the renderer that actually gives the desired Mushaf-like appearance.
-3. Add the required script/font data to the database/assets.
-4. Rebuild the Arabic-only renderer around that representation.
+1. Continue with QCF V2 as the first implemented renderer.
+2. Validate the result with screenshots against Quran.com/Madinah Mushaf.
+3. Keep Digital Khatt v2 as a fallback candidate if QCF V2 page-font handling
+   proves too heavy or visually unsuitable in Compose.
+4. Resolve font/data licensing and offline packaging before release.
 
 The likely target is QCF V2: each Quranic word is a single glyph, which maps
 naturally to the existing word timing data. Digital Khatt v2 may be a more
 modern Unicode-based option and should be evaluated before committing to the
 final asset pipeline.
+
+## High-Quality Implementation Plan
+
+### Goal
+
+Arabic-only mode should look like a real digital Mushaf/connected Quran text
+renderer while preserving the app's signature word-timed follow-along behavior.
+The renderer must:
+
+- use Quran-specific script data and matching fonts;
+- preserve authentic Quranic glyph shapes, spacing, and diacritics;
+- map every rendered visual word back to the existing timing position;
+- avoid semi-transparent Quran glyphs;
+- keep animation smooth and typographically respectful.
+
+### Phase 1: Build A Rendering Spike
+
+Create a small isolated renderer spike before touching the production reader:
+
+- Add a temporary debug preview screen or JVM/Android screenshot harness that
+  renders the same 8-12 ayahs through candidate pipelines.
+- Include short ayahs, long wrapping ayahs, ayahs crossing Mushaf pages, and
+  examples with dense marks.
+- Use fixed test cases, at minimum:
+  - `1:1-7`
+  - `23:2-3`
+  - `73:4`
+  - one long ayah that wraps on phone width
+  - one ayah that crosses a page boundary
+- Capture screenshots in light, dark, and royal green themes.
+
+Acceptance criteria:
+
+- The text must visibly match a Quran/Mushaf rendering, not generic Arabic
+  words in a paragraph.
+- Diacritics must not collide or drift.
+- Words must map cleanly to timing positions.
+- The animation must be at least as pleasant as the current word-by-word
+  Arabic view before it is considered for production.
+
+Status: partially bypassed. The implementation went directly into the
+Arabic-only branch, but the same screenshot acceptance criteria still apply
+before treating it as release-ready.
+
+### Phase 2: Evaluate Script/Font Candidates
+
+Evaluate two candidates with real screenshots.
+
+#### Candidate A: QCF/QPC V2 Glyphs
+
+Use QUL's QPC V2 glyph word-by-word or ayah-by-ayah script and QPC V2 page
+fonts.
+
+Expected shape:
+
+- Best match for Madinah Mushaf/Quran.com-style visual rendering.
+- Each Quranic word is represented as a specialized glyph code.
+- Page number determines which font is used.
+
+Known costs:
+
+- Requires packaging/loading many page fonts.
+- Ayahs crossing pages need multiple font runs.
+- Layout should become page/line-aware over time.
+
+This is the likely final direction if the requirement is "looks like a real
+Mushaf".
+
+#### Candidate B: Digital Khatt V2
+
+Use Digital Khatt v2 word-by-word or ayah-by-ayah script with the Digital Khatt
+v2 font.
+
+Expected shape:
+
+- Modern Unicode-oriented Quranic font pipeline.
+- Fewer font-management problems than QCF page fonts.
+- Potentially better fit for responsive ayah-by-ayah layout.
+
+Known risks:
+
+- May not match the exact Madinah Mushaf/Quran.com look as closely as QCF V2.
+- Word-timed animation may still require text-run styling or overlay work,
+  depending on how the script maps to visual words.
+
+This should be selected only if screenshots prove it gives the desired Quranic
+appearance with a simpler implementation.
+
+Decision gate:
+
+- Do not proceed based on theory. Pick the renderer only after side-by-side
+  screenshots in the app's actual Compose UI.
+
+Status: QCF/QPC V2 selected for first implementation because it maps a visual
+glyph token to Quran words and best matches the Mushaf-style target. Digital
+Khatt v2 remains documented as the alternate candidate.
+
+### Phase 3: Extend The Data Pipeline
+
+After choosing the candidate, update `tools/build_db.py` and the SQLite schema.
+
+For QCF/QPC V2, add:
+
+- `words.qcf_v2_code TEXT NOT NULL DEFAULT ''`
+- `words.qcf_v2_page INTEGER NOT NULL DEFAULT 0`
+- `words.qcf_v2_line INTEGER NOT NULL DEFAULT 0`
+- optionally `ayahs.qcf_v2_text TEXT`
+- optionally `ayahs.qcf_v2_pages TEXT` for page-crossing ayahs
+
+For Digital Khatt v2, add:
+
+- `words.digital_khatt_v2 TEXT NOT NULL DEFAULT ''`
+- optionally `ayahs.digital_khatt_v2_text TEXT`
+
+Pipeline validation:
+
+- Word count from the chosen Quran script must equal existing canonical word
+  count for every ayah.
+- Every timed word position must have a render token.
+- Page/font metadata must be present for QCF V2.
+- Build must fail on mismatches unless an explicit, logged exception exists.
+- Add a small JSON/SQLite fixture test that validates representative ayahs.
+
+Status: implemented for QCF V2.
+
+- Added `qcf_v2`, `qcf_page`, `qcf_line`, and `qcf_span_end`.
+- Rebuilt `app/src/main/assets/quran.db`.
+- Validated all 6,236 ayahs against QCF V2 layout data.
+- Handled known many-to-many segmentation cases such as `لَّوۡمَا`,
+  `بَعْدَ مَا`, and `إِلْ يَاسِينَ`.
+
+### Phase 4: Font Packaging
+
+For QCF/QPC V2:
+
+- Download page fonts from the chosen source and pin their versions.
+- Prefer assets over `res/font` if 604 files become awkward for Android
+  resources.
+- Implement a small `QuranFontProvider` that loads and caches typefaces by
+  Mushaf page.
+- Keep the current Hafs font for the existing word-by-word Arabic mode until
+  the new renderer fully replaces it.
+
+For Digital Khatt v2:
+
+- Bundle the Digital Khatt v2 font.
+- Confirm Android/Compose handles the font's shaping and variation settings
+  correctly.
+- Add a fallback path only for unsupported devices if testing finds issues.
+
+Status: implemented as bundled QCF V2 font loading.
+
+- Added `QcfFontProvider`.
+- Added `scripts/fetch_qcf_v2_fonts.sh` to prefetch all 604 page fonts into
+  `app/src/main/assets/qcf-v2-fonts`.
+- Fonts are copied from assets into `noBackupFilesDir/qcf-v2-fonts` before
+  loading with `Typeface.createFromFile`.
+- Arabic-only no-gloss mode preloads the current surah's required page fonts
+  before rendering QCF text.
+- QCF glyphs do not fall back to Hafs Arabic text inside the visible list,
+  avoiding font-swap reflow.
+
+### Phase 5: Production Renderer
+
+Build a new renderer component rather than continuing to mutate `AyahBlock`:
+
+- `MushafArabicAyahText`
+- input: `Ayah`, active word position, sweep duration, font scale, theme colors;
+- output: a complete Arabic-only ayah rendering.
+
+For QCF V2:
+
+- Render one visual word per glyph token.
+- Group words by page/font.
+- Preserve page order and RTL flow.
+- Use `FlowRow` only if it still matches the Mushaf visual goal; otherwise
+  switch to page/line-aware layout using QCF line metadata.
+- Treat each glyph as the timed visual word.
+
+For Digital Khatt v2:
+
+- Prefer one full ayah text run if word timing can be mapped without breaking
+  shaping.
+- If per-word rendering is required, verify that Digital Khatt still looks
+  correct with word-level text units before selecting it.
+
+Status: initial production renderer wired into Arabic-only no-gloss mode.
+
+- Existing `AyahBlock` delegates that branch to QCF glyph word units.
+- One rendered QCF token can cover multiple timing word positions via
+  `qcf_span_end`.
+- Continuation canonical words with no render token are skipped in the visual
+  flow.
+
+### Phase 6: Animation Design
+
+Do not reuse alpha on Quran glyphs.
+
+Accepted states:
+
+- Upcoming: flat opaque faded ink color.
+- Active: full ink arriving on the current visual word.
+- Recited: full ink or a slightly settled opaque color.
+- Non-active ayahs: block-level dim is acceptable because it affects the whole
+  ayah uniformly, not overlapping glyph internals.
+
+For QCF V2, start with the robust version:
+
+- whole-word color animation from faded opaque ink to full ink;
+- duration = active timing segment adjusted by playback speed;
+- easing = `InkSweepEasing`.
+
+Only add directional clipping after the base glyph renderer is visually
+approved. Since each QCF word is a single glyph, directional clipping is a
+secondary polish pass, not the core implementation.
+
+For Digital Khatt v2:
+
+- use flat color transitions first;
+- avoid per-character or per-span alpha;
+- consider overlay clipping only if screenshots prove it looks good.
+
+Status: implemented baseline.
+
+- Upcoming QCF glyphs use an opaque faded ink color composited over the page
+  background.
+- Active glyphs animate to full ink with `InkSweepEasing`.
+- No alpha is applied to individual QCF glyph text.
+
+### Phase 7: Interaction And Sync
+
+Keep the existing timing engine:
+
+- `HighlightEngine` continues to emit word position.
+- Timing data remains keyed by `(surah, ayah, wordPosition)`.
+- Renderer maps `wordPosition` to QCF/Digital Khatt render token.
+
+Interactions:
+
+- Tap a rendered word seeks to the timing segment if hit testing is reliable.
+- Until reliable hit testing exists, keep ayah-level tap behavior in
+  Arabic-only mode.
+- Preserve active-word bring-into-view only after the new renderer exposes
+  stable word bounds.
+
+Status: implemented with existing sync.
+
+- `HighlightEngine` still emits canonical word positions.
+- QCF tokens use `position..qcfSpanEnd` to determine active/recited/upcoming
+  state.
+- Tap-to-word seek is preserved for rendered QCF tokens.
+
+### Phase 8: QA And Acceptance
+
+Required checks before merging production renderer:
+
+- Screenshot comparison for selected ayahs across all themes.
+- Phone-width and tablet-width screenshots.
+- Playback test: active word advances correctly for Alafasy and Husary.
+- Repeat/range repeat still works.
+- No semi-transparent Quran text glyphs in active ayah rendering.
+- No fallback font boxes or missing glyphs.
+- No visible font swap during scroll/playback.
+- APK size increase is measured and documented.
+
+Definition of done:
+
+- Arabic-only mode clearly uses the selected Quran script/font pipeline.
+- The result looks materially closer to Quran.com/Madinah Mushaf than the
+  current Unicode Hafs paragraph.
+- Word timing remains accurate.
+- Animation is smooth, restrained, and not worse than the current word-by-word
+  Arabic view.
+
+Status: pending visual QA.
 
 ## Rejected Short-Term Architecture
 

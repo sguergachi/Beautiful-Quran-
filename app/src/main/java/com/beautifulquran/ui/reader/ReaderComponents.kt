@@ -33,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +44,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -56,6 +58,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.beautifulquran.QuranApp
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.data.model.Ayah
 import com.beautifulquran.data.model.Word
@@ -370,6 +373,85 @@ fun EnglishWordUnit(
     )
 }
 
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+private fun QcfGlyphWordUnit(
+    word: Word,
+    state: WordVisualState,
+    fontScale: Float,
+    sweepMs: Int?,
+    keepInView: Boolean,
+    onClick: (() -> Unit)?,
+) {
+    val context = LocalContext.current
+    val provider = remember(context) {
+        (context.applicationContext as QuranApp).qcfFontProvider
+    }
+    val fontFamily by produceState<androidx.compose.ui.text.font.FontFamily?>(
+        initialValue = provider.cachedFontFamily(word.qcfPage),
+        key1 = word.qcfPage,
+        key2 = provider,
+    ) {
+        if (value == null) value = provider.fontFamily(word.qcfPage)
+    }
+    if (fontFamily == null) return
+    val fullInk = MaterialTheme.colorScheme.onBackground
+    val fadedInk = fullInk
+        .copy(alpha = WordVisualState.Upcoming.inkAlpha())
+        .compositeOver(MaterialTheme.colorScheme.background)
+    val color by animateColorAsState(
+        targetValue = when (state) {
+            WordVisualState.Upcoming -> fadedInk
+            WordVisualState.Plain,
+            WordVisualState.Active,
+            WordVisualState.Recited -> fullInk
+        },
+        animationSpec = tween(
+            durationMillis = if (state == WordVisualState.Active) sweepMs ?: 450 else 450,
+            easing = InkSweepEasing,
+        ),
+        label = "qcfGlyphColor",
+    )
+    val isActive = state == WordVisualState.Active
+    val interaction = remember { MutableInteractionSource() }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val density = LocalDensity.current
+    val activeWordTopMarginPx = with(density) { 144.dp.toPx() }
+    val activeWordBottomMarginPx = with(density) { 132.dp.toPx() }
+    var wordSize by remember { mutableStateOf(IntSize.Zero) }
+    LaunchedEffect(isActive, keepInView, wordSize) {
+        if (isActive && keepInView && wordSize != IntSize.Zero) {
+            bringIntoViewRequester.bringIntoView(
+                Rect(
+                    left = 0f,
+                    top = -activeWordTopMarginPx,
+                    right = wordSize.width.toFloat(),
+                    bottom = wordSize.height + activeWordBottomMarginPx,
+                ),
+            )
+        }
+    }
+
+    Text(
+        text = word.qcfV2,
+        fontFamily = fontFamily,
+        fontSize = ArabicWordStyle.fontSize * fontScale * 1.18f,
+        lineHeight = 1.75.em,
+        color = color,
+        modifier = Modifier
+            .bringIntoViewRequester(bringIntoViewRequester)
+            .onSizeChanged { wordSize = it }
+            .let { m ->
+                if (onClick != null) {
+                    m.clickable(interactionSource = interaction, indication = null, onClick = onClick)
+                } else {
+                    m
+                }
+            }
+            .padding(horizontal = 2.dp, vertical = 2.dp),
+    )
+}
+
 /** Marks every occurrence of [query] in [text] with a soft gold wash. */
 private fun highlightMatches(text: String, query: String?, mark: Color): AnnotatedString =
     buildAnnotatedString {
@@ -478,6 +560,14 @@ fun AyahBlock(
         else -> WordVisualState.Upcoming
     }
 
+    fun qcfStateFor(word: Word): WordVisualState = when {
+        !isActiveAyah -> WordVisualState.Plain
+        activeWordPosition == null -> WordVisualState.Upcoming
+        activeWordPosition in word.position..word.qcfSpanEnd -> WordVisualState.Active
+        word.qcfSpanEnd < activeWordPosition -> WordVisualState.Recited
+        else -> WordVisualState.Upcoming
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -539,86 +629,24 @@ fun AyahBlock(
                 }
             }
         } else {
-            // Connected script must be one shaped text run. Rendering each
-            // word as its own Text breaks Arabic joining even if spacing is 0.
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                val fullInk = MaterialTheme.colorScheme.onBackground
-                val fadedInk = fullInk
-                    .copy(alpha = WordVisualState.Upcoming.inkAlpha())
-                    .compositeOver(MaterialTheme.colorScheme.background)
-                val wordColors = ayah.words.map { word ->
-                    val wordState = stateFor(word)
-                    animateColorAsState(
-                        targetValue = when (wordState) {
-                            WordVisualState.Upcoming -> fadedInk
-                            WordVisualState.Plain,
-                            WordVisualState.Active,
-                            WordVisualState.Recited -> fullInk
-                        },
-                        animationSpec = tween(
-                            durationMillis = if (wordState == WordVisualState.Active) {
-                                sweepMs ?: 450
-                            } else {
-                                450
-                            },
-                            easing = InkSweepEasing,
-                        ),
-                        label = "connectedArabicWordColor",
-                    )
-                }
-                val text = buildAnnotatedString {
-                    append(ayah.text)
-                    var wordIndex = 0
-                    var rangeStart: Int? = null
-                    ayah.text.forEachIndexed { index, char ->
-                        if (char.isWhitespace()) {
-                            val start = rangeStart
-                            if (start != null && wordIndex < wordColors.size) {
-                                addStyle(
-                                    SpanStyle(color = wordColors[wordIndex].value),
-                                    start,
-                                    index,
-                                )
-                                wordIndex += 1
-                                rangeStart = null
-                            }
-                        } else if (rangeStart == null) {
-                            rangeStart = index
-                        }
-                    }
-                    val start = rangeStart
-                    if (start != null && wordIndex < wordColors.size) {
-                        addStyle(
-                            SpanStyle(color = wordColors[wordIndex].value),
-                            start,
-                            ayah.text.length,
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterHorizontally),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    ayah.words.filter { it.qcfV2.isNotBlank() }.forEach { word ->
+                        val wordState = qcfStateFor(word)
+                        QcfGlyphWordUnit(
+                            word = word,
+                            state = wordState,
+                            fontScale = fontScale,
+                            sweepMs = sweepMs.takeIf { wordState == WordVisualState.Active },
+                            keepInView = keepActiveWordInView && wordState == WordVisualState.Active,
+                            onClick = onWordClick?.let { handler -> { handler(word) } },
                         )
                     }
-                    append(" ")
-                    withStyle(
-                        SpanStyle(
-                            color = LocalQuranAccents.current.gold,
-                            fontSize = 20.sp * fontScale,
-                        ),
-                    ) {
-                        append("﴿${ayah.number.toArabicIndic()}﴾")
-                    }
                 }
-                Text(
-                    text = text,
-                    style = ArabicWordStyle.copy(
-                        fontSize = ArabicWordStyle.fontSize * fontScale,
-                        lineHeight = 2.05.em,
-                    ),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onAyahClick,
-                        ),
-                )
             }
         }
         if (showTranslation && readingMode == ReadingMode.ARABIC_ENGLISH) {

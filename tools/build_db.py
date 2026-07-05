@@ -26,6 +26,7 @@ import re
 import sqlite3
 import sys
 import tarfile
+import unicodedata
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -42,6 +43,10 @@ WBW_TGZ = (
 ALIGN_ZIP = (
     "https://github.com/cpfair/quran-align/releases/download"
     "/release-2016-11-24/quran-align-data-2016-11-24.zip"
+)
+MUSHAF_LAYOUT_PAGE_URL = (
+    "https://raw.githubusercontent.com/zonetecde/mushaf-layout"
+    "/refs/heads/main/mushaf/page-{page:03d}.json"
 )
 
 # id, everyayah slug (audio dir + timing file key), display name, style
@@ -70,6 +75,11 @@ def fetch(url: str, name: str) -> Path:
     return dest
 
 
+def fetch_text(url: str, name: str) -> str:
+    path = fetch(url, name)
+    return path.read_text(encoding="utf-8")
+
+
 def read_tar_member(tgz: Path, member: str) -> bytes:
     with tarfile.open(tgz) as tf:
         f = tf.extractfile(member)
@@ -79,6 +89,20 @@ def read_tar_member(tgz: Path, member: str) -> bytes:
 
 def normalize_text(s: str) -> str:
     return s.replace(" ", " ").replace(" ", " ").strip()
+
+
+def normalize_for_alignment(s: str) -> str:
+    out = []
+    char_map = {"ٱ": "ا", "أ": "ا", "إ": "ا", "آ": "ا", "ى": "ي"}
+    for ch in unicodedata.normalize("NFKD", s):
+        if unicodedata.category(ch).startswith("M"):
+            continue
+        if ch == "ـ":
+            continue
+        ch = char_map.get(ch, ch)
+        if "\u0621" <= ch <= "\u064a":
+            out.append(ch)
+    return "".join(out)
 
 
 def load_text_and_meta(tgz: Path):
@@ -122,6 +146,92 @@ def load_wbw(tgz: Path):
                 if key not in page_of:
                     page_of[key] = pnum
     return out, page_of
+
+
+def load_qcf_v2_layout():
+    """Return {(surah, ayah): [(word, glyph, page, line), ...]} from the public
+    precomputed Madani Mushaf layout. Some visual words intentionally cover
+    multiple canonical timing words; they are aligned later per ayah."""
+    out = {}
+    for page in range(1, 605):
+        raw = fetch_text(MUSHAF_LAYOUT_PAGE_URL.format(page=page), f"mushaf-page-{page:03d}.json")
+        data = json.loads(raw)
+        for line in data.get("lines", []):
+            if line.get("type") != "text":
+                continue
+            line_number = int(line.get("line") or 0)
+            for word in line.get("words", []):
+                location = word.get("location", "")
+                parts = location.split(":")
+                if len(parts) != 3:
+                    continue
+                glyph = normalize_text(word.get("qpcV2") or "")
+                if not glyph:
+                    continue
+                key = (int(parts[0]), int(parts[1]))
+                out.setdefault(key, []).append(
+                    (
+                        normalize_text(word.get("word") or ""),
+                        glyph,
+                        page,
+                        line_number,
+                    )
+                )
+    return out
+
+
+def align_qcf_words(arabic_words, qcf_words, surah, ayah):
+    aligned = {}
+    canonical_norms = [normalize_for_alignment(w) for w in arabic_words]
+    qcf_norms = [normalize_for_alignment(w[0]) for w in qcf_words]
+    canonical_index = 0
+    qcf_index = 0
+
+    def loosely_equal(a, b):
+        return a == b or a.replace("ي", "ا") == b.replace("ي", "ا")
+
+    while canonical_index < len(canonical_norms) and qcf_index < len(qcf_words):
+        start = canonical_index
+        glyphs = []
+        page = qcf_words[qcf_index][2]
+        line = qcf_words[qcf_index][3]
+        combined_canonical = ""
+        combined_qcf = ""
+        while True:
+            if not combined_canonical and canonical_index < len(canonical_norms):
+                combined_canonical += canonical_norms[canonical_index]
+                canonical_index += 1
+            if not combined_qcf and qcf_index < len(qcf_words):
+                glyphs.append(qcf_words[qcf_index][1])
+                combined_qcf += qcf_norms[qcf_index]
+                qcf_index += 1
+            if combined_canonical and combined_qcf and loosely_equal(combined_canonical, combined_qcf):
+                break
+            if canonical_index >= len(canonical_norms) and qcf_index >= len(qcf_words):
+                break
+            if len(combined_canonical) <= len(combined_qcf) and canonical_index < len(canonical_norms):
+                combined_canonical += canonical_norms[canonical_index]
+                canonical_index += 1
+            elif qcf_index < len(qcf_words):
+                glyphs.append(qcf_words[qcf_index][1])
+                combined_qcf += qcf_norms[qcf_index]
+                qcf_index += 1
+            else:
+                combined_canonical += canonical_norms[canonical_index]
+                canonical_index += 1
+        if not loosely_equal(combined_canonical, combined_qcf):
+            raise ValueError(
+                f"cannot align qcf v2 word {surah}:{ayah}: "
+                f"canonical {combined_canonical!r}, qcf {combined_qcf!r}"
+            )
+        aligned[start + 1] = (" ".join(glyphs), page, line, canonical_index)
+    if canonical_index != len(canonical_norms) or qcf_index != len(qcf_words):
+        raise ValueError(
+            f"qcf v2 alignment ended early for {surah}:{ayah}: "
+            f"canonical {canonical_index}/{len(canonical_norms)}, "
+            f"qcf {qcf_index}/{len(qcf_words)}"
+        )
+    return aligned
 
 
 def load_timings(zip_path: Path, slug: str):
@@ -220,6 +330,10 @@ CREATE TABLE words (
   arabic TEXT NOT NULL,
   translation_en TEXT NOT NULL,
   transliteration TEXT NOT NULL,
+  qcf_v2 TEXT NOT NULL,
+  qcf_page INTEGER NOT NULL,
+  qcf_line INTEGER NOT NULL,
+  qcf_span_end INTEGER NOT NULL,
   PRIMARY KEY (surah_id, ayah_number, position)
 );
 CREATE TABLE reciters (
@@ -244,18 +358,23 @@ def main():
     ap.add_argument("--skip-timings", action="store_true")
     args = ap.parse_args()
 
-    print("[1/4] fetching text + metadata (quran-json)")
+    print("[1/5] fetching text + metadata (quran-json)")
     qj = fetch(QURAN_JSON_TGZ, "quran-json.tgz")
     surahs, ayahs = load_text_and_meta(qj)
     assert len(surahs) == 114 and len(ayahs) == 6236, "unexpected corpus shape"
 
-    print("[2/4] fetching word-by-word gloss")
+    print("[2/5] fetching word-by-word gloss")
     wbw_tgz = fetch(WBW_TGZ, "wbw.tgz")
     wbw, page_of = load_wbw(wbw_tgz)
 
-    print("[3/4] building words table")
+    print("[3/5] fetching QCF V2 mushaf layout")
+    qcf_v2 = load_qcf_v2_layout()
+    print(f"  qcf v2 ayahs: {len(qcf_v2)}")
+
+    print("[4/5] building words table")
     words = []
     gloss_mismatch = []
+    qcf_missing = []
     for (s, a), (text, _tr) in sorted(ayahs.items()):
         arabic_words = text.split()
         glosses = wbw.get((s, a), [])
@@ -263,18 +382,32 @@ def main():
             gloss_mismatch.append((s, a, len(arabic_words), len(glosses)))
         for i, w in enumerate(arabic_words):
             g, t = glosses[min(i, len(glosses) - 1)] if glosses else ("", "")
-            words.append((s, a, i + 1, w, g, t))
+            if i == 0:
+                try:
+                    qcf_aligned = align_qcf_words(arabic_words, qcf_v2.get((s, a), []), s, a)
+                except ValueError as e:
+                    print(f"  !! {e}", file=sys.stderr)
+                    sys.exit(1)
+            qcf = qcf_aligned.get(i + 1)
+            if qcf is None:
+                qcf = ("", 0, 0, i + 1)
+            words.append((s, a, i + 1, w, g, t, qcf[0], qcf[1], qcf[2], qcf[3]))
     print(f"  words: {len(words)}; gloss count mismatches (clamped): {len(gloss_mismatch)}")
     for m in gloss_mismatch:
         print(f"    surah {m[0]} ayah {m[1]}: text={m[2]} wbw={m[3]}")
+    if qcf_missing:
+        print(f"  !! missing qcf v2 glyphs: {len(qcf_missing)}", file=sys.stderr)
+        for m in qcf_missing[:20]:
+            print(f"    surah {m[0]} ayah {m[1]} word {m[2]}", file=sys.stderr)
+        sys.exit(1)
 
     timing_rows = []
     reciter_rows = []
     if args.skip_timings:
-        print("[4/4] SKIPPING timings (--skip-timings)")
+        print("[5/5] SKIPPING timings (--skip-timings)")
         reciter_rows = [(r[0], r[1], r[2], r[3], 0) for r in RECITERS]
     else:
-        print("[4/4] fetching + normalizing word timings (quran-align)")
+        print("[5/5] fetching + normalizing word timings (quran-align)")
         zp = fetch(ALIGN_ZIP, "quran-align-data.zip")
         word_counts = {}
         for s, a, pos, *_ in words:
@@ -314,7 +447,7 @@ def main():
         "INSERT INTO ayahs VALUES (?,?,?,?,?)",
         [(s, a, t, tr, page_of.get((s, a), 0)) for (s, a), (t, tr) in sorted(ayahs.items())],
     )
-    db.executemany("INSERT INTO words VALUES (?,?,?,?,?,?)", words)
+    db.executemany("INSERT INTO words VALUES (?,?,?,?,?,?,?,?,?,?)", words)
     db.executemany("INSERT INTO reciters VALUES (?,?,?,?,?)", reciter_rows)
     db.executemany("INSERT INTO timings VALUES (?,?,?,?)", timing_rows)
     db.execute("CREATE INDEX idx_words_ayah ON words(surah_id, ayah_number)")
