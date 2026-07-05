@@ -437,12 +437,12 @@ fun ReaderScreen(
             .takeIf { it > 0 }
             ?.coerceIn(1, content.surah.ayahCount)
             ?: return@LaunchedEffect
+        requestedJumpAyah = 0
         followEnabled = isThisSurahPlaying
         viewModel.onAyahBecameActive(target)
         if (isThisSurahPlaying) viewModel.player.seekToAyah(target)
         val itemIndex = ayahToItemIndex[target - 1] ?: return@LaunchedEffect
         listState.smoothScrollToItem(itemIndex, -readingAnchorOffsetPx)
-        requestedJumpAyah = 0
     }
 
     fun selectedPlaybackAyah(): Int {

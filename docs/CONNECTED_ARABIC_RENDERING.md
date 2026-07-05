@@ -92,6 +92,10 @@ The app now has an initial QCF/QPC V2 implementation path:
   font swap that caused sudden text rearrangement while scrolling.
 - QCF glyph words no longer render Hafs fallback text. They render only after
   the matching QCF page font is cached.
+- Arabic-only no-gloss mode does not render one `Text` composable per word.
+  It renders one QCF `AnnotatedString` text run per Mushaf line, with one span
+  per timed visual word. This keeps Quran pause/stop signs inside the same QCF
+  font run while still allowing word-by-word color fade.
 
 Remaining validation:
 
@@ -302,11 +306,13 @@ For Digital Khatt v2:
 
 Status: initial production renderer wired into Arabic-only no-gloss mode.
 
-- Existing `AyahBlock` delegates that branch to QCF glyph word units.
+- Existing `AyahBlock` delegates that branch to QCF line text runs.
 - One rendered QCF token can cover multiple timing word positions via
   `qcf_span_end`.
-- Continuation canonical words with no render token are skipped in the visual
-  flow.
+- Continuation canonical words with no render token are represented by the
+  previous visual span.
+- Each QCF line is one `Text` with an `AnnotatedString`; word-by-word fade is
+  expressed as span color animation, not as separate word components.
 
 ### Phase 6: Animation Design
 
@@ -342,6 +348,8 @@ Status: implemented baseline.
   background.
 - Active glyphs animate to full ink with `InkSweepEasing`.
 - No alpha is applied to individual QCF glyph text.
+- Quran stop/pause signs are preserved because they remain embedded in each
+  QCF glyph token inside the line-level text run.
 
 ### Phase 7: Interaction And Sync
 

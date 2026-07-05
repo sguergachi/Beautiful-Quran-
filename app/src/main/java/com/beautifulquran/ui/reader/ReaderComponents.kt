@@ -33,7 +33,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -401,87 +400,114 @@ fun EnglishWordUnit(
 }
 
 @Composable
-@OptIn(ExperimentalFoundationApi::class)
-private fun QcfGlyphWordUnit(
-    word: Word,
-    state: WordVisualState,
-    repeat: Boolean,
+private fun QcfGlyphLine(
+    words: List<Word>,
+    states: List<WordVisualState>,
+    repeats: List<Boolean>,
     fontScale: Float,
-    sweepMs: Int?,
-    keepInView: Boolean,
-    onClick: (() -> Unit)?,
+    activeSweepMs: Int?,
 ) {
     val context = LocalContext.current
     val provider = remember(context) {
         (context.applicationContext as QuranApp).qcfFontProvider
     }
-    val fontFamily by produceState<androidx.compose.ui.text.font.FontFamily?>(
-        initialValue = provider.cachedFontFamily(word.qcfPage),
-        key1 = word.qcfPage,
-        key2 = provider,
-    ) {
-        if (value == null) value = provider.fontFamily(word.qcfPage)
-    }
-    if (fontFamily == null) return
+    val page = words.firstOrNull()?.qcfPage ?: return
+    val fontFamily = provider.cachedFontFamily(page) ?: return
     val fullInk = MaterialTheme.colorScheme.onBackground
     val fadedInk = fullInk
         .copy(alpha = WordVisualState.Upcoming.inkAlpha())
         .compositeOver(MaterialTheme.colorScheme.background)
     val repeatInk = LocalQuranAccents.current.repeatInk
-    val color by animateColorAsState(
-        targetValue = when {
-            repeat -> repeatInk
-            state == WordVisualState.Upcoming -> fadedInk
-            else -> fullInk
-        },
-        animationSpec = tween(
-            durationMillis = when {
-                repeat -> REPEAT_FADE_IN_MS
-                state == WordVisualState.Active -> sweepMs ?: 450
-                else -> 450
+    val colors = states.mapIndexed { index, state ->
+        animateColorAsState(
+            targetValue = when {
+                repeats.getOrElse(index) { false } -> repeatInk
+                state == WordVisualState.Upcoming -> fadedInk
+                else -> fullInk
             },
-            easing = InkSweepEasing,
-        ),
-        label = "qcfGlyphColor",
-    )
-    val isActive = state == WordVisualState.Active
-    val interaction = remember { MutableInteractionSource() }
-    val bringIntoViewRequester = remember { BringIntoViewRequester() }
-    val density = LocalDensity.current
-    val activeWordTopMarginPx = with(density) { 144.dp.toPx() }
-    val activeWordBottomMarginPx = with(density) { 132.dp.toPx() }
-    var wordSize by remember { mutableStateOf(IntSize.Zero) }
-    LaunchedEffect(isActive, keepInView, wordSize) {
-        if (isActive && keepInView && wordSize != IntSize.Zero) {
-            bringIntoViewRequester.bringIntoView(
-                Rect(
-                    left = 0f,
-                    top = -activeWordTopMarginPx,
-                    right = wordSize.width.toFloat(),
-                    bottom = wordSize.height + activeWordBottomMarginPx,
-                ),
-            )
+            animationSpec = tween(
+                durationMillis = when {
+                    repeats.getOrElse(index) { false } -> REPEAT_FADE_IN_MS
+                    state == WordVisualState.Active -> activeSweepMs ?: 450
+                    else -> 450
+                },
+                easing = InkSweepEasing,
+            ),
+            label = "qcfLineGlyphColor",
+        )
+    }
+    val text = buildAnnotatedString {
+        words.forEachIndexed { index, word ->
+            if (index > 0) append(" ")
+            withStyle(SpanStyle(color = colors[index].value)) {
+                append(word.qcfV2)
+            }
         }
     }
-
     Text(
-        text = word.qcfV2,
+        text = text,
         fontFamily = fontFamily,
         fontSize = ArabicWordStyle.fontSize * fontScale * 1.18f,
         lineHeight = 1.75.em,
-        color = color,
-        modifier = Modifier
-            .bringIntoViewRequester(bringIntoViewRequester)
-            .onSizeChanged { wordSize = it }
-            .let { m ->
-                if (onClick != null) {
-                    m.clickable(interactionSource = interaction, indication = null, onClick = onClick)
-                } else {
-                    m
-                }
-            }
-            .padding(horizontal = 2.dp, vertical = 2.dp),
+        textAlign = TextAlign.Center,
+        softWrap = false,
+        modifier = Modifier.fillMaxWidth(),
     )
+}
+
+@Composable
+private fun QcfGlyphAyah(
+    ayah: Ayah,
+    activeWordPosition: Int?,
+    highWater: Int,
+    repeatActive: Boolean,
+    isActiveAyah: Boolean,
+    fontScale: Float,
+    sweepMs: Int?,
+    onAyahClick: () -> Unit,
+) {
+    fun qcfStateFor(word: Word): WordVisualState = when {
+        !isActiveAyah -> WordVisualState.Plain
+        activeWordPosition == null -> WordVisualState.Upcoming
+        activeWordPosition in word.position..word.qcfSpanEnd -> WordVisualState.Active
+        word.qcfSpanEnd < activeWordPosition -> WordVisualState.Recited
+        word.qcfSpanEnd <= highWater -> WordVisualState.Recited
+        else -> WordVisualState.Upcoming
+    }
+    fun isRepeat(state: WordVisualState) =
+        state == WordVisualState.Active && repeatActive
+
+    val interaction = remember { MutableInteractionSource() }
+    val lines = remember(ayah.words) {
+        ayah.words
+            .filter { it.qcfV2.isNotBlank() }
+            .groupBy { it.qcfPage to it.qcfLine }
+            .toSortedMap(compareBy<Pair<Int, Int>> { it.first }.thenBy { it.second })
+            .values
+            .toList()
+    }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onAyahClick,
+            ),
+    ) {
+        lines.forEach { lineWords ->
+            QcfGlyphLine(
+                words = lineWords,
+                states = lineWords.map(::qcfStateFor),
+                repeats = lineWords.map { isRepeat(qcfStateFor(it)) },
+                fontScale = fontScale,
+                activeSweepMs = sweepMs,
+            )
+        }
+    }
 }
 
 /** Marks every occurrence of [query] in [text] with a soft gold wash. */
@@ -678,24 +704,16 @@ fun AyahBlock(
             }
         } else {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterHorizontally),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    ayah.words.filter { it.qcfV2.isNotBlank() }.forEach { word ->
-                        val wordState = qcfStateFor(word)
-                        QcfGlyphWordUnit(
-                            word = word,
-                            state = wordState,
-                            repeat = isRepeat(wordState),
-                            fontScale = fontScale,
-                            sweepMs = sweepMs.takeIf { wordState == WordVisualState.Active },
-                            keepInView = keepActiveWordInView && wordState == WordVisualState.Active,
-                            onClick = onWordClick?.let { handler -> { handler(word) } },
-                        )
-                    }
-                }
+                QcfGlyphAyah(
+                    ayah = ayah,
+                    activeWordPosition = activeWordPosition,
+                    highWater = highWater,
+                    repeatActive = isRepeatActive,
+                    isActiveAyah = isActiveAyah,
+                    fontScale = fontScale,
+                    sweepMs = sweepMs,
+                    onAyahClick = onAyahClick,
+                )
             }
         }
         if (showTranslation && readingMode == ReadingMode.ARABIC_ENGLISH) {
