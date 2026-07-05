@@ -71,7 +71,6 @@ import com.beautifulquran.ui.theme.HafsFontFamily
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.TranslationFontFamily
 import com.beautifulquran.ui.theme.gilded
-import com.beautifulquran.ui.theme.inkColorWash
 import com.beautifulquran.ui.theme.letterFadeIn
 import com.beautifulquran.ui.theme.starAndCrossWeave
 import com.beautifulquran.ui.theme.verticalFadingEdges
@@ -162,21 +161,16 @@ private fun rememberRepeatWash(repeat: Boolean, sweepMs: Int?): RepeatWash {
     return RepeatWash(progress = progress.asState(), alpha = alpha.asState())
 }
 
-private fun Modifier.repeatInkWash(
+private fun Modifier.repeatInkLayer(
     wash: RepeatWash,
-    color: Color,
     rtl: Boolean,
 ): Modifier =
-    if (wash.alpha.value > 0f) {
-        inkColorWash(
+    graphicsLayer { alpha = wash.alpha.value }
+        .letterFadeIn(
             progress = { wash.progress.value },
-            alpha = { wash.alpha.value },
-            color = color,
             rtl = rtl,
+            restingAlpha = 0f,
         )
-    } else {
-        this
-    }
 
 /**
  * Drives the letter-fade sweep for the active word: restarts at 0 each time
@@ -251,25 +245,32 @@ fun WordUnit(
             }
             .padding(horizontal = 5.dp, vertical = 2.dp),
     ) {
-        Text(
-            text = word.arabic,
-            style = ArabicWordStyle,
-            fontSize = ArabicWordStyle.fontSize * fontScale,
-            color = arabicInk,
-            // A repeated word was already recited, so it holds full read ink and
-            // the warm tint blooms through the glyphs as a second wash.
-            modifier = when {
-                repeat -> Modifier.repeatInkWash(repeatWash, repeatInk, rtl = true)
-                isActive -> Modifier.letterFadeIn(
-                    progress = { sweep.value },
-                    rtl = true,
-                    restingAlpha = WordVisualState.Upcoming.inkAlpha(),
+        Box {
+            Text(
+                text = word.arabic,
+                style = ArabicWordStyle,
+                fontSize = ArabicWordStyle.fontSize * fontScale,
+                color = arabicInk,
+                modifier = when {
+                    repeat -> Modifier
+                    isActive -> Modifier.letterFadeIn(
+                        progress = { sweep.value },
+                        rtl = true,
+                        restingAlpha = WordVisualState.Upcoming.inkAlpha(),
+                    )
+                    else -> Modifier.graphicsLayer { alpha = lyricInk.value }
+                },
+            )
+            if (repeatWash.alpha.value > 0f) {
+                Text(
+                    text = word.arabic,
+                    style = ArabicWordStyle,
+                    fontSize = ArabicWordStyle.fontSize * fontScale,
+                    color = repeatInk,
+                    modifier = Modifier.repeatInkLayer(repeatWash, rtl = true),
                 )
-                else -> Modifier
-                    .graphicsLayer { alpha = lyricInk.value }
-                    .repeatInkWash(repeatWash, repeatInk, rtl = true)
-            },
-        )
+            }
+        }
         if (showGloss) {
             Text(
                 text = word.translation,
@@ -343,27 +344,10 @@ fun ConnectedArabicWordUnit(
             )
         }
     }
-    Text(
-        text = word.arabic,
-        style = ArabicWordStyle,
-        fontSize = ArabicWordStyle.fontSize * fontScale,
-        color = arabicInk,
+    Box(
         modifier = Modifier
             .bringIntoViewRequester(bringIntoViewRequester)
             .onSizeChanged { wordSize = it }
-            .then(
-                when {
-                    repeat -> Modifier.repeatInkWash(repeatWash, repeatInk, rtl = true)
-                    isActive -> Modifier.letterFadeIn(
-                        progress = { sweep.value },
-                        rtl = true,
-                        restingAlpha = WordVisualState.Upcoming.inkAlpha(),
-                    )
-                    else -> Modifier
-                        .graphicsLayer { alpha = lyricInk.value }
-                        .repeatInkWash(repeatWash, repeatInk, rtl = true)
-                },
-            )
             .let { m ->
                 if (onClick != null) {
                     m.clickable(interactionSource = interaction, indication = null, onClick = onClick)
@@ -372,7 +356,32 @@ fun ConnectedArabicWordUnit(
                 }
             }
             .padding(horizontal = 4.dp, vertical = 3.dp),
-    )
+    ) {
+        Text(
+            text = word.arabic,
+            style = ArabicWordStyle,
+            fontSize = ArabicWordStyle.fontSize * fontScale,
+            color = arabicInk,
+            modifier = when {
+                repeat -> Modifier
+                isActive -> Modifier.letterFadeIn(
+                    progress = { sweep.value },
+                    rtl = true,
+                    restingAlpha = WordVisualState.Upcoming.inkAlpha(),
+                )
+                else -> Modifier.graphicsLayer { alpha = lyricInk.value }
+            },
+        )
+        if (repeatWash.alpha.value > 0f) {
+            Text(
+                text = word.arabic,
+                style = ArabicWordStyle,
+                fontSize = ArabicWordStyle.fontSize * fontScale,
+                color = repeatInk,
+                modifier = Modifier.repeatInkLayer(repeatWash, rtl = true),
+            )
+        }
+    }
 }
 
 /** One word of the English-only lyric flow. */
@@ -412,29 +421,10 @@ fun EnglishWordUnit(
             )
         }
     }
-    Text(
-        text = word.translation,
-        fontFamily = TranslationFontFamily,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 22.sp * fontScale,
-        lineHeight = 1.55.em,
-        color = lyricColor,
+    Box(
         modifier = Modifier
             .bringIntoViewRequester(bringIntoViewRequester)
             .onSizeChanged { wordSize = it }
-            .then(
-                when {
-                    repeat -> Modifier.repeatInkWash(repeatWash, repeatInk, rtl = false)
-                    isActive -> Modifier.letterFadeIn(
-                        progress = { sweep.value },
-                        rtl = false,
-                        restingAlpha = WordVisualState.Upcoming.inkAlpha(),
-                    )
-                    else -> Modifier
-                        .graphicsLayer { alpha = lyricInk.value }
-                        .repeatInkWash(repeatWash, repeatInk, rtl = false)
-                },
-            )
             .let { m ->
                 if (onClick != null) {
                     m.clickable(interactionSource = interaction, indication = null, onClick = onClick)
@@ -443,7 +433,36 @@ fun EnglishWordUnit(
                 }
             }
             .padding(horizontal = 3.dp, vertical = 2.dp),
-    )
+    ) {
+        Text(
+            text = word.translation,
+            fontFamily = TranslationFontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 22.sp * fontScale,
+            lineHeight = 1.55.em,
+            color = lyricColor,
+            modifier = when {
+                repeat -> Modifier
+                isActive -> Modifier.letterFadeIn(
+                    progress = { sweep.value },
+                    rtl = false,
+                    restingAlpha = WordVisualState.Upcoming.inkAlpha(),
+                )
+                else -> Modifier.graphicsLayer { alpha = lyricInk.value }
+            },
+        )
+        if (repeatWash.alpha.value > 0f) {
+            Text(
+                text = word.translation,
+                fontFamily = TranslationFontFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 22.sp * fontScale,
+                lineHeight = 1.55.em,
+                color = repeatInk,
+                modifier = Modifier.repeatInkLayer(repeatWash, rtl = false),
+            )
+        }
+    }
 }
 
 @Composable
@@ -520,17 +539,42 @@ private fun QcfGlyphLine(
                     }
                 }
             }
-            Text(
-                text = wordText,
-                style = style,
+            val repeatWordText = buildAnnotatedString {
+                withStyle(SpanStyle(color = repeatInk)) {
+                    append(qcfText)
+                }
+                if (pauseMarks.isNotEmpty()) {
+                    withStyle(
+                        SpanStyle(
+                            color = repeatInk,
+                            fontFamily = HafsFontFamily,
+                        ),
+                    ) {
+                        append(" ")
+                        append(pauseMarks)
+                    }
+                }
+            }
+            Box(
                 modifier = Modifier
-                    .repeatInkWash(repeatWashes[index], repeatInk, rtl = true)
                     .clickable(
                         interactionSource = null,
                         indication = null,
                         onClick = { onWordClick?.invoke(word) },
                     ),
-            )
+            ) {
+                Text(
+                    text = wordText,
+                    style = style,
+                )
+                if (repeatWashes[index].alpha.value > 0f) {
+                    Text(
+                        text = repeatWordText,
+                        style = style,
+                        modifier = Modifier.repeatInkLayer(repeatWashes[index], rtl = true),
+                    )
+                }
+            }
         }
     }
 }
