@@ -6,8 +6,13 @@ import com.beautifulquran.data.QuranRepository
 import com.beautifulquran.data.SettingsRepository
 import com.beautifulquran.playback.PlayerController
 import com.beautifulquran.ui.reader.QcfFontProvider
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 class QuranApp : Application() {
+
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     lateinit var repository: QuranRepository
         private set
@@ -24,5 +29,6 @@ class QuranApp : Application() {
         settings = SettingsRepository(this)
         player = PlayerController(this)
         qcfFontProvider = QcfFontProvider(this)
+        qcfFontProvider.prepareOnStartup(appScope)
     }
 }

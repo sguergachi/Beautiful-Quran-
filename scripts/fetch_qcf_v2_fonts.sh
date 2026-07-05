@@ -3,8 +3,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
-OUT_DIR="$REPO_ROOT/app/src/main/assets/qcf-v2-fonts"
+ASSET_DIR="$REPO_ROOT/app/src/main/assets"
+OUT_ARCHIVE="$ASSET_DIR/qcf-v2-fonts.tar.xz"
+OUT_PART_PREFIX="$OUT_ARCHIVE.part"
 BASE_URL="${QCF_V2_FONT_BASE_URL:-https://raw.githubusercontent.com/nuqayah/qpc-fonts/master/mushaf-v2}"
+
+WORK_DIR="$(mktemp -d)"
+OUT_DIR="$WORK_DIR/qcf-v2-fonts"
+trap 'rm -rf "$WORK_DIR"' EXIT
 
 mkdir -p "$OUT_DIR"
 
@@ -29,4 +35,9 @@ for page in $(seq 1 604); do
   mv "$tmp" "$dest"
 done
 
-printf 'QCF V2 fonts ready in %s\n' "$OUT_DIR"
+tmp_archive="$OUT_ARCHIVE.tmp"
+tar -C "$WORK_DIR" -cf - qcf-v2-fonts | xz -9e -T0 > "$tmp_archive"
+rm -f "$OUT_ARCHIVE" "$OUT_PART_PREFIX"*
+split -b 60M -d -a 1 "$tmp_archive" "$OUT_PART_PREFIX"
+
+printf 'QCF V2 font archive parts ready at %s*\n' "$OUT_PART_PREFIX"

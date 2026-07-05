@@ -32,6 +32,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
@@ -124,12 +125,16 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -140,6 +145,8 @@ import com.beautifulquran.R
 import com.beautifulquran.QuranApp
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ReadingMode
+import com.beautifulquran.data.model.SurahContent
+import com.beautifulquran.ui.theme.ArabicWordStyle
 import com.beautifulquran.ui.theme.DisplayFontFamily
 import com.beautifulquran.ui.theme.IslamicReturnToAyahButton
 import com.beautifulquran.ui.theme.LocalQuranAccents
@@ -155,6 +162,76 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+
+private data class QcfMeasureLine(
+    val page: Int,
+    val text: String,
+)
+
+@Composable
+private fun rememberArabicOnlyQcfFontSize(
+    content: SurahContent,
+    enabled: Boolean,
+    fontScale: Float,
+    readerWidth: Dp,
+    qcfFontProvider: QcfFontProvider,
+): TextUnit? {
+    if (!enabled) return null
+
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val baseFontSize = ArabicWordStyle.fontSize * fontScale * 1.18f
+    val readerColumnWidth = if (readerWidth > 680.dp) 680.dp else readerWidth
+    val textColumnWidth = (readerColumnWidth - 56.dp).coerceAtLeast(0.dp)
+    val availableWidthPx = with(density) { textColumnWidth.toPx() }
+    val lines = remember(content) {
+        content.ayahs.flatMap { ayah ->
+            ayah.words
+                .filter { it.qcfV2.isNotBlank() }
+                .groupBy { it.qcfPage to it.qcfLine }
+                .toSortedMap(compareBy<Pair<Int, Int>> { it.first }.thenBy { it.second })
+                .values
+                .mapNotNull { lineWords ->
+                    val page = lineWords.firstOrNull()?.qcfPage ?: return@mapNotNull null
+                    QcfMeasureLine(
+                        page = page,
+                        text = lineWords.joinToString(" ") { it.qcfV2 },
+                    )
+                }
+        }
+    }
+
+    val fitScale = remember(lines, baseFontSize, availableWidthPx) {
+        if (availableWidthPx <= 0f) {
+            1f
+        } else {
+            val widestLinePx = lines.maxOfOrNull { line ->
+                val fontFamily = qcfFontProvider.cachedFontFamily(line.page) ?: return@maxOfOrNull 0
+                val style = ArabicWordStyle.merge(
+                    TextStyle(
+                        fontFamily = fontFamily,
+                        fontSize = baseFontSize,
+                        lineHeight = 1.75.em,
+                        textAlign = TextAlign.Center,
+                    ),
+                )
+                textMeasurer.measure(
+                    text = line.text,
+                    style = style,
+                    softWrap = false,
+                ).size.width
+            } ?: 0
+
+            if (widestLinePx > 0) {
+                (availableWidthPx / widestLinePx).coerceAtMost(1f)
+            } else {
+                1f
+            }
+        }
+    }
+
+    return baseFontSize * fitScale
+}
 
 // LazyColumn's animateScrollToItem estimates the heights of every unmeasured
 // ayah block along the way and re-anchors as the real ones compose in, which
@@ -766,12 +843,20 @@ fun ReaderScreen(
 
         // One column of text at a book-like measure: full-bleed on phones,
         // centered with air on tablets and in landscape.
-        Box(
+        BoxWithConstraints(
             Modifier
                 .padding(bottom = padding.calculateBottomPadding())
                 .fillMaxSize()
                 .graphicsLayer { alpha = readerContentAlpha.value },
         ) {
+            val qcfFontSize = rememberArabicOnlyQcfFontSize(
+                content = content,
+                enabled = needsQcfFonts && qcfFontsReady,
+                fontScale = settings.fontScale,
+                readerWidth = maxWidth,
+                qcfFontProvider = qcfFontProvider,
+            )
+
             LazyColumn(
                 state = listState,
                 contentPadding = PaddingValues(top = padding.calculateTopPadding()),
@@ -846,6 +931,7 @@ fun ReaderScreen(
                                 showTranslation = settings.showTranslation,
                                 searchQuery = activeQuery,
                                 keepActiveWordInView = followEnabled && recitingActive,
+                                qcfFontSize = qcfFontSize,
                                 onWordClick = { word ->
                                     val segment = viewModel.segmentsFor(ayah.number)
                                         ?.firstOrNull { it.position == word.position }

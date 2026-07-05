@@ -10,7 +10,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -50,13 +49,13 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -407,7 +406,7 @@ private fun QcfGlyphLine(
     words: List<Word>,
     states: List<WordVisualState>,
     repeats: List<Boolean>,
-    fontScale: Float,
+    fontSize: TextUnit,
     activeSweepMs: Int?,
 ) {
     val context = LocalContext.current
@@ -439,9 +438,6 @@ private fun QcfGlyphLine(
             label = "qcfLineGlyphColor",
         )
     }
-    val measureText = remember(words) {
-        words.joinToString(" ") { it.qcfV2 }
-    }
     val text = buildAnnotatedString {
         words.forEachIndexed { index, word ->
             if (index > 0) append(" ")
@@ -450,41 +446,21 @@ private fun QcfGlyphLine(
             }
         }
     }
-    val textMeasurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    val baseFontSize = ArabicWordStyle.fontSize * fontScale * 1.18f
-    val baseStyle = ArabicWordStyle.merge(
+    val style = ArabicWordStyle.merge(
         TextStyle(
             fontFamily = fontFamily,
-            fontSize = baseFontSize,
+            fontSize = fontSize,
             lineHeight = 1.75.em,
             textAlign = TextAlign.Center,
         ),
     )
 
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        val availableWidthPx = with(density) { maxWidth.toPx() }
-        val measuredWidthPx = remember(measureText, baseStyle, availableWidthPx) {
-            textMeasurer.measure(
-                text = measureText,
-                style = baseStyle,
-                softWrap = false,
-            ).size.width
-        }
-        val fitScale = remember(measuredWidthPx, availableWidthPx) {
-            if (measuredWidthPx > 0 && availableWidthPx > 0f) {
-                (availableWidthPx / measuredWidthPx).coerceAtMost(1f)
-            } else {
-                1f
-            }
-        }
-        Text(
-            text = text,
-            style = baseStyle.copy(fontSize = baseFontSize * fitScale),
-            softWrap = false,
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
+    Text(
+        text = text,
+        style = style,
+        softWrap = false,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
@@ -494,7 +470,7 @@ private fun QcfGlyphAyah(
     highWater: Int,
     repeatActive: Boolean,
     isActiveAyah: Boolean,
-    fontScale: Float,
+    fontSize: TextUnit,
     sweepMs: Int?,
     onAyahClick: () -> Unit,
 ) {
@@ -537,7 +513,7 @@ private fun QcfGlyphAyah(
                 words = lineWords,
                 states = lineWords.map(::qcfStateFor),
                 repeats = lineWords.map { isRepeat(qcfStateFor(it)) },
-                fontScale = fontScale,
+                fontSize = fontSize,
                 activeSweepMs = sweepMs,
             )
         }
@@ -620,6 +596,7 @@ fun AyahBlock(
     showTranslation: Boolean,
     searchQuery: String? = null,
     keepActiveWordInView: Boolean = false,
+    qcfFontSize: TextUnit? = null,
     onWordClick: ((Word) -> Unit)?,
     onAyahClick: () -> Unit,
 ) {
@@ -744,7 +721,7 @@ fun AyahBlock(
                     highWater = highWater,
                     repeatActive = isRepeatActive,
                     isActiveAyah = isActiveAyah,
-                    fontScale = fontScale,
+                    fontSize = qcfFontSize ?: ArabicWordStyle.fontSize * fontScale * 1.18f,
                     sweepMs = sweepMs,
                     onAyahClick = onAyahClick,
                 )

@@ -73,6 +73,7 @@ class HighlightEngineTest {
         assertEquals(3, info.position)
         assertEquals(false, info.isRepeat)
         assertEquals(3, info.highWater)
+        assertEquals(3, info.repeatStart)
     }
 
     @Test
@@ -81,6 +82,16 @@ class HighlightEngineTest {
         assertEquals(2, info.position)      // jumped back to word 2
         assertEquals(true, info.isRepeat)
         assertEquals(3, info.highWater)     // word 3 was already reached
+        assertEquals(2, info.repeatStart)
+    }
+
+    @Test
+    fun `repeat start holds across the repeated phrase`() {
+        val info = HighlightEngine.activeInfo(withRepeat, 4500)!!
+        assertEquals(3, info.position)
+        assertEquals(true, info.isRepeat)
+        assertEquals(3, info.highWater)
+        assertEquals(2, info.repeatStart)
     }
 
     @Test
@@ -89,5 +100,6 @@ class HighlightEngineTest {
         assertEquals(4, info.position)
         assertEquals(false, info.isRepeat)
         assertEquals(4, info.highWater)
+        assertEquals(4, info.repeatStart)
     }
 }
