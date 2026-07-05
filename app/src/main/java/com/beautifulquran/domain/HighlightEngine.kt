@@ -46,15 +46,33 @@ object HighlightEngine {
     /** [activeSegment] enriched with repeat / high-water context. */
     fun activeInfo(segments: List<Segment>, positionMs: Long): ActiveInfo? {
         val idx = activeIndex(segments, positionMs) ?: return null
+        val maxBeforeByIndex = IntArray(idx + 1)
         var maxBefore = -1
-        for (i in 0 until idx) maxBefore = maxOf(maxBefore, segments[i].position)
+        for (i in 0..idx) {
+            maxBeforeByIndex[i] = maxBefore
+            if (i < idx) maxBefore = maxOf(maxBefore, segments[i].position)
+        }
         val seg = segments[idx]
+        val isRepeat = seg.position <= maxBefore
+        val repeatStart = if (isRepeat) {
+            var startIndex = idx
+            while (
+                startIndex > 0 &&
+                segments[startIndex - 1].position <= maxBeforeByIndex[startIndex - 1]
+            ) {
+                startIndex--
+            }
+            (startIndex..idx).minOf { segments[it].position }
+        } else {
+            seg.position
+        }
         return ActiveInfo(
             position = seg.position,
             startMs = seg.startMs,
             endMs = seg.endMs,
-            isRepeat = seg.position <= maxBefore,
+            isRepeat = isRepeat,
             highWater = maxOf(maxBefore, seg.position),
+            repeatStart = repeatStart,
         )
     }
 

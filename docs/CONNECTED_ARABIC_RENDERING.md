@@ -84,6 +84,9 @@ The app now has an initial QCF/QPC V2 implementation path:
   `qcf_span_end`.
 - The alignment step supports many-to-many differences between canonical timing
   words and QCF visual words.
+- Some canonical timing words intentionally have blank `qcf_v2` because the
+  previous QCF visual glyph spans them through `qcf_span_end`. These are not
+  missing rendered words; they are connected/combined Mushaf glyph cases.
 - Arabic-only no-gloss mode renders QCF V2 glyph tokens using bundled QCF page
   fonts fetched by `scripts/fetch_qcf_v2_fonts.sh`.
 - The active/recited/upcoming states use opaque color animation only.
@@ -96,6 +99,9 @@ The app now has an initial QCF/QPC V2 implementation path:
   It renders one QCF `AnnotatedString` text run per Mushaf line, with one span
   per timed visual word. This keeps Quran pause/stop signs inside the same QCF
   font run while still allowing word-by-word color fade.
+- Each QCF Mushaf line is measured against the actual available Compose width
+  and scaled down only when needed. This avoids the `softWrap = false` clipping
+  failure where long connected lines can appear to lose words at the edges.
 
 Remaining validation:
 

@@ -512,6 +512,8 @@ private fun QcfGlyphAyah(
     val interaction = remember { MutableInteractionSource() }
     val lines = remember(ayah.words) {
         ayah.words
+            // Blank QCF rows are timing continuations covered by the previous
+            // multi-word Mushaf glyph; qcfSpanEnd keeps highlight mapping intact.
             .filter { it.qcfV2.isNotBlank() }
             .groupBy { it.qcfPage to it.qcfLine }
             .toSortedMap(compareBy<Pair<Int, Int>> { it.first }.thenBy { it.second })
