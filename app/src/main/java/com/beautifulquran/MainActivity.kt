@@ -103,6 +103,8 @@ private const val COVER_LAYER = 0
 private const val AYAH_LAYER = 1
 private const val SETTINGS_LAYER = 2
 private const val STACK_PAGE_DURATION_MS = 460
+private const val STACK_PAGE_TURN_THRESHOLD = 0.18f
+private const val STACK_PAGE_FLING_THRESHOLD = 0.35f
 private val StackMotionEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
 
 @Composable
@@ -151,6 +153,7 @@ private fun PaperStackApp() {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .paperStackDrag(
+                gestureKey = selectedSurahId,
                 position = { stackPosition.value },
                 maxLayer = {
                     if (selectedSurahId == 0 && stackPosition.value <= COVER_LAYER + 0.01f) COVER_LAYER else settingsLayer
@@ -322,18 +325,23 @@ private fun Modifier.paperDropShadow(turning: Float): Modifier = drawWithContent
 }
 
 private fun Modifier.paperStackDrag(
+    gestureKey: Any,
     position: () -> Float,
     maxLayer: () -> Int,
     onDragStart: () -> Unit,
     onDrag: (deltaPages: Float) -> Unit,
     onSettle: (targetLayer: Int) -> Unit,
-): Modifier = pointerInput(Unit) {
+): Modifier = pointerInput(gestureKey) {
     awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false)
+        val down = awaitFirstDown(
+            requireUnconsumed = false,
+            pass = PointerEventPass.Initial,
+        )
         val velocityTracker = VelocityTracker()
         val touchSlop = viewConfiguration.touchSlop
         var horizontalDrag = false
         var startLayer = position().roundToInt()
+        var startPosition = position()
         var totalDx = 0f
         var totalDy = 0f
         velocityTracker.addPosition(down.uptimeMillis, down.position)
@@ -352,10 +360,11 @@ private fun Modifier.paperStackDrag(
             velocityTracker.addPosition(change.uptimeMillis, change.position)
 
             if (!horizontalDrag) {
-                val mostlyHorizontal = abs(totalDx) > abs(totalDy) * 1.25f
+                val mostlyHorizontal = abs(totalDx) > abs(totalDy) * 1.05f
                 if (abs(totalDx) > touchSlop && mostlyHorizontal) {
                     horizontalDrag = true
-                    startLayer = position().roundToInt()
+                    startPosition = position()
+                    startLayer = startPosition.roundToInt()
                     onDragStart()
                 }
             }
@@ -370,15 +379,26 @@ private fun Modifier.paperStackDrag(
         }
 
         if (horizontalDrag) {
-            val velocityPages = -velocityTracker.calculateVelocity().x / size.width.toFloat().coerceAtLeast(1f)
-            val projected = position() + velocityPages * 0.18f
+            val width = size.width.toFloat().coerceAtLeast(1f)
+            val dragPages = -totalDx / width
+            val draggedPosition = startPosition + dragPages
+            val velocityPages = -velocityTracker.calculateVelocity().x / width
+            val turnDirection = when {
+                dragPages > STACK_PAGE_TURN_THRESHOLD ||
+                    velocityPages > STACK_PAGE_FLING_THRESHOLD -> 1
+                dragPages < -STACK_PAGE_TURN_THRESHOLD ||
+                    velocityPages < -STACK_PAGE_FLING_THRESHOLD -> -1
+                else -> 0
+            }
             // Clamp the fling to one layer per gesture so a hard swipe settles on the
             // adjacent page rather than overshooting past it.
             val lower = (startLayer - 1).coerceAtLeast(COVER_LAYER)
             val upper = (startLayer + 1).coerceAtMost(maxLayer())
-            val target = projected
-                .roundToInt()
-                .coerceIn(lower, upper)
+            val target = if (turnDirection == 0) {
+                draggedPosition.roundToInt()
+            } else {
+                startLayer + turnDirection
+            }.coerceIn(lower, upper)
             onSettle(target)
         }
     }
