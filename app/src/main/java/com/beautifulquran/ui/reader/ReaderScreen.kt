@@ -140,6 +140,7 @@ import androidx.core.view.WindowInsetsCompat
 import com.beautifulquran.R
 import com.beautifulquran.QuranApp
 import com.beautifulquran.data.AyahSelectorSide
+import com.beautifulquran.data.ArabicRenderMode
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.ui.theme.DisplayFontFamily
 import com.beautifulquran.ui.theme.IslamicReturnToAyahButton
@@ -349,7 +350,9 @@ fun ReaderScreen(
     }
     val qcfExtractionProgress by qcfFontProvider.extractionProgress.collectAsStateWithLifecycle()
     val needsQcfFonts =
-        settings.readingMode != ReadingMode.ENGLISH_ONLY && !settings.showWordGloss
+        settings.readingMode != ReadingMode.ENGLISH_ONLY &&
+            !settings.showWordGloss &&
+            settings.arabicRenderMode == ArabicRenderMode.QCF_MUSHAF
     var qcfFontsReady by remember(surahId) { mutableStateOf(false) }
     var qcfFontError by remember(surahId) { mutableStateOf<String?>(null) }
     LaunchedEffect(uiState.content, needsQcfFonts) {
@@ -882,6 +885,7 @@ fun ReaderScreen(
                                 showGloss = settings.showWordGloss,
                                 showTransliteration = settings.showTransliteration,
                                 showTranslation = settings.showTranslation,
+                                arabicRenderMode = settings.arabicRenderMode,
                                 searchQuery = activeQuery,
                                 keepActiveWordInView = followEnabled && recitingActive,
                                 onWordClick = { word ->

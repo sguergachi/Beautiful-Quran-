@@ -52,6 +52,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.BuildConfig
 import com.beautifulquran.R
 import com.beautifulquran.data.AyahSelectorSide
+import com.beautifulquran.data.ArabicRenderMode
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.theme.themePreviewColors
@@ -204,6 +205,34 @@ fun SettingsScreen(
                         checked = settings.showTranslation,
                         onChange = { v -> viewModel.settings.update { it.copy(showTranslation = v) } },
                     )
+                    if (!settings.showWordGloss) {
+                        Spacer(Modifier.height(18.dp))
+                        SectionLabel("Arabic renderer")
+                        Spacer(Modifier.height(10.dp))
+                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            ArabicRenderMode.entries.forEachIndexed { index, mode ->
+                                SegmentedButton(
+                                    selected = settings.arabicRenderMode == mode,
+                                    onClick = {
+                                        viewModel.settings.update { it.copy(arabicRenderMode = mode) }
+                                    },
+                                    shape = SegmentedButtonDefaults.itemShape(
+                                        index = index,
+                                        count = ArabicRenderMode.entries.size,
+                                    ),
+                                    colors = greenSegmentedButtonColors(),
+                                ) {
+                                    Text(
+                                        text = when (mode) {
+                                            ArabicRenderMode.RESPONSIVE_HAFS -> "Responsive"
+                                            ArabicRenderMode.QCF_MUSHAF -> "QCF"
+                                        },
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Spacer(Modifier.height(24.dp))
