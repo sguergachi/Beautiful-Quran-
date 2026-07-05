@@ -1043,6 +1043,9 @@ fun OrnateSurahTitle(
 @Composable
 fun PageBreak(page: Int, useArabicIndicDigits: Boolean = true) {
     val accents = LocalQuranAccents.current
+    val pageNumberStyle = MaterialTheme.typography.labelSmall
+    val pageNumberSize = 11.sp
+    val pageNumberColor = accents.gold.copy(alpha = 0.45f)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1052,6 +1055,13 @@ fun PageBreak(page: Int, useArabicIndicDigits: Boolean = true) {
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Text(
+                text = page.toString(),
+                style = pageNumberStyle,
+                fontSize = pageNumberSize,
+                color = pageNumberColor,
+            )
+            Spacer(Modifier.width(8.dp))
             HorizontalDivider(
                 modifier = Modifier.weight(1f),
                 thickness = 0.5.dp,
@@ -1060,9 +1070,9 @@ fun PageBreak(page: Int, useArabicIndicDigits: Boolean = true) {
             Spacer(Modifier.width(8.dp))
             Text(
                 text = if (useArabicIndicDigits) page.toArabicIndic() else page.toString(),
-                style = MaterialTheme.typography.labelSmall,
-                fontSize = 10.sp,
-                color = accents.gold.copy(alpha = 0.45f),
+                style = pageNumberStyle,
+                fontSize = pageNumberSize,
+                color = pageNumberColor,
             )
         }
     }
