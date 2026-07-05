@@ -145,7 +145,11 @@ private data class RepeatWash(
 private fun rememberRepeatWash(repeat: Boolean, sweepMs: Int?): RepeatWash {
     val progress = remember { Animatable(if (repeat) 0f else 1f) }
     val alpha = remember { Animatable(if (repeat) 1f else 0f) }
-    LaunchedEffect(repeat, sweepMs) {
+    // Restart only when the word enters or leaves the repeat chain. While a
+    // repeated phrase advances, earlier words remain orange but stop being the
+    // active word, so their sweepMs becomes null; that must not restart the
+    // wash and briefly clear the held orange.
+    LaunchedEffect(repeat) {
         if (repeat) {
             alpha.snapTo(1f)
             progress.snapTo(0f)
