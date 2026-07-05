@@ -371,7 +371,9 @@ fun ReaderScreen(
 
     fun selectedPlaybackAyah(): Int {
         val ayahCount = uiState.content?.surah?.ayahCount ?: return startAyah ?: 1
-        return (requestedJumpAyah.takeIf { it > 0 } ?: scrolledAyah.value)
+        val relyOnScroll = requestedJumpAyah > 0 || !isThisSurahPlaying || !followEnabled
+        val position = if (relyOnScroll) scrolledAyah.value else activeAyah
+        return (requestedJumpAyah.takeIf { it > 0 } ?: position ?: scrolledAyah.value)
             .coerceIn(1, ayahCount)
     }
 
