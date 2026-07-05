@@ -482,6 +482,7 @@ private fun QcfGlyphLine(
     states: List<WordVisualState>,
     repeats: List<Boolean>,
     fontSize: TextUnit,
+    activeSweepMs: Int?,
     onWordClick: ((Word) -> Unit)?,
 ) {
     val context = LocalContext.current
@@ -491,10 +492,17 @@ private fun QcfGlyphLine(
     val page = words.firstOrNull()?.qcfPage ?: return
     val fontFamily = provider.cachedFontFamily(page) ?: return
     val fullInk = MaterialTheme.colorScheme.onBackground
+    val paper = MaterialTheme.colorScheme.background
     val fadedInk = fullInk
         .copy(alpha = WordVisualState.Upcoming.inkAlpha())
-        .compositeOver(MaterialTheme.colorScheme.background)
+        .compositeOver(paper)
     val repeatInk = LocalQuranAccents.current.repeatInk
+    val sweeps = states.map { state ->
+        rememberLetterSweep(
+            active = state == WordVisualState.Active,
+            sweepMs = activeSweepMs.takeIf { state == WordVisualState.Active },
+        )
+    }
     val style = ArabicWordStyle.merge(
         TextStyle(
             fontFamily = fontFamily,
@@ -514,6 +522,9 @@ private fun QcfGlyphLine(
             val repeat = repeats.getOrElse(index) { false }
             val wordColor = when {
                 repeat -> repeatInk
+                state == WordVisualState.Active -> fullInk
+                    .copy(alpha = wordFadeAlpha(sweeps[index].value))
+                    .compositeOver(paper)
                 state == WordVisualState.Upcoming -> fadedInk
                 else -> fullInk
             }
@@ -620,6 +631,7 @@ private fun QcfGlyphAyah(
                 states = lineWords.map(::qcfStateFor),
                 repeats = lineWords.map(::inRepeatChain),
                 fontSize = fontSize,
+                activeSweepMs = sweepMs,
                 onWordClick = onWordClick,
             )
         }
