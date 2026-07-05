@@ -129,11 +129,11 @@ HighlightEngine.activeInfo(segments, positionMs)
 
 ## Traps we hit (read before touching this)
 
-- **`quran.db` is git-ignored and generated.** It is *not* committed; CI and
-  local builds regenerate it with `python3 tools/build_db.py`. Repeat data only
-  exists after that runs — a one-off local edit to the asset will not survive a
-  rebuild and will not ship. The import therefore lives *inside* `build_db.py`,
-  not in a side script.
+- **`quran.db` is a committed app asset.** Normal local and CI builds use
+  `app/src/main/assets/quran.db` directly so they do not depend on the external
+  data sources. When repeat timing data changes, update `tools/build_db.py`,
+  rebuild the asset with `python3 tools/build_db.py`, and commit the regenerated
+  database with the code change.
 - **Bump the DB version when content changes.** `QuranDatabase.DB_FILE_NAME`
   (`quran-vN.db`) is the extraction key: the bundled asset is copied to internal
   storage only if that file doesn't already exist. Changing the DB's *content*
