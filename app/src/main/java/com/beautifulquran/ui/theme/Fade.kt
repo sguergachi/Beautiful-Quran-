@@ -3,12 +3,13 @@ package com.beautifulquran.ui.theme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -34,9 +35,9 @@ import androidx.compose.ui.unit.dp
  * paper, not a wipe. The edge itself is wide, about half the word.
  *
  * Letters ahead of the wash rest at [restingAlpha] (the "upcoming" ink);
- * letters behind it are fully inked. The offscreen layer this needs is only
- * the size of one word, and the modifier should only be attached while the
- * word is active.
+ * letters behind it are fully inked. The mask uses a small bleed around the
+ * measured text box so Arabic glyphs that overhang their bounds are not clipped
+ * while the offscreen wash is active.
  */
 fun Modifier.letterFadeIn(
     progress: () -> Float,
@@ -53,13 +54,25 @@ fun Modifier.letterFadeIn(
         val a = restingAlpha + (1f - restingAlpha) * (if (rtl) s else 1f - s)
         Color.White.copy(alpha = a)
     }
-    return graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-        .drawWithContent {
+    return drawWithContent {
+        val p = progress().coerceIn(0f, 1f)
+        if (p >= 1f) {
             drawContent()
-            val p = progress().coerceIn(0f, 1f)
-            if (p >= 1f) return@drawWithContent
-            val w = size.width
-            if (w <= 0f) return@drawWithContent
+            return@drawWithContent
+        }
+        val w = size.width
+        if (w <= 0f) {
+            drawContent()
+            return@drawWithContent
+        }
+        val bleed = FadeLayerBleed.toPx()
+        drawIntoCanvas { canvas ->
+            canvas.saveLayer(
+                Rect(-bleed, -bleed, size.width + bleed, size.height + bleed),
+                Paint(),
+            )
+        }
+        drawContent()
             // The feather is far wider than the word itself, so every letter
             // spends most of the word's dwell time mid-bloom: the reveal is
             // closer to a whole-word breath than a moving edge, with only a
@@ -81,11 +94,18 @@ fun Modifier.letterFadeIn(
                     endX = head,
                 )
             }
-            drawRect(brush = brush, blendMode = BlendMode.DstIn)
-        }
+        drawRect(
+            brush = brush,
+            topLeft = Offset(-bleed, -bleed),
+            size = Size(size.width + bleed * 2f, size.height + bleed * 2f),
+            blendMode = BlendMode.DstIn,
+        )
+        drawIntoCanvas { canvas -> canvas.restore() }
+    }
 }
 
 private const val InkProfileStops = 9
+private val FadeLayerBleed = 8.dp
 
 fun Modifier.verticalFadingEdges(
     color: Color,
