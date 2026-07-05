@@ -713,7 +713,9 @@ fun ReaderScreen(
                                         val distance = (change.position - down.position).getDistance()
                                         if (distance > touchSlop) {
                                             dragStarted = true
-                                            followEnabled = false
+                                            val dx = change.position.x - down.position.x
+                                            val dy = change.position.y - down.position.y
+                                            followEnabled = abs(dy) > abs(dx)
                                         }
                                     }
                                 }
