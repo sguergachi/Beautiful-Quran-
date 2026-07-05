@@ -4,7 +4,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -39,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -71,6 +71,7 @@ import com.beautifulquran.ui.theme.HafsFontFamily
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.TranslationFontFamily
 import com.beautifulquran.ui.theme.gilded
+import com.beautifulquran.ui.theme.inkColorWash
 import com.beautifulquran.ui.theme.letterFadeIn
 import com.beautifulquran.ui.theme.starAndCrossWeave
 import com.beautifulquran.ui.theme.verticalFadingEdges
@@ -136,22 +137,43 @@ private val InkSweepEasing = CubicBezierEasing(0.3f, 0.24f, 0.7f, 0.78f)
 private const val REPEAT_FADE_IN_MS = 200
 private const val REPEAT_FADE_OUT_MS = 900
 
-/**
- * Animates a word's ink toward the warm [QuranAccents.repeatInk] while the
- * reciter is repeating it, then back to [base] once [repeat] clears — the
- * second, orange fade the reader shows on re-recited words. Read as [State] so
- * the colour can be deferred to draw where needed.
- */
+private data class RepeatWash(
+    val progress: State<Float>,
+    val alpha: State<Float>,
+)
+
 @Composable
-private fun repeatTint(repeat: Boolean, base: Color): State<Color> =
-    animateColorAsState(
-        targetValue = if (repeat) LocalQuranAccents.current.repeatInk else base,
-        animationSpec = tween(
-            durationMillis = if (repeat) REPEAT_FADE_IN_MS else REPEAT_FADE_OUT_MS,
-            easing = InkSweepEasing,
-        ),
-        label = "repeatInk",
-    )
+private fun rememberRepeatWash(repeat: Boolean): RepeatWash {
+    val progress = remember { Animatable(if (repeat) 0f else 1f) }
+    val alpha = remember { Animatable(if (repeat) 1f else 0f) }
+    LaunchedEffect(repeat) {
+        if (repeat) {
+            alpha.snapTo(1f)
+            progress.snapTo(0f)
+            progress.animateTo(1f, tween(REPEAT_FADE_IN_MS, easing = InkSweepEasing))
+        } else {
+            progress.snapTo(1f)
+            alpha.animateTo(0f, tween(REPEAT_FADE_OUT_MS, easing = InkSweepEasing))
+        }
+    }
+    return RepeatWash(progress = progress.asState(), alpha = alpha.asState())
+}
+
+private fun Modifier.repeatInkWash(
+    wash: RepeatWash,
+    color: Color,
+    rtl: Boolean,
+): Modifier =
+    if (wash.alpha.value > 0f) {
+        inkColorWash(
+            progress = { wash.progress.value },
+            alpha = { wash.alpha.value },
+            color = color,
+            rtl = rtl,
+        )
+    } else {
+        this
+    }
 
 /**
  * Drives the letter-fade sweep for the active word: restarts at 0 each time
@@ -190,7 +212,9 @@ fun WordUnit(
 ) {
     val isActive = state == WordVisualState.Active
     val lyricInk = animatedInkAlpha(state)
-    val arabicInk = repeatTint(repeat, MaterialTheme.colorScheme.onBackground)
+    val repeatWash = rememberRepeatWash(repeat)
+    val arabicInk = MaterialTheme.colorScheme.onBackground
+    val repeatInk = LocalQuranAccents.current.repeatInk
     val sweep = rememberLetterSweep(isActive, sweepMs)
     val interaction = remember { MutableInteractionSource() }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
@@ -228,17 +252,19 @@ fun WordUnit(
             text = word.arabic,
             style = ArabicWordStyle,
             fontSize = ArabicWordStyle.fontSize * fontScale,
-            color = arabicInk.value,
+            color = arabicInk,
             // A repeated word was already recited, so it holds full read ink and
-            // only its colour blooms to orange — no dim letter sweep.
+            // the warm tint blooms through the glyphs as a second wash.
             modifier = when {
-                repeat -> Modifier.graphicsLayer { alpha = 1f }
+                repeat -> Modifier.repeatInkWash(repeatWash, repeatInk, rtl = true)
                 isActive -> Modifier.letterFadeIn(
                     progress = { sweep.value },
                     rtl = true,
                     restingAlpha = WordVisualState.Upcoming.inkAlpha(),
                 )
-                else -> Modifier.graphicsLayer { alpha = lyricInk.value }
+                else -> Modifier
+                    .graphicsLayer { alpha = lyricInk.value }
+                    .repeatInkWash(repeatWash, repeatInk, rtl = true)
             },
         )
         if (showGloss) {
@@ -292,7 +318,9 @@ fun ConnectedArabicWordUnit(
 ) {
     val isActive = state == WordVisualState.Active
     val lyricInk = animatedInkAlpha(state)
-    val arabicInk = repeatTint(repeat, MaterialTheme.colorScheme.onBackground)
+    val repeatWash = rememberRepeatWash(repeat)
+    val arabicInk = MaterialTheme.colorScheme.onBackground
+    val repeatInk = LocalQuranAccents.current.repeatInk
     val sweep = rememberLetterSweep(isActive, sweepMs)
     val interaction = remember { MutableInteractionSource() }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
@@ -316,19 +344,21 @@ fun ConnectedArabicWordUnit(
         text = word.arabic,
         style = ArabicWordStyle,
         fontSize = ArabicWordStyle.fontSize * fontScale,
-        color = arabicInk.value,
+        color = arabicInk,
         modifier = Modifier
             .bringIntoViewRequester(bringIntoViewRequester)
             .onSizeChanged { wordSize = it }
             .then(
                 when {
-                    repeat -> Modifier.graphicsLayer { alpha = 1f }
+                    repeat -> Modifier.repeatInkWash(repeatWash, repeatInk, rtl = true)
                     isActive -> Modifier.letterFadeIn(
                         progress = { sweep.value },
                         rtl = true,
                         restingAlpha = WordVisualState.Upcoming.inkAlpha(),
                     )
-                    else -> Modifier.graphicsLayer { alpha = lyricInk.value }
+                    else -> Modifier
+                        .graphicsLayer { alpha = lyricInk.value }
+                        .repeatInkWash(repeatWash, repeatInk, rtl = true)
                 },
             )
             .let { m ->
@@ -357,10 +387,9 @@ fun EnglishWordUnit(
 ) {
     val isActive = state == WordVisualState.Active
     val lyricInk = animatedInkAlpha(state)
-    val lyricColor = repeatTint(
-        repeat,
-        if (searchHit) LocalQuranAccents.current.gold else MaterialTheme.colorScheme.onBackground,
-    )
+    val repeatWash = rememberRepeatWash(repeat)
+    val lyricColor = if (searchHit) LocalQuranAccents.current.gold else MaterialTheme.colorScheme.onBackground
+    val repeatInk = LocalQuranAccents.current.repeatInk
     val sweep = rememberLetterSweep(isActive, sweepMs)
     val interaction = remember { MutableInteractionSource() }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
@@ -386,19 +415,21 @@ fun EnglishWordUnit(
         fontWeight = FontWeight.SemiBold,
         fontSize = 22.sp * fontScale,
         lineHeight = 1.55.em,
-        color = lyricColor.value,
+        color = lyricColor,
         modifier = Modifier
             .bringIntoViewRequester(bringIntoViewRequester)
             .onSizeChanged { wordSize = it }
             .then(
                 when {
-                    repeat -> Modifier.graphicsLayer { alpha = 1f }
+                    repeat -> Modifier.repeatInkWash(repeatWash, repeatInk, rtl = false)
                     isActive -> Modifier.letterFadeIn(
                         progress = { sweep.value },
                         rtl = false,
                         restingAlpha = WordVisualState.Upcoming.inkAlpha(),
                     )
-                    else -> Modifier.graphicsLayer { alpha = lyricInk.value }
+                    else -> Modifier
+                        .graphicsLayer { alpha = lyricInk.value }
+                        .repeatInkWash(repeatWash, repeatInk, rtl = false)
                 },
             )
             .let { m ->
@@ -413,6 +444,7 @@ fun EnglishWordUnit(
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun QcfGlyphLine(
     words: List<Word>,
     states: List<WordVisualState>,
@@ -431,25 +463,18 @@ private fun QcfGlyphLine(
     val fadedInk = fullInk
         .copy(alpha = WordVisualState.Upcoming.inkAlpha())
         .compositeOver(MaterialTheme.colorScheme.background)
-    val repeatInk = LocalQuranAccents.current.repeatInk
     val colors = states.mapIndexed { index, state ->
-        animateColorAsState(
-            targetValue = when {
-                repeats.getOrElse(index) { false } -> repeatInk
-                state == WordVisualState.Upcoming -> fadedInk
-                else -> fullInk
-            },
+        animateFloatAsState(
+            targetValue = if (state == WordVisualState.Upcoming) 0f else 1f,
             animationSpec = tween(
-                durationMillis = when {
-                    repeats.getOrElse(index) { false } -> REPEAT_FADE_IN_MS
-                    state == WordVisualState.Active -> activeSweepMs ?: 450
-                    else -> 450
-                },
+                durationMillis = if (state == WordVisualState.Active) activeSweepMs ?: 450 else 450,
                 easing = InkSweepEasing,
             ),
-            label = "qcfLineGlyphColor",
+            label = "qcfLineGlyphInk",
         )
     }
+    val repeatInk = LocalQuranAccents.current.repeatInk
+    val repeatWashes = repeats.map { rememberRepeatWash(it) }
     val style = ArabicWordStyle.merge(
         TextStyle(
             fontFamily = fontFamily,
@@ -459,21 +484,23 @@ private fun QcfGlyphLine(
         ),
     )
 
-    Row(
+    FlowRow(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center,
+        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         words.forEachIndexed { index, word ->
             val pauseMarks = word.arabic.quranPauseMarks()
             val qcfText = word.qcfV2.withoutTrailingQcfPauseGlyphs(pauseMarks.length)
+            val ink = lerp(fadedInk, fullInk, colors[index].value)
             val wordText = buildAnnotatedString {
-                withStyle(SpanStyle(color = colors[index].value)) {
+                withStyle(SpanStyle(color = ink)) {
                     append(qcfText)
                 }
                 if (pauseMarks.isNotEmpty()) {
                     withStyle(
                         SpanStyle(
-                            color = colors[index].value,
+                            color = ink,
                             fontFamily = HafsFontFamily,
                         ),
                     ) {
@@ -486,15 +513,13 @@ private fun QcfGlyphLine(
                 text = wordText,
                 style = style,
                 modifier = Modifier
+                    .repeatInkWash(repeatWashes[index], repeatInk, rtl = true)
                     .clickable(
                         interactionSource = null,
                         indication = null,
                         onClick = { onWordClick?.invoke(word) },
                     ),
             )
-            if (index < words.lastIndex) {
-                Spacer(Modifier.width(4.dp))
-            }
         }
     }
 }
