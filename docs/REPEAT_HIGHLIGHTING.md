@@ -58,13 +58,13 @@ Two facts make this a drop-in source rather than a new recording to license:
 ### Per-reciter availability
 
 Sampled backtrack counts across ~765 ayahs per reciter (quran.com recitation id
-in parentheses). "Encodes repeats" = has backtracks; **only Mishary is
-ear-verified** — verify the others before enabling.
+in parentheses). "Encodes repeats" = has backtracks. Enabled reciters were
+ear-verified (Mishary 2:14, Hani 2:16); **verify the rest before enabling.**
 
 | Our reciter | qdc id | Encodes repeats? |
 |---|---|---|
 | Mishary Alafasy (murattal) | 7 | ✅ enabled, ear-verified |
-| Hani ar-Rifai | 5 | yes (unverified) |
+| Hani ar-Rifai | 5 | ✅ enabled, ear-verified |
 | Al-Husary (murattal) | 6 | yes (unverified) |
 | Al-Husary — **Muallim** (teaching) | 12 | yes (dense; not yet imported) |
 | AbdulBaset (murattal) | 2 | yes (unverified) |
@@ -109,8 +109,9 @@ of quran-align:
 - `adjust_qdc_segments()` clamps word positions to our canonical word count,
   drops zero-length spans, keeps repeats, and counts the repeat spans.
 
-For Mishary this yields **4,372 repeat spans across 835 ayahs**, full 6,236/6,236
-coverage (6 clamps, 12 zero-length dropped). Everyone not in `QDC_REPEAT_RECITERS`
+Mishary yields **4,372 repeat spans** at full 6,236/6,236 coverage; Hani yields
+**2,151 repeat spans** at 6,235/6,236 (one ayah has no quran.com segments and
+falls back to whole-ayah highlighting). Everyone not in `QDC_REPEAT_RECITERS`
 still uses quran-align exactly as before.
 
 ## The rendering path
@@ -168,7 +169,8 @@ read ink together while 12 fades in white as a new word.
   quran.com's window covers it, and single-word first ayahs (e.g. الٓمٓ) simply
   span the whole window. Not a problem in practice, but don't expect a separate
   bismillah segment.
-- **Only Mishary is ear-verified.** Other reciters' backtracks are almost
+- **Enabled reciters are ear-verified; the rest are not.** Mishary (2:14) and
+  Hani (2:16) were confirmed by ear. The other reciters' backtracks are almost
   certainly real (contiguous, realistically timed) but haven't been listened to.
   Verify before enabling — a false positive would flash orange where the reciter
   didn't actually repeat.

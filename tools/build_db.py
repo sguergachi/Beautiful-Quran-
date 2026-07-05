@@ -73,7 +73,10 @@ QDC_URL = (
     "https://api.quran.com/api/qdc/audio/reciters/{rid}"
     "/audio_files?chapter_number={ch}&segments=true"
 )
-QDC_REPEAT_RECITERS = {1: 7}  # Mishary Alafasy (murattal)
+QDC_REPEAT_RECITERS = {
+    1: 7,  # Mishary Alafasy (murattal)
+    7: 5,  # Hani ar-Rifai (murattal)
+}
 
 
 def fetch(url: str, name: str) -> Path:
