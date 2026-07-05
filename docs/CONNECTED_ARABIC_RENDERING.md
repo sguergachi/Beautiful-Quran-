@@ -12,6 +12,13 @@ The Arabic-only view currently tries to combine two goals:
 - fade/highlight the active word using the same recitation timing engine as the
   word-by-word view.
 
+The second goal is non-negotiable. The app's core experience is not merely
+"show which word is active"; it is the timed word-by-word fade that makes the
+recitation feel written onto the page. Arabic-only rendering work may change
+the technical mechanism of the fade, but it must not remove the animated
+word-timed transition, replace it with static coloring, or promote an
+artifact-free but lifeless renderer as acceptable.
+
 The naive implementation conflicts with Arabic shaping:
 
 - Rendering one `Text` per word preserves per-word animation, but it prevents
@@ -98,7 +105,11 @@ The app now has an initial QCF/QPC V2 implementation path:
 - Arabic-only no-gloss mode does not render one `Text` composable per word.
   It renders one QCF `AnnotatedString` text run per Mushaf line, with one span
   per timed visual word. This keeps Quran pause/stop signs inside the same QCF
-  font run while still allowing word-by-word color fade.
+  font run while still allowing word-by-word fade.
+- In QCF mode, the active word must still animate from upcoming ink to full ink
+  over the current timing segment. A single-text-run implementation may use an
+  animated opaque color span instead of a per-letter offscreen mask to avoid
+  glyph clipping/artifacts, but it may not become a static active-word color.
 - Arabic-only QCF mode uses one font size derived from the settings font slider
   and applies it to every ayah and Mushaf line. Long QCF line runs wrap between
   words when needed instead of shrinking to fit, so the text stays a consistent
@@ -167,8 +178,9 @@ Acceptance criteria:
   words in a paragraph.
 - Diacritics must not collide or drift.
 - Words must map cleanly to timing positions.
-- The animation must be at least as pleasant as the current word-by-word
-  Arabic view before it is considered for production.
+- The animation must remain word-timed and visibly animated. It should be at
+  least as pleasant as the current word-by-word Arabic view before it is
+  considered for production.
 
 Status: partially bypassed. The implementation went directly into the
 Arabic-only branch, but the same screenshot acceptance criteria still apply

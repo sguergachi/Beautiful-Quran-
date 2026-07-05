@@ -57,6 +57,14 @@ paper metaphor, not a tap ripple (taps still never ripple — see Motion).
 
 ## Ink
 
+The word-by-word follow-along experience is the core value of the app. This is
+not ornamental polish; it is the product. Every reading mode that follows
+recitation must preserve a timed, animated word-by-word ink transition. A
+renderer may change how it implements that transition to protect Arabic
+shaping, glyph quality, or performance, but it may not degrade the experience
+to static highlighting, whole-ayah highlighting, background blocks, or a
+non-animated state change.
+
 Highlighting is carried by **the letters themselves** — the Apple Music
 lyrics treatment, never a background block:
 
@@ -76,6 +84,13 @@ reciter dwells on it, corrected for playback speed — so the last letter
 finishes as the voice moves on. It is drawn as a one-word offscreen mask
 whose progress is read only at draw time; nothing recomposes per frame
 (`Modifier.letterFadeIn` in `ui/theme/Fade.kt`).
+
+If a specialized scripture renderer cannot safely use the per-letter mask
+because it harms glyph outlines or mark placement, the fallback is still an
+animated word-timed ink fade from upcoming ink to full ink. The fallback must
+remain synchronized to the current word's timing segment and must be treated as
+a temporary renderer-specific compromise, not a relaxation of the product
+principle.
 
 While reciting, the top bar, reciter name, repeat, and speed fade to 8 % over
 a slow 900 ms, leaving the words plus play/pause and rewind/forward controls
