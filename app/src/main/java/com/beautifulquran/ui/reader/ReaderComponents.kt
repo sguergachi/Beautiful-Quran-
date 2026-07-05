@@ -1021,6 +1021,7 @@ fun AyahBlock(
  */
 @Composable
 fun SurahHeader(
+    chapterNumber: Int,
     nameArabic: String,
     nameTransliteration: String,
     nameTranslation: String,
@@ -1064,7 +1065,7 @@ fun SurahHeader(
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "${revelationPlace.replaceFirstChar { it.uppercase() }} · $ayahCount ayahs",
+            text = "Chapter $chapterNumber · ${revelationPlace.replaceFirstChar { it.uppercase() }} · $ayahCount ayahs",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
         )
@@ -1079,6 +1080,7 @@ fun SurahHeader(
  */
 @Composable
 fun OrnateSurahTitle(
+    chapterNumber: Int,
     nameArabic: String,
     nameTransliteration: String,
     sheen: State<Float>,
@@ -1109,7 +1111,7 @@ fun OrnateSurahTitle(
                 maxLines = 1,
             )
             Text(
-                text = nameTransliteration.uppercase(),
+                text = "$chapterNumber · ${nameTransliteration.uppercase()}",
                 style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 2.sp),
                 fontSize = 9.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
