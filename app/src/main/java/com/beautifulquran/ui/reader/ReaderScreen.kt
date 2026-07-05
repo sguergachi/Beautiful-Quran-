@@ -234,6 +234,21 @@ fun ReaderScreen(
     val activeAyahState = viewModel.activeAyah.collectAsStateWithLifecycle()
     val activeAyah = if (isThisSurahPlaying) activeAyahState.value else null
 
+    // When a repeat range loops back, the player dips out of "playing" for a
+    // frame or two before it resumes at the range's start. Debounce that so the
+    // receded chrome / status-bar overlay hold steady across the restart instead
+    // of flashing in — only a genuine, sustained pause brings the chrome back.
+    val playingNow = isThisSurahPlaying && playerState.isPlaying
+    var recitingActive by remember { mutableStateOf(playingNow) }
+    LaunchedEffect(playingNow) {
+        if (playingNow) {
+            recitingActive = true
+        } else {
+            delay(350)
+            recitingActive = false
+        }
+    }
+
     val readerItems = remember(uiState.content) {
         val c = uiState.content
         if (c == null) emptyList() else buildList {
@@ -270,12 +285,12 @@ fun ReaderScreen(
     // transport controls stay present. Read inside graphicsLayer blocks so
     // the fade is draw-phase-only.
     val chromeAlpha = animateFloatAsState(
-        targetValue = if (isThisSurahPlaying && playerState.isPlaying) 0.08f else 1f,
+        targetValue = if (recitingActive) 0.08f else 1f,
         animationSpec = tween(900),
         label = "chromeAlpha",
     )
     val topBarAlpha = animateFloatAsState(
-        targetValue = if (isThisSurahPlaying && playerState.isPlaying) 0f else 1f,
+        targetValue = if (recitingActive) 0f else 1f,
         animationSpec = tween(900),
         label = "topBarAlpha",
     )
@@ -490,7 +505,7 @@ fun ReaderScreen(
                 navigationIcon = {
                     IconButton(
                         onClick = { if (searchActive) closeSearch() else onBack() },
-                        enabled = searchActive || !(isThisSurahPlaying && playerState.isPlaying),
+                        enabled = searchActive || !recitingActive,
                     ) {
                         Icon(
                             imageVector = if (searchActive) {
@@ -548,7 +563,7 @@ fun ReaderScreen(
                     } else {
                         IconButton(
                             onClick = { searchActive = true },
-                            enabled = !(isThisSurahPlaying && playerState.isPlaying),
+                            enabled = !recitingActive,
                         ) {
                             Icon(
                                 Icons.Rounded.Search,
@@ -558,7 +573,7 @@ fun ReaderScreen(
                         }
                         IconButton(
                             onClick = onOpenSettings,
-                            enabled = !(isThisSurahPlaying && playerState.isPlaying),
+                            enabled = !recitingActive,
                         ) {
                             Icon(
                                 Icons.Rounded.Tune,
@@ -580,8 +595,7 @@ fun ReaderScreen(
                 val showReturnToAyah =
                     playerState.error == null &&
                         !followEnabled &&
-                        isThisSurahPlaying &&
-                        playerState.isPlaying
+                        recitingActive
                 AnimatedVisibility(
                     visible = playerState.error != null,
                     enter = fadeIn(),
@@ -682,8 +696,10 @@ fun ReaderScreen(
                 .fillMaxSize()
                 .graphicsLayer { alpha = readerContentAlpha.value },
         ) {
-            // Opaque status bar overlay when playing to hide content under notch/camera
-            if (isThisSurahPlaying && playerState.isPlaying) {
+            // Opaque bar over the status-bar strip while reciting, so the verse
+            // scrolling up never shows beneath the notch/camera. Held steady
+            // across loop restarts via recitingActive.
+            if (recitingActive && statusBarTop > 0.dp) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -758,14 +774,14 @@ fun ReaderScreen(
                                 activeWord = activeWord,
                                 playbackSpeed = playerState.speed,
                                 isActiveAyah = isActive,
-                                dimmed = isThisSurahPlaying && playerState.isPlaying && !isActive,
+                                dimmed = recitingActive && !isActive,
                                 obscuredBySelector = ayahSelectorExpanded,
                                 fontScale = settings.fontScale,
                                 showGloss = settings.showWordGloss,
                                 showTransliteration = settings.showTransliteration,
                                 showTranslation = settings.showTranslation,
                                 searchQuery = activeQuery,
-                                keepActiveWordInView = followEnabled && isThisSurahPlaying && playerState.isPlaying,
+                                keepActiveWordInView = followEnabled && recitingActive,
                                 onWordClick = { word ->
                                     val segment = viewModel.segmentsFor(ayah.number)
                                         ?.firstOrNull { it.position == word.position }
@@ -828,7 +844,7 @@ fun ReaderScreen(
                     (activeAyah?.toFloat() ?: scrolledAyahPosition.value)
                         .coerceIn(1f, content.surah.ayahCount.toFloat())
                 },
-                chromeAlpha = { if (isThisSurahPlaying && playerState.isPlaying) 0f else chromeAlpha.value },
+                chromeAlpha = { if (recitingActive) 0f else chromeAlpha.value },
                 onJumpToAyah = { requestedJumpAyah = it },
                 onExpandedChange = { ayahSelectorExpanded = it },
                 dismissRequests = ayahSelectorDismissRequests,

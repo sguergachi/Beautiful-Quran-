@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -36,16 +35,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.beautifulquran.data.ThemeMode
@@ -72,7 +68,6 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val settings by app.settings.settings.collectAsStateWithLifecycle()
-            val playerState by app.player.state.collectAsStateWithLifecycle()
             val systemDark = isSystemInDarkTheme()
             val usesNightfall = settings.themeMode == ThemeMode.DARK ||
                 (settings.themeMode == ThemeMode.SYSTEM && systemDark)
@@ -89,29 +84,11 @@ class MainActivity : ComponentActivity() {
             }
 
             BeautifulQuranTheme(themeMode = settings.themeMode) {
-                PlaybackStatusBarVisibility(isPlaying = playerState.isPlaying)
+                // The status bar stays visible during playback: hiding it used
+                // to collapse the top inset (pulling the verse up under the
+                // notch) and flashed back on every loop restart. The reader
+                // instead paints its own opaque bar over that strip.
                 PaperStackApp()
-            }
-        }
-    }
-
-    @Composable
-    private fun PlaybackStatusBarVisibility(isPlaying: Boolean) {
-        val view = LocalView.current
-        DisposableEffect(view, isPlaying) {
-            val controller = WindowCompat.getInsetsController(window, view)
-            val previousBehavior = controller.systemBarsBehavior
-            if (isPlaying) {
-                controller.systemBarsBehavior =
-                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                controller.hide(WindowInsetsCompat.Type.statusBars())
-            } else {
-                controller.show(WindowInsetsCompat.Type.statusBars())
-            }
-
-            onDispose {
-                controller.systemBarsBehavior = previousBehavior
-                controller.show(WindowInsetsCompat.Type.statusBars())
             }
         }
     }
@@ -354,7 +331,12 @@ private fun Modifier.paperStackDrag(
         velocityTracker.addPosition(down.uptimeMillis, down.position)
 
         while (true) {
-            val event = awaitPointerEvent()
+            // Watch the gesture in the Initial pass — ahead of the reader's
+            // vertical scroll and the ayah rail — so a horizontal page turn is
+            // claimed here instead of being swallowed by whatever sits below.
+            // Vertical drags are never consumed, so scrolling still reaches the
+            // list in the Main pass.
+            val event = awaitPointerEvent(PointerEventPass.Initial)
             val change = event.changes.firstOrNull { it.id == down.id } ?: break
             val delta = change.positionChange()
             totalDx += delta.x

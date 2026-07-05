@@ -231,6 +231,73 @@ fun WordUnit(
     }
 }
 
+/**
+ * One Arabic word in the connected (word-for-word gloss disabled) flow. Same
+ * recitation letter-fade as [WordUnit], but with no gloss column and tight
+ * spacing so the words read as continuous Quranic script rather than boxed
+ * tokens.
+ */
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+fun ConnectedArabicWordUnit(
+    word: Word,
+    state: WordVisualState,
+    fontScale: Float,
+    sweepMs: Int?,
+    keepInView: Boolean,
+    onClick: (() -> Unit)?,
+) {
+    val isActive = state == WordVisualState.Active
+    val lyricInk = animatedInkAlpha(state)
+    val sweep = rememberLetterSweep(isActive, sweepMs)
+    val interaction = remember { MutableInteractionSource() }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val density = LocalDensity.current
+    val activeWordTopMarginPx = with(density) { 144.dp.toPx() }
+    val activeWordBottomMarginPx = with(density) { 132.dp.toPx() }
+    var wordSize by remember { mutableStateOf(IntSize.Zero) }
+    LaunchedEffect(isActive, keepInView, wordSize) {
+        if (isActive && keepInView && wordSize != IntSize.Zero) {
+            bringIntoViewRequester.bringIntoView(
+                Rect(
+                    left = 0f,
+                    top = -activeWordTopMarginPx,
+                    right = wordSize.width.toFloat(),
+                    bottom = wordSize.height + activeWordBottomMarginPx,
+                ),
+            )
+        }
+    }
+    Text(
+        text = word.arabic,
+        style = ArabicWordStyle,
+        fontSize = ArabicWordStyle.fontSize * fontScale,
+        color = MaterialTheme.colorScheme.onBackground,
+        modifier = Modifier
+            .bringIntoViewRequester(bringIntoViewRequester)
+            .onSizeChanged { wordSize = it }
+            .then(
+                if (isActive) {
+                    Modifier.letterFadeIn(
+                        progress = { sweep.value },
+                        rtl = true,
+                        restingAlpha = WordVisualState.Upcoming.inkAlpha(),
+                    )
+                } else {
+                    Modifier.graphicsLayer { alpha = lyricInk.value }
+                },
+            )
+            .let { m ->
+                if (onClick != null) {
+                    m.clickable(interactionSource = interaction, indication = null, onClick = onClick)
+                } else {
+                    m
+                }
+            }
+            .padding(horizontal = 4.dp, vertical = 3.dp),
+    )
+}
+
 /** One word of the English-only lyric flow. */
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
@@ -469,42 +536,28 @@ fun AyahBlock(
                 }
             }
         } else {
+            // Connected script: continuous Arabic words with no gloss, but the
+            // same recitation letter-fade as the word-for-word view (a single
+            // static Text would lose that fade). Centered so short verses sit
+            // mid-line like a mushaf.
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                val textColor = MaterialTheme.colorScheme.onBackground
-                val connectedText = remember(ayah.words, activeWord, isActiveAyah) {
-                    buildAnnotatedString {
-                        ayah.words.forEachIndexed { i, word ->
-                            if (i > 0) append(" ")
-                            val start = length
-                            append(word.arabic)
-                            val state = stateFor(word)
-                            val alpha = state.inkAlpha()
-                            addStyle(
-                                SpanStyle(color = textColor.copy(alpha = alpha)),
-                                start = start,
-                                end = length,
-                            )
-                        }
-                    }
-                }
-                Box(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center,
+                    horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterHorizontally),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            text = connectedText,
-                            style = ArabicWordStyle,
-                            fontSize = ArabicWordStyle.fontSize * fontScale,
-                            color = textColor,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth(),
+                    ayah.words.forEach { word ->
+                        val wordState = stateFor(word)
+                        ConnectedArabicWordUnit(
+                            word = word,
+                            state = wordState,
+                            fontScale = fontScale,
+                            sweepMs = sweepMs.takeIf { wordState == WordVisualState.Active },
+                            keepInView = keepActiveWordInView && wordState == WordVisualState.Active,
+                            onClick = onWordClick?.let { handler -> { handler(word) } },
                         )
-                        ArabicAyahNumberUnit(ayah.number, fontScale)
                     }
+                    ArabicAyahNumberUnit(ayah.number, fontScale)
                 }
             }
         }

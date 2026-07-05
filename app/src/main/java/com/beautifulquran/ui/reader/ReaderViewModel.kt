@@ -178,7 +178,14 @@ class ReaderViewModel(
         )
         val np = player.state.value.nowPlaying
         if (np != null && np.surahId == surahId && np.reciterId != reciter.id) {
+            // Switching voices must never drop the chosen loop range: restarting
+            // the surah with the new reciter clears it (playSurah rebuilds the
+            // playlist), so capture it first and re-apply it afterwards.
+            val preservedRange = player.state.value.repeatRange
             playFromAyah(np.ayah)
+            if (preservedRange != null) {
+                player.setRepeatRange(preservedRange.first, preservedRange.last)
+            }
         }
     }
 
