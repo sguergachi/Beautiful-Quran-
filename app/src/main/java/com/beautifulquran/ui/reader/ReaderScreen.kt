@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -22,6 +23,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -30,14 +32,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -58,6 +58,7 @@ import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -89,12 +90,20 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathOperation
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -110,15 +119,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
 import com.beautifulquran.R
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ReadingMode
+import com.beautifulquran.ui.theme.DisplayFontFamily
 import com.beautifulquran.ui.theme.IslamicReturnToAyahButton
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.SerifFontFamily
@@ -128,6 +139,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.ceil
+import kotlin.math.hypot
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -316,21 +329,10 @@ fun ReaderScreen(
         showNotifPermissionDialog = true
     }
 
-    if (showNotifPermissionDialog && pendingNotifPermissionAction != null) {
-        PlaybackNotificationPermissionDialog(
-            onDismiss = {
-                showNotifPermissionDialog = false
-                pendingNotifPermissionAction?.invoke()
-                pendingNotifPermissionAction = null
-            },
-            onAllow = {
-                showNotifPermissionDialog = false
-                notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                pendingNotifPermissionAction?.invoke()
-                pendingNotifPermissionAction = null
-            },
-        )
-    }
+    // The permission prompt is not a dialog — it is an ink bleed that turns
+    // this very sheet into the question. See PlaybackNotificationSheet and the
+    // "ink bleed" section of docs/DESIGN.md. Rendered as a full-screen overlay
+    // over the Scaffold below.
 
     // Reading by hand pauses the follow mode via pointerInput.
 
@@ -439,6 +441,7 @@ fun ReaderScreen(
         searchIndex = 0
     }
 
+    Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -863,6 +866,28 @@ fun ReaderScreen(
         }
     }
 
+        // The notification-permission prompt: ink bleeds across this sheet and
+        // it becomes the question. Answering runs the bleed in reverse, back
+        // into the pressed button (the sheet owns that exit), then hands off —
+        // so the callbacks fire only once the paper has receded.
+        if (showNotifPermissionDialog && pendingNotifPermissionAction != null) {
+            PlaybackNotificationSheet(
+                modifier = Modifier.zIndex(2f),
+                onDismiss = {
+                    showNotifPermissionDialog = false
+                    pendingNotifPermissionAction?.invoke()
+                    pendingNotifPermissionAction = null
+                },
+                onAllow = {
+                    showNotifPermissionDialog = false
+                    notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    pendingNotifPermissionAction?.invoke()
+                    pendingNotifPermissionAction = null
+                },
+            )
+        }
+    }
+
     val dialogContent = uiState.content
     if (showRepeatDialog && dialogContent != null) {
         val repeatRangeForThisSurah = playerState.repeatRange
@@ -890,130 +915,241 @@ fun ReaderScreen(
     }
 }
 
+// A gentle, near-symmetric ease for the word fade: it drifts in slowly, never
+// snapping to full ink, so text feels light as it soaks into the paper.
+private val SoftInkEasing = CubicBezierEasing(0.33f, 0.0f, 0.15f, 1.0f)
+
+// A circle of ink centred at an origin (a fraction of the sheet, so it is
+// size-agnostic); the radius reaches the farthest corner exactly at
+// progress = 1, so the ink covers every corner of the paper.
+//
+// - `punchHole = false` — the sheet is clipped *to* the circle: ink spreads
+//   open from the origin to fill the paper (the enter bleed).
+// - `punchHole = true` — the sheet is the paper *minus* the circle: a hole
+//   opens at the origin and grows outward, revealing the reader beneath (the
+//   exit reveal, from the pressed button).
+private class InkRevealShape(
+    private val originX: Float,
+    private val originY: Float,
+    private val progress: Float,
+    private val punchHole: Boolean = false,
+) : Shape {
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density,
+    ): Outline {
+        val cx = size.width * originX
+        val cy = size.height * originY
+        val maxRadius = hypot(
+            max(cx, size.width - cx),
+            max(cy, size.height - cy),
+        )
+        val r = maxRadius * progress
+        val circle = Path().apply {
+            addOval(Rect(cx - r, cy - r, cx + r, cy + r))
+        }
+        val path = if (punchHole) {
+            val sheet = Path().apply {
+                addRect(Rect(0f, 0f, size.width, size.height))
+            }
+            Path().apply { op(sheet, circle, PathOperation.Difference) }
+        } else {
+            circle
+        }
+        return Outline.Generic(path)
+    }
+}
+
+// Not a dialog — the reader sheet itself, soaked in ink, becomes the question.
+// Ink bleeds from the play control across the whole paper (the clip circle),
+// then the words write themselves in: a large chapter-style title up top, the
+// body through the middle, and the two answers along the bottom, surfacing
+// only once the message has landed. See docs/DESIGN.md, "The ink bleed".
 @Composable
-private fun PlaybackNotificationPermissionDialog(
+private fun PlaybackNotificationSheet(
+    modifier: Modifier = Modifier,
     onDismiss: () -> Unit,
     onAllow: () -> Unit,
 ) {
-    val titleStyle = MaterialTheme.typography.titleMedium.copy(
-        fontFamily = SerifFontFamily,
+    val titleStyle = MaterialTheme.typography.headlineMedium.copy(
+        fontFamily = DisplayFontFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 28.sp,
-        lineHeight = 34.sp,
+        fontSize = 46.sp,
+        lineHeight = 52.sp,
         letterSpacing = 0.sp,
     )
-    val bodyStyle = MaterialTheme.typography.bodyMedium.copy(
+    val bodyStyle = MaterialTheme.typography.bodyLarge.copy(
         fontFamily = SerifFontFamily,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
+        fontSize = 21.sp,
+        lineHeight = 32.sp,
         letterSpacing = 0.sp,
     )
     val actionStyle = MaterialTheme.typography.labelLarge.copy(
         fontFamily = SerifFontFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 15.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.2.sp,
+        fontSize = 17.sp,
+        lineHeight = 22.sp,
+        letterSpacing = 0.3.sp,
     )
-    val paperAlpha = remember { Animatable(0f) }
-    val actionAlpha = remember { Animatable(0f) }
 
+    // Read only inside graphicsLayer, so the reveal is draw-phase only and
+    // never recomposes the sheet. On enter, ink spreads open from the play
+    // control (bottom-centre) to fill the paper. On answering, a hole opens at
+    // the pressed button and grows outward, revealing the reader beneath.
+    val inkSpread = remember { Animatable(1f) }
+    val revealHole = remember { Animatable(0f) }
+    val actionAlpha = remember { Animatable(0f) }
+    var originX by remember { mutableFloatStateOf(0.5f) }
+    var originY by remember { mutableFloatStateOf(0.9f) }
+    var closing by remember { mutableStateOf(false) }
+    // Button centres, captured in window space, so the reveal is contextual.
+    var sheetBounds by remember { mutableStateOf<Rect?>(null) }
+    var dismissCentre by remember { mutableStateOf(Offset.Unspecified) }
+    var allowCentre by remember { mutableStateOf(Offset.Unspecified) }
+    val scope = rememberCoroutineScope()
+
+    // Enter: ink spreads open from the play control.
     LaunchedEffect(Unit) {
+        inkSpread.snapTo(0f)
         launch {
-            delay(2_920)
+            // The answers surface only once the words have written in.
+            delay(3_100)
             actionAlpha.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(durationMillis = 700, easing = LinearOutSlowInEasing),
+                animationSpec = tween(durationMillis = 900, easing = FastOutSlowInEasing),
             )
         }
-        paperAlpha.animateTo(
+        inkSpread.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = 360, easing = LinearEasing),
+            animationSpec = tween(durationMillis = 620, easing = FastOutSlowInEasing),
         )
     }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp,
-            shadowElevation = 18.dp,
+    // Answer: a circular hole opens at the pressed button and spreads outward,
+    // revealing the ayahs and UI beneath, then hands off (start playback /
+    // launch the OS request) once the paper is gone.
+    fun answer(centre: Offset, then: () -> Unit) {
+        if (closing) return
+        val bounds = sheetBounds
+        if (centre.isSpecified && bounds != null && bounds.width > 0f && bounds.height > 0f) {
+            originX = ((centre.x - bounds.left) / bounds.width).coerceIn(0f, 1f)
+            originY = ((centre.y - bounds.top) / bounds.height).coerceIn(0f, 1f)
+        }
+        closing = true
+        scope.launch {
+            launch {
+                actionAlpha.animateTo(0f, tween(durationMillis = 180, easing = LinearEasing))
+            }
+            revealHole.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 620, easing = FastOutSlowInEasing),
+            )
+            then()
+        }
+    }
+
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .onGloballyPositioned { sheetBounds = it.boundsInWindow() }
+            .graphicsLayer {
+                clip = true
+                shape = if (closing) {
+                    // Hole opens at the pressed button, growing to reveal the reader.
+                    InkRevealShape(originX, originY, revealHole.value, punchHole = true)
+                } else {
+                    // Ink fills a circle spreading up from the play control.
+                    InkRevealShape(originX, originY, inkSpread.value, punchHole = false)
+                }
+            }
+            .background(MaterialTheme.colorScheme.background)
+            // Absorb every touch so the recitation sheet beneath never reacts.
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent()
+                        event.changes.forEach { it.consume() }
+                    } while (event.changes.any { it.pressed })
+                }
+            }
+            .padding(
+                start = 32.dp,
+                end = 32.dp,
+                top = statusBarTop + 48.dp,
+                bottom = navBarBottom + 40.dp,
+            ),
+    ) {
+        // Top — the title opens the sheet like a chapter.
+        WordFadeText(
+            text = stringResource(R.string.notification_permission_title),
+            style = titleStyle,
+            color = MaterialTheme.colorScheme.onSurface,
+            initialDelayMs = 260,
+            wordDelayMs = 120,
+        )
+        // Middle — the body, written in word by word, resting in the sheet.
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(top = 28.dp),
+            contentAlignment = Alignment.TopStart,
+        ) {
+            WordFadeText(
+                text = stringResource(R.string.notification_permission_message),
+                style = bodyStyle,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
+                initialDelayMs = 760,
+                wordDelayMs = 96,
+            )
+        }
+        // Bottom — the two answers, fading up after the words have landed.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .widthIn(max = 372.dp)
-                .heightIn(min = 318.dp)
-                .graphicsLayer {
-                    alpha = paperAlpha.value
-                    scaleX = 0.985f + (0.015f * paperAlpha.value)
-                    scaleY = 0.985f + (0.015f * paperAlpha.value)
-                },
+                .graphicsLayer { alpha = actionAlpha.value },
         ) {
-            Box(
-                modifier = Modifier.padding(
-                    start = 28.dp,
-                    top = 32.dp,
-                    end = 28.dp,
-                    bottom = 26.dp,
-                ),
+            TextButton(
+                onClick = { answer(dismissCentre, onDismiss) },
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                modifier = Modifier
+                    .defaultMinSize(minWidth = 0.dp, minHeight = 48.dp)
+                    .onGloballyPositioned { dismissCentre = it.boundsInWindow().center },
             ) {
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(end = 2.dp),
-                ) {
-                    WordFadeText(
-                        text = stringResource(R.string.notification_permission_title),
-                        style = titleStyle,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        initialDelayMs = 120,
-                        wordDelayMs = 110,
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    WordFadeText(
-                        text = stringResource(R.string.notification_permission_message),
-                        style = bodyStyle,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.86f),
-                        initialDelayMs = 420,
-                        wordDelayMs = 92,
-                    )
-                }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomEnd)
-                        .graphicsLayer { alpha = actionAlpha.value },
-                ) {
-                    TextButton(
-                        onClick = onDismiss,
-                        shape = RoundedCornerShape(7.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-                        modifier = Modifier.defaultMinSize(minWidth = 0.dp, minHeight = 44.dp),
-                    ) {
-                        WordFadeText(
-                            text = stringResource(R.string.notification_permission_not_now),
-                            style = actionStyle,
-                            color = MaterialTheme.colorScheme.primary,
-                            initialDelayMs = 2_920,
-                            wordDelayMs = 95,
-                        )
-                    }
-                    Button(
-                        onClick = onAllow,
-                        shape = RoundedCornerShape(7.dp),
-                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
-                        modifier = Modifier.defaultMinSize(minWidth = 92.dp, minHeight = 48.dp),
-                    ) {
-                        WordFadeText(
-                            text = stringResource(R.string.notification_permission_allow),
-                            style = actionStyle,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            initialDelayMs = 3_020,
-                            wordDelayMs = 95,
-                        )
-                    }
-                }
+                Text(
+                    text = stringResource(R.string.notification_permission_not_now),
+                    style = actionStyle,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                )
+            }
+            Button(
+                onClick = { answer(allowCentre, onAllow) },
+                shape = RoundedCornerShape(8.dp),
+                // Flat: nothing casts a shadow on the paper.
+                elevation = ButtonDefaults.buttonElevation(
+                    defaultElevation = 0.dp,
+                    pressedElevation = 0.dp,
+                    focusedElevation = 0.dp,
+                    hoveredElevation = 0.dp,
+                ),
+                contentPadding = PaddingValues(horizontal = 28.dp, vertical = 14.dp),
+                modifier = Modifier
+                    .defaultMinSize(minWidth = 96.dp, minHeight = 52.dp)
+                    .onGloballyPositioned { allowCentre = it.boundsInWindow().center },
+            ) {
+                Text(
+                    text = stringResource(R.string.notification_permission_allow),
+                    style = actionStyle,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
             }
         }
     }
@@ -1040,7 +1176,12 @@ private fun WordFadeText(
                 delay((index * wordDelayMs).toLong())
                 alpha.animateTo(
                     targetValue = 1f,
-                    animationSpec = tween(durationMillis = 2_480, easing = LinearOutSlowInEasing),
+                    // A long, gentle ease so each word drifts up rather than
+                    // switches on — smooth, slow, light, like ink soaking in.
+                    animationSpec = tween(
+                        durationMillis = 3_600,
+                        easing = SoftInkEasing,
+                    ),
                 )
             }
         }
