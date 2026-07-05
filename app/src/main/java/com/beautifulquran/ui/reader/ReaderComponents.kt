@@ -38,7 +38,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -489,14 +488,11 @@ private fun QcfGlyphLine(
     val fadedInk = fullInk
         .copy(alpha = WordVisualState.Upcoming.inkAlpha())
         .compositeOver(MaterialTheme.colorScheme.background)
-    val colors = states.mapIndexed { index, state ->
-        animateFloatAsState(
-            targetValue = if (state == WordVisualState.Upcoming) 0f else 1f,
-            animationSpec = tween(
-                durationMillis = if (state == WordVisualState.Active) activeSweepMs ?: 450 else 450,
-                easing = InkSweepEasing,
-            ),
-            label = "qcfLineGlyphInk",
+    val inkAlphas = states.map { state -> animatedInkAlpha(state) }
+    val sweeps = states.map { state ->
+        rememberLetterSweep(
+            active = state == WordVisualState.Active,
+            sweepMs = activeSweepMs.takeIf { state == WordVisualState.Active },
         )
     }
     val repeatInk = LocalQuranAccents.current.repeatInk
@@ -526,15 +522,32 @@ private fun QcfGlyphLine(
         words.forEachIndexed { index, word ->
             val pauseMarks = word.arabic.quranPauseMarks()
             val qcfText = word.qcfV2.withoutTrailingQcfPauseGlyphs(pauseMarks.length)
-            val ink = lerp(fadedInk, fullInk, colors[index].value)
+            val state = states.getOrElse(index) { WordVisualState.Plain }
+            val repeat = repeats.getOrElse(index) { false }
             val wordText = buildAnnotatedString {
-                withStyle(SpanStyle(color = ink)) {
+                withStyle(SpanStyle(color = fullInk)) {
                     append(qcfText)
                 }
                 if (pauseMarks.isNotEmpty()) {
                     withStyle(
                         SpanStyle(
-                            color = ink,
+                            color = fullInk,
+                            fontFamily = HafsFontFamily,
+                        ),
+                    ) {
+                        append(" ")
+                        append(pauseMarks)
+                    }
+                }
+            }
+            val fadedWordText = buildAnnotatedString {
+                withStyle(SpanStyle(color = fadedInk)) {
+                    append(qcfText)
+                }
+                if (pauseMarks.isNotEmpty()) {
+                    withStyle(
+                        SpanStyle(
+                            color = fadedInk,
                             fontFamily = HafsFontFamily,
                         ),
                     ) {
@@ -568,8 +581,23 @@ private fun QcfGlyphLine(
                     ),
             ) {
                 Text(
-                    text = wordText,
+                    text = if (state == WordVisualState.Upcoming) fadedWordText else wordText,
                     style = style,
+                    modifier = when (state) {
+                        WordVisualState.Active -> {
+                            if (repeat) {
+                                Modifier
+                            } else {
+                                Modifier.letterFadeIn(
+                                    progress = { sweeps[index].value },
+                                    rtl = true,
+                                    restingAlpha = WordVisualState.Upcoming.inkAlpha(),
+                                )
+                            }
+                        }
+                        WordVisualState.Upcoming -> Modifier
+                        else -> Modifier.graphicsLayer { alpha = inkAlphas[index].value }
+                    },
                 )
                 if (repeatWashes[index].alpha.value > 0f) {
                     Text(
