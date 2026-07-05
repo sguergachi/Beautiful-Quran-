@@ -68,6 +68,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -146,6 +147,7 @@ import com.beautifulquran.ui.theme.DisplayFontFamily
 import com.beautifulquran.ui.theme.IslamicReturnToAyahButton
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.SerifFontFamily
+import com.beautifulquran.ui.theme.playbackNotificationColorScheme
 import com.beautifulquran.ui.theme.verticalFadingEdges
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -991,7 +993,9 @@ fun ReaderScreen(
         // into the pressed button (the sheet owns that exit), then hands off —
         // so the callbacks fire only once the paper has receded.
         if (showNotifPermissionDialog && pendingNotifPermissionAction != null) {
+            val notificationColors = playbackNotificationColorScheme(settings.themeMode)
             PlaybackNotificationSheet(
+                colors = notificationColors,
                 modifier = Modifier.zIndex(2f),
                 onDismiss = {
                     showNotifPermissionDialog = false
@@ -1094,6 +1098,7 @@ private class InkRevealShape(
 // only once the message has landed. See docs/DESIGN.md, "The ink bleed".
 @Composable
 private fun PlaybackNotificationSheet(
+    colors: ColorScheme,
     modifier: Modifier = Modifier,
     onDismiss: () -> Unit,
     onAllow: () -> Unit,
@@ -1192,7 +1197,7 @@ private fun PlaybackNotificationSheet(
                     InkRevealShape(originX, originY, inkSpread.value, punchHole = false)
                 }
             }
-            .background(MaterialTheme.colorScheme.background)
+            .background(colors.background)
             // Absorb every touch so the recitation sheet beneath never reacts.
             .pointerInput(Unit) {
                 awaitEachGesture {
@@ -1214,7 +1219,7 @@ private fun PlaybackNotificationSheet(
         WordFadeText(
             text = stringResource(R.string.notification_permission_title),
             style = titleStyle,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = colors.onBackground,
             initialDelayMs = 260,
             wordDelayMs = 120,
         )
@@ -1229,7 +1234,7 @@ private fun PlaybackNotificationSheet(
             WordFadeText(
                 text = stringResource(R.string.notification_permission_message),
                 style = bodyStyle,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
+                color = colors.onBackground.copy(alpha = 0.82f),
                 initialDelayMs = 760,
                 wordDelayMs = 96,
             )
@@ -1253,12 +1258,16 @@ private fun PlaybackNotificationSheet(
                 Text(
                     text = stringResource(R.string.notification_permission_not_now),
                     style = actionStyle,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    color = colors.onBackground.copy(alpha = 0.5f),
                 )
             }
             Button(
                 onClick = { answer(allowCentre, onAllow) },
                 shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colors.primary,
+                    contentColor = colors.onPrimary,
+                ),
                 // Flat: nothing casts a shadow on the paper.
                 elevation = ButtonDefaults.buttonElevation(
                     defaultElevation = 0.dp,
@@ -1274,7 +1283,7 @@ private fun PlaybackNotificationSheet(
                 Text(
                     text = stringResource(R.string.notification_permission_allow),
                     style = actionStyle,
-                    color = MaterialTheme.colorScheme.onPrimary,
+                    color = colors.onPrimary,
                 )
             }
         }
