@@ -114,6 +114,27 @@ private data class QcfLineText(
     val wordRanges: List<IntRange>,
 )
 
+private fun TextLayoutResult.wordIndexAt(
+    tap: Offset,
+    ranges: List<IntRange>,
+    hitSlopPx: Float,
+): Int =
+    ranges.indexOfFirst { range ->
+        range
+            .map { offset -> getBoundingBox(offset) }
+            .reduceOrNull { acc, rect -> acc.expandToInclude(rect) }
+            ?.inflate(hitSlopPx)
+            ?.contains(tap) == true
+    }
+
+private fun Rect.expandToInclude(other: Rect): Rect =
+    Rect(
+        left = minOf(left, other.left),
+        top = minOf(top, other.top),
+        right = maxOf(right, other.right),
+        bottom = maxOf(bottom, other.bottom),
+    )
+
 /**
  * Returns the ink alpha as [State] so callers can defer the read to the draw
  * phase (inside a graphicsLayer block): the fade animates every frame without
@@ -489,6 +510,7 @@ private fun QcfGlyphLine(
     onWordClick: ((Word) -> Unit)?,
 ) {
     val context = LocalContext.current
+    val hitSlopPx = with(LocalDensity.current) { 8.dp.toPx() }
     val provider = remember(context) {
         (context.applicationContext as QuranApp).qcfFontProvider
     }
@@ -564,8 +586,9 @@ private fun QcfGlyphLine(
                 } else {
                     Modifier.pointerInput(lineText.wordRanges, words, layoutResult) {
                         detectTapGestures { tap ->
-                            val offset = layoutResult?.getOffsetForPosition(tap) ?: return@detectTapGestures
-                            val wordIndex = lineText.wordRanges.indexOfFirst { offset in it }
+                            val wordIndex = layoutResult
+                                ?.wordIndexAt(tap, lineText.wordRanges, hitSlopPx)
+                                ?: -1
                             if (wordIndex >= 0) onWordClick.invoke(words[wordIndex])
                         }
                     }
@@ -674,6 +697,7 @@ private fun ResponsiveHafsAyah(
     )
     var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     val interaction = remember { MutableInteractionSource() }
+    val hitSlopPx = with(LocalDensity.current) { 8.dp.toPx() }
 
     val wordRanges = mutableListOf<IntRange>()
     val annotatedText = buildAnnotatedString {
@@ -719,8 +743,9 @@ private fun ResponsiveHafsAyah(
                 } else {
                     Modifier.pointerInput(lineText.wordRanges, ayah.words, layoutResult) {
                         detectTapGestures { tap ->
-                            val offset = layoutResult?.getOffsetForPosition(tap) ?: return@detectTapGestures
-                            val wordIndex = lineText.wordRanges.indexOfFirst { offset in it }
+                            val wordIndex = layoutResult
+                                ?.wordIndexAt(tap, lineText.wordRanges, hitSlopPx)
+                                ?: -1
                             if (wordIndex >= 0) {
                                 onWordClick.invoke(ayah.words[wordIndex])
                             } else {
