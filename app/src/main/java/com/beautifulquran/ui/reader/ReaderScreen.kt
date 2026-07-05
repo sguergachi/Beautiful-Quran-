@@ -20,6 +20,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -679,6 +680,16 @@ fun ReaderScreen(
                 .fillMaxSize()
                 .graphicsLayer { alpha = readerContentAlpha.value },
         ) {
+            // Opaque status bar overlay when playing to hide content under notch/camera
+            if (isThisSurahPlaying && playerState.isPlaying) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(statusBarTop)
+                        .background(MaterialTheme.colorScheme.background)
+                        .zIndex(100f),
+                )
+            }
             LazyColumn(
                 state = listState,
                 contentPadding = PaddingValues(top = padding.calculateTopPadding()),
