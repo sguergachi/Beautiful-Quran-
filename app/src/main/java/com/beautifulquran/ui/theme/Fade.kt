@@ -87,6 +87,49 @@ fun Modifier.letterFadeIn(
 
 private const val InkProfileStops = 9
 
+/**
+ * Paints [color] over already-drawn glyphs with the same feather geometry as
+ * [letterFadeIn]. This is used for repeat highlighting: the word is already
+ * full ink, then the warm tint blooms through it as a second wash.
+ */
+fun Modifier.inkColorWash(
+    progress: () -> Float,
+    alpha: () -> Float,
+    color: Color,
+    rtl: Boolean,
+): Modifier {
+    val stops = FloatArray(InkProfileStops) { i -> i / (InkProfileStops - 1f) }
+    val washColors = stops.map { t ->
+        val s = t * t * t * (t * (t * 6f - 15f) + 10f)
+        color.copy(alpha = if (rtl) s else 1f - s)
+    }
+    return graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+        .drawWithContent {
+            drawContent()
+            val a = alpha().coerceIn(0f, 1f)
+            if (a <= 0f) return@drawWithContent
+            val p = progress().coerceIn(0f, 1f)
+            val w = size.width
+            if (w <= 0f) return@drawWithContent
+            val edge = (w * 1.6f).coerceAtLeast(1f)
+            val head = p * (w + edge)
+            val brush = if (rtl) {
+                Brush.horizontalGradient(
+                    colors = washColors.map { it.copy(alpha = it.alpha * a) },
+                    startX = w - head,
+                    endX = w - head + edge,
+                )
+            } else {
+                Brush.horizontalGradient(
+                    colors = washColors.map { it.copy(alpha = it.alpha * a) },
+                    startX = head - edge,
+                    endX = head,
+                )
+            }
+            drawRect(brush = brush, blendMode = BlendMode.SrcAtop)
+        }
+}
+
 fun Modifier.verticalFadingEdges(
     color: Color,
     top: Dp = 28.dp,
