@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.os.Build
 import android.view.HapticFeedbackConstants
+import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -281,14 +282,17 @@ fun ReaderScreen(
         val window = view.context.findActivity()?.window
         val controller = window?.let { WindowCompat.getInsetsController(it, view) }
         if (recitingActive) {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             controller?.hide(WindowInsetsCompat.Type.statusBars())
             controller?.systemBarsBehavior =
                 androidx.core.view.WindowInsetsControllerCompat
                     .BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         } else {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             controller?.show(WindowInsetsCompat.Type.statusBars())
         }
         onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             controller?.show(WindowInsetsCompat.Type.statusBars())
         }
     }
