@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,9 +44,11 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -103,6 +106,11 @@ private fun String.quranPauseMarks(): String =
 
 private fun String.withoutTrailingQcfPauseGlyphs(count: Int): String =
     if (count <= 0) this else dropLast(count.coerceAtMost(length))
+
+private data class QcfLineText(
+    val text: AnnotatedString,
+    val wordRanges: List<IntRange>,
+)
 
 /**
  * Returns the ink alpha as [State] so callers can defer the read to the draw
@@ -469,13 +477,11 @@ fun EnglishWordUnit(
 }
 
 @Composable
-@OptIn(ExperimentalLayoutApi::class)
 private fun QcfGlyphLine(
     words: List<Word>,
     states: List<WordVisualState>,
     repeats: List<Boolean>,
     fontSize: TextUnit,
-    activeSweepMs: Int?,
     onWordClick: ((Word) -> Unit)?,
 ) {
     val context = LocalContext.current
@@ -488,20 +494,7 @@ private fun QcfGlyphLine(
     val fadedInk = fullInk
         .copy(alpha = WordVisualState.Upcoming.inkAlpha())
         .compositeOver(MaterialTheme.colorScheme.background)
-    val inkAlphas = states.map { state -> animatedInkAlpha(state) }
-    val sweeps = states.map { state ->
-        rememberLetterSweep(
-            active = state == WordVisualState.Active,
-            sweepMs = activeSweepMs.takeIf { state == WordVisualState.Active },
-        )
-    }
     val repeatInk = LocalQuranAccents.current.repeatInk
-    val repeatWashes = repeats.mapIndexed { index, repeat ->
-        rememberRepeatWash(
-            repeat = repeat,
-            sweepMs = activeSweepMs.takeIf { states.getOrNull(index) == WordVisualState.Active },
-        )
-    }
     val style = ArabicWordStyle.merge(
         TextStyle(
             fontFamily = fontFamily,
@@ -510,105 +503,62 @@ private fun QcfGlyphLine(
             textAlign = TextAlign.Center,
         ),
     )
+    var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
 
-    // A mushaf line can be wider than a phone screen; FlowRow wraps the words
-    // onto extra rows instead of a plain Row overflowing (and, with centred
-    // arrangement, spilling off both edges).
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
+    val wordRanges = mutableListOf<IntRange>()
+    val annotatedLineText = buildAnnotatedString {
         words.forEachIndexed { index, word ->
             val pauseMarks = word.arabic.quranPauseMarks()
             val qcfText = word.qcfV2.withoutTrailingQcfPauseGlyphs(pauseMarks.length)
             val state = states.getOrElse(index) { WordVisualState.Plain }
             val repeat = repeats.getOrElse(index) { false }
-            val wordText = buildAnnotatedString {
-                withStyle(SpanStyle(color = fullInk)) {
-                    append(qcfText)
-                }
-                if (pauseMarks.isNotEmpty()) {
-                    withStyle(
-                        SpanStyle(
-                            color = fullInk,
-                            fontFamily = HafsFontFamily,
-                        ),
-                    ) {
-                        append(" ")
-                        append(pauseMarks)
-                    }
-                }
+            val wordColor = when {
+                repeat -> repeatInk
+                state == WordVisualState.Upcoming -> fadedInk
+                else -> fullInk
             }
-            val fadedWordText = buildAnnotatedString {
-                withStyle(SpanStyle(color = fadedInk)) {
-                    append(qcfText)
-                }
-                if (pauseMarks.isNotEmpty()) {
-                    withStyle(
-                        SpanStyle(
-                            color = fadedInk,
-                            fontFamily = HafsFontFamily,
-                        ),
-                    ) {
-                        append(" ")
-                        append(pauseMarks)
-                    }
-                }
+
+            val start = length
+            withStyle(SpanStyle(color = wordColor)) {
+                append(qcfText)
             }
-            val repeatWordText = buildAnnotatedString {
-                withStyle(SpanStyle(color = repeatInk)) {
-                    append(qcfText)
-                }
-                if (pauseMarks.isNotEmpty()) {
-                    withStyle(
-                        SpanStyle(
-                            color = repeatInk,
-                            fontFamily = HafsFontFamily,
-                        ),
-                    ) {
-                        append(" ")
-                        append(pauseMarks)
-                    }
-                }
-            }
-            Box(
-                modifier = Modifier
-                    .clickable(
-                        interactionSource = null,
-                        indication = null,
-                        onClick = { onWordClick?.invoke(word) },
+            if (pauseMarks.isNotEmpty()) {
+                withStyle(
+                    SpanStyle(
+                        color = wordColor,
+                        fontFamily = HafsFontFamily,
                     ),
-            ) {
-                Text(
-                    text = if (state == WordVisualState.Upcoming) fadedWordText else wordText,
-                    style = style,
-                    modifier = when (state) {
-                        WordVisualState.Active -> {
-                            if (repeat) {
-                                Modifier
-                            } else {
-                                Modifier.letterFadeIn(
-                                    progress = { sweeps[index].value },
-                                    rtl = true,
-                                    restingAlpha = WordVisualState.Upcoming.inkAlpha(),
-                                )
-                            }
-                        }
-                        WordVisualState.Upcoming -> Modifier
-                        else -> Modifier.graphicsLayer { alpha = inkAlphas[index].value }
-                    },
-                )
-                if (repeatWashes[index].alpha.value > 0f) {
-                    Text(
-                        text = repeatWordText,
-                        style = style,
-                        modifier = Modifier.repeatInkLayer(repeatWashes[index], rtl = true),
-                    )
+                ) {
+                    append(" ")
+                    append(pauseMarks)
                 }
             }
+            wordRanges += start until length
+            if (index != words.lastIndex) append(" ")
         }
     }
+    val lineText = QcfLineText(annotatedLineText, wordRanges)
+
+    Text(
+        text = lineText.text,
+        style = style,
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (onWordClick == null) {
+                    Modifier
+                } else {
+                    Modifier.pointerInput(lineText.wordRanges, words, layoutResult) {
+                        detectTapGestures { tap ->
+                            val offset = layoutResult?.getOffsetForPosition(tap) ?: return@detectTapGestures
+                            val wordIndex = lineText.wordRanges.indexOfFirst { offset in it }
+                            if (wordIndex >= 0) onWordClick.invoke(words[wordIndex])
+                        }
+                    }
+                },
+            ),
+        onTextLayout = { layoutResult = it },
+    )
 }
 
 @Composable
@@ -670,7 +620,6 @@ private fun QcfGlyphAyah(
                 states = lineWords.map(::qcfStateFor),
                 repeats = lineWords.map(::inRepeatChain),
                 fontSize = fontSize,
-                activeSweepMs = sweepMs,
                 onWordClick = onWordClick,
             )
         }
