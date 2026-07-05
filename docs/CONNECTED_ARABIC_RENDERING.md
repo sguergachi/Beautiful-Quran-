@@ -99,12 +99,11 @@ The app now has an initial QCF/QPC V2 implementation path:
   It renders one QCF `AnnotatedString` text run per Mushaf line, with one span
   per timed visual word. This keeps Quran pause/stop signs inside the same QCF
   font run while still allowing word-by-word color fade.
-- Arabic-only QCF mode computes one font size for the loaded reader content by
-  measuring all rendered QCF line runs against the actual Compose width. Every
-  ayah and Mushaf line then uses that same size, so the text reads like a
-  Mushaf page instead of changing size line-by-line, while still avoiding the
-  `softWrap = false` clipping failure where long connected lines can appear to
-  lose words at the edges.
+- Arabic-only QCF mode uses one font size derived from the settings font slider
+  and applies it to every ayah and Mushaf line. Long QCF line runs wrap between
+  words when needed instead of shrinking to fit, so the text stays a consistent
+  Mushaf-like size while avoiding the clipping failure where long connected
+  lines can appear to lose words at the edges.
 
 Remaining validation:
 

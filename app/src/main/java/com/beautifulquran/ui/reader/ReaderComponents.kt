@@ -112,6 +112,7 @@ private fun animatedInkAlpha(state: WordVisualState): State<Float> =
 
 const val MIN_SWEEP_MS = 140
 const val MAX_SWEEP_MS = 8_000
+private const val ARABIC_ONLY_QCF_FONT_MULTIPLIER = 1.3f
 
 /**
  * The wash moves at an unhurried, deliberate pace: essentially a steady
@@ -458,7 +459,7 @@ private fun QcfGlyphLine(
     Text(
         text = text,
         style = style,
-        softWrap = false,
+        softWrap = true,
         modifier = Modifier.fillMaxWidth(),
     )
 }
@@ -596,7 +597,6 @@ fun AyahBlock(
     showTranslation: Boolean,
     searchQuery: String? = null,
     keepActiveWordInView: Boolean = false,
-    qcfFontSize: TextUnit? = null,
     onWordClick: ((Word) -> Unit)?,
     onAyahClick: () -> Unit,
 ) {
@@ -721,7 +721,7 @@ fun AyahBlock(
                     highWater = highWater,
                     repeatActive = isRepeatActive,
                     isActiveAyah = isActiveAyah,
-                    fontSize = qcfFontSize ?: ArabicWordStyle.fontSize * fontScale * 1.18f,
+                    fontSize = ArabicWordStyle.fontSize * fontScale * ARABIC_ONLY_QCF_FONT_MULTIPLIER,
                     sweepMs = sweepMs,
                     onAyahClick = onAyahClick,
                 )

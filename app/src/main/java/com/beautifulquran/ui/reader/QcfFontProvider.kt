@@ -6,6 +6,9 @@ import androidx.compose.ui.text.font.FontFamily
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -22,6 +25,11 @@ import kotlin.math.min
  * Loads bundled QPC/QCF V2 page fonts.
  */
 class QcfFontProvider(private val context: Context) {
+    private val _extractionProgress = MutableStateFlow(QcfFontExtractionProgress())
+
+    val extractionProgress: StateFlow<QcfFontExtractionProgress> =
+        _extractionProgress.asStateFlow()
+
     private val lock = Mutex()
     private val extractionLock = Mutex()
     private val memory = linkedMapOf<Int, FontFamily>()
@@ -78,10 +86,17 @@ class QcfFontProvider(private val context: Context) {
     }
 
     private suspend fun ensureArchiveExtracted() {
-        if (isArchiveExtracted()) return
+        if (isArchiveExtracted()) {
+            markExtractionComplete()
+            return
+        }
         extractionLock.withLock {
-            if (isArchiveExtracted()) return
+            if (isArchiveExtracted()) {
+                markExtractionComplete()
+                return
+            }
             runCatching {
+                _extractionProgress.value = QcfFontExtractionProgress(isRunning = true)
                 dir.mkdirs()
                 dir.listFiles { file ->
                     file.name.endsWith(".tmp") || file.name.startsWith(".qcf-v2-fonts-")
@@ -97,8 +112,13 @@ class QcfFontProvider(private val context: Context) {
                     file.name.startsWith(".qcf-v2-fonts-") && file.name != marker.name
                 }?.forEach { it.delete() }
                 marker.writeText("ready\n")
+                markExtractionComplete()
             }.onFailure {
                 marker.delete()
+                _extractionProgress.value = QcfFontExtractionProgress(
+                    isRunning = false,
+                    error = it.message ?: "Could not prepare Mushaf fonts",
+                )
             }
         }
     }
@@ -121,6 +141,7 @@ class QcfFontProvider(private val context: Context) {
 
     private fun extractTar(input: InputStream) {
         val header = ByteArray(TAR_BLOCK_BYTES)
+        var extractedFonts = 0
         while (true) {
             val read = input.readFullyOrEnd(header)
             if (read == -1 || header.all { it == 0.toByte() }) return
@@ -141,6 +162,11 @@ class QcfFontProvider(private val context: Context) {
                     tmp.delete()
                     throw IllegalStateException("Could not move extracted QCF font into place")
                 }
+                extractedFonts++
+                _extractionProgress.value = QcfFontExtractionProgress(
+                    extractedFonts = extractedFonts,
+                    isRunning = true,
+                )
             } else {
                 input.skipExactly(size)
             }
@@ -214,9 +240,18 @@ class QcfFontProvider(private val context: Context) {
     private fun paddingFor(size: Long): Long =
         (TAR_BLOCK_BYTES - (size % TAR_BLOCK_BYTES)) % TAR_BLOCK_BYTES
 
+    private fun markExtractionComplete() {
+        _extractionProgress.value = QcfFontExtractionProgress(
+            extractedFonts = QCF_FONT_COUNT,
+            isRunning = false,
+            isComplete = true,
+        )
+    }
+
     companion object {
         private const val MIN_FONT_BYTES = 100_000L
         private const val MAX_MEMORY_FONTS = 80
+        private const val QCF_FONT_COUNT = 604
         private const val ARCHIVE_VERSION = "qcf-v2-fonts-v1"
         private const val TAR_BLOCK_BYTES = 512
         private val ARCHIVE_ASSETS = listOf(
@@ -227,4 +262,22 @@ class QcfFontProvider(private val context: Context) {
 
         fun fontFileName(page: Int): String = "QCF2${page.toString().padStart(3, '0')}.ttf"
     }
+}
+
+data class QcfFontExtractionProgress(
+    val extractedFonts: Int = 0,
+    val totalFonts: Int = 604,
+    val isRunning: Boolean = false,
+    val isComplete: Boolean = false,
+    val error: String? = null,
+) {
+    val fraction: Float
+        get() = if (totalFonts > 0) {
+            (extractedFonts.toFloat() / totalFonts).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
+
+    val percent: Int
+        get() = (fraction * 100).toInt().coerceIn(0, 100)
 }
