@@ -444,7 +444,7 @@ fun AyahBlock(
                     )
                 }
             }
-        } else {
+        } else if (showGloss) {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
@@ -466,6 +466,45 @@ fun AyahBlock(
                         )
                     }
                     ArabicAyahNumberUnit(ayah.number, fontScale)
+                }
+            }
+        } else {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                val textColor = MaterialTheme.colorScheme.onBackground
+                val connectedText = remember(ayah.words, activeWord, isActiveAyah) {
+                    buildAnnotatedString {
+                        ayah.words.forEachIndexed { i, word ->
+                            if (i > 0) append(" ")
+                            val start = length
+                            append(word.arabic)
+                            val state = stateFor(word)
+                            val alpha = state.inkAlpha()
+                            addStyle(
+                                SpanStyle(color = textColor.copy(alpha = alpha)),
+                                start = start,
+                                end = length,
+                            )
+                        }
+                    }
+                }
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = connectedText,
+                            style = ArabicWordStyle,
+                            fontSize = ArabicWordStyle.fontSize * fontScale,
+                            color = textColor,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        ArabicAyahNumberUnit(ayah.number, fontScale)
+                    }
                 }
             }
         }
