@@ -213,6 +213,19 @@ fun themePreviewColors(themeMode: ThemeMode): List<Color> {
 }
 
 @Composable
+fun playbackNotificationColorScheme(themeMode: ThemeMode): ColorScheme {
+    val systemDark = isSystemInDarkTheme()
+    val currentIsNightfall = themeMode == ThemeMode.DARK ||
+        (themeMode == ThemeMode.SYSTEM && systemDark)
+
+    return when {
+        themeMode == ThemeMode.ROYAL_GREEN -> LightColors
+        currentIsNightfall -> RoyalGreenColors
+        else -> DarkColors
+    }
+}
+
+@Composable
 fun BeautifulQuranTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     content: @Composable () -> Unit,
