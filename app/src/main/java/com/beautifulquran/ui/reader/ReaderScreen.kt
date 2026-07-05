@@ -425,6 +425,12 @@ fun ReaderScreen(
             ayahItem.ayahIndex + 1f + itemProgress
         }
     }
+    val isAwayFromActiveAyah = remember(activeAyah) {
+        derivedStateOf {
+            val ayah = activeAyah ?: return@derivedStateOf false
+            scrolledAyah.value != ayah
+        }
+    }
 
     // A fresh query restarts from its first match…
     LaunchedEffect(activeQuery) { searchIndex = 0 }
@@ -662,7 +668,8 @@ fun ReaderScreen(
                 val showReturnToAyah =
                     playerState.error == null &&
                         !followEnabled &&
-                        recitingActive
+                        recitingActive &&
+                        isAwayFromActiveAyah.value
                 AnimatedVisibility(
                     visible = playerState.error != null,
                     enter = fadeIn(),
@@ -820,7 +827,9 @@ fun ReaderScreen(
                                             dragStarted = true
                                             val dx = change.position.x - down.position.x
                                             val dy = change.position.y - down.position.y
-                                            followEnabled = abs(dy) > abs(dx)
+                                            if (abs(dy) > abs(dx)) {
+                                                followEnabled = false
+                                            }
                                         }
                                     }
                                 }
