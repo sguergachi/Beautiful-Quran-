@@ -1005,8 +1005,8 @@ fun OrnateSurahTitle(
 fun PageBreak(page: Int, useArabicIndicDigits: Boolean = true) {
     val accents = LocalQuranAccents.current
     val pageNumberStyle = MaterialTheme.typography.labelSmall
-    val pageNumberSize = 11.sp
-    val pageNumberColor = accents.gold.copy(alpha = 0.45f)
+    val pageNumberSize = 12.sp
+    val pageNumberColor = accents.gold.copy(alpha = 0.68f)
     Column(
         modifier = Modifier
             .fillMaxWidth()
