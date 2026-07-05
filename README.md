@@ -66,6 +66,7 @@ source scripts/android_env.sh
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how the app is put together: pipeline, sync engine, modules, conventions
 - [docs/DESIGN.md](docs/DESIGN.md) — the design language: the sheet, ink, color, type, motion
 - [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — every smoothness technique in use and why
+- [docs/REPEAT_HIGHLIGHTING.md](docs/REPEAT_HIGHLIGHTING.md) — the orange second fade for words a reciter repeats, and where the repeat-aware timing data comes from
 
 ## Data & attribution
 
@@ -74,5 +75,6 @@ source scripts/android_env.sh
 | Uthmani text + Saheeh Intl. translation | [quran-json](https://github.com/risan/quran-json) (Tanzil / Al Quran Cloud) | free with attribution |
 | Word-by-word gloss + transliteration | Quran.com dataset via npm | free with attribution |
 | Word timing segments | [cpfair/quran-align](https://github.com/cpfair/quran-align) | CC-BY 4.0 |
+| Repeat-aware timing segments | [quran.com](https://quran.com) `qdc` audio API | free with attribution |
 | Recitation audio | [everyayah.com](https://everyayah.com) | free; rights remain with reciters |
 | Arabic typeface | KFGQPC HAFS Uthmanic Script, King Fahd Complex | free redistribution |

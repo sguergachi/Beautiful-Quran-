@@ -54,6 +54,7 @@ Sources (all fetched over HTTPS, cached in `tools/.cache/`):
 | `quran-json` (npm) | Uthmani Unicode text, Saheeh International translation, surah metadata | Tanzil-derived, verse-keyed, no auth |
 | `@kmaslesa/holy-quran-word-by-word-full-data` (npm) | Per-word English gloss + transliteration (Quran.com data) | Only per-word English dataset on an open registry |
 | `cpfair/quran-align` release zip | Word-level timestamps per reciter, CC-BY 4.0 | The canonical open word-alignment dataset, matched to everyayah.com audio |
+| quran.com `qdc` audio API | **Repeat-aware** word timestamps for reciters in `QDC_REPEAT_RECITERS` | quran-align is one-pass and cannot encode a repeated phrase; quran.com's segments backtrack when the reciter repeats. Same everyayah audio. See [REPEAT_HIGHLIGHTING.md](REPEAT_HIGHLIGHTING.md) |
 
 The **canonical word segmentation** is the space-split of the Uthmani text.
 The other two sources are mapped onto it by position:
@@ -67,6 +68,17 @@ The other two sources are mapped onto it by position:
 - A reciter whose timing file cannot be parsed at all (the Sudais file in the
   upstream release zip is truncated) ships with `has_timings = 0` — the app
   plays audio for that reciter without word highlighting.
+- Reciters in `QDC_REPEAT_RECITERS` take **repeat-aware** timings from quran.com
+  instead: same schema, but the word index backtracks where the reciter repeats
+  a phrase, driving the orange second fade. The segments are rebased from
+  gapless-file offsets to ayah-relative ms (`adjust_qdc_segments`). Full detail:
+  [REPEAT_HIGHLIGHTING.md](REPEAT_HIGHLIGHTING.md).
+
+> **Changing the DB content requires a version bump.** The generated `quran.db`
+> is git-ignored and extracted from assets to internal storage keyed on
+> `QuranDatabase.DB_FILE_NAME` (`quran-vN.db`). Any content change (new reciter,
+> new timings) must bump that suffix or existing installs keep the stale cached
+> database.
 
 Output schema (all read-only at runtime):
 
@@ -106,6 +118,11 @@ per-item derivedStateOf in the reader list  ──►  one ayah recomposes
 - `HighlightEngine` holds a word lit through inter-word gaps (karaoke
   behavior), lights nothing before the first word (covers the basmalah lead
   on first-ayah audio) and nothing after the last word ends.
+- For repeat-aware reciters, `HighlightEngine.activeInfo` also reports
+  `isRepeat` (the active word points back at an earlier position) and
+  `highWater` (furthest word reached), which drive the orange second fade and
+  keep already-recited words lit during a repeat. See
+  [REPEAT_HIGHLIGHTING.md](REPEAT_HIGHLIGHTING.md).
 - Word-level accuracy of the source data is ±73 ms on average — inside the
   ~150 ms window that reads as "in sync" to a human.
 
