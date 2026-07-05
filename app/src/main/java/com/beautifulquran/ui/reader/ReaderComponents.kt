@@ -484,6 +484,9 @@ private fun QcfGlyphLine(
         ),
     )
 
+    // A mushaf line can be wider than a phone screen; FlowRow wraps the words
+    // onto extra rows instead of a plain Row overflowing (and, with centred
+    // arrangement, spilling off both edges).
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
