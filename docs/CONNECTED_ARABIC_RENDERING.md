@@ -104,6 +104,10 @@ The app now has an initial QCF/QPC V2 implementation path:
   words when needed instead of shrinking to fit, so the text stays a consistent
   Mushaf-like size while avoiding the clipping failure where long connected
   lines can appear to lose words at the edges.
+- Waqf/pause marks are rendered explicitly from the canonical Unicode Arabic
+  word using the Hafs font. The corresponding trailing QCF private-use pause
+  glyph is stripped from the QCF token first, so the connected Mushaf word stays
+  QCF while Quran reading-rule signs remain visible.
 
 Remaining validation:
 

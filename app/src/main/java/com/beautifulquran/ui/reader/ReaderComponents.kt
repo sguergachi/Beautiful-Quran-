@@ -97,6 +97,14 @@ private fun wordFadeAlpha(progress: Float): Float {
     return resting + (WordVisualState.Active.inkAlpha() - resting) * progress.coerceIn(0f, 1f)
 }
 
+private val QuranPauseMarks = setOf('ۖ', 'ۗ', 'ۘ', 'ۙ', 'ۚ', 'ۛ', 'ۜ', '۩')
+
+private fun String.quranPauseMarks(): String =
+    filter { it in QuranPauseMarks }
+
+private fun String.withoutTrailingQcfPauseGlyphs(count: Int): String =
+    if (count <= 0) this else dropLast(count.coerceAtMost(length))
+
 /**
  * Returns the ink alpha as [State] so callers can defer the read to the draw
  * phase (inside a graphicsLayer block): the fade animates every frame without
@@ -442,8 +450,21 @@ private fun QcfGlyphLine(
     val text = buildAnnotatedString {
         words.forEachIndexed { index, word ->
             if (index > 0) append(" ")
+            val pauseMarks = word.arabic.quranPauseMarks()
+            val qcfText = word.qcfV2.withoutTrailingQcfPauseGlyphs(pauseMarks.length)
             withStyle(SpanStyle(color = colors[index].value)) {
-                append(word.qcfV2)
+                append(qcfText)
+            }
+            if (pauseMarks.isNotEmpty()) {
+                withStyle(
+                    SpanStyle(
+                        color = colors[index].value,
+                        fontFamily = HafsFontFamily,
+                    ),
+                ) {
+                    append(" ")
+                    append(pauseMarks)
+                }
             }
         }
     }
