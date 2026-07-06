@@ -1140,6 +1140,7 @@ private fun PlaybackNotificationSheet(
     val inkSpread = remember { Animatable(1f) }
     val revealHole = remember { Animatable(0f) }
     val actionAlpha = remember { Animatable(0f) }
+    val fruitAlpha = remember { Animatable(0f) }
     var originX by remember { mutableFloatStateOf(0.5f) }
     var originY by remember { mutableFloatStateOf(0.9f) }
     var closing by remember { mutableStateOf(false) }
@@ -1152,6 +1153,14 @@ private fun PlaybackNotificationSheet(
     // Enter: ink spreads open from the play control.
     LaunchedEffect(Unit) {
         inkSpread.snapTo(0f)
+        fruitAlpha.snapTo(0f)
+        launch {
+            delay(980)
+            fruitAlpha.animateTo(
+                targetValue = 0.90f,
+                animationSpec = tween(durationMillis = 1_450, easing = SoftInkEasing),
+            )
+        }
         launch {
             // The answers surface only once the words have written in.
             delay(2_250)
@@ -1178,6 +1187,9 @@ private fun PlaybackNotificationSheet(
         }
         closing = true
         scope.launch {
+            launch {
+                fruitAlpha.animateTo(0f, tween(durationMillis = 220, easing = LinearEasing))
+            }
             launch {
                 actionAlpha.animateTo(0f, tween(durationMillis = 180, easing = LinearEasing))
             }
@@ -1259,10 +1271,10 @@ private fun PlaybackNotificationSheet(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .fillMaxWidth(0.88f)
-                        .height(500.dp)
-                        .graphicsLayer { alpha = 0.90f }
-                        .padding(end = 0.dp, bottom = 6.dp),
+                        .fillMaxWidth(0.72f)
+                        .height(420.dp)
+                        .graphicsLayer { alpha = fruitAlpha.value }
+                        .padding(end = 0.dp, bottom = 64.dp),
                 )
             }
             // Bottom — the two answers, fading up after the words have landed.
