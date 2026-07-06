@@ -119,10 +119,15 @@ class PlayerController(private val context: Context) {
     )
 
     private fun syncFromController(player: Player, forcePlaying: Boolean = false) {
+        val ended = player.playbackState == Player.STATE_ENDED
         _state.value = _state.value.copy(
             isPlaying = player.isPlaying || forcePlaying,
             isBuffering = player.playbackState == Player.STATE_BUFFERING,
-            nowPlaying = player.currentMediaItem?.mediaId?.let(::parseMediaId),
+            nowPlaying = if (ended && !forcePlaying) {
+                null
+            } else {
+                player.currentMediaItem?.mediaId?.let(::parseMediaId)
+            },
             repeatMode = player.repeatMode,
             repeatRange = repeatRange,
             speed = player.playbackParameters.speed,
