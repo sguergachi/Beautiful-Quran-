@@ -19,7 +19,7 @@ data class PageTurnVariation(
  *
  * Recordings are CC0: "Book Flip Sounds" by Voltiment555 (variations 1-13)
  * and "80 CC0 RPG SFX" by rubberduck (variations 14-17), both from
- * opengameart.org, trimmed, time-compressed to at most half a second, and
+ * opengameart.org, trimmed, time-compressed to at most one second, and
  * loudness-normalized to -18 LUFS.
  */
 class PageTurnSounds(context: Context) {
@@ -52,9 +52,8 @@ class PageTurnSounds(context: Context) {
     fun playRandom() {
         var index = Random.nextInt(soundIds.size)
         if (index == lastIndex) index = (index + 1) % soundIds.size
-        // Small upward-only pitch drift so a repeated recording reads as a
-        // fresh sheet without ever stretching playback past half a second.
-        play(index, rate = 1f + Random.nextFloat() * 0.1f)
+        // Small pitch drift so a repeated recording reads as a fresh sheet.
+        play(index, rate = 1f + (Random.nextFloat() - 0.5f) * 0.1f)
     }
 
     /** Plays one specific variation as recorded, for auditioning. */
