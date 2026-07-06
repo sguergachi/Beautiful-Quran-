@@ -21,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,12 +40,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -55,6 +58,7 @@ import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ArabicRenderMode
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.data.ThemeMode
+import com.beautifulquran.ui.PageTurnSounds
 import com.beautifulquran.ui.theme.themePreviewColors
 import com.beautifulquran.ui.theme.verticalFadingEdges
 
@@ -205,34 +209,6 @@ fun SettingsScreen(
                         checked = settings.showTranslation,
                         onChange = { v -> viewModel.settings.update { it.copy(showTranslation = v) } },
                     )
-                    if (!settings.showWordGloss) {
-                        Spacer(Modifier.height(18.dp))
-                        SectionLabel("Arabic renderer")
-                        Spacer(Modifier.height(10.dp))
-                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            ArabicRenderMode.entries.forEachIndexed { index, mode ->
-                                SegmentedButton(
-                                    selected = settings.arabicRenderMode == mode,
-                                    onClick = {
-                                        viewModel.settings.update { it.copy(arabicRenderMode = mode) }
-                                    },
-                                    shape = SegmentedButtonDefaults.itemShape(
-                                        index = index,
-                                        count = ArabicRenderMode.entries.size,
-                                    ),
-                                    colors = greenSegmentedButtonColors(),
-                                ) {
-                                    Text(
-                                        text = when (mode) {
-                                            ArabicRenderMode.RESPONSIVE_HAFS -> "Responsive"
-                                            ArabicRenderMode.QCF_MUSHAF -> "QCF"
-                                        },
-                                        style = MaterialTheme.typography.labelMedium,
-                                    )
-                                }
-                            }
-                        }
-                    }
                 }
 
                 Spacer(Modifier.height(24.dp))
@@ -269,6 +245,9 @@ fun SettingsScreen(
                 }
 
                 Spacer(Modifier.height(48.dp))
+                DeveloperSection(viewModel)
+
+                Spacer(Modifier.height(48.dp))
                 SectionLabel("About & attributions")
                 Spacer(Modifier.height(12.dp))
                 Text(
@@ -277,6 +256,93 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                 )
                 Spacer(Modifier.height(56.dp))
+            }
+        }
+    }
+}
+
+/** Testing tools for development builds; controls here may change or vanish. */
+@Composable
+private fun DeveloperSection(viewModel: SettingsViewModel) {
+    val settings by viewModel.settings.settings.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val sounds = remember { PageTurnSounds(context) }
+    DisposableEffect(sounds) {
+        onDispose { sounds.release() }
+    }
+
+    SectionLabel("Developer")
+    Spacer(Modifier.height(4.dp))
+    Text(
+        text = "Tools for testing work in progress.",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+    )
+
+    Spacer(Modifier.height(20.dp))
+    Text("Arabic renderer", style = MaterialTheme.typography.bodyLarge)
+    Text(
+        text = "Applies to Arabic-only reading (word-by-word off).",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+    )
+    Spacer(Modifier.height(10.dp))
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        ArabicRenderMode.entries.forEachIndexed { index, mode ->
+            SegmentedButton(
+                selected = settings.arabicRenderMode == mode,
+                onClick = {
+                    viewModel.settings.update { it.copy(arabicRenderMode = mode) }
+                },
+                shape = SegmentedButtonDefaults.itemShape(
+                    index = index,
+                    count = ArabicRenderMode.entries.size,
+                ),
+                colors = greenSegmentedButtonColors(),
+            ) {
+                Text(
+                    text = when (mode) {
+                        ArabicRenderMode.RESPONSIVE_HAFS -> "Responsive"
+                        ArabicRenderMode.QCF_MUSHAF -> "QCF"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+        }
+    }
+
+    Spacer(Modifier.height(24.dp))
+    Text("Page turn sounds", style = MaterialTheme.typography.bodyLarge)
+    Text(
+        text = "Tap to audition. Names match the res/raw files.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+    )
+    Spacer(Modifier.height(6.dp))
+    PageTurnSounds.VARIATIONS.forEachIndexed { index, variation ->
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) { sounds.play(index) }
+                .padding(vertical = 6.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.PlayArrow,
+                contentDescription = "Play ${variation.fileName}",
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.size(12.dp))
+            Column {
+                Text(variation.fileName, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = variation.source,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                )
             }
         }
     }
