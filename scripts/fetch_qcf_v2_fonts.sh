@@ -35,7 +35,9 @@ for page in $(seq 1 604); do
   mv "$tmp" "$dest"
 done
 
-tmp_archive="$OUT_ARCHIVE.tmp"
+# Build the archive inside WORK_DIR so the EXIT trap cleans it up; only the
+# split .part* files land in the assets directory.
+tmp_archive="$WORK_DIR/qcf-v2-fonts.tar.xz"
 tar -C "$WORK_DIR" -cf - qcf-v2-fonts | xz -9e -T0 > "$tmp_archive"
 rm -f "$OUT_ARCHIVE" "$OUT_PART_PREFIX"*
 split -b 60M -d -a 1 "$tmp_archive" "$OUT_PART_PREFIX"

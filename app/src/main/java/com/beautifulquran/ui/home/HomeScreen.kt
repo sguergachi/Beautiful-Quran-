@@ -2,11 +2,9 @@ package com.beautifulquran.ui.home
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -76,6 +74,7 @@ import com.beautifulquran.data.model.Surah
 import com.beautifulquran.ui.theme.ArabicTitleStyle
 import com.beautifulquran.ui.theme.GildedRosette
 import com.beautifulquran.ui.theme.LocalQuranAccents
+import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.verticalFadingEdges
 
 /** Position of the search field in the list (after the title) — the row we lift to the top on focus. */
@@ -207,12 +206,7 @@ fun HomeScreen(
                         modifier = Modifier
                             .size(48.dp)
                             .clip(CircleShape)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                role = Role.Button,
-                                onClick = onOpenSettings,
-                            )
+                            .quietClickable(role = Role.Button, onClick = onOpenSettings)
                             .semantics { contentDescription = "Open settings" },
                     ) {
                         GildedRosette(
@@ -329,11 +323,7 @@ private fun ContinueCard(target: ContinueTarget, onClick: () -> Unit) {
             .padding(top = 18.dp)
             .clip(RoundedCornerShape(22.dp))
             .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
+            .quietClickable(onClick = onClick)
             .padding(horizontal = 22.dp, vertical = 18.dp),
     ) {
         Column(Modifier.weight(1f)) {
@@ -366,11 +356,7 @@ private fun SurahRow(surah: Surah, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
+            .quietClickable(onClick = onClick)
             .padding(horizontal = 28.dp, vertical = 15.dp),
     ) {
         Box(Modifier.width(34.dp)) {

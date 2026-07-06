@@ -14,16 +14,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * Softly dissolves the content at its top and bottom edges, so scrolling
- * feels like ink fading off a single sheet of paper.
- *
- * Implementation note: because every sheet sits on a solid paper color, the
- * fade is drawn as a cheap gradient overlay of that color on top of the
- * content. This costs one rect per edge in the draw phase — no offscreen
- * compositing layer, no alpha mask — which keeps scrolling at the display's
- * native refresh rate even on modest GPUs.
- */
-/**
  * Letter reveal for the word being recited: a soft ink wash sweeps across the
  * glyphs (right-to-left for Arabic), so each letter breathes in to full ink
  * in turn. [progress] is 0..1 across the word and is read only at draw time —
@@ -107,6 +97,16 @@ fun Modifier.letterFadeIn(
 private const val InkProfileStops = 9
 private val FadeLayerBleed = 11.dp
 
+/**
+ * Softly dissolves the content at its top and bottom edges, so scrolling
+ * feels like ink fading off a single sheet of paper.
+ *
+ * Implementation note: because every sheet sits on a solid paper color, the
+ * fade is drawn as a cheap gradient overlay of that color on top of the
+ * content. This costs one rect per edge in the draw phase — no offscreen
+ * compositing layer, no alpha mask — which keeps scrolling at the display's
+ * native refresh rate even on modest GPUs.
+ */
 fun Modifier.verticalFadingEdges(
     color: Color,
     top: Dp = 28.dp,

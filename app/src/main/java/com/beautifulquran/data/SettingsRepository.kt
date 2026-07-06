@@ -31,6 +31,11 @@ data class Settings(
     val lastAyah: Int = 1,
 )
 
+/** Reads an enum stored by ordinal, falling back to [default] if the stored
+ * ordinal no longer maps to an entry (e.g. after an entry is removed). */
+private inline fun <reified E : Enum<E>> SharedPreferences.enum(key: String, default: E): E =
+    enumValues<E>().getOrNull(getInt(key, default.ordinal)) ?: default
+
 class SettingsRepository(context: Context) {
 
     private val prefs: SharedPreferences =
@@ -42,16 +47,13 @@ class SettingsRepository(context: Context) {
     private fun read() = Settings(
         reciterId = prefs.getInt("reciterId", 1),
         fontScale = prefs.getFloat("fontScale", 1f),
-        readingMode = ReadingMode.entries[prefs.getInt("readingMode", 0)],
+        readingMode = prefs.enum("readingMode", ReadingMode.ARABIC_ENGLISH),
         showWordGloss = prefs.getBoolean("showWordGloss", true),
         showTransliteration = prefs.getBoolean("showTransliteration", false),
         showTranslation = prefs.getBoolean("showTranslation", true),
-        arabicRenderMode = ArabicRenderMode.entries.getOrNull(
-            prefs.getInt("arabicRenderMode", 0),
-        ) ?: ArabicRenderMode.RESPONSIVE_HAFS,
-        themeMode = ThemeMode.entries.getOrNull(prefs.getInt("themeMode", 0)) ?: ThemeMode.SYSTEM,
-        ayahSelectorSide = AyahSelectorSide.entries.getOrNull(prefs.getInt("ayahSelectorSide", 0))
-            ?: AyahSelectorSide.LEFT,
+        arabicRenderMode = prefs.enum("arabicRenderMode", ArabicRenderMode.RESPONSIVE_HAFS),
+        themeMode = prefs.enum("themeMode", ThemeMode.SYSTEM),
+        ayahSelectorSide = prefs.enum("ayahSelectorSide", AyahSelectorSide.LEFT),
         lastSurah = prefs.getInt("lastSurah", 0),
         lastAyah = prefs.getInt("lastAyah", 1),
     )

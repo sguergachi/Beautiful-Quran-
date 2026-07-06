@@ -184,8 +184,7 @@ class PlayerController(private val context: Context) {
         repeatRange = startAyah..endAyah
         repeatEndPositionMs = endPositionMs
         _state.value = _state.value.copy(repeatRange = repeatRange, repeatMode = Player.REPEAT_MODE_OFF)
-        scope.launch {
-            val c = ensureController()
+        withController { c ->
             c.repeatMode = Player.REPEAT_MODE_OFF
             val idx = c.currentMediaItemIndex
             if (c.mediaItemCount > 0 && (idx < startAyah - 1 || idx > endAyah - 1)) {
@@ -195,7 +194,10 @@ class PlayerController(private val context: Context) {
         }
     }
 
-    fun clearRepeatRange() {
+    fun clearRepeatRange() = resetRepeatState()
+
+    /** Clears the range, its custom end position, and the boundary monitor. */
+    private fun resetRepeatState() {
         repeatRange = null
         repeatEndPositionMs = null
         repeatBoundaryJob?.cancel()
@@ -223,8 +225,7 @@ class PlayerController(private val context: Context) {
         repeatRange = boundedRange
         if (boundedRange == null) repeatEndPositionMs = null
         _state.value = _state.value.copy(repeatRange = boundedRange)
-        scope.launch {
-            val c = ensureController()
+        withController { c ->
             val items = (1..ayahCount).map { ayah ->
                 MediaItem.Builder()
                     .setMediaId(mediaId(surahId, ayah, reciter.id))
@@ -247,73 +248,49 @@ class PlayerController(private val context: Context) {
         }
     }
 
-    fun togglePlayPause() {
-        scope.launch {
-            val c = ensureController()
-            if (c.isPlaying) c.pause() else c.play()
-        }
+    /** Runs [block] on the main scope with a connected controller —
+     * the shape of every one-shot command below. */
+    private fun withController(block: suspend (MediaController) -> Unit) {
+        scope.launch { block(ensureController()) }
     }
 
-    fun seekToAyah(ayah: Int) {
-        scope.launch {
-            val c = ensureController()
+    fun togglePlayPause() = withController { c ->
+        if (c.isPlaying) c.pause() else c.play()
+    }
+
+    /**
+     * Seeks to [ayah] at [positionMs] within it (when the ayah is in the
+     * loaded playlist) and optionally starts playback. The four public
+     * variants below are the combinations the UI actually uses.
+     */
+    private fun seekTo(ayah: Int, positionMs: Long, play: Boolean, playIfOutOfRange: Boolean = play) =
+        withController { c ->
             val index = ayah - 1
-            if (index in 0 until c.mediaItemCount) c.seekTo(index, 0L)
+            val inRange = index in 0 until c.mediaItemCount
+            if (inRange) c.seekTo(index, positionMs)
+            if ((inRange && play) || (!inRange && playIfOutOfRange)) c.play()
         }
-    }
 
-    fun playLoadedFromAyah(ayah: Int) {
-        scope.launch {
-            val c = ensureController()
-            val index = ayah - 1
-            if (index in 0 until c.mediaItemCount) {
-                c.seekTo(index, 0L)
-            }
-            c.play()
-        }
-    }
+    fun seekToAyah(ayah: Int) = seekTo(ayah, 0L, play = false)
 
-    fun seekToWord(ayah: Int, positionMs: Long) {
-        scope.launch {
-            val c = ensureController()
-            val index = ayah - 1
-            if (index in 0 until c.mediaItemCount) c.seekTo(index, positionMs)
-        }
-    }
+    /** Seek to [ayah] in the already-loaded playlist and play — also resumes
+     * when the index is out of range (e.g. a stale jump request). */
+    fun playLoadedFromAyah(ayah: Int) = seekTo(ayah, 0L, play = true, playIfOutOfRange = true)
 
-    fun seekToWordAndPlay(ayah: Int, positionMs: Long) {
-        scope.launch {
-            val c = ensureController()
-            val index = ayah - 1
-            if (index in 0 until c.mediaItemCount) {
-                c.seekTo(index, positionMs)
-                c.play()
-            }
-        }
-    }
+    fun seekToWord(ayah: Int, positionMs: Long) = seekTo(ayah, positionMs, play = false)
 
-    fun next() {
-        scope.launch { ensureController().seekToNextMediaItem() }
-    }
+    fun seekToWordAndPlay(ayah: Int, positionMs: Long) = seekTo(ayah, positionMs, play = true, playIfOutOfRange = false)
 
-    fun previous() {
-        scope.launch { ensureController().seekToPreviousMediaItem() }
-    }
+    fun next() = withController { it.seekToNextMediaItem() }
 
-    fun setRepeatMode(mode: Int) {
-        scope.launch { ensureController().repeatMode = mode }
-    }
+    fun previous() = withController { it.seekToPreviousMediaItem() }
 
-    fun setSpeed(speed: Float) {
-        scope.launch { ensureController().setPlaybackSpeed(speed) }
-    }
+    fun setRepeatMode(mode: Int) = withController { it.repeatMode = mode }
+
+    fun setSpeed(speed: Float) = withController { it.setPlaybackSpeed(speed) }
 
     fun stop() {
-        repeatRange = null
-        repeatEndPositionMs = null
-        repeatBoundaryJob?.cancel()
-        repeatBoundaryJob = null
-        _state.value = _state.value.copy(repeatRange = null)
+        resetRepeatState()
         scope.launch {
             controller?.let {
                 it.stop()

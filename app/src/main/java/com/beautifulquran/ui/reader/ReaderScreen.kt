@@ -1,64 +1,39 @@
 package com.beautifulquran.ui.reader
 
-import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.pm.PackageManager
-import android.graphics.Paint
-import android.graphics.Typeface
-import android.os.Build
-import android.view.HapticFeedbackConstants
 import android.view.WindowManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.exponentialDecay
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -69,106 +44,58 @@ import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.isSpecified
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathOperation
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
-import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import com.beautifulquran.R
 import com.beautifulquran.QuranApp
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ArabicRenderMode
 import com.beautifulquran.data.ReadingMode
-import com.beautifulquran.ui.theme.DisplayFontFamily
 import com.beautifulquran.ui.theme.IslamicReturnToAyahButton
-import com.beautifulquran.ui.theme.LocalQuranAccents
-import com.beautifulquran.ui.theme.SerifFontFamily
+import com.beautifulquran.ui.theme.absorbPointerEvents
 import com.beautifulquran.ui.theme.playbackNotificationColorScheme
 import com.beautifulquran.ui.theme.verticalFadingEdges
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.abs
-import kotlin.math.ceil
-import kotlin.math.hypot
 import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.pow
-import kotlin.math.roundToInt
-import kotlin.math.sqrt
 
 // LazyColumn's animateScrollToItem estimates the heights of every unmeasured
 // ayah block along the way and re-anchors as the real ones compose in, which
@@ -247,16 +174,12 @@ fun ReaderScreen(
     }
     var followEnabled by remember { mutableStateOf(true) }
     var showRepeatDialog by remember { mutableStateOf(false) }
-    var showNotifPermissionDialog by remember { mutableStateOf(false) }
-    var pendingNotifPermissionAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var requestedJumpAyah by remember { mutableIntStateOf(0) }
 
     // In-surah English search: matches are ayahs whose translation or any
     // word gloss contains the query.
-    var searchActive by rememberSaveable { mutableStateOf(false) }
-    var searchQuery by rememberSaveable { mutableStateOf("") }
-    var searchIndex by rememberSaveable { mutableIntStateOf(0) }
-    val activeQuery = searchQuery.trim().takeIf { searchActive && it.length >= 2 }
+    val search = rememberSurahSearchState()
+    val activeQuery = search.activeQuery
     val searchMatches = remember(uiState.content, activeQuery) {
         val content = uiState.content
         if (activeQuery == null || content == null) {
@@ -268,7 +191,7 @@ fun ReaderScreen(
             }.map { it.number }
         }
     }
-    val currentMatch = searchIndex.coerceIn(0, (searchMatches.size - 1).coerceAtLeast(0))
+    val currentMatch = search.index.coerceIn(0, (searchMatches.size - 1).coerceAtLeast(0))
 
     val isThisSurahPlaying = playerState.nowPlaying?.surahId == surahId
     // Lead-adjusted: crosses to the next ayah ~500ms before the current one's
@@ -392,25 +315,7 @@ fun ReaderScreen(
             qcfFontError = "Could not load Mushaf font pages: ${failed.sorted().joinToString()}"
         }
     }
-    val notifPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { }
-    fun requestPlaybackNotificationPermission(action: () -> Unit) {
-        if (Build.VERSION.SDK_INT < 33) {
-            action()
-            return
-        }
-        val granted = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.POST_NOTIFICATIONS,
-        ) == PackageManager.PERMISSION_GRANTED
-        if (granted) {
-            action()
-            return
-        }
-        pendingNotifPermissionAction = action
-        showNotifPermissionDialog = true
-    }
+    val notifPermission = rememberPlaybackPermissionState()
 
     // The permission prompt is not a dialog — it is an ink bleed that turns
     // this very sheet into the question. See PlaybackNotificationSheet and the
@@ -420,13 +325,14 @@ fun ReaderScreen(
     // Reading by hand pauses the follow mode via pointerInput.
 
     val density = LocalDensity.current
-    val readingAnchorOffsetPx = remember(listState.layoutInfo.viewportSize.height, density) {
+    // Where scrolls anchor the target ayah: the upper third of the viewport.
+    // Computed on demand inside the scroll coroutines below — reading
+    // LazyListState.layoutInfo during composition would subscribe the whole
+    // screen to a value that changes on every scroll frame.
+    val fallbackAnchorPx = with(density) { 120.dp.roundToPx() }
+    fun readingAnchorOffsetPx(): Int {
         val viewportHeight = listState.layoutInfo.viewportSize.height
-        if (viewportHeight > 0) {
-            (viewportHeight * 0.28f).toInt()
-        } else {
-            with(density) { 120.dp.roundToPx() }
-        }
+        return if (viewportHeight > 0) (viewportHeight * 0.28f).toInt() else fallbackAnchorPx
     }
     val statusBarTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
     val scrolledAyahPosition = remember(readerItems) {
@@ -452,13 +358,13 @@ fun ReaderScreen(
     }
 
     // A fresh query restarts from its first match…
-    LaunchedEffect(activeQuery) { searchIndex = 0 }
+    LaunchedEffect(activeQuery) { search.index = 0 }
     // …and the sheet glides to whichever match is current.
     LaunchedEffect(searchMatches, currentMatch) {
         val target = searchMatches.getOrNull(currentMatch) ?: return@LaunchedEffect
         followEnabled = false
         val itemIndex = ayahToItemIndex[target - 1] ?: return@LaunchedEffect
-        listState.smoothScrollToItem(itemIndex, -readingAnchorOffsetPx)
+        listState.smoothScrollToItem(itemIndex, -readingAnchorOffsetPx())
     }
 
     LaunchedEffect(requestedJumpAyah) {
@@ -472,7 +378,7 @@ fun ReaderScreen(
         viewModel.onAyahBecameActive(target)
         if (isThisSurahPlaying) viewModel.player.seekToAyah(target)
         val itemIndex = ayahToItemIndex[target - 1] ?: return@LaunchedEffect
-        listState.smoothScrollToItem(itemIndex, -readingAnchorOffsetPx)
+        listState.smoothScrollToItem(itemIndex, -readingAnchorOffsetPx())
     }
 
     fun selectedPlaybackAyah(): Int {
@@ -491,7 +397,7 @@ fun ReaderScreen(
         val itemIndex = ayahToItemIndex[ayah - 1] ?: return@LaunchedEffect
         listState.animateScrollToItem(
             index = itemIndex,
-            scrollOffset = -readingAnchorOffsetPx,
+            scrollOffset = -readingAnchorOffsetPx(),
         )
     }
 
@@ -505,7 +411,7 @@ fun ReaderScreen(
                 val itemIndex = ayahToItemIndex[startAyah - 1] ?: return@LaunchedEffect
                 listState.scrollToItem(
                     index = itemIndex,
-                    scrollOffset = -readingAnchorOffsetPx,
+                    scrollOffset = -readingAnchorOffsetPx(),
                 )
             }
         }
@@ -521,15 +427,9 @@ fun ReaderScreen(
 
     val keyboard = LocalSoftwareKeyboardController.current
     val searchFocus = remember { FocusRequester() }
-    LaunchedEffect(searchActive) {
-        if (searchActive) searchFocus.requestFocus() else keyboard?.hide()
+    LaunchedEffect(search.active) {
+        if (search.active) searchFocus.requestFocus() else keyboard?.hide()
     }
-    fun closeSearch() {
-        searchActive = false
-        searchQuery = ""
-        searchIndex = 0
-    }
-
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -540,13 +440,13 @@ fun ReaderScreen(
             // search field with match navigation.
             CenterAlignedTopAppBar(
                 modifier = Modifier.graphicsLayer {
-                    alpha = if (searchActive) 1f else topBarAlpha.value
+                    alpha = if (search.active) 1f else topBarAlpha.value
                 },
                 title = {
-                    if (searchActive) {
+                    if (search.active) {
                         BasicTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
+                            value = search.query,
+                            onValueChange = { search.query = it },
                             singleLine = true,
                             textStyle = MaterialTheme.typography.bodyLarge.copy(
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -556,7 +456,7 @@ fun ReaderScreen(
                             keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
                             decorationBox = { inner ->
                                 Box(contentAlignment = Alignment.CenterStart) {
-                                    if (searchQuery.isEmpty()) {
+                                    if (search.query.isEmpty()) {
                                         Text(
                                             text = "Find an English word…",
                                             style = MaterialTheme.typography.bodyLarge,
@@ -597,22 +497,22 @@ fun ReaderScreen(
                 },
                 navigationIcon = {
                     IconButton(
-                        onClick = { if (searchActive) closeSearch() else onBack() },
-                        enabled = searchActive || !recitingActive,
+                        onClick = { if (search.active) search.close() else onBack() },
+                        enabled = search.active || !recitingActive,
                     ) {
                         Icon(
-                            imageVector = if (searchActive) {
+                            imageVector = if (search.active) {
                                 Icons.Rounded.Close
                             } else {
                                 Icons.AutoMirrored.Rounded.ArrowBack
                             },
-                            contentDescription = if (searchActive) "Close search" else "Back",
+                            contentDescription = if (search.active) "Close search" else "Back",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
                         )
                     }
                 },
                 actions = {
-                    if (searchActive) {
+                    if (search.active) {
                         Text(
                             text = if (searchMatches.isEmpty()) {
                                 if (activeQuery == null) "" else "0/0"
@@ -626,7 +526,7 @@ fun ReaderScreen(
                             onClick = {
                                 if (searchMatches.isNotEmpty()) {
                                     keyboard?.hide()
-                                    searchIndex =
+                                    search.index =
                                         (currentMatch - 1 + searchMatches.size) % searchMatches.size
                                 }
                             },
@@ -642,7 +542,7 @@ fun ReaderScreen(
                             onClick = {
                                 if (searchMatches.isNotEmpty()) {
                                     keyboard?.hide()
-                                    searchIndex = (currentMatch + 1) % searchMatches.size
+                                    search.index = (currentMatch + 1) % searchMatches.size
                                 }
                             },
                             enabled = searchMatches.isNotEmpty(),
@@ -655,7 +555,7 @@ fun ReaderScreen(
                         }
                     } else {
                         IconButton(
-                            onClick = { searchActive = true },
+                            onClick = { search.active = true },
                             enabled = !recitingActive,
                         ) {
                             Icon(
@@ -733,7 +633,7 @@ fun ReaderScreen(
                             if (playerState.isPlaying) {
                                 viewModel.player.togglePlayPause()
                             } else {
-                                requestPlaybackNotificationPermission {
+                                notifPermission.request {
                                     followEnabled = true
                                     if (requestedJumpAyah > 0) {
                                         val selectedAyah = selectedPlaybackAyah()
@@ -744,7 +644,7 @@ fun ReaderScreen(
                                 }
                             }
                         } else {
-                            requestPlaybackNotificationPermission {
+                            notifPermission.request {
                                 followEnabled = true
                                 viewModel.playFromAyah(selectedPlaybackAyah())
                             }
@@ -905,7 +805,7 @@ fun ReaderScreen(
                                 onWordClick = { word ->
                                     val segment = viewModel.segmentsFor(ayah.number)
                                         ?.firstOrNull { it.position == word.position }
-                                    requestPlaybackNotificationPermission {
+                                    notifPermission.request {
                                         followEnabled = true
                                         if (segment != null) {
                                             viewModel.playFromWord(ayah.number, segment.startMs)
@@ -915,7 +815,7 @@ fun ReaderScreen(
                                     }
                                 },
                                 onAyahClick = {
-                                    requestPlaybackNotificationPermission {
+                                    notifPermission.request {
                                         followEnabled = true
                                         viewModel.playFromAyah(ayah.number)
                                     }
@@ -936,17 +836,7 @@ fun ReaderScreen(
                     Modifier
                         .matchParentSize()
                         .zIndex(0.5f)
-                        .pointerInput(Unit) {
-                            awaitEachGesture {
-                                val down = awaitFirstDown(requireUnconsumed = false)
-                                ayahSelectorDismissRequests += 1
-                                down.consume()
-                                do {
-                                    val event = awaitPointerEvent()
-                                    event.changes.forEach { it.consume() }
-                                } while (event.changes.any { it.pressed })
-                            }
-                        },
+                        .absorbPointerEvents { ayahSelectorDismissRequests += 1 },
                 )
             }
             val selectorSide = settings.ayahSelectorSide
@@ -969,6 +859,7 @@ fun ReaderScreen(
                 currentAyah = railCurrentAyah,
                 currentPosition = railCurrentPosition,
                 chromeAlpha = { if (recitingActive) 0f else chromeAlpha.value },
+                interactive = !recitingActive,
                 onJumpToAyah = { requestedJumpAyah = it },
                 onExpandedChange = { ayahSelectorExpanded = it },
                 dismissRequests = ayahSelectorDismissRequests,
@@ -1004,22 +895,12 @@ fun ReaderScreen(
         // it becomes the question. Answering runs the bleed in reverse, back
         // into the pressed button (the sheet owns that exit), then hands off —
         // so the callbacks fire only once the paper has receded.
-        if (showNotifPermissionDialog && pendingNotifPermissionAction != null) {
-            val notificationColors = playbackNotificationColorScheme(settings.themeMode)
+        if (notifPermission.sheetVisible) {
             PlaybackNotificationSheet(
-                colors = notificationColors,
+                colors = playbackNotificationColorScheme(settings.themeMode),
                 modifier = Modifier.zIndex(2f),
-                onDismiss = {
-                    showNotifPermissionDialog = false
-                    pendingNotifPermissionAction?.invoke()
-                    pendingNotifPermissionAction = null
-                },
-                onAllow = {
-                    showNotifPermissionDialog = false
-                    notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    pendingNotifPermissionAction?.invoke()
-                    pendingNotifPermissionAction = null
-                },
+                onDismiss = notifPermission::dismiss,
+                onAllow = notifPermission::allow,
             )
         }
     }
@@ -1042,7 +923,7 @@ fun ReaderScreen(
             onDismiss = { showRepeatDialog = false },
             onRepeatMode = viewModel::setRepeatMode,
             onRepeatRange = { from, to ->
-                requestPlaybackNotificationPermission {
+                notifPermission.request {
                     followEnabled = true
                     viewModel.setRepeatRange(from, to)
                 }
@@ -1057,792 +938,35 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
-// A gentle, near-symmetric ease for the word fade: it drifts in slowly, never
-// snapping to full ink, so text feels light as it soaks into the paper.
-private val SoftInkEasing = CubicBezierEasing(0.33f, 0.0f, 0.15f, 1.0f)
-private val ExponentialSlowDownEasing = Easing { fraction ->
-    if (fraction >= 1f) 1f else 1f - 2f.pow(-10f * fraction)
-}
-private val PlaybackNotificationOverscan = 12.dp
-// Only the full-colour illustrations appear on the prompt; the mono line-art
-// variants are no longer shown.
-private val QuranFruitColorDrawables = listOf(
-    R.drawable.quran_fruit_dates,
-    R.drawable.quran_fruit_fig,
-    R.drawable.quran_fruit_grapes,
-    R.drawable.quran_fruit_olives,
-    R.drawable.quran_fruit_pomegranate,
-)
-
-// Intrinsic width/height of each illustration, in the parallel order of the
-// list above (dates, fig, grapes, olives, pomegranate). The art ranges from a
-// tall date branch (0.59) to an almost-square olive spray (1.05); we normalise
-// to a constant ink *area* so every fruit reads at the same visual weight
-// rather than the tall ones shrinking inside a fixed box.
-private val QuranFruitAspectRatios = listOf(0.59f, 0.95f, 0.69f, 1.05f, 0.84f)
-
-// The prompt cycles the fruit one after another instead of picking at random,
-// so a reader who opens the sheet repeatedly walks the whole set in order
-// rather than seeing the same fruit twice in a row. floorMod keeps the index
-// in range even after the counter eventually wraps past Int.MAX_VALUE.
-private val QuranFruitRotation = AtomicInteger(0)
-
-private fun nextQuranFruitIndex(): Int =
-    QuranFruitRotation.getAndIncrement().mod(QuranFruitColorDrawables.size)
-
-// A circle of ink centred at an origin (a fraction of the sheet, so it is
-// size-agnostic); the radius reaches the farthest corner exactly at
-// progress = 1, so the ink covers every corner of the paper.
-//
-// - `punchHole = false` — the sheet is clipped *to* the circle: ink spreads
-//   open from the origin to fill the paper (the enter bleed).
-// - `punchHole = true` — the sheet is the paper *minus* the circle: a hole
-//   opens at the origin and grows outward, revealing the reader beneath (the
-//   exit reveal, from the pressed button).
-private class InkRevealShape(
-    private val originX: Float,
-    private val originY: Float,
-    private val progress: Float,
-    private val punchHole: Boolean = false,
-) : Shape {
-    override fun createOutline(
-        size: Size,
-        layoutDirection: LayoutDirection,
-        density: Density,
-    ): Outline {
-        val cx = size.width * originX
-        val cy = size.height * originY
-        val maxRadius = hypot(
-            max(cx, size.width - cx),
-            max(cy, size.height - cy),
-        )
-        val r = maxRadius * progress
-        val circle = Path().apply {
-            addOval(Rect(cx - r, cy - r, cx + r, cy + r))
-        }
-        val path = if (punchHole) {
-            val sheet = Path().apply {
-                addRect(Rect(0f, 0f, size.width, size.height))
-            }
-            Path().apply { op(sheet, circle, PathOperation.Difference) }
-        } else {
-            circle
-        }
-        return Outline.Generic(path)
-    }
-}
-
-// Not a dialog — the reader sheet itself, soaked in ink, becomes the question.
-// Ink bleeds from the play control across the whole paper (the clip circle),
-// then the words write themselves in: a large chapter-style title up top, the
-// body through the middle, and the two answers along the bottom, surfacing
-// only once the message has landed. See docs/DESIGN.md, "The ink bleed".
-@Composable
-private fun PlaybackNotificationSheet(
-    colors: ColorScheme,
-    modifier: Modifier = Modifier,
-    onDismiss: () -> Unit,
-    onAllow: () -> Unit,
+/**
+ * In-surah English search state: whether the top bar is in search mode, the
+ * live query, and which match is current. Backed by rememberSaveable so an
+ * open search survives rotation and process recreation.
+ */
+private class SurahSearchState(
+    activeState: MutableState<Boolean>,
+    queryState: MutableState<String>,
+    indexState: MutableState<Int>,
 ) {
-    val titleStyle = MaterialTheme.typography.headlineMedium.copy(
-        fontFamily = DisplayFontFamily,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 46.sp,
-        lineHeight = 52.sp,
-        letterSpacing = 0.sp,
-    )
-    val bodyStyle = MaterialTheme.typography.bodyLarge.copy(
-        fontFamily = SerifFontFamily,
-        fontSize = 21.sp,
-        lineHeight = 32.sp,
-        letterSpacing = 0.sp,
-    )
-    val actionStyle = MaterialTheme.typography.labelLarge.copy(
-        fontFamily = SerifFontFamily,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 17.sp,
-        lineHeight = 22.sp,
-        letterSpacing = 0.3.sp,
-    )
+    var active by activeState
+    var query by queryState
+    var index by indexState
 
-    // Read only inside graphicsLayer, so the reveal is draw-phase only and
-    // never recomposes the sheet. On enter, ink spreads open from the play
-    // control (bottom-centre) to fill the paper. On answering, a hole opens at
-    // the pressed button and grows outward, revealing the reader beneath.
-    val inkSpread = remember { Animatable(1f) }
-    val revealHole = remember { Animatable(0f) }
-    val actionAlpha = remember { Animatable(0f) }
-    val fruitAlpha = remember { Animatable(0f) }
-    var originX by remember { mutableFloatStateOf(0.5f) }
-    var originY by remember { mutableFloatStateOf(0.9f) }
-    var closing by remember { mutableStateOf(false) }
-    // Button centres, captured in window space, so the reveal is contextual.
-    var sheetBounds by remember { mutableStateOf<Rect?>(null) }
-    var dismissCentre by remember { mutableStateOf(Offset.Unspecified) }
-    var allowCentre by remember { mutableStateOf(Offset.Unspecified) }
-    // Next fruit in the rotation, chosen once per time the sheet appears.
-    val fruitIndex = remember { nextQuranFruitIndex() }
-    val fruitDrawable = QuranFruitColorDrawables[fruitIndex]
-    val fruitAspect = QuranFruitAspectRatios[fruitIndex]
-    val scope = rememberCoroutineScope()
+    /** Non-null while a usable query is live (search open, ≥ 2 chars). */
+    val activeQuery: String?
+        get() = query.trim().takeIf { active && it.length >= 2 }
 
-    // Enter: ink spreads open from the play control.
-    LaunchedEffect(Unit) {
-        inkSpread.snapTo(0f)
-        fruitAlpha.snapTo(0f)
-        launch {
-            // The answers surface only once the words have written in.
-            delay(2_250)
-            actionAlpha.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
-            )
-        }
-        launch {
-            // The illustration arrives *last* of all — only after the words and
-            // both answers have landed — as a flat opacity fade, like ink soaking
-            // up on the paper where it lies, with no rise or scale.
-            delay(3_000)
-            fruitAlpha.animateTo(
-                targetValue = 0.90f,
-                animationSpec = tween(durationMillis = 1_500, easing = SoftInkEasing),
-            )
-        }
-        inkSpread.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 720, easing = ExponentialSlowDownEasing),
-        )
-    }
-
-    // Answer: a circular hole opens at the pressed button and spreads outward,
-    // revealing the ayahs and UI beneath, then hands off (start playback /
-    // launch the OS request) once the paper is gone.
-    fun answer(centre: Offset, then: () -> Unit) {
-        if (closing) return
-        val bounds = sheetBounds
-        if (centre.isSpecified && bounds != null && bounds.width > 0f && bounds.height > 0f) {
-            originX = ((centre.x - bounds.left) / bounds.width).coerceIn(0f, 1f)
-            originY = ((centre.y - bounds.top) / bounds.height).coerceIn(0f, 1f)
-        }
-        closing = true
-        scope.launch {
-            launch {
-                fruitAlpha.animateTo(0f, tween(durationMillis = 220, easing = LinearEasing))
-            }
-            launch {
-                actionAlpha.animateTo(0f, tween(durationMillis = 180, easing = LinearEasing))
-            }
-            revealHole.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(durationMillis = 720, easing = ExponentialSlowDownEasing),
-            )
-            then()
-        }
-    }
-
-    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val overscan = PlaybackNotificationOverscan
-        Column(
-            modifier = Modifier
-                .offset(x = -overscan, y = -overscan)
-                .requiredSize(
-                    width = maxWidth + overscan * 2,
-                    height = maxHeight + overscan * 2,
-                )
-                .onGloballyPositioned { sheetBounds = it.boundsInWindow() }
-                .graphicsLayer {
-                    clip = true
-                    shape = if (closing) {
-                        // Hole opens at the pressed button, growing to reveal the reader.
-                        InkRevealShape(originX, originY, revealHole.value, punchHole = true)
-                    } else {
-                        // Ink fills a circle spreading up from the play control.
-                        InkRevealShape(originX, originY, inkSpread.value, punchHole = false)
-                    }
-                }
-                .background(colors.background)
-                // Absorb every touch so the recitation sheet beneath never reacts.
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        awaitFirstDown(requireUnconsumed = false)
-                        do {
-                            val event = awaitPointerEvent()
-                            event.changes.forEach { it.consume() }
-                        } while (event.changes.any { it.pressed })
-                    }
-                }
-                .padding(
-                    start = 32.dp + overscan,
-                    end = 32.dp + overscan,
-                    top = statusBarTop + 48.dp + overscan,
-                    bottom = navBarBottom + 40.dp + overscan,
-                ),
-        ) {
-            // Top — the title opens the sheet like a chapter.
-            WordFadeText(
-                text = stringResource(R.string.notification_permission_title),
-                style = titleStyle,
-                color = colors.onBackground,
-                initialDelayMs = 180,
-                wordDelayMs = 82,
-            )
-            // Middle — the body, written in word by word, resting in the sheet.
-            BoxWithConstraints(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(top = 28.dp),
-                contentAlignment = Alignment.TopStart,
-            ) {
-                // The illustration is the illuminated ornament of the page: sized
-                // to a constant ink area (so tall and wide fruit weigh the same),
-                // then optically centred in the space the words leave below them,
-                // filling the void that used to sit between body and answers.
-                val squareEdge = maxWidth * 0.66f
-                val aspectRoot = sqrt(fruitAspect)
-                val rawWidth = squareEdge * aspectRoot
-                val rawHeight = squareEdge / aspectRoot
-                val fitScale = min(
-                    1f,
-                    min(
-                        (maxWidth * 0.74f) / rawWidth,
-                        (maxHeight * 0.60f) / rawHeight,
-                    ),
-                )
-                val fruitWidth = rawWidth * fitScale
-                val fruitHeight = rawHeight * fitScale
-
-                WordFadeText(
-                    text = stringResource(R.string.notification_permission_message),
-                    style = bodyStyle,
-                    color = colors.onBackground.copy(alpha = 0.82f),
-                    initialDelayMs = 520,
-                    wordDelayMs = 62,
-                )
-                Image(
-                    painter = painterResource(fruitDrawable),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        // Slightly below true centre, so it settles into the void
-                        // that opens up beneath the body without crowding it.
-                        .align(BiasAlignment(0f, 0.18f))
-                        .width(fruitWidth)
-                        .height(fruitHeight)
-                        // A flat ink reveal: opacity only, no scale or movement.
-                        .graphicsLayer { alpha = fruitAlpha.value }
-                )
-            }
-            // Bottom — the two answers, fading up after the words have landed.
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .graphicsLayer { alpha = actionAlpha.value },
-            ) {
-                TextButton(
-                    onClick = { answer(dismissCentre, onDismiss) },
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                    modifier = Modifier
-                        .defaultMinSize(minWidth = 0.dp, minHeight = 48.dp)
-                        .onGloballyPositioned { dismissCentre = it.boundsInWindow().center },
-                ) {
-                    Text(
-                        text = stringResource(R.string.notification_permission_not_now),
-                        style = actionStyle,
-                        color = colors.onBackground.copy(alpha = 0.5f),
-                    )
-                }
-                Button(
-                    onClick = { answer(allowCentre, onAllow) },
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = colors.primary,
-                        contentColor = colors.onPrimary,
-                    ),
-                    // Flat: nothing casts a shadow on the paper.
-                    elevation = ButtonDefaults.buttonElevation(
-                        defaultElevation = 0.dp,
-                        pressedElevation = 0.dp,
-                        focusedElevation = 0.dp,
-                        hoveredElevation = 0.dp,
-                    ),
-                    contentPadding = PaddingValues(horizontal = 28.dp, vertical = 14.dp),
-                    modifier = Modifier
-                        .defaultMinSize(minWidth = 96.dp, minHeight = 52.dp)
-                        .onGloballyPositioned { allowCentre = it.boundsInWindow().center },
-                ) {
-                    Text(
-                        text = stringResource(R.string.notification_permission_allow),
-                        style = actionStyle,
-                        color = colors.onPrimary,
-                    )
-                }
-            }
-        }
+    fun close() {
+        active = false
+        query = ""
+        index = 0
     }
 }
 
 @Composable
-private fun WordFadeText(
-    text: String,
-    style: TextStyle,
-    color: androidx.compose.ui.graphics.Color,
-    initialDelayMs: Int,
-    wordDelayMs: Int,
-) {
-    val words = remember(text) { text.split(" ") }
-    val alphas = remember(text) {
-        List(words.size) { Animatable(0f) }
-    }
-
-    LaunchedEffect(text, initialDelayMs, wordDelayMs) {
-        alphas.forEach { it.snapTo(0f) }
-        delay(initialDelayMs.toLong())
-        alphas.forEachIndexed { index, alpha ->
-            launch {
-                delay((index * wordDelayMs).toLong())
-                alpha.animateTo(
-                    targetValue = 1f,
-                    // Gentle enough to feel like ink, short enough that the
-                    // permission message is readable without waiting.
-                    animationSpec = tween(
-                        durationMillis = 2_400,
-                        easing = SoftInkEasing,
-                    ),
-                )
-            }
-        }
-    }
-
-    Text(
-        text = buildAnnotatedString {
-            words.forEachIndexed { index, word ->
-                if (index > 0) append(" ")
-                withStyle(SpanStyle(color = color.copy(alpha = alphas[index].value))) {
-                    append(word)
-                }
-            }
-        },
-        style = style,
-    )
-}
-
-private fun rubberBandDialPosition(value: Float, min: Float, max: Float): Float {
-    if (value in min..max) return value
-    return if (value < min) {
-        min - (min - value) * 0.32f
-    } else {
-        max + (value - max) * 0.32f
-    }
-}
-
-private fun symbolicAyahBarCount(ayahCount: Int): Int {
-    return ceil(sqrt(ayahCount.toFloat())).roundToInt().coerceIn(4, 18)
-}
-
-private suspend fun settleDialWheel(
-    start: Float,
-    velocity: Float,
-    ayahCount: Int,
-    setPosition: (Float) -> Unit,
-): Int {
-    val min = 1f
-    val max = ayahCount.toFloat()
-    val anim = Animatable(start.coerceIn(min, max))
-    // Bounds stop the decay the moment it reaches either end — no invisible
-    // tail running past the range while the wheel sits frozen at the clamp.
-    anim.updateBounds(lowerBound = min, upperBound = max)
-
-    val flung = abs(velocity) > 0.06f
-    if (flung) {
-        anim.animateDecay(
-            initialVelocity = velocity,
-            animationSpec = exponentialDecay(frictionMultiplier = 1.85f),
-        ) {
-            setPosition(value)
-        }
-    }
-
-    val target = anim.value.roundToInt().coerceIn(1, ayahCount)
-    anim.animateTo(
-        targetValue = target.toFloat(),
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessMediumLow,
-        ),
-        initialVelocity = if (flung) 0f else velocity,
-    ) {
-        setPosition(value)
-    }
-    setPosition(target.toFloat())
-    return target
-}
-
-@Composable
-private fun AyahSelectorRail(
-    ayahCount: Int,
-    side: AyahSelectorSide,
-    currentAyah: State<Int>,
-    currentPosition: State<Float>,
-    chromeAlpha: () -> Float,
-    onJumpToAyah: (Int) -> Unit,
-    onExpandedChange: (Boolean) -> Unit,
-    dismissRequests: Int,
-    modifier: Modifier = Modifier,
-) {
-    val mirrored = side == AyahSelectorSide.RIGHT
-    var expanded by remember { mutableStateOf(false) }
-    // Owned Animatable rather than animateFloatAsState so the commit sequence
-    // can await the collapse and keep the wheel anchored on the chosen ayah
-    // the whole way out.
-    val expansion = remember { Animatable(0f) }
-    var lastHapticAyah by remember(ayahCount) {
-        mutableIntStateOf(currentAyah.value.coerceIn(1, ayahCount))
-    }
-    var dialPosition by remember(ayahCount) {
-        mutableFloatStateOf(currentPosition.value.coerceIn(1f, ayahCount.toFloat()))
-    }
-    // Runs settle + grace countdown + commit after a release; cancelled by the next touch.
-    var releaseJob by remember { mutableStateOf<Job?>(null) }
-    val commitProgress = remember { Animatable(0f) }
-    val scope = rememberCoroutineScope()
-    val view = LocalView.current
-    val latestOnJumpToAyah by rememberUpdatedState(onJumpToAyah)
-    val latestOnExpandedChange by rememberUpdatedState(onExpandedChange)
-
-    LaunchedEffect(expanded) {
-        latestOnExpandedChange(expanded)
-    }
-    LaunchedEffect(dismissRequests) {
-        if (dismissRequests == 0 || !expanded) return@LaunchedEffect
-        releaseJob?.cancel()
-        releaseJob = null
-        commitProgress.snapTo(0f)
-        expanded = false
-        expansion.animateTo(0f, spring(dampingRatio = 1f, stiffness = 200f))
-    }
-
-    fun scheduleReleaseCommit(start: Float, velocity: Float) {
-        releaseJob?.cancel()
-        releaseJob = scope.launch {
-            commitProgress.snapTo(0f)
-            val target = settleDialWheel(
-                start = start,
-                velocity = velocity,
-                ayahCount = ayahCount,
-                setPosition = { dialPosition = it },
-            )
-            lastHapticAyah = target
-            // Grace window: the gold underline drains for 1.5s; touching the
-            // rail again cancels this job and hands the wheel back for edits.
-            commitProgress.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(durationMillis = 1_500, easing = LinearEasing),
-            )
-            if (target != currentAyah.value.coerceIn(1, ayahCount)) {
-                latestOnJumpToAyah(target)
-            }
-            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-            expanded = false
-            // Collapse stays anchored on the committed ayah — dialPosition is
-            // not touched, so the wheel fades out where the reader left it
-            // instead of snapping back to the pre-jump scroll position.
-            expansion.animateTo(0f, spring(dampingRatio = 1f, stiffness = 200f))
-            commitProgress.snapTo(0f)
-            releaseJob = null
-        }
-    }
-
-    LaunchedEffect(ayahCount) {
-        // Mirror the reading position only while the wheel is fully hidden;
-        // syncing any earlier yanks a still-visible wheel to a stale ayah.
-        snapshotFlow { currentAyah.value to currentPosition.value }
-            .collect { (ayah, position) ->
-                if (!expanded && releaseJob == null && !expansion.isRunning) {
-                    lastHapticAyah = ayah.coerceIn(1, ayahCount)
-                    dialPosition = position.coerceIn(1f, ayahCount.toFloat())
-                }
-            }
-    }
-    LaunchedEffect(expanded, ayahCount) {
-        if (!expanded) return@LaunchedEffect
-        snapshotFlow { dialPosition.roundToInt().coerceIn(1, ayahCount) }
-            .collect { ayah ->
-                if (ayah != lastHapticAyah) {
-                    val majorTick = ayah == 1 || ayah == ayahCount || ayah % 5 == 0
-                    view.performHapticFeedback(
-                        if (majorTick) {
-                            HapticFeedbackConstants.CONTEXT_CLICK
-                        } else {
-                            HapticFeedbackConstants.CLOCK_TICK
-                        },
-                    )
-                    lastHapticAyah = ayah
-                }
-            }
-    }
-    val accents = LocalQuranAccents.current
-    val onSurface = MaterialTheme.colorScheme.onSurface
-
-    Box(
-        modifier = modifier
-            // Fixed drawing width: the old expand/collapse width animation
-            // re-laid the rail out every frame. Touch handling is split into
-            // a child below so the collapsed hit target is only the visible
-            // edge strip, letting nearby ayah text receive taps.
-            .width(92.dp)
-            .graphicsLayer { alpha = chromeAlpha() },
-    ) {
-        Canvas(Modifier.fillMaxSize()) {
-            val expand = expansion.value
-            // The right-side rail is the left layout mirrored across the rail's
-            // own width: bar rects flip so their hidden cap lands under the far
-            // edge, and numbers hang off the inner end instead.
-            val railWidth = size.width
-            fun rectLeft(x: Float, width: Float) = if (mirrored) railWidth - x - width else x
-            fun textAnchor(x: Float) = if (mirrored) railWidth - x else x
-            // Always anchored on dialPosition: while hidden it mirrors the
-            // reading position (synced above), while visible it is the finger
-            // — including the rubber-banded overshoot past either end.
-            val selectedPosition = dialPosition
-            val selectedAyah = selectedPosition.roundToInt().coerceIn(1, ayahCount)
-            val collapsedX = 0f
-            val centerY = size.height * 0.5f
-            val collapsedAlpha = 1f - expand
-            val numberPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                textAlign = if (mirrored) Paint.Align.RIGHT else Paint.Align.LEFT
-                textSize = 9.sp.toPx()
-                typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
-            }
-
-            // Collapsed-stack metrics live outside the pass because the
-            // expanded wheel's focal point blooms out of the dark bar.
-            val collapsedBarsCount = symbolicAyahBarCount(ayahCount)
-            val collapsedBarHeight = 1.5.dp.toPx()
-            val collapsedSpacing = (72.dp.toPx() / collapsedBarsCount)
-                .coerceIn(4.dp.toPx(), 8.dp.toPx())
-            val collapsedStep = collapsedBarHeight + collapsedSpacing
-            val readProgress = if (ayahCount > 1) {
-                ((currentPosition.value - 1f) / (ayahCount - 1).toFloat()).coerceIn(0f, 1f)
-            } else {
-                0f
-            }
-            val collapsedActivePosition = readProgress * (collapsedBarsCount - 1)
-
-            if (collapsedAlpha > 0.01f) {
-                // Symbolic summary of the surah: bar count grows with ayah
-                // count (sqrt-mapped), and the glow slides through the stack
-                // as the reader moves through the surah.
-                val collapsedBarWidth = 10.dp.toPx()
-                val collapsedCorner = CornerRadius(collapsedBarHeight, collapsedBarHeight)
-                val halfSpan = ((collapsedBarsCount - 1) / 2f).coerceAtLeast(1f)
-
-                for (index in 0 until collapsedBarsCount) {
-                    val relative = index - (collapsedBarsCount - 1) / 2f
-                    val y = centerY + relative * collapsedStep
-                    // Staggered exit: outer bars slip off the edge first as
-                    // the wheel opens, and return last on close.
-                    val exit = (collapsedAlpha * 1.35f - (abs(relative) / halfSpan) * 0.35f)
-                        .coerceIn(0f, 1f)
-                    if (exit <= 0.01f) continue
-                    // Continuous focus instead of one hard active index, so
-                    // the highlight glides between bars during scroll.
-                    val focus = (1f - abs(index - collapsedActivePosition)).coerceIn(0f, 1f)
-                    // Left cap hidden behind the screen edge so the bars read
-                    // as flush at x = 0 despite the rounded corners.
-                    val collapsedBarW = collapsedBarWidth * (0.7f + 0.45f * focus) + collapsedBarHeight
-                    drawRoundRect(
-                        color = onSurface.copy(alpha = (0.18f + 0.72f * focus) * exit),
-                        topLeft = Offset(
-                            rectLeft(
-                                collapsedX - collapsedBarHeight - (1f - exit) * 4.dp.toPx(),
-                                collapsedBarW,
-                            ),
-                            y - collapsedBarHeight / 2f,
-                        ),
-                        size = Size(collapsedBarW, collapsedBarHeight),
-                        cornerRadius = collapsedCorner,
-                    )
-                }
-            }
-
-            if (expand > 0.01f) {
-                // Flush with the screen edge, matching the collapsed stack.
-                val wheelX = 0f
-                val tickSpacing = 14.dp.toPx()
-                val focusRadius = (ceil(size.height / tickSpacing / 2f).toInt() + 2)
-                    .coerceAtLeast(8)
-                // The focal point rides the rail like a scrollbar thumb: its
-                // height mirrors the dark bar's relative position in the
-                // surah. On open it blooms out of the dark bar itself, then
-                // glides to (and drags along) that proportional position.
-                val anchorMargin = 72.dp.toPx()
-                val anchorTravel = (size.height - 2f * anchorMargin).coerceAtLeast(0f)
-                val dialFraction = if (ayahCount > 1) {
-                    ((selectedPosition - 1f) / (ayahCount - 1f)).coerceIn(0f, 1f)
-                } else {
-                    0.5f
-                }
-                val collapsedActiveY = centerY +
-                    (collapsedActivePosition - (collapsedBarsCount - 1) / 2f) * collapsedStep
-                val restingAnchorY = anchorMargin + dialFraction * anchorTravel
-                val anchorY = collapsedActiveY + (restingAnchorY - collapsedActiveY) * expand
-                val first = (selectedPosition - anchorY / tickSpacing).toInt()
-                    .coerceAtLeast(1)
-                val last = (selectedPosition + (size.height - anchorY) / tickSpacing + 1f).toInt()
-                    .coerceAtMost(ayahCount)
-                val verticalFade = 82.dp.toPx()
-                val minBarLength = 8.dp.toPx()
-                val maxBarLength = 44.dp.toPx()
-                val minBarThickness = 2.dp.toPx()
-                val maxBarThickness = 4.dp.toPx()
-                val holdProgress = commitProgress.value
-
-                for (ayah in first..last) {
-                    val offset = ayah - selectedPosition
-                    val y = anchorY + offset * tickSpacing
-                    val distance = (abs(offset) / focusRadius).coerceIn(0f, 1f)
-                    val focus = 1f - distance
-                    val major = ayah == 1 || ayah == ayahCount || ayah % 5 == 0
-                    // Bloom outward from the focal tick on open, retract on close.
-                    val arrival = ((expand - distance * 0.3f) / 0.7f).coerceIn(0f, 1f)
-                    if (arrival <= 0.01f) continue
-                    val edgeFade = (min(y, size.height - y) / verticalFade).coerceIn(0f, 1f)
-                    // Ticks scrolling in from either end grow out of the edge
-                    // rather than popping in at full length; the focal tick is
-                    // exempt so it stays tallest even near the rail's ends.
-                    val grow = arrival * (0.35f + 0.65f * maxOf(edgeFade, focus * focus))
-                    val length = (
-                        minBarLength +
-                            (maxBarLength - minBarLength) * focus * focus +
-                            if (major) 6.dp.toPx() else 0f
-                        ) * grow
-                    val tickThickness = minBarThickness + (maxBarThickness - minBarThickness) * focus
-                    val tickCorner = CornerRadius(tickThickness, tickThickness)
-                    val alpha = (0.1f + 0.62f * focus) * arrival * edgeFade
-                    val isSelected = ayah == selectedAyah
-                    // Start behind the screen edge so the rounded left cap is
-                    // hidden and the visible end sits truly flush at x = 0.
-                    val tickFullWidth = length + tickThickness
-                    drawRoundRect(
-                        color = if (isSelected) {
-                            accents.gold.copy(alpha = 0.96f * arrival)
-                        } else {
-                            onSurface.copy(alpha = alpha)
-                        },
-                        topLeft = Offset(
-                            rectLeft(wheelX - tickThickness, tickFullWidth),
-                            y - tickThickness / 2f,
-                        ),
-                        size = Size(tickFullWidth, tickThickness),
-                        cornerRadius = tickCorner,
-                    )
-                    if (isSelected && holdProgress > 0f) {
-                        // Grace countdown: the selected yellow bar fills from
-                        // the edge cap before the ayah jump commits, tinted with
-                        // the same theme onSurface ink as the collapsed
-                        // highlight (light grey on dark, dark grey on paper).
-                        val holdWidth = tickFullWidth * holdProgress
-                        drawRoundRect(
-                            color = onSurface.copy(alpha = 0.82f * arrival),
-                            topLeft = Offset(
-                                rectLeft(wheelX - tickThickness, holdWidth),
-                                y - tickThickness / 2f,
-                            ),
-                            size = Size(holdWidth, tickThickness),
-                            cornerRadius = tickCorner,
-                        )
-                    }
-                    numberPaint.color = if (isSelected) {
-                        accents.gold.copy(alpha = 0.95f * arrival).toArgb()
-                    } else {
-                        onSurface.copy(alpha = (0.18f + 0.46f * focus) * arrival * edgeFade).toArgb()
-                    }
-                    numberPaint.textSize = if (isSelected) 11.sp.toPx() else 8.5.sp.toPx()
-                    drawIntoCanvas { canvas ->
-                        canvas.nativeCanvas.drawText(
-                            ayah.toString(),
-                            textAnchor(wheelX + length + 6.dp.toPx()),
-                            y + numberPaint.textSize * 0.34f,
-                            numberPaint,
-                        )
-                    }
-                }
-            }
-        }
-
-        if (expanded || chromeAlpha() >= 0.1f) {
-            Box(
-                Modifier
-                    .align(if (mirrored) AbsoluteAlignment.CenterRight else AbsoluteAlignment.CenterLeft)
-                    .fillMaxHeight()
-                    .width(if (expanded) 92.dp else 44.dp)
-                    .pointerInput(ayahCount) {
-                        awaitEachGesture {
-                            val down = awaitFirstDown(requireUnconsumed = false)
-                            // Invisible chrome (recitation follow mode) must not
-                            // hijack page touches into a ghost selector.
-                            if (chromeAlpha() < 0.1f) return@awaitEachGesture
-                            val tickSpacingPx = 14.dp.toPx()
-                            val velocityTracker = VelocityTracker()
-                            var dragged = false
-                            releaseJob?.cancel()
-                            releaseJob = null
-                            scope.launch { commitProgress.snapTo(0f) }
-                            velocityTracker.addPosition(down.uptimeMillis, down.position)
-                            if (!expanded) {
-                                lastHapticAyah = currentAyah.value.coerceIn(1, ayahCount)
-                                dialPosition = currentPosition.value.coerceIn(1f, ayahCount.toFloat())
-                                expanded = true
-                            }
-                            scope.launch {
-                                expansion.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 340f))
-                            }
-                            down.consume()
-
-                            // Band the accumulated finger position once per frame;
-                            // re-banding an already-banded value compounds the curve
-                            // and made overscroll feel erratic.
-                            var rawPosition = dialPosition
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                if (!change.pressed) break
-                                val deltaAyah = -change.positionChange().y / tickSpacingPx
-                                if (abs(deltaAyah) > 0.001f) {
-                                    dragged = true
-                                    rawPosition += deltaAyah
-                                    dialPosition = rubberBandDialPosition(
-                                        rawPosition,
-                                        1f,
-                                        ayahCount.toFloat(),
-                                    )
-                                }
-                                velocityTracker.addPosition(change.uptimeMillis, change.position)
-                                change.consume()
-                            }
-                            // Every release schedules the settle + grace countdown, so
-                            // an opened wheel always resolves instead of lingering.
-                            // A no-move tap settles back onto the current ayah and the
-                            // commit becomes a no-op.
-                            val velocityAyah = if (dragged) {
-                                -velocityTracker.calculateVelocity().y / tickSpacingPx
-                            } else {
-                                0f
-                            }
-                            scheduleReleaseCommit(
-                                start = dialPosition.coerceIn(1f, ayahCount.toFloat()),
-                                velocity = velocityAyah,
-                            )
-                        }
-                    },
-            )
-        }
-    }
+private fun rememberSurahSearchState(): SurahSearchState {
+    val active = rememberSaveable { mutableStateOf(false) }
+    val query = rememberSaveable { mutableStateOf("") }
+    val index = rememberSaveable { mutableIntStateOf(0) }
+    return remember { SurahSearchState(active, query, index) }
 }

@@ -6,8 +6,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -48,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import com.beautifulquran.data.model.Surah
 import com.beautifulquran.ui.theme.ArabicTitleStyle
 import com.beautifulquran.ui.theme.LocalQuranAccents
+import com.beautifulquran.ui.theme.quietClickable
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.abs
 
@@ -279,11 +278,7 @@ private fun GoRow(surah: Surah, ayah: Int, onClick: () -> Unit) {
             color = OnGold,
             modifier = Modifier
                 .clip(RoundedCornerShape(50))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onClick,
-                )
+                .quietClickable(onClick = onClick)
                 .background(accents.gold)
                 .padding(horizontal = 22.dp, vertical = 9.dp),
         )

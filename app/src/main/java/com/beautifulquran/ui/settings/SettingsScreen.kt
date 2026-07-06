@@ -1,9 +1,7 @@
 package com.beautifulquran.ui.settings
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,6 +57,7 @@ import com.beautifulquran.data.ArabicRenderMode
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.PageTurnSounds
+import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.themePreviewColors
 import com.beautifulquran.ui.theme.verticalFadingEdges
 
@@ -127,10 +126,7 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) { viewModel.selectReciter(reciter) }
+                            .quietClickable { viewModel.selectReciter(reciter) }
                             .padding(vertical = 4.dp),
                     ) {
                         RadioButton(
@@ -325,10 +321,7 @@ private fun DeveloperSection(viewModel: SettingsViewModel) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                ) { sounds.auditionFlip(index) }
+                .quietClickable { sounds.auditionFlip(index) }
                 .padding(vertical = 8.dp),
         ) {
             Icon(
@@ -389,11 +382,7 @@ private fun ThemeOptionRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
+            .quietClickable(onClick = onClick)
             .padding(vertical = 4.dp),
     ) {
         RadioButton(

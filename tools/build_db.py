@@ -92,8 +92,12 @@ def fetch(url: str, name: str) -> Path:
         return dest
     print(f"  downloading {url}")
     req = urllib.request.Request(url, headers={"User-Agent": "beautiful-quran-build/1.0"})
-    with urllib.request.urlopen(req, timeout=120) as r, open(dest, "wb") as f:
+    # Download to a tmp file and rename: an interrupted download must never
+    # leave a partial file that the cache check above would serve on rerun.
+    tmp = dest.with_suffix(dest.suffix + ".tmp")
+    with urllib.request.urlopen(req, timeout=120) as r, open(tmp, "wb") as f:
         f.write(r.read())
+    tmp.replace(dest)
     return dest
 
 
@@ -457,20 +461,18 @@ def main():
     print("[4/5] building words table")
     words = []
     gloss_mismatch = []
-    qcf_missing = []
     for (s, a), (text, _tr) in sorted(ayahs.items()):
         arabic_words = text.split()
         glosses = wbw.get((s, a), [])
         if len(glosses) != len(arabic_words):
             gloss_mismatch.append((s, a, len(arabic_words), len(glosses)))
+        try:
+            qcf_aligned = align_qcf_words(arabic_words, qcf_v2.get((s, a), []), s, a)
+        except ValueError as e:
+            print(f"  !! {e}", file=sys.stderr)
+            sys.exit(1)
         for i, w in enumerate(arabic_words):
             g, t = glosses[min(i, len(glosses) - 1)] if glosses else ("", "")
-            if i == 0:
-                try:
-                    qcf_aligned = align_qcf_words(arabic_words, qcf_v2.get((s, a), []), s, a)
-                except ValueError as e:
-                    print(f"  !! {e}", file=sys.stderr)
-                    sys.exit(1)
             qcf = qcf_aligned.get(i + 1)
             if qcf is None:
                 qcf = ("", 0, 0, i + 1)
@@ -478,11 +480,6 @@ def main():
     print(f"  words: {len(words)}; gloss count mismatches (clamped): {len(gloss_mismatch)}")
     for m in gloss_mismatch:
         print(f"    surah {m[0]} ayah {m[1]}: text={m[2]} wbw={m[3]}")
-    if qcf_missing:
-        print(f"  !! missing qcf v2 glyphs: {len(qcf_missing)}", file=sys.stderr)
-        for m in qcf_missing[:20]:
-            print(f"    surah {m[0]} ayah {m[1]} word {m[2]}", file=sys.stderr)
-        sys.exit(1)
 
     timing_rows = []
     reciter_rows = []

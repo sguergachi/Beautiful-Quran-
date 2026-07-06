@@ -67,36 +67,26 @@ class ReaderViewModel(
     private var timings: Map<Int, List<Segment>> = emptyMap()
     private var loadJob: Job? = null
 
-    /** Emits the active word ~30x/sec while this surah is playing, but only
-     * publishes on change, so the UI recomposes once per word. */
+    /**
+     * The polling backbone of the sync engine: while this surah is the loaded
+     * one, samples [sample] every [TICK_MS] (gently while paused, since the
+     * position is frozen) and publishes only *changes*, so downstream
+     * recomposition happens per word/ayah boundary — not per tick.
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val activeWord: StateFlow<ActiveWord?> = player.state
-        .map { s ->
-            // Keep the highlight while paused (like a lyrics player); it only
-            // clears when this surah stops being the loaded one.
-            s.nowPlaying?.takeIf { it.surahId == surahId }
-        }
+    private fun <K : Any, T> pollingWhileLoaded(
+        key: (NowPlaying) -> K?,
+        sample: (K) -> T?,
+    ): StateFlow<T?> = player.state
+        .map { s -> s.nowPlaying?.takeIf { it.surahId == surahId }?.let(key) }
         .distinctUntilChanged()
-        .flatMapLatest { np ->
-            if (np == null) {
-                flowOf<ActiveWord?>(null)
+        .flatMapLatest { k ->
+            if (k == null) {
+                flowOf<T?>(null)
             } else {
-                flow<ActiveWord?> {
+                flow<T?> {
                     while (true) {
-                        val segments = timings[np.ayah]
-                        val info = segments?.let {
-                            HighlightEngine.activeInfo(it, player.positionMs)
-                        }
-                        emit(info?.let {
-                            ActiveWord(
-                                ayah = np.ayah,
-                                wordPosition = it.position,
-                                durationMs = it.endMs - it.startMs,
-                                isRepeat = it.isRepeat,
-                                highWater = it.highWater,
-                                repeatStart = it.repeatStart,
-                            )
-                        })
+                        emit(sample(k))
                         // Position is frozen while paused; poll gently.
                         delay(if (player.state.value.isPlaying) TICK_MS else PAUSED_TICK_MS)
                     }
@@ -106,28 +96,32 @@ class ReaderViewModel(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(1_000), null)
 
+    /** Emits the active word ~30x/sec while this surah is playing, but only
+     * publishes on change, so the UI recomposes once per word. The highlight
+     * holds while paused (like a lyrics player); it only clears when this
+     * surah stops being the loaded one. */
+    val activeWord: StateFlow<ActiveWord?> = pollingWhileLoaded(key = { it }) { np ->
+        timings[np.ayah]
+            ?.let { HighlightEngine.activeInfo(it, player.positionMs) }
+            ?.let {
+                ActiveWord(
+                    ayah = np.ayah,
+                    wordPosition = it.position,
+                    durationMs = it.endMs - it.startMs,
+                    isRepeat = it.isRepeat,
+                    highWater = it.highWater,
+                    repeatStart = it.repeatStart,
+                )
+            }
+    }
+
     /** The ayah whose block is lit on the sheet. Normally the playing ayah,
      * but the highlight crosses to the next ayah [FADE_LEAD_MS] before the
      * current one's audio ends, so the fade onto the next ayah begins a touch
      * early and the transition feels anticipatory rather than abrupt. */
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val activeAyah: StateFlow<Int?> = player.state
-        .map { it.nowPlaying?.takeIf { np -> np.surahId == surahId }?.ayah }
-        .distinctUntilChanged()
-        .flatMapLatest { ayah ->
-            if (ayah == null) {
-                flowOf<Int?>(null)
-            } else {
-                flow<Int?> {
-                    while (true) {
-                        emit(ayahWithFadeLead(ayah))
-                        delay(if (player.state.value.isPlaying) TICK_MS else PAUSED_TICK_MS)
-                    }
-                }
-            }
-        }
-        .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(1_000), null)
+    val activeAyah: StateFlow<Int?> = pollingWhileLoaded(key = { it.ayah }) { ayah ->
+        ayahWithFadeLead(ayah)
+    }
 
     /** Advances the lit ayah to the next one during the final [FADE_LEAD_MS] of
      * the current ayah's audio, so its fade-in leads the audio boundary. Only
@@ -254,36 +248,40 @@ class ReaderViewModel(
         return segments[segments.size / 2].startMs
     }
 
-    fun playFromAyah(ayah: Int) {
-        val content = _uiState.value.content ?: return
-        val reciter = _uiState.value.currentReciter ?: return
+    /** Loads this surah as the playlist from [startAyah]; no-op until content
+     * and reciter are ready. Returns false when not started. */
+    private fun startSurah(
+        startAyah: Int,
+        startPositionMs: Long = 0L,
+        preserveRepeatRange: Boolean = true,
+    ): Boolean {
+        val content = _uiState.value.content ?: return false
+        val reciter = _uiState.value.currentReciter ?: return false
         player.playSurah(
             surahId = content.surah.id,
             ayahCount = content.surah.ayahCount,
-            startAyah = ayah,
+            startAyah = startAyah,
             reciter = reciter,
             surahName = content.surah.nameTransliteration,
+            startPositionMs = startPositionMs,
+            preserveRepeatRange = preserveRepeatRange,
         )
-        rememberPosition(ayah)
+        return true
+    }
+
+    fun playFromAyah(ayah: Int) {
+        if (startSurah(ayah)) rememberPosition(ayah)
     }
 
     fun playFromWord(ayah: Int, positionMs: Long) {
-        val content = _uiState.value.content ?: return
         val reciter = _uiState.value.currentReciter ?: return
         val np = playerState.value.nowPlaying
         if (np != null && np.surahId == surahId && np.reciterId == reciter.id) {
             player.seekToWordAndPlay(ayah, positionMs)
-        } else {
-            player.playSurah(
-                surahId = content.surah.id,
-                ayahCount = content.surah.ayahCount,
-                startAyah = ayah,
-                reciter = reciter,
-                surahName = content.surah.nameTransliteration,
-                startPositionMs = positionMs,
-            )
+            rememberPosition(ayah)
+        } else if (startSurah(ayah, startPositionMs = positionMs)) {
+            rememberPosition(ayah)
         }
-        rememberPosition(ayah)
     }
 
     fun onAyahBecameActive(ayah: Int) {
@@ -313,15 +311,7 @@ class ReaderViewModel(
         val content = _uiState.value.content ?: return
         val start = from.coerceIn(1, content.surah.ayahCount)
         val end = to.coerceIn(start, content.surah.ayahCount)
-        val reciter = _uiState.value.currentReciter ?: return
-        player.playSurah(
-            surahId = content.surah.id,
-            ayahCount = content.surah.ayahCount,
-            startAyah = start,
-            reciter = reciter,
-            surahName = content.surah.nameTransliteration,
-            preserveRepeatRange = false,
-        )
+        if (!startSurah(start, preserveRepeatRange = false)) return
         player.setRepeatRange(start, end, repeatEndPositionFor(end))
         rememberPosition(start)
     }
