@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -40,6 +41,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -47,6 +49,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.AppViewModelFactory
+import com.beautifulquran.ui.PageTurnSounds
 import com.beautifulquran.ui.home.HomeScreen
 import com.beautifulquran.ui.home.HomeViewModel
 import com.beautifulquran.ui.reader.ReaderScreen
@@ -123,9 +126,16 @@ private fun PaperStackApp() {
     val scope = rememberCoroutineScope()
     val settingsLayer = if (selectedSurahId == 0) AYAH_LAYER else SETTINGS_LAYER
 
+    val context = LocalContext.current
+    val pageTurnSounds = remember { PageTurnSounds(context) }
+    DisposableEffect(pageTurnSounds) {
+        onDispose { pageTurnSounds.release() }
+    }
+
     suspend fun settleTo(layer: Int) {
         val boundedLayer = layer.coerceIn(COVER_LAYER, settingsLayer)
         val distance = abs(boundedLayer - stackPosition.value)
+        if (boundedLayer != settledLayer) pageTurnSounds.play()
         settledLayer = boundedLayer
         stackPosition.animateTo(
             targetValue = boundedLayer.toFloat(),
