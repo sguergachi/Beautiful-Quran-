@@ -15,6 +15,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -163,6 +164,7 @@ import kotlin.math.ceil
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
@@ -1056,7 +1058,17 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 // A gentle, near-symmetric ease for the word fade: it drifts in slowly, never
 // snapping to full ink, so text feels light as it soaks into the paper.
 private val SoftInkEasing = CubicBezierEasing(0.33f, 0.0f, 0.15f, 1.0f)
+private val ExponentialSlowDownEasing = Easing { fraction ->
+    if (fraction >= 1f) 1f else 1f - 2f.pow(-10f * fraction)
+}
 private val PlaybackNotificationOverscan = 12.dp
+private val QuranFruitDrawables = listOf(
+    R.drawable.quran_fruit_dates,
+    R.drawable.quran_fruit_fig,
+    R.drawable.quran_fruit_grapes,
+    R.drawable.quran_fruit_olives,
+    R.drawable.quran_fruit_pomegranate,
+)
 
 // A circle of ink centred at an origin (a fraction of the sheet, so it is
 // size-agnostic); the radius reaches the farthest corner exactly at
@@ -1148,6 +1160,7 @@ private fun PlaybackNotificationSheet(
     var sheetBounds by remember { mutableStateOf<Rect?>(null) }
     var dismissCentre by remember { mutableStateOf(Offset.Unspecified) }
     var allowCentre by remember { mutableStateOf(Offset.Unspecified) }
+    val fruitDrawable = remember { QuranFruitDrawables.random() }
     val scope = rememberCoroutineScope()
 
     // Enter: ink spreads open from the play control.
@@ -1171,7 +1184,7 @@ private fun PlaybackNotificationSheet(
         }
         inkSpread.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = 620, easing = FastOutSlowInEasing),
+            animationSpec = tween(durationMillis = 720, easing = ExponentialSlowDownEasing),
         )
     }
 
@@ -1195,7 +1208,7 @@ private fun PlaybackNotificationSheet(
             }
             revealHole.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(durationMillis = 620, easing = FastOutSlowInEasing),
+                animationSpec = tween(durationMillis = 720, easing = ExponentialSlowDownEasing),
             )
             then()
         }
@@ -1266,15 +1279,15 @@ private fun PlaybackNotificationSheet(
                     wordDelayMs = 62,
                 )
                 Image(
-                    painter = painterResource(R.drawable.quran_fruits_ink),
+                    painter = painterResource(fruitDrawable),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .fillMaxWidth(0.88f)
-                        .height(500.dp)
+                        .align(Alignment.BottomStart)
+                        .padding(start = 42.dp, bottom = 84.dp)
+                        .fillMaxWidth(0.52f)
+                        .height(430.dp)
                         .graphicsLayer { alpha = fruitAlpha.value }
-                        .padding(end = 0.dp, bottom = 52.dp),
                 )
             }
             // Bottom — the two answers, fading up after the words have landed.
