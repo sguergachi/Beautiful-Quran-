@@ -3,32 +3,41 @@ package com.beautifulquran.ui
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.SoundPool
+import android.os.Handler
+import android.os.Looper
 import com.beautifulquran.R
+import kotlin.math.abs
+import kotlin.math.floor
+import kotlin.math.roundToInt
 import kotlin.random.Random
 
-/** One page-turn recording, labeled by its res/raw file name for reference. */
-data class PageTurnVariation(
-    val fileName: String,
-    val source: String,
-    val resId: Int,
+/** A page-turn recording split into the three phases of a physical flip. */
+data class PageTurnFlip(
+    val name: String,
+    val liftRes: Int,
+    val sweepRes: Int,
+    val dropRes: Int,
 )
 
 /**
- * Plays a randomly chosen paper page-turn sound when the app's paper stack
- * turns between screens (cover, reader, settings).
+ * Drives paper page-turn audio from the live position of the paper stack.
  *
- * Recordings are CC0: "Book Flip Sounds" by Voltiment555 (variations 1-13)
- * and "80 CC0 RPG SFX" by rubberduck (variations 14-17), both from
- * opengameart.org, trimmed, time-compressed to at most one second, and
- * loudness-normalized to -18 LUFS.
+ * A flip is cut into three stems — lift (the sheet peeling up), sweep (the arc
+ * through the air) and drop (landing on the stack). Instead of firing a fixed
+ * one-shot, [onPosition] is fed the stack's fractional position every frame and
+ * releases each stem as the swipe crosses that phase. The sound therefore spans
+ * however long the swipe actually takes, and a gesture abandoned before the
+ * slap never plays the drop — you can start a turn and set it back down.
+ *
+ * Stems are cut from CC0 "Book Flip Sounds" by Voltiment555 (opengameart.org),
+ * flips 2/8/9, EQ'd for more body and less room, normalized to -17 LUFS.
  */
 class PageTurnSounds(context: Context) {
 
-    // Media usage keeps the flip on the same volume the listener already uses
-    // for recitation; SoundPool never takes audio focus, so playback of the
-    // recitation is not ducked or paused by a page turn.
+    // Media usage keeps the flip on the listener's media volume; SoundPool never
+    // takes audio focus, so a page turn never ducks or pauses the recitation.
     private val soundPool = SoundPool.Builder()
-        .setMaxStreams(2)
+        .setMaxStreams(4)
         .setAudioAttributes(
             AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -38,58 +47,140 @@ class PageTurnSounds(context: Context) {
         .build()
 
     private val loadedSamples = mutableSetOf<Int>()
-    private val soundIds: List<Int>
-    private var lastIndex = -1
+    private val handler = Handler(Looper.getMainLooper())
 
     init {
         soundPool.setOnLoadCompleteListener { _, sampleId, status ->
             if (status == 0) loadedSamples += sampleId
         }
-        soundIds = VARIATIONS.map { soundPool.load(context, it.resId, 1) }
+        FLIPS.flatMap { listOf(it.liftRes, it.sweepRes, it.dropRes) }
+            .forEach { soundPool.load(context, it, 1) }
     }
 
-    /** Plays a random variation, never the same one twice in a row. */
-    fun playRandom() {
-        var index = Random.nextInt(soundIds.size)
-        if (index == lastIndex) index = (index + 1) % soundIds.size
-        // Small pitch drift so a repeated recording reads as a fresh sheet.
-        play(index, rate = 1f + (Random.nextFloat() - 0.5f) * 0.1f)
+    // --- Scrub state for the turn currently under way -----------------------
+    private var activeFrom: Int? = null
+    private var activeFlip: PageTurnFlip? = null
+    private var phase = 0 // 0 none, 1 lift, 2 sweep, 3 drop
+    private var maxProgress = 0f
+    private var lastFlipIndex = -1
+    private var lastPos = Float.NaN
+    private var lastTimeNs = 0L
+    private var turnRate = 1f
+
+    /**
+     * Feed the paper stack's current fractional position (0 = cover, 1 = reader,
+     * 2 = settings). Safe to call every frame from both drags and animations.
+     */
+    fun onPosition(pos: Float) {
+        val now = System.nanoTime()
+        if (lastPos.isNaN()) {
+            lastPos = pos
+            lastTimeNs = now
+            return
+        }
+        val dtSec = ((now - lastTimeNs).coerceAtLeast(1_000_000)) / 1_000_000_000f
+        val velocity = (pos - lastPos) / dtSec // layers per second
+        lastPos = pos
+        lastTimeNs = now
+
+        val from = activeFrom
+        if (from == null) {
+            // Settled until the sheet is pulled clear of an integer layer.
+            val nearest = pos.roundToInt()
+            if (abs(pos - nearest) > START_EPS) {
+                beginTurn(origin = if (velocity >= 0f) floor(pos).toInt() else floor(pos).toInt() + 1)
+                turnRate = rateFor(velocity)
+            }
+            return
+        }
+
+        if (abs(pos - from) > 1f + START_EPS) {
+            // Ran straight into the next layer; close this turn and open another.
+            finishTurn()
+            beginTurn(origin = if (velocity >= 0f) floor(pos).toInt() else floor(pos).toInt() + 1)
+            return
+        }
+        val progress = abs(pos - from).coerceIn(0f, 1f)
+        if (progress > maxProgress) {
+            maxProgress = progress
+            turnRate = rateFor(velocity)
+        }
+
+        if (maxProgress >= SWEEP_AT) advanceTo(2, activeFlip?.sweepRes)
+        if (maxProgress >= DROP_AT) advanceTo(3, activeFlip?.dropRes)
+
+        // Landed on a new layer, or set back down on the one we started from.
+        val nearest = pos.roundToInt()
+        if (abs(pos - nearest) < SETTLE_EPS) {
+            if (nearest != from) finishTurn() else abandonTurn()
+        }
     }
 
-    /** Plays one specific variation as recorded, for auditioning. */
-    fun play(index: Int, rate: Float = 1f) {
-        val soundId = soundIds.getOrNull(index) ?: return
-        // Loading is async; a turn during the first frames simply stays silent.
-        if (soundId !in loadedSamples) return
-        lastIndex = index
-        soundPool.play(soundId, VOLUME, VOLUME, 1, 0, rate)
+    private fun beginTurn(origin: Int) {
+        var index = Random.nextInt(FLIPS.size)
+        if (index == lastFlipIndex) index = (index + 1) % FLIPS.size
+        lastFlipIndex = index
+        activeFlip = FLIPS[index]
+        activeFrom = origin
+        phase = 0
+        maxProgress = 0f
+        advanceTo(1, activeFlip?.liftRes) // the lift starts the instant the sheet moves
+    }
+
+    /** Ensure the drop has sounded, then settle on the new layer. */
+    private fun finishTurn() {
+        advanceTo(3, activeFlip?.dropRes)
+        clearTurn()
+    }
+
+    /** Reset back onto the origin layer without ever landing the page. */
+    private fun abandonTurn() = clearTurn()
+
+    private fun clearTurn() {
+        activeFrom = null
+        activeFlip = null
+        phase = 0
+        maxProgress = 0f
+    }
+
+    private fun advanceTo(target: Int, res: Int?) {
+        if (phase >= target || res == null) return
+        phase = target
+        playStem(res, turnRate)
+    }
+
+    private fun rateFor(velocity: Float): Float =
+        (0.9f + abs(velocity) * 0.12f).coerceIn(0.9f, 1.6f)
+
+    private fun playStem(res: Int, rate: Float) {
+        if (res !in loadedSamples) return // async load; earliest turns stay quiet
+        soundPool.play(res, VOLUME, VOLUME, 1, 0, rate)
+    }
+
+    /** Play a whole flip at natural pace — for auditioning in developer settings. */
+    fun auditionFlip(index: Int) {
+        val flip = FLIPS.getOrNull(index) ?: return
+        playStem(flip.liftRes, 1f)
+        handler.postDelayed({ playStem(flip.sweepRes, 1f) }, 110)
+        handler.postDelayed({ playStem(flip.dropRes, 1f) }, 300)
     }
 
     fun release() {
+        handler.removeCallbacksAndMessages(null)
         soundPool.release()
     }
 
     companion object {
         private const val VOLUME = 0.3f
+        private const val START_EPS = 0.03f
+        private const val SETTLE_EPS = 0.03f
+        private const val SWEEP_AT = 0.42f
+        private const val DROP_AT = 0.88f
 
-        val VARIATIONS = listOf(
-            PageTurnVariation("page_turn_01", "Book Flip 1", R.raw.page_turn_01),
-            PageTurnVariation("page_turn_02", "Book Flip 2", R.raw.page_turn_02),
-            PageTurnVariation("page_turn_03", "Book Flip 3", R.raw.page_turn_03),
-            PageTurnVariation("page_turn_04", "Book Flip 4", R.raw.page_turn_04),
-            PageTurnVariation("page_turn_05", "Book Flip 5", R.raw.page_turn_05),
-            PageTurnVariation("page_turn_06", "Book Flip 6", R.raw.page_turn_06),
-            PageTurnVariation("page_turn_07", "Book Flip 7", R.raw.page_turn_07),
-            PageTurnVariation("page_turn_08", "Book Flip 8", R.raw.page_turn_08),
-            PageTurnVariation("page_turn_09", "Book Flip 9", R.raw.page_turn_09),
-            PageTurnVariation("page_turn_10", "Book Flip 10", R.raw.page_turn_10),
-            PageTurnVariation("page_turn_11", "Book Flip 11", R.raw.page_turn_11),
-            PageTurnVariation("page_turn_12", "Book Flip 12", R.raw.page_turn_12),
-            PageTurnVariation("page_turn_13", "Book Flip 13", R.raw.page_turn_13),
-            PageTurnVariation("page_turn_14", "RPG book 1", R.raw.page_turn_14),
-            PageTurnVariation("page_turn_15", "RPG book 2", R.raw.page_turn_15),
-            PageTurnVariation("page_turn_16", "RPG book 3", R.raw.page_turn_16),
-            PageTurnVariation("page_turn_17", "RPG book 4", R.raw.page_turn_17),
+        val FLIPS = listOf(
+            PageTurnFlip("Flip 2 (crisp)", R.raw.flip2_lift, R.raw.flip2_sweep, R.raw.flip2_drop),
+            PageTurnFlip("Flip 8 (busy)", R.raw.flip8_lift, R.raw.flip8_sweep, R.raw.flip8_drop),
+            PageTurnFlip("Flip 9 (soft sweep)", R.raw.flip9_lift, R.raw.flip9_sweep, R.raw.flip9_drop),
         )
     }
 }

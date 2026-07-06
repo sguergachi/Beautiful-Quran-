@@ -28,6 +28,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -131,11 +132,15 @@ private fun PaperStackApp() {
     DisposableEffect(pageTurnSounds) {
         onDispose { pageTurnSounds.release() }
     }
+    // Feed the live stack position to the page-turn audio every frame, so the
+    // flip stems track the swipe (or settle animation) rather than firing once.
+    LaunchedEffect(pageTurnSounds) {
+        snapshotFlow { stackPosition.value }.collect { pageTurnSounds.onPosition(it) }
+    }
 
     suspend fun settleTo(layer: Int) {
         val boundedLayer = layer.coerceIn(COVER_LAYER, settingsLayer)
         val distance = abs(boundedLayer - stackPosition.value)
-        if (boundedLayer != settledLayer) pageTurnSounds.playRandom()
         settledLayer = boundedLayer
         stackPosition.animateTo(
             targetValue = boundedLayer.toFloat(),
