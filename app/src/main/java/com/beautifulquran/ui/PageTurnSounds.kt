@@ -30,7 +30,8 @@ data class PageTurnFlip(
  * slap never plays the drop — you can start a turn and set it back down.
  *
  * Stems are cut from CC0 "Book Flip Sounds" by Voltiment555 (opengameart.org),
- * flips 2/8/9, EQ'd for more body and less room, normalized to -17 LUFS.
+ * flips 2/8/9, then EQ'd to warm them up — low-mid body lifted, the harsh
+ * 4-8kHz presence and brittle top rolled off so the flip reads as paper.
  */
 class PageTurnSounds(context: Context) {
 
@@ -153,8 +154,10 @@ class PageTurnSounds(context: Context) {
         playStem(res, turnRate)
     }
 
+    // A gentle rate spread gives fast swipes a touch more urgency without
+    // pitching the stem up into the thin, harsh register that erases its body.
     private fun rateFor(velocity: Float): Float =
-        (0.9f + abs(velocity) * 0.12f).coerceIn(0.9f, 1.6f)
+        (0.95f + abs(velocity) * 0.05f).coerceIn(0.92f, 1.12f)
 
     private fun playStem(res: Int, rate: Float) {
         val sampleId = sampleIds[res] ?: return
