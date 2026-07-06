@@ -106,6 +106,7 @@ private const val STACK_PAGE_DURATION_MS = 460
 private const val STACK_PAGE_TURN_THRESHOLD = 0.18f
 private const val STACK_PAGE_FLING_THRESHOLD = 0.35f
 private const val STACK_PAGE_PULL_RESISTANCE_DP = 34
+private const val STACK_OFFSCREEN_OVERSCAN_DP = 24f
 private val StackMotionEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
 
 @Composable
@@ -283,7 +284,7 @@ private fun Modifier.paperLayerTransform(
     when (layer) {
         PaperLayer.Cover -> {
             val turn = stackPosition.coerceIn(0f, 1f)
-            translationX = -width * turn
+            translationX = -(width + STACK_OFFSCREEN_OVERSCAN_DP * density) * turn
             rotationY = -5f * turn
             shadowElevation = 22f * (1f - turn)
         }
