@@ -30,8 +30,9 @@ data class PageTurnFlip(
  * slap never plays the drop — you can start a turn and set it back down.
  *
  * Stems are cut from CC0 "Book Flip Sounds" by Voltiment555 (opengameart.org),
- * flips 2/8/9, then EQ'd to warm them up — low-mid body lifted, the harsh
- * 4-8kHz presence and brittle top rolled off so the flip reads as paper.
+ * flips 2/8/9. The original tone is kept; a downward expander dries the decay
+ * tail so each stem reads close and dry (a closet, not a room) instead of
+ * hissing, and stems are peak-normalized rather than loudness-pumped.
  */
 class PageTurnSounds(context: Context) {
 
