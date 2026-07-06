@@ -1269,10 +1269,10 @@ private fun PlaybackNotificationSheet(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .fillMaxWidth(0.72f)
-                        .height(420.dp)
+                        .fillMaxWidth(0.88f)
+                        .height(500.dp)
                         .graphicsLayer { alpha = fruitAlpha.value }
-                        .padding(end = 0.dp, bottom = 64.dp),
+                        .padding(end = 0.dp, bottom = 52.dp),
                 )
             }
             // Bottom — the two answers, fading up after the words have landed.
