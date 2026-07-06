@@ -1284,9 +1284,9 @@ private fun PlaybackNotificationSheet(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(start = 42.dp, bottom = 84.dp)
-                        .fillMaxWidth(0.52f)
-                        .height(430.dp)
+                        .padding(start = 28.dp, bottom = 16.dp)
+                        .fillMaxWidth(0.74f)
+                        .height(320.dp)
                         .graphicsLayer { alpha = fruitAlpha.value }
                 )
             }
