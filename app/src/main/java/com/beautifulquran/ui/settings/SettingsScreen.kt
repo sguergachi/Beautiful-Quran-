@@ -314,12 +314,13 @@ private fun DeveloperSection(viewModel: SettingsViewModel) {
     Spacer(Modifier.height(24.dp))
     Text("Page turn sounds", style = MaterialTheme.typography.bodyLarge)
     Text(
-        text = "Tap to audition. Names match the res/raw files.",
+        text = "Tap to hear the whole flip (lift → sweep → drop). In use, the " +
+            "stems track your swipe.",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
     )
     Spacer(Modifier.height(6.dp))
-    PageTurnSounds.VARIATIONS.forEachIndexed { index, variation ->
+    PageTurnSounds.FLIPS.forEachIndexed { index, flip ->
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -327,23 +328,16 @@ private fun DeveloperSection(viewModel: SettingsViewModel) {
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                ) { sounds.play(index) }
-                .padding(vertical = 6.dp),
+                ) { sounds.auditionFlip(index) }
+                .padding(vertical = 8.dp),
         ) {
             Icon(
                 imageVector = Icons.Rounded.PlayArrow,
-                contentDescription = "Play ${variation.fileName}",
+                contentDescription = "Play ${flip.name}",
                 tint = MaterialTheme.colorScheme.primary,
             )
             Spacer(Modifier.size(12.dp))
-            Column {
-                Text(variation.fileName, style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text = variation.source,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                )
-            }
+            Text(flip.name, style = MaterialTheme.typography.bodyLarge)
         }
     }
 }
