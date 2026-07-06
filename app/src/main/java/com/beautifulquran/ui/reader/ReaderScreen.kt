@@ -111,7 +111,10 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -1149,10 +1152,10 @@ private fun PlaybackNotificationSheet(
         inkSpread.snapTo(0f)
         launch {
             // The answers surface only once the words have written in.
-            delay(3_100)
+            delay(2_250)
             actionAlpha.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+                animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
             )
         }
         inkSpread.animateTo(
@@ -1230,8 +1233,8 @@ private fun PlaybackNotificationSheet(
                 text = stringResource(R.string.notification_permission_title),
                 style = titleStyle,
                 color = colors.onBackground,
-                initialDelayMs = 260,
-                wordDelayMs = 120,
+                initialDelayMs = 180,
+                wordDelayMs = 82,
             )
             // Middle — the body, written in word by word, resting in the sheet.
             Box(
@@ -1245,8 +1248,16 @@ private fun PlaybackNotificationSheet(
                     text = stringResource(R.string.notification_permission_message),
                     style = bodyStyle,
                     color = colors.onBackground.copy(alpha = 0.82f),
-                    initialDelayMs = 760,
-                    wordDelayMs = 96,
+                    initialDelayMs = 520,
+                    wordDelayMs = 62,
+                )
+                QuranFruitInkSketch(
+                    color = colors.onBackground,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .fillMaxWidth(0.76f)
+                        .height(440.dp)
+                        .padding(end = 0.dp, bottom = 6.dp),
                 )
             }
             // Bottom — the two answers, fading up after the words have landed.
@@ -1302,6 +1313,136 @@ private fun PlaybackNotificationSheet(
 }
 
 @Composable
+private fun QuranFruitInkSketch(
+    color: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier = modifier.graphicsLayer { alpha = 0.30f }) {
+        val ink = color
+        val stroke = Stroke(
+            width = size.minDimension * 0.012f,
+            cap = StrokeCap.Round,
+            join = StrokeJoin.Round,
+        )
+        val fineStroke = Stroke(
+            width = size.minDimension * 0.006f,
+            cap = StrokeCap.Round,
+            join = StrokeJoin.Round,
+        )
+
+        fun pt(x: Float, y: Float) = Offset(size.width * x, size.height * y)
+        fun fruitCircle(x: Float, y: Float, r: Float) {
+            drawCircle(
+                color = ink,
+                radius = size.minDimension * r,
+                center = pt(x, y),
+                style = fineStroke,
+            )
+        }
+
+        // A single loose branch ties together fruits named in the Quran:
+        // dates, grapes, olives, pomegranate, and fig.
+        val branch = Path().apply {
+            moveTo(size.width * 0.12f, size.height * 0.58f)
+            cubicTo(
+                size.width * 0.32f,
+                size.height * 0.30f,
+                size.width * 0.58f,
+                size.height * 0.78f,
+                size.width * 0.88f,
+                size.height * 0.42f,
+            )
+        }
+        drawPath(branch, ink, style = stroke)
+
+        // Grapes.
+        listOf(
+            0.23f to 0.48f,
+            0.19f to 0.57f,
+            0.28f to 0.58f,
+            0.24f to 0.67f,
+            0.32f to 0.69f,
+            0.28f to 0.78f,
+        ).forEach { (x, y) -> fruitCircle(x, y, 0.045f) }
+        drawLine(ink, pt(0.27f, 0.42f), pt(0.23f, 0.49f), strokeWidth = stroke.width)
+
+        // Olive leaves.
+        listOf(
+            0.42f to 0.38f,
+            0.48f to 0.45f,
+            0.54f to 0.39f,
+            0.60f to 0.48f,
+        ).forEachIndexed { index, (x, y) ->
+            val leaf = Path().apply {
+                moveTo(size.width * x, size.height * y)
+                cubicTo(
+                    size.width * (x + if (index % 2 == 0) 0.08f else -0.08f),
+                    size.height * (y - 0.10f),
+                    size.width * (x + if (index % 2 == 0) 0.16f else -0.16f),
+                    size.height * (y - 0.02f),
+                    size.width * x,
+                    size.height * y,
+                )
+            }
+            drawPath(leaf, ink, style = fineStroke)
+        }
+        fruitCircle(0.50f, 0.55f, 0.025f)
+        fruitCircle(0.58f, 0.57f, 0.025f)
+
+        // Fig.
+        val fig = Path().apply {
+            moveTo(size.width * 0.70f, size.height * 0.57f)
+            cubicTo(
+                size.width * 0.61f,
+                size.height * 0.42f,
+                size.width * 0.70f,
+                size.height * 0.25f,
+                size.width * 0.79f,
+                size.height * 0.41f,
+            )
+            cubicTo(
+                size.width * 0.86f,
+                size.height * 0.55f,
+                size.width * 0.79f,
+                size.height * 0.72f,
+                size.width * 0.70f,
+                size.height * 0.57f,
+            )
+        }
+        drawPath(fig, ink, style = stroke)
+        drawLine(ink, pt(0.70f, 0.57f), pt(0.78f, 0.42f), strokeWidth = fineStroke.width)
+
+        // Pomegranate crown and seeds.
+        drawCircle(ink, radius = size.minDimension * 0.070f, center = pt(0.84f, 0.68f), style = stroke)
+        val crown = Path().apply {
+            moveTo(size.width * 0.80f, size.height * 0.62f)
+            lineTo(size.width * 0.82f, size.height * 0.55f)
+            lineTo(size.width * 0.85f, size.height * 0.61f)
+            lineTo(size.width * 0.88f, size.height * 0.55f)
+            lineTo(size.width * 0.88f, size.height * 0.63f)
+        }
+        drawPath(crown, ink, style = fineStroke)
+        fruitCircle(0.82f, 0.68f, 0.012f)
+        fruitCircle(0.85f, 0.70f, 0.012f)
+        fruitCircle(0.86f, 0.66f, 0.012f)
+
+        // Dates.
+        listOf(
+            0.13f to 0.38f,
+            0.16f to 0.33f,
+            0.18f to 0.42f,
+        ).forEach { (x, y) ->
+            drawOval(
+                color = ink,
+                topLeft = pt(x - 0.018f, y - 0.055f),
+                size = Size(size.width * 0.036f, size.height * 0.11f),
+                style = fineStroke,
+            )
+        }
+    }
+}
+
+@Composable
 private fun WordFadeText(
     text: String,
     style: TextStyle,
@@ -1322,10 +1463,10 @@ private fun WordFadeText(
                 delay((index * wordDelayMs).toLong())
                 alpha.animateTo(
                     targetValue = 1f,
-                    // A long, gentle ease so each word drifts up rather than
-                    // switches on — smooth, slow, light, like ink soaking in.
+                    // Gentle enough to feel like ink, short enough that the
+                    // permission message is readable without waiting.
                     animationSpec = tween(
-                        durationMillis = 3_600,
+                        durationMillis = 2_400,
                         easing = SoftInkEasing,
                     ),
                 )
