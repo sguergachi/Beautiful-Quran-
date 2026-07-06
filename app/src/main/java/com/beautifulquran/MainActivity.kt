@@ -99,7 +99,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private companion object {
-        const val NIGHTFALL_STATUS_BAR = 0xFF010F0C.toInt()
+        const val NIGHTFALL_STATUS_BAR = 0xFF0A0B0C.toInt()
     }
 }
 

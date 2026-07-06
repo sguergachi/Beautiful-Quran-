@@ -232,7 +232,7 @@ A Python script (run manually, output committed or attached to releases):
 - **Paper**: warm sepia off-white `#FAF3E8`, ink `#1C1B18`, accent **deep teal-green
   `#0E5C4A`**, highlight gold `#C9A227` (active word pill uses a soft translucent
   gold/teal wash, never pure yellow).
-- **Nightfall**: near-black green `#010F0C`, warm parchment text `#E8E2D5`, same
+- **Nightfall**: near-black charcoal `#0A0B0C`, warm parchment text `#E8E2D5`, same
   accents desaturated.
 - **Royal green**: the previous green dark palette, `#062C24`, with the same
   parchment text and desaturated accents.

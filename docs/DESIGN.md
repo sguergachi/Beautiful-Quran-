@@ -104,7 +104,7 @@ Two themes, both "paper":
   deep green `#0E5C4A` as the single interactive accent,
   muted gold `#B8901C` reserved for Quranic ornament (ayah marks, surah
   numbers, the ۞).
-- **Nightfall**: near-black green `#010F0C`, parchment ink `#E8E2D5`,
+- **Nightfall**: near-black charcoal `#0A0B0C`, parchment ink `#E8E2D5`,
   soft green `#7FB8A4`, warmer gold `#D9B44A`.
 - **Royal green**: deep green `#062C24`, parchment ink `#E8E2D5`,
   soft green `#7FB8A4`, warmer gold `#D9B44A`.
