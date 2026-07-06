@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Beautiful Quran</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --paper: #faf3e8;
+      --surface: #fffbf2;
+      --ink: #1c1b18;
+      --ink-muted: #6e6858;
+      --green: #0e5c4a;
+      --green-dim: #9bb8af;
+      --green-pale: #d7e8e1;
+      --gold: #b8901c;
+      --gold-bright: #e9cd7a;
+      --gold-deep: #8a6b1e;
+      --body: 'EB Garamond', Georgia, 'Times New Roman', serif;
+      --display: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+    }
+
+    html { font-size: 18px; }
+
+    body {
+      font-family: var(--body);
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 0 28px;
+      background: var(--paper);
+    }
+
+    .sheet {
+      background: var(--surface);
+      padding: 56px 48px 64px;
+      margin-top: 48px;
+      margin-bottom: 48px;
+      position: relative;
+    }
+
+    @media (max-width: 600px) {
+      .sheet { padding: 36px 24px 48px; margin-top: 24px; margin-bottom: 24px; }
+    }
+
+    h1, h2, h3 { font-family: var(--display); font-weight: 600; line-height: 1.2; }
+
+    h1 {
+      font-size: 2.8rem;
+      margin-bottom: 0.2em;
+      letter-spacing: -0.02em;
+    }
+
+    h1 .arabic {
+      display: block;
+      font-size: 1.4rem;
+      font-weight: 500;
+      letter-spacing: 0;
+      color: var(--green);
+      margin-bottom: 0.15em;
+    }
+
+    .subtitle {
+      font-family: var(--body);
+      font-size: 0.95rem;
+      font-style: italic;
+      color: var(--ink-muted);
+      margin-bottom: 32px;
+    }
+
+    .ornament {
+      text-align: center;
+      margin: 28px 0;
+      font-size: 1.4rem;
+      color: var(--gold);
+      line-height: 1;
+      opacity: 0.65;
+      letter-spacing: 6px;
+    }
+
+    p { margin-bottom: 1.2em; }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 32px;
+      margin: 24px 0 20px;
+    }
+
+    @media (max-width: 500px) {
+      .feature-grid { grid-template-columns: 1fr; }
+    }
+
+    .feature-grid li {
+      list-style: none;
+      padding: 0.5em 0 0.5em 1.6em;
+      position: relative;
+      font-size: 0.95rem;
+    }
+
+    .feature-grid li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.85em;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green-dim);
+      opacity: 0.7;
+    }
+
+    .tagline {
+      font-family: var(--display);
+      font-size: 1.15rem;
+      font-style: italic;
+      color: var(--green);
+      margin: 20px 0 24px;
+    }
+
+    .btn {
+      display: inline-block;
+      font-family: var(--body);
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: #fff;
+      background: var(--green);
+      padding: 10px 28px;
+      text-decoration: none;
+      border-radius: 0;
+      letter-spacing: 0.02em;
+      transition: background 0.25s;
+    }
+
+    .btn:hover { background: #0a4a3b; }
+
+    .btn-outline {
+      display: inline-block;
+      font-family: var(--body);
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--green);
+      background: transparent;
+      padding: 9px 27px;
+      text-decoration: none;
+      border: 1px solid var(--green-dim);
+      letter-spacing: 0.02em;
+      transition: border-color 0.25s, color 0.25s;
+      margin-left: 12px;
+    }
+
+    .btn-outline:hover { border-color: var(--green); color: #0a4a3b; }
+
+    @media (max-width: 460px) {
+      .btn, .btn-outline { display: block; width: 100%; text-align: center; }
+      .btn-outline { margin-left: 0; margin-top: 10px; }
+    }
+
+    h2 {
+      font-size: 1.6rem;
+      margin-bottom: 0.6em;
+      margin-top: 1.6em;
+    }
+
+    h2:first-of-type { margin-top: 0; }
+
+    .screenshot-area {
+      margin: 32px 0;
+      height: 140px;
+      background: linear-gradient(135deg, var(--green-pale), var(--paper));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--display);
+      font-style: italic;
+      color: var(--ink-muted);
+      font-size: 1rem;
+      letter-spacing: 0.04em;
+      opacity: 0.7;
+    }
+
+    .attribution-block {
+      font-size: 0.85rem;
+      color: var(--ink-muted);
+      line-height: 1.7;
+      margin: 20px 0;
+    }
+
+    .attribution-block strong { color: var(--ink); font-weight: 600; }
+
+    hr {
+      border: none;
+      border-top: 1px solid var(--green-pale);
+      margin: 32px 0;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-top: 24px;
+    }
+
+    .footer-links a {
+      color: var(--ink-muted);
+      text-decoration: none;
+      font-size: 0.85rem;
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover { color: var(--green); }
+
+    .badge {
+      display: inline-block;
+      font-family: var(--body);
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--green);
+      border: 1px solid var(--green-dim);
+      padding: 2px 10px;
+      letter-spacing: 0.04em;
+    }
+
+    .badge + .badge { margin-left: 6px; }
+
+    a { color: var(--green); text-decoration: underline; text-underline-offset: 2px; }
+    a:hover { color: #0a4a3b; }
+
+    .footer-note {
+      text-align: center;
+      padding: 32px 0 48px;
+      font-size: 0.8rem;
+      color: var(--ink-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="sheet">
+      <h1>
+        <span class="arabic">&#1575;&#1604;&#1602;&#1585;&#1570;&#1606; &#1575;&#1604;&#1603;&#1585;&#1610;&#1605;</span>
+        Beautiful Quran
+      </h1>
+      <p class="subtitle">A calm, paper-simple Quran reader for Android — with word-by-word recitation highlighting.</p>
+
+      <div class="ornament">&#9679; &#9679; &#9679;</div>
+
+      <p>
+        Every word lights up in time with the reciter, its English meaning right beneath it &mdash;
+        like lyrics for the Quran. No ads, no accounts, no analytics. Just the book, recited, on one
+        clean sheet of paper.
+      </p>
+
+      <ul class="feature-grid">
+        <li>Full Quran, Uthmani script (KFGQPC Hafs typeface)</li>
+        <li>Word-by-word highlight synced to audio</li>
+        <li>7 reciters, streamed and cached</li>
+        <li>Word-by-word English gloss + Saheeh International translation</li>
+        <li>Repeat one ayah, a surah, or any range</li>
+        <li>Search English translation within a surah</li>
+        <li>Warm paper &amp; charcoal dark themes</li>
+        <li>All text &amp; timing data offline</li>
+      </ul>
+
+      <p class="tagline">One sheet of paper. Calm and pure. Butter smooth.</p>
+
+      <a href="#" class="btn">Get the APK</a>
+      <a href="https://github.com/cpfair/Beautiful-Quran" class="btn-outline">View on GitHub</a>
+
+      <h2>How it works</h2>
+      <p>
+        Open a surah and tap play. As the reciter recites, each Arabic word fades in
+        from the ink of the page &mdash; timed to the millisecond. The English
+        gloss rises beneath it. Skip, repeat, or narrow playback to any ayah range.
+        The paper stays quiet; only the words move.
+      </p>
+
+      <div class="screenshot-area">&#8212; screenshot placeholder &#8212;</div>
+
+      <h2>Reading modes</h2>
+      <p>
+        <strong>Arabic &amp; English</strong> &mdash; Arabic flows right-to-left with
+        the English gloss under each word; the flowing translation below.
+      </p>
+      <p>
+        <strong>English</strong> &mdash; the gloss becomes the primary line, lighting
+        word-by-word on the same timings.
+      </p>
+      <p>Optional transliteration. Optional ayah translation. All of it serif, all of it paper.</p>
+
+      <hr>
+
+      <h2>Data &amp; attribution</h2>
+      <div class="attribution-block">
+        <strong>Quran text (Uthmani) + Saheeh International translation</strong> &mdash;
+        via the quran-json project, from Tanzil and Al Quran Cloud &middot; free with attribution<br>
+        <strong>Word-by-word gloss + transliteration</strong> &mdash;
+        Quran.com dataset &middot; free with attribution<br>
+        <strong>Word timing segments</strong> &mdash;
+        the quran-align project contributors &middot; CC-BY 4.0<br>
+        <strong>Repeat-aware timing segments</strong> &mdash;
+        quran.com qdc audio API &middot; free with attribution<br>
+        <strong>Recitation audio</strong> &mdash;
+        streamed from everyayah.com &middot; rights remain with reciters<br>
+        <strong>Arabic typeface</strong> &mdash;
+        KFGQPC HAFS Uthmanic Script, King Fahd Complex &middot; free redistribution
+      </div>
+
+      <hr>
+
+      <div class="footer-links">
+        <a href="privacy.html">Privacy policy</a>
+        <a href="https://github.com/cpfair/Beautiful-Quran">GitHub</a>
+      </div>
+    </div>
+    <div class="footer-note">Beautiful Quran &middot; free, ad-free, open source</div>
+  </div>
+</body>
+</html>

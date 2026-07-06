@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy &mdash; Beautiful Quran</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --paper: #faf3e8;
+      --surface: #fffbf2;
+      --ink: #1c1b18;
+      --ink-muted: #6e6858;
+      --green: #0e5c4a;
+      --green-dim: #9bb8af;
+      --gold: #b8901c;
+      --body: 'EB Garamond', Georgia, 'Times New Roman', serif;
+      --display: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+    }
+
+    html { font-size: 18px; }
+
+    body {
+      font-family: var(--body);
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page { max-width: 680px; margin: 0 auto; padding: 0 28px; }
+
+    .sheet {
+      background: var(--surface);
+      padding: 56px 48px 64px;
+      margin-top: 48px;
+      margin-bottom: 48px;
+    }
+
+    @media (max-width: 600px) {
+      .sheet { padding: 36px 24px 48px; margin-top: 24px; margin-bottom: 24px; }
+    }
+
+    h1 {
+      font-family: var(--display);
+      font-size: 2rem;
+      font-weight: 600;
+      line-height: 1.2;
+      margin-bottom: 0.15em;
+    }
+
+    .subtitle {
+      font-size: 0.9rem;
+      font-style: italic;
+      color: var(--ink-muted);
+      margin-bottom: 28px;
+    }
+
+    hr {
+      border: none;
+      border-top: 1px solid #d7cdb8;
+      margin: 28px 0;
+    }
+
+    h2 {
+      font-family: var(--display);
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-top: 1.6em;
+      margin-bottom: 0.5em;
+    }
+
+    h2:first-of-type { margin-top: 0; }
+
+    p { margin-bottom: 1em; }
+
+    ul { margin-bottom: 1em; padding-left: 1.3em; }
+    li { margin-bottom: 0.3em; }
+
+    strong { font-weight: 600; }
+
+    a {
+      color: var(--green);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    a:hover { color: #0a4a3b; }
+
+    .back-link {
+      display: inline-block;
+      margin-top: 24px;
+      font-size: 0.9rem;
+      text-decoration: none;
+      color: var(--ink-muted);
+      font-style: italic;
+    }
+    .back-link:hover { color: var(--green); }
+
+    .footer-note {
+      text-align: center;
+      padding: 0 0 48px;
+      font-size: 0.8rem;
+      color: var(--ink-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="sheet">
+      <h1>Privacy Policy</h1>
+      <p class="subtitle">Last updated: July 2026</p>
+
+      <hr>
+
+      <h2>Summary</h2>
+      <p>
+        Beautiful Quran <strong>does not collect, store, or share any personal data</strong>.
+        There are no accounts, no analytics, no crash reporting, and no advertising SDKs.
+        The app is a standalone reader that works fully offline after initial setup.
+      </p>
+
+      <h2>What information we collect</h2>
+      <p>
+        None. The app does not collect any personal information, device identifiers,
+        usage statistics, or any other data. All preferences (reciter choice, theme,
+        font size, reading position) are stored locally on your device in standard
+        Android <code>SharedPreferences</code> and are never transmitted anywhere.
+      </p>
+
+      <h2>Internet access</h2>
+      <p>
+        The app requests internet access only to stream recitation audio files from
+        <strong>everyayah.com</strong>, a public service that hosts Quran recitations.
+        Standard HTTP requests are made to fetch MP3 files. No identifying information
+        is sent with these requests beyond what your device and network normally
+        include in any HTTP request (e.g., IP address, User-Agent string).
+      </p>
+      <p>
+        Audio files are cached locally so recently heard surahs work offline.
+        This cache is stored in the app's private files directory and is never
+        transmitted or shared.
+      </p>
+
+      <h2>Third-party services</h2>
+      <p>
+        The app connects to one external service:
+      </p>
+      <ul>
+        <li><strong>everyayah.com</strong> &mdash; hosts public-domain recitation audio. The app fetches MP3 files from this domain. No other third-party services, SDKs, or APIs are used.</li>
+      </ul>
+      <p>
+        The app uses no advertising, analytics, crash reporting, or push notification services.
+      </p>
+
+      <h2>Data storage</h2>
+      <p>
+        All app data is stored locally on your device:
+      </p>
+      <ul>
+        <li><strong>Quran text database</strong> &mdash; shipped with the app in the APK, extracted to the app's <code>noBackupFilesDir</code></li>
+        <li><strong>Audio cache</strong> &mdash; stored in <code>filesDir/audio</code>, excluded from system backups</li>
+        <li><strong>User preferences</strong> &mdash; stored in <code>SharedPreferences</code></li>
+      </ul>
+
+      <h2>Children's privacy</h2>
+      <p>
+        The app does not collect any personal information from anyone, including
+        children under the age of 13. All content is religious text appropriate
+        for all ages.
+      </p>
+
+      <h2>Changes to this policy</h2>
+      <p>
+        If this policy changes in the future, the updated date at the top of this
+        page will be revised. The app itself will not change its data practices
+        without a corresponding update to this policy.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        This app is open source. For questions about this policy, please open an
+        issue on the
+        <a href="https://github.com/cpfair/Beautiful-Quran">GitHub repository</a>.
+      </p>
+
+      <hr>
+      <a href="index.html" class="back-link">&larr; Back to Beautiful Quran</a>
+    </div>
+    <div class="footer-note">Beautiful Quran &middot; free, ad-free, open source</div>
+  </div>
+</body>
+</html>
