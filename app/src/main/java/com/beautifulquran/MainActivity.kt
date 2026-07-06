@@ -135,7 +135,7 @@ private fun PaperStackApp() {
     suspend fun settleTo(layer: Int) {
         val boundedLayer = layer.coerceIn(COVER_LAYER, settingsLayer)
         val distance = abs(boundedLayer - stackPosition.value)
-        if (boundedLayer != settledLayer) pageTurnSounds.play()
+        if (boundedLayer != settledLayer) pageTurnSounds.playRandom()
         settledLayer = boundedLayer
         stackPosition.animateTo(
             targetValue = boundedLayer.toFloat(),
