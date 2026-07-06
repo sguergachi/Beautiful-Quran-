@@ -180,7 +180,7 @@ class PageTurnSounds(context: Context) {
     }
 
     companion object {
-        private const val VOLUME = 0.3f
+        private const val VOLUME = 0.18f
         private const val START_EPS = 0.03f
         private const val SETTLE_EPS = 0.03f
         private const val SWEEP_AT = 0.42f
