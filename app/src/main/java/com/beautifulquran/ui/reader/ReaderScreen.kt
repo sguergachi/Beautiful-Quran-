@@ -1173,8 +1173,6 @@ private fun PlaybackNotificationSheet(
     val revealHole = remember { Animatable(0f) }
     val actionAlpha = remember { Animatable(0f) }
     val fruitAlpha = remember { Animatable(0f) }
-    // Drives the illustration's settle: a gentle rise and scale as it blooms in.
-    val fruitEnter = remember { Animatable(0f) }
     var originX by remember { mutableFloatStateOf(0.5f) }
     var originY by remember { mutableFloatStateOf(0.9f) }
     var closing by remember { mutableStateOf(false) }
@@ -1192,7 +1190,6 @@ private fun PlaybackNotificationSheet(
     LaunchedEffect(Unit) {
         inkSpread.snapTo(0f)
         fruitAlpha.snapTo(0f)
-        fruitEnter.snapTo(0f)
         launch {
             // The answers surface only once the words have written in.
             delay(2_250)
@@ -1202,17 +1199,12 @@ private fun PlaybackNotificationSheet(
             )
         }
         launch {
-            // The illustration blooms in *last* of all — only after the words
-            // and both answers have arrived — rising and scaling as it fades.
+            // The illustration arrives *last* of all — only after the words and
+            // both answers have landed — as a flat opacity fade, like ink soaking
+            // up on the paper where it lies, with no rise or scale.
             delay(3_000)
-            launch {
-                fruitAlpha.animateTo(
-                    targetValue = 0.90f,
-                    animationSpec = tween(durationMillis = 1_500, easing = SoftInkEasing),
-                )
-            }
-            fruitEnter.animateTo(
-                targetValue = 1f,
+            fruitAlpha.animateTo(
+                targetValue = 0.90f,
                 animationSpec = tween(durationMillis = 1_500, easing = SoftInkEasing),
             )
         }
@@ -1340,14 +1332,8 @@ private fun PlaybackNotificationSheet(
                         .align(BiasAlignment(0f, 0.18f))
                         .width(fruitWidth)
                         .height(fruitHeight)
-                        .graphicsLayer {
-                            alpha = fruitAlpha.value
-                            // Bloom in: rise a touch and scale up from 92% as it fades.
-                            val enter = fruitEnter.value
-                            scaleX = 0.92f + 0.08f * enter
-                            scaleY = 0.92f + 0.08f * enter
-                            translationY = (1f - enter) * 18.dp.toPx()
-                        }
+                        // A flat ink reveal: opacity only, no scale or movement.
+                        .graphicsLayer { alpha = fruitAlpha.value }
                 )
             }
             // Bottom — the two answers, fading up after the words have landed.
