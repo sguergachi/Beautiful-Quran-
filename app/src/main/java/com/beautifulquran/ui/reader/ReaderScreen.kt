@@ -99,6 +99,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -1085,6 +1086,22 @@ private val QuranFruitMonoLightDrawables = listOf(
     R.drawable.quran_fruit_pomegranate_mono_light,
 )
 
+// Intrinsic width/height of each illustration, in the parallel order of the
+// lists above (dates, fig, grapes, olives, pomegranate). The art ranges from a
+// tall date branch (0.59) to an almost-square olive spray (1.05); we normalise
+// to a constant ink *area* so every fruit reads at the same visual weight
+// rather than the tall ones shrinking inside a fixed box.
+private val QuranFruitAspectRatios = listOf(0.59f, 0.95f, 0.69f, 1.05f, 0.84f)
+
+private fun quranFruitAspectRatio(drawable: Int): Float {
+    val index = listOf(
+        QuranFruitColorDrawables,
+        QuranFruitMonoDarkDrawables,
+        QuranFruitMonoLightDrawables,
+    ).firstNotNullOfOrNull { list -> list.indexOf(drawable).takeIf { it >= 0 } }
+    return index?.let { QuranFruitAspectRatios.getOrElse(it) { 1f } } ?: 1f
+}
+
 private fun quranFruitDrawablesForBackground(
     background: androidx.compose.ui.graphics.Color,
 ): List<Int> {
@@ -1189,6 +1206,7 @@ private fun PlaybackNotificationSheet(
     val fruitDrawable = remember(colors.background) {
         quranFruitDrawablesForBackground(colors.background).random()
     }
+    val fruitAspect = remember(fruitDrawable) { quranFruitAspectRatio(fruitDrawable) }
     val scope = rememberCoroutineScope()
 
     // Enter: ink spreads open from the play control.
@@ -1299,10 +1317,23 @@ private fun PlaybackNotificationSheet(
                     .padding(top = 28.dp),
                 contentAlignment = Alignment.TopStart,
             ) {
-                val gridColumn = maxWidth / 12f
-                val gridRow = maxHeight / 8f
-                val fruitColumnStart = gridColumn * 0.30f
-                val fruitActionClearance = gridRow * 1.65f
+                // The illustration is the illuminated ornament of the page: sized
+                // to a constant ink area (so tall and wide fruit weigh the same),
+                // then optically centred in the space the words leave below them,
+                // filling the void that used to sit between body and answers.
+                val squareEdge = maxWidth * 0.74f
+                val aspectRoot = sqrt(fruitAspect)
+                val rawWidth = squareEdge * aspectRoot
+                val rawHeight = squareEdge / aspectRoot
+                val fitScale = min(
+                    1f,
+                    min(
+                        (maxWidth * 0.82f) / rawWidth,
+                        (maxHeight * 0.66f) / rawHeight,
+                    ),
+                )
+                val fruitWidth = rawWidth * fitScale
+                val fruitHeight = rawHeight * fitScale
 
                 WordFadeText(
                     text = stringResource(R.string.notification_permission_message),
@@ -1316,10 +1347,11 @@ private fun PlaybackNotificationSheet(
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(start = fruitColumnStart, bottom = fruitActionClearance)
-                        .width(gridColumn * 5.30f)
-                        .height(gridRow * 4.05f)
+                        // Slightly below true centre, so it settles into the void
+                        // that opens up beneath the body without crowding it.
+                        .align(BiasAlignment(0f, 0.18f))
+                        .width(fruitWidth)
+                        .height(fruitHeight)
                         .graphicsLayer { alpha = fruitAlpha.value }
                 )
             }
