@@ -1264,13 +1264,18 @@ private fun PlaybackNotificationSheet(
                 wordDelayMs = 82,
             )
             // Middle — the body, written in word by word, resting in the sheet.
-            Box(
+            BoxWithConstraints(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .padding(top = 28.dp),
                 contentAlignment = Alignment.TopStart,
             ) {
+                val gridColumn = maxWidth / 12f
+                val gridRow = maxHeight / 8f
+                val fruitColumnStart = gridColumn * 0.30f
+                val fruitActionClearance = gridRow * 1.65f
+
                 WordFadeText(
                     text = stringResource(R.string.notification_permission_message),
                     style = bodyStyle,
@@ -1284,9 +1289,9 @@ private fun PlaybackNotificationSheet(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(start = 28.dp, bottom = 16.dp)
-                        .fillMaxWidth(0.74f)
-                        .height(320.dp)
+                        .padding(start = fruitColumnStart, bottom = fruitActionClearance)
+                        .width(gridColumn * 5.30f)
+                        .height(gridRow * 4.05f)
                         .graphicsLayer { alpha = fruitAlpha.value }
                 )
             }
