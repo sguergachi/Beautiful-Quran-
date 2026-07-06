@@ -116,7 +116,6 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.boundsInWindow
@@ -161,6 +160,7 @@ import com.beautifulquran.ui.theme.verticalFadingEdges
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.hypot
@@ -1064,6 +1064,8 @@ private val ExponentialSlowDownEasing = Easing { fraction ->
     if (fraction >= 1f) 1f else 1f - 2f.pow(-10f * fraction)
 }
 private val PlaybackNotificationOverscan = 12.dp
+// Only the full-colour illustrations appear on the prompt; the mono line-art
+// variants are no longer shown.
 private val QuranFruitColorDrawables = listOf(
     R.drawable.quran_fruit_dates,
     R.drawable.quran_fruit_fig,
@@ -1071,47 +1073,22 @@ private val QuranFruitColorDrawables = listOf(
     R.drawable.quran_fruit_olives,
     R.drawable.quran_fruit_pomegranate,
 )
-private val QuranFruitMonoDarkDrawables = listOf(
-    R.drawable.quran_fruit_dates_mono_dark,
-    R.drawable.quran_fruit_fig_mono_dark,
-    R.drawable.quran_fruit_grapes_mono_dark,
-    R.drawable.quran_fruit_olives_mono_dark,
-    R.drawable.quran_fruit_pomegranate_mono_dark,
-)
-private val QuranFruitMonoLightDrawables = listOf(
-    R.drawable.quran_fruit_dates_mono_light,
-    R.drawable.quran_fruit_fig_mono_light,
-    R.drawable.quran_fruit_grapes_mono_light,
-    R.drawable.quran_fruit_olives_mono_light,
-    R.drawable.quran_fruit_pomegranate_mono_light,
-)
 
 // Intrinsic width/height of each illustration, in the parallel order of the
-// lists above (dates, fig, grapes, olives, pomegranate). The art ranges from a
+// list above (dates, fig, grapes, olives, pomegranate). The art ranges from a
 // tall date branch (0.59) to an almost-square olive spray (1.05); we normalise
 // to a constant ink *area* so every fruit reads at the same visual weight
 // rather than the tall ones shrinking inside a fixed box.
 private val QuranFruitAspectRatios = listOf(0.59f, 0.95f, 0.69f, 1.05f, 0.84f)
 
-private fun quranFruitAspectRatio(drawable: Int): Float {
-    val index = listOf(
-        QuranFruitColorDrawables,
-        QuranFruitMonoDarkDrawables,
-        QuranFruitMonoLightDrawables,
-    ).firstNotNullOfOrNull { list -> list.indexOf(drawable).takeIf { it >= 0 } }
-    return index?.let { QuranFruitAspectRatios.getOrElse(it) { 1f } } ?: 1f
-}
+// The prompt cycles the fruit one after another instead of picking at random,
+// so a reader who opens the sheet repeatedly walks the whole set in order
+// rather than seeing the same fruit twice in a row. floorMod keeps the index
+// in range even after the counter eventually wraps past Int.MAX_VALUE.
+private val QuranFruitRotation = AtomicInteger(0)
 
-private fun quranFruitDrawablesForBackground(
-    background: androidx.compose.ui.graphics.Color,
-): List<Int> {
-    val contrastLinework = if (background.luminance() < 0.45f) {
-        QuranFruitMonoLightDrawables
-    } else {
-        QuranFruitMonoDarkDrawables
-    }
-    return QuranFruitColorDrawables + contrastLinework
-}
+private fun nextQuranFruitIndex(): Int =
+    QuranFruitRotation.getAndIncrement().mod(QuranFruitColorDrawables.size)
 
 // A circle of ink centred at an origin (a fraction of the sheet, so it is
 // size-agnostic); the radius reaches the farthest corner exactly at
@@ -1196,6 +1173,8 @@ private fun PlaybackNotificationSheet(
     val revealHole = remember { Animatable(0f) }
     val actionAlpha = remember { Animatable(0f) }
     val fruitAlpha = remember { Animatable(0f) }
+    // Drives the illustration's settle: a gentle rise and scale as it blooms in.
+    val fruitEnter = remember { Animatable(0f) }
     var originX by remember { mutableFloatStateOf(0.5f) }
     var originY by remember { mutableFloatStateOf(0.9f) }
     var closing by remember { mutableStateOf(false) }
@@ -1203,29 +1182,38 @@ private fun PlaybackNotificationSheet(
     var sheetBounds by remember { mutableStateOf<Rect?>(null) }
     var dismissCentre by remember { mutableStateOf(Offset.Unspecified) }
     var allowCentre by remember { mutableStateOf(Offset.Unspecified) }
-    val fruitDrawable = remember(colors.background) {
-        quranFruitDrawablesForBackground(colors.background).random()
-    }
-    val fruitAspect = remember(fruitDrawable) { quranFruitAspectRatio(fruitDrawable) }
+    // Next fruit in the rotation, chosen once per time the sheet appears.
+    val fruitIndex = remember { nextQuranFruitIndex() }
+    val fruitDrawable = QuranFruitColorDrawables[fruitIndex]
+    val fruitAspect = QuranFruitAspectRatios[fruitIndex]
     val scope = rememberCoroutineScope()
 
     // Enter: ink spreads open from the play control.
     LaunchedEffect(Unit) {
         inkSpread.snapTo(0f)
         fruitAlpha.snapTo(0f)
-        launch {
-            delay(980)
-            fruitAlpha.animateTo(
-                targetValue = 0.90f,
-                animationSpec = tween(durationMillis = 1_450, easing = SoftInkEasing),
-            )
-        }
+        fruitEnter.snapTo(0f)
         launch {
             // The answers surface only once the words have written in.
             delay(2_250)
             actionAlpha.animateTo(
                 targetValue = 1f,
                 animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
+            )
+        }
+        launch {
+            // The illustration blooms in *last* of all — only after the words
+            // and both answers have arrived — rising and scaling as it fades.
+            delay(3_000)
+            launch {
+                fruitAlpha.animateTo(
+                    targetValue = 0.90f,
+                    animationSpec = tween(durationMillis = 1_500, easing = SoftInkEasing),
+                )
+            }
+            fruitEnter.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 1_500, easing = SoftInkEasing),
             )
         }
         inkSpread.animateTo(
@@ -1321,15 +1309,15 @@ private fun PlaybackNotificationSheet(
                 // to a constant ink area (so tall and wide fruit weigh the same),
                 // then optically centred in the space the words leave below them,
                 // filling the void that used to sit between body and answers.
-                val squareEdge = maxWidth * 0.74f
+                val squareEdge = maxWidth * 0.66f
                 val aspectRoot = sqrt(fruitAspect)
                 val rawWidth = squareEdge * aspectRoot
                 val rawHeight = squareEdge / aspectRoot
                 val fitScale = min(
                     1f,
                     min(
-                        (maxWidth * 0.82f) / rawWidth,
-                        (maxHeight * 0.66f) / rawHeight,
+                        (maxWidth * 0.74f) / rawWidth,
+                        (maxHeight * 0.60f) / rawHeight,
                     ),
                 )
                 val fruitWidth = rawWidth * fitScale
@@ -1352,7 +1340,14 @@ private fun PlaybackNotificationSheet(
                         .align(BiasAlignment(0f, 0.18f))
                         .width(fruitWidth)
                         .height(fruitHeight)
-                        .graphicsLayer { alpha = fruitAlpha.value }
+                        .graphicsLayer {
+                            alpha = fruitAlpha.value
+                            // Bloom in: rise a touch and scale up from 92% as it fades.
+                            val enter = fruitEnter.value
+                            scaleX = 0.92f + 0.08f * enter
+                            scaleY = 0.92f + 0.08f * enter
+                            translationY = (1f - enter) * 18.dp.toPx()
+                        }
                 )
             }
             // Bottom — the two answers, fading up after the words have landed.
