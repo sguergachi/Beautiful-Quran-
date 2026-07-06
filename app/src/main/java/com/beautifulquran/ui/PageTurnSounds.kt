@@ -46,6 +46,10 @@ class PageTurnSounds(context: Context) {
         )
         .build()
 
+    // SoundPool.load() hands back an opaque sample id per file; play() and the
+    // loaded-check both need that id, not the R.raw.* resource id, so keep a map
+    // from resource id to sample id and track which samples have finished loading.
+    private val sampleIds = mutableMapOf<Int, Int>()
     private val loadedSamples = mutableSetOf<Int>()
     private val handler = Handler(Looper.getMainLooper())
 
@@ -54,7 +58,7 @@ class PageTurnSounds(context: Context) {
             if (status == 0) loadedSamples += sampleId
         }
         FLIPS.flatMap { listOf(it.liftRes, it.sweepRes, it.dropRes) }
-            .forEach { soundPool.load(context, it, 1) }
+            .forEach { res -> sampleIds[res] = soundPool.load(context, res, 1) }
     }
 
     // --- Scrub state for the turn currently under way -----------------------
@@ -153,8 +157,9 @@ class PageTurnSounds(context: Context) {
         (0.9f + abs(velocity) * 0.12f).coerceIn(0.9f, 1.6f)
 
     private fun playStem(res: Int, rate: Float) {
-        if (res !in loadedSamples) return // async load; earliest turns stay quiet
-        soundPool.play(res, VOLUME, VOLUME, 1, 0, rate)
+        val sampleId = sampleIds[res] ?: return
+        if (sampleId !in loadedSamples) return // async load; earliest turns stay quiet
+        soundPool.play(sampleId, VOLUME, VOLUME, 1, 0, rate)
     }
 
     /** Play a whole flip at natural pace — for auditioning in developer settings. */
