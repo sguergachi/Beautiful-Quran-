@@ -112,7 +112,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
@@ -1256,11 +1255,11 @@ private fun PlaybackNotificationSheet(
                     painter = painterResource(R.drawable.quran_fruits_ink),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    colorFilter = ColorFilter.tint(colors.onBackground.copy(alpha = 0.46f)),
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .fillMaxWidth(0.88f)
                         .height(500.dp)
+                        .graphicsLayer { alpha = 0.90f }
                         .padding(end = 0.dp, bottom = 6.dp),
                 )
             }
