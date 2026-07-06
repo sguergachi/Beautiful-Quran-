@@ -257,6 +257,7 @@ class ReaderViewModel(
     fun playFromAyah(ayah: Int) {
         val content = _uiState.value.content ?: return
         val reciter = _uiState.value.currentReciter ?: return
+        player.clearRepeatRange()
         player.playSurah(
             surahId = content.surah.id,
             ayahCount = content.surah.ayahCount,
@@ -272,8 +273,10 @@ class ReaderViewModel(
         val reciter = _uiState.value.currentReciter ?: return
         val np = playerState.value.nowPlaying
         if (np != null && np.surahId == surahId && np.reciterId == reciter.id) {
+            player.clearRepeatRange()
             player.seekToWordAndPlay(ayah, positionMs)
         } else {
+            player.clearRepeatRange()
             player.playSurah(
                 surahId = content.surah.id,
                 ayahCount = content.surah.ayahCount,
