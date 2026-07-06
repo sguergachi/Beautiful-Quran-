@@ -150,8 +150,8 @@ private fun animatedInkAlpha(state: WordVisualState): State<Float> =
 
 const val MIN_SWEEP_MS = 140
 const val MAX_SWEEP_MS = 8_000
-private const val ARABIC_ONLY_QCF_FONT_MULTIPLIER = 1.3f
-private const val ARABIC_ONLY_HAFS_FONT_MULTIPLIER = 1.25f
+private const val ARABIC_ONLY_QCF_FONT_MULTIPLIER = 1.05f
+private const val ARABIC_ONLY_HAFS_FONT_MULTIPLIER = 1.0f
 
 /**
  * The wash moves at an unhurried, deliberate pace: essentially a steady
