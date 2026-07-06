@@ -15,6 +15,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -163,6 +164,7 @@ import kotlin.math.ceil
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
@@ -1054,6 +1056,9 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 // A gentle, near-symmetric ease for the word fade: it drifts in slowly, never
 // snapping to full ink, so text feels light as it soaks into the paper.
 private val SoftInkEasing = CubicBezierEasing(0.33f, 0.0f, 0.15f, 1.0f)
+private val ExponentialSlowDownEasing = Easing { fraction ->
+    if (fraction >= 1f) 1f else 1f - 2f.pow(-10f * fraction)
+}
 private val PlaybackNotificationOverscan = 12.dp
 private val QuranFruitDrawables = listOf(
     R.drawable.quran_fruit_dates,
@@ -1177,7 +1182,7 @@ private fun PlaybackNotificationSheet(
         }
         inkSpread.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = 620, easing = FastOutSlowInEasing),
+            animationSpec = tween(durationMillis = 720, easing = ExponentialSlowDownEasing),
         )
     }
 
@@ -1201,7 +1206,7 @@ private fun PlaybackNotificationSheet(
             }
             revealHole.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(durationMillis = 620, easing = FastOutSlowInEasing),
+                animationSpec = tween(durationMillis = 720, easing = ExponentialSlowDownEasing),
             )
             then()
         }
