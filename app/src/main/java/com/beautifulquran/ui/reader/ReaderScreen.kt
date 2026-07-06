@@ -115,6 +115,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.boundsInWindow
@@ -1062,13 +1063,38 @@ private val ExponentialSlowDownEasing = Easing { fraction ->
     if (fraction >= 1f) 1f else 1f - 2f.pow(-10f * fraction)
 }
 private val PlaybackNotificationOverscan = 12.dp
-private val QuranFruitDrawables = listOf(
+private val QuranFruitColorDrawables = listOf(
     R.drawable.quran_fruit_dates,
     R.drawable.quran_fruit_fig,
     R.drawable.quran_fruit_grapes,
     R.drawable.quran_fruit_olives,
     R.drawable.quran_fruit_pomegranate,
 )
+private val QuranFruitMonoDarkDrawables = listOf(
+    R.drawable.quran_fruit_dates_mono_dark,
+    R.drawable.quran_fruit_fig_mono_dark,
+    R.drawable.quran_fruit_grapes_mono_dark,
+    R.drawable.quran_fruit_olives_mono_dark,
+    R.drawable.quran_fruit_pomegranate_mono_dark,
+)
+private val QuranFruitMonoLightDrawables = listOf(
+    R.drawable.quran_fruit_dates_mono_light,
+    R.drawable.quran_fruit_fig_mono_light,
+    R.drawable.quran_fruit_grapes_mono_light,
+    R.drawable.quran_fruit_olives_mono_light,
+    R.drawable.quran_fruit_pomegranate_mono_light,
+)
+
+private fun quranFruitDrawablesForBackground(
+    background: androidx.compose.ui.graphics.Color,
+): List<Int> {
+    val contrastLinework = if (background.luminance() < 0.45f) {
+        QuranFruitMonoLightDrawables
+    } else {
+        QuranFruitMonoDarkDrawables
+    }
+    return QuranFruitColorDrawables + contrastLinework
+}
 
 // A circle of ink centred at an origin (a fraction of the sheet, so it is
 // size-agnostic); the radius reaches the farthest corner exactly at
@@ -1160,7 +1186,9 @@ private fun PlaybackNotificationSheet(
     var sheetBounds by remember { mutableStateOf<Rect?>(null) }
     var dismissCentre by remember { mutableStateOf(Offset.Unspecified) }
     var allowCentre by remember { mutableStateOf(Offset.Unspecified) }
-    val fruitDrawable = remember { QuranFruitDrawables.random() }
+    val fruitDrawable = remember(colors.background) {
+        quranFruitDrawablesForBackground(colors.background).random()
+    }
     val scope = rememberCoroutineScope()
 
     // Enter: ink spreads open from the play control.
