@@ -34,6 +34,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = Path(__file__).resolve().parent / ".cache"
 OUT = ROOT / "app" / "src" / "main" / "assets" / "quran.db"
+OVERRIDES_DIR = Path(__file__).resolve().parent / "timing_overrides"
 
 QURAN_JSON_TGZ = "https://registry.npmjs.org/quran-json/-/quran-json-3.1.2.tgz"
 WBW_TGZ = (
@@ -415,6 +416,85 @@ def ingest_reciter_timings(rid, word_counts, timing_rows, stats, adjust):
     return covered
 
 
+def apply_timing_overrides(timing_rows, reciter_rows, word_counts):
+    """Apply every JSON file in tools/timing_overrides/ on top of the built
+    timing rows, replacing or adding (reciter, surah, ayah) rows.
+
+    The patch shape is exactly what the in-app Timings Lab exports (see
+    docs/TIMINGS_LAB.md):
+
+      {"schema": 1, "device": "...", "appVersion": "...",
+       "edits": [
+         {"reciterId": 1, "reciterSlug": "Alafasy_128kbps",
+          "surahId": 2, "ayah": 14,
+          "segments": [[pos, start_ms, end_ms], ...]}, ...]}
+
+    Positions are validated against the canonical word count for that ayah;
+    an out-of-range position fails the build rather than shipping a bad patch.
+    Slug mismatches warn but still apply — the reciterId is authoritative.
+    """
+    slug_by_id = {r[0]: r[1] for r in RECITERS}
+    by_key = {(rid, sid, ay): segs for (rid, sid, ay, segs) in timing_rows}
+    applied = 0
+    files = sorted(OVERRIDES_DIR.glob("*.json")) if OVERRIDES_DIR.is_dir() else []
+    if not files:
+        return timing_rows, reciter_rows
+    for path in files:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            print(f"  !! cannot parse override {path.name}: {e}", file=sys.stderr)
+            sys.exit(1)
+        for edit in payload.get("edits") or []:
+            try:
+                rid = int(edit["reciterId"])
+                sid = int(edit["surahId"])
+                ay = int(edit["ayah"])
+            except (KeyError, TypeError, ValueError) as e:
+                print(f"  !! override {path.name}: missing reciterId/surahId/ayah ({e})", file=sys.stderr)
+                sys.exit(1)
+            expected_slug = slug_by_id.get(rid)
+            if expected_slug is None:
+                print(f"  !! override {path.name}: unknown reciterId {rid}", file=sys.stderr)
+                sys.exit(1)
+            slug = edit.get("reciterSlug")
+            if slug and slug != expected_slug:
+                print(f"  !  override {path.name}: reciterSlug {slug!r} != {expected_slug!r} for id {rid}; applying by id")
+            n_words = word_counts.get((sid, ay))
+            if n_words is None:
+                print(f"  !! override {path.name}: surah {sid} ayah {ay} not in corpus", file=sys.stderr)
+                sys.exit(1)
+            raw = edit.get("segments") or []
+            if not raw:
+                print(f"  !! override {path.name}: surah {sid} ayah {ay} has no segments", file=sys.stderr)
+                sys.exit(1)
+            segs = []
+            for s in raw:
+                if len(s) < 3:
+                    print(f"  !! override {path.name}: segment {s} needs [pos, start, end]", file=sys.stderr)
+                    sys.exit(1)
+                pos, start, end = int(s[0]), int(s[1]), int(s[2])
+                if pos < 1 or pos > n_words:
+                    print(f"  !! override {path.name}: surah {sid} ayah {ay} position {pos} out of [1,{n_words}]", file=sys.stderr)
+                    sys.exit(1)
+                if start < 0 or end <= start:
+                    print(f"  !! override {path.name}: surah {sid} ayah {ay} segment {s} has bad start/end", file=sys.stderr)
+                    sys.exit(1)
+                segs.append([pos, start, end])
+            segs.sort(key=lambda s: s[1])
+            by_key[(rid, sid, ay)] = json.dumps(segs, separators=(",", ":"))
+            applied += 1
+            print(f"  override {path.name}: {expected_slug} surah {sid} ayah {ay} -> {len(segs)} segments")
+    new_rows = [(rid, sid, ay, segs) for (rid, sid, ay), segs in sorted(by_key.items())]
+    # A reciter with any timing row (DB or override) offers word highlighting.
+    has = {rid for (rid, _sid, _ay, _segs) in new_rows}
+    new_reciter_rows = [
+        (r[0], r[1], r[2], r[3], 1 if r[0] in has else r[4]) for r in reciter_rows
+    ]
+    print(f"  overrides: {applied} ayah(s) across {len(files)} file(s)")
+    return new_rows, new_reciter_rows
+
+
 DDL = """
 CREATE TABLE surahs (
   id INTEGER PRIMARY KEY,
@@ -503,6 +583,10 @@ def main():
     for m in gloss_mismatch:
         print(f"    surah {m[0]} ayah {m[1]}: text={m[2]} wbw={m[3]}")
 
+    word_counts = {}
+    for s, a, pos, *_ in words:
+        word_counts[(s, a)] = max(word_counts.get((s, a), 0), pos)
+
     timing_rows = []
     reciter_rows = []
     if args.skip_timings:
@@ -511,9 +595,6 @@ def main():
     else:
         print("[5/5] fetching + normalizing word timings (quran-align)")
         zp = fetch(ALIGN_ZIP, "quran-align-data.zip")
-        word_counts = {}
-        for s, a, pos, *_ in words:
-            word_counts[(s, a)] = max(word_counts.get((s, a), 0), pos)
         for rid, slug, name, style in RECITERS:
             qdc_id = QDC_REPEAT_RECITERS.get(rid)
             if qdc_id is not None:
@@ -550,6 +631,9 @@ def main():
                 print(f"  !! coverage below threshold for {slug}", file=sys.stderr)
                 sys.exit(1)
             reciter_rows.append((rid, slug, name, style, 1))
+
+    print("[overrides] applying tools/timing_overrides/*.json")
+    timing_rows, reciter_rows = apply_timing_overrides(timing_rows, reciter_rows, word_counts)
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     if OUT.exists():

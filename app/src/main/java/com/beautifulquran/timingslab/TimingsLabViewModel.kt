@@ -5,29 +5,27 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
 import com.beautifulquran.data.QuranRepository
+import com.beautifulquran.data.Settings
 import com.beautifulquran.data.SettingsRepository
+import com.beautifulquran.data.model.Ayah
 import com.beautifulquran.data.model.Reciter
 import com.beautifulquran.data.model.Segment
-import com.beautifulquran.data.model.SurahContent
-import com.beautifulquran.data.model.Word
+import com.beautifulquran.domain.HighlightEngine
 import com.beautifulquran.playback.PlayerController
 import com.beautifulquran.playback.PlayerUiState
+import com.beautifulquran.ui.reader.ActiveWord
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
-/** One editable pass in the lab. The bound version of [Segment] — kept mutable
- * so the UI can drag a single handle without rewriting the whole list. */
-data class LabSegment(
-    var position: Int,
-    var startMs: Long,
-    var endMs: Long,
-)
+/** The Lab's two verbs: watch/tune the existing marks, or record a fresh
+ * tap-sync pass over the whole ayah (Musixmatch style). */
+enum class LabMode { LISTEN, RECORD }
 
-/** Status snapshot for the lab; one emitted value at a time. */
 data class TimingsLabUiState(
     val isLoading: Boolean = true,
     val surahId: Int = 0,
@@ -35,26 +33,35 @@ data class TimingsLabUiState(
     val ayah: Int = 1,
     val ayahCount: Int = 0,
     val reciter: Reciter? = null,
-    val words: List<Word> = emptyList(),
-    /** Currently displayed passes — edited in place; persisted on Save. */
-    val segments: List<LabSegment> = emptyList(),
-    /** When true, this ayah has an override saved on device. */
+    /** The full ayah row — rendered by the reader's own AyahBlock. */
+    val ayahData: Ayah? = null,
+    /** Working copy of this ayah's marks, always sorted by startMs. The live
+     * preview runs HighlightEngine straight over this list, so edits are
+     * visible before they persist. */
+    val passes: List<Segment> = emptyList(),
+    val mode: LabMode = LabMode.LISTEN,
+    /** Index into [passes] of the mark being tuned, or null. */
+    val selectedPass: Int? = null,
+    /** When true, nudges also shift every mark after the selected one —
+     * the drift fixer. */
+    val shiftFollowing: Boolean = false,
+    /** This ayah has a saved on-device correction. */
     val isOverridden: Boolean = false,
+    /** Corrected ayahs in the whole override store (the submit ribbon). */
+    val overrideCount: Int = 0,
     val durationMs: Long = 0L,
     val positionMs: Long = 0L,
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
+    val speed: Float = 1f,
+    /** Marks dropped in the current record pass (enables Undo). */
+    val recordedMarks: Int = 0,
     val error: String? = null,
-    val tapMode: Boolean = false,
-    /** Position the tap-mode flow expects next (1-based). May exceed
-     * [words] size; UI clamps. */
-    val tapExpectedNext: Int = 1,
-    val dirty: Boolean = false,
 )
 
 class TimingsLabViewModel(
     private val repository: QuranRepository,
-    private val settings: SettingsRepository,
+    private val settingsRepo: SettingsRepository,
     private val player: PlayerController,
     private val overrides: TimingOverrides,
 ) : ViewModel() {
@@ -62,112 +69,157 @@ class TimingsLabViewModel(
     private val _ui = MutableStateFlow(TimingsLabUiState())
     val ui: StateFlow<TimingsLabUiState> = _ui.asStateFlow()
 
+    /** Reader settings (reading mode, gloss, font scale) so the stage renders
+     * exactly what the reader renders. */
+    val settings: StateFlow<Settings> = settingsRepo.settings
+
+    /** Drives AyahBlock's karaoke fade, computed from the *edited* marks. */
+    private val _activeWord = MutableStateFlow<ActiveWord?>(null)
+    val activeWord: StateFlow<ActiveWord?> = _activeWord.asStateFlow()
+
     val playerState: StateFlow<PlayerUiState> = player.state
 
     private var loadJob: Job? = null
     private var pollJob: Job? = null
+    private var saveJob: Job? = null
     @Volatile private var recitersCache: List<Reciter> = emptyList()
 
+    /** True once any edit touched the working copy; gates auto-save so merely
+     * opening an ayah never writes an override. */
+    private var edited = false
+
+    /** Marks of the in-flight record pass in tap order (kept sorted because
+     * the playhead only moves forward between rewinds). */
+    private val recordMarks = mutableListOf<Segment>()
+
+    /** Working copy as it was when Re-sync started; restored on cancel. */
+    private var recordBackup: List<Segment> = emptyList()
+
+    /** Whether playback actually started during this record pass, so the
+     * stream ending can be told apart from it never starting. */
+    private var recordPlaybackSeen = false
+
     init {
-        // One observer of player state, one position poller; both gated on
-        // whether the lab's current ayah is the active media item.
         viewModelScope.launch {
             player.state.collect { ps ->
-                val np = ps.nowPlaying
-                val matches = np != null &&
-                    np.surahId == _ui.value.surahId &&
-                    np.ayah == _ui.value.ayah &&
-                    np.reciterId == _ui.value.reciter?.id
+                val matches = matchesLab(ps)
                 _ui.value = _ui.value.copy(
                     isPlaying = matches && ps.isPlaying,
                     isBuffering = matches && ps.isBuffering,
+                    speed = ps.speed,
                     durationMs = if (matches && player.durationMs > 0L) player.durationMs else _ui.value.durationMs,
                     error = if (matches) ps.error else null,
                 )
-                if (matches) pollPosition()
+                if (matches) {
+                    if (_ui.value.mode == LabMode.RECORD && ps.isPlaying) recordPlaybackSeen = true
+                    pollPosition()
+                } else if (_ui.value.mode == LabMode.RECORD && ps.nowPlaying == null && recordPlaybackSeen) {
+                    // The single-item playlist ended (record runs with repeat
+                    // off): the pass is complete.
+                    finishRecord()
+                }
+            }
+        }
+        viewModelScope.launch {
+            overrides.overrides.collect { map ->
+                _ui.value = _ui.value.copy(overrideCount = map.size)
             }
         }
     }
 
-    /** Subscribe to the live polled position so the scrubber/marks animate
-     * frame-by-frame; rerun only when the lab's ayah idles out. */
+    private fun matchesLab(ps: PlayerUiState): Boolean {
+        val np = ps.nowPlaying ?: return false
+        val st = _ui.value
+        return np.surahId == st.surahId && np.ayah == st.ayah && np.reciterId == st.reciter?.id
+    }
+
+    /** Samples the playhead and re-derives the active word while this ayah is
+     * the loaded media item; the highlight follows edits live because it is
+     * recomputed from [TimingsLabUiState.passes] every tick. */
     private fun pollPosition() {
-        pollJob?.cancel()
+        if (pollJob?.isActive == true) return
         pollJob = viewModelScope.launch {
-            while (true) {
-                val np = player.state.value.nowPlaying
-                if (np == null ||
-                    np.surahId != _ui.value.surahId ||
-                    np.ayah != _ui.value.ayah ||
-                    np.reciterId != _ui.value.reciter?.id
-                ) {
-                    break
+            while (matchesLab(player.state.value)) {
+                val st = _ui.value
+                val duration = player.durationMs.takeIf { it > 0L } ?: st.durationMs
+                val pos = player.positionMs.coerceIn(0L, duration.coerceAtLeast(0L))
+                _ui.value = st.copy(positionMs = pos, durationMs = duration)
+                _activeWord.value = st.passes
+                    .let { HighlightEngine.activeInfo(it, pos) }
+                    ?.let {
+                        ActiveWord(
+                            ayah = st.ayah,
+                            wordPosition = it.position,
+                            durationMs = it.endMs - it.startMs,
+                            isRepeat = it.isRepeat,
+                            highWater = it.highWater,
+                            repeatStart = it.repeatStart,
+                        )
+                    }
+                // With repeat off, a record pass ends when the audio does.
+                if (st.mode == LabMode.RECORD && duration > 0L && pos >= duration - END_GUARD_MS) {
+                    finishRecord()
                 }
-                _ui.value = _ui.value.copy(
-                    positionMs = player.positionMs.coerceIn(0L, player.durationMs.coerceAtLeast(0L)),
-                    durationMs = if (_ui.value.durationMs <= 0L) player.durationMs else _ui.value.durationMs,
-                )
                 delay(if (player.state.value.isPlaying) TICK_MS else PAUSED_TICK_MS)
             }
+            _activeWord.value = null
         }
     }
 
+    // ── Target ayah ────────────────────────────────────────────────────────
+
     fun initFromLastOpened() {
-        viewModelScope.launch {
-            val s = settings.settings.value
-            val surahId = s.lastSurah.takeIf { it in 1..114 } ?: 1
-            val ayah = s.lastAyah.coerceIn(1, 200)
-            load(surahId, ayah)
-        }
+        val s = settingsRepo.settings.value
+        changeTarget(s.lastSurah.takeIf { it in 1..114 } ?: 1, s.lastAyah.coerceAtLeast(1))
     }
 
     fun changeTarget(surahId: Int, ayah: Int) {
-        viewModelScope.launch {
-            if (_ui.value.dirty) {
-                flushSaveCurrent()
-            }
-            load(surahId, ayah)
-        }
+        if (_ui.value.mode == LabMode.RECORD) finishRecord()
+        persistNow()
+        pauseIfLabAyahPlaying()
+        load(surahId, ayah)
     }
 
     fun nextAyah() {
-        val ayahCount = _ui.value.ayahCount
-        if (ayahCount <= 0) return
-        changeTarget(_ui.value.surahId, (_ui.value.ayah % ayahCount) + 1)
+        val st = _ui.value
+        if (st.ayahCount <= 0) return
+        changeTarget(st.surahId, (st.ayah % st.ayahCount) + 1)
     }
 
     fun prevAyah() {
-        val ayahCount = _ui.value.ayahCount
-        if (ayahCount <= 0) return
-        val prev = if (_ui.value.ayah <= 1) ayahCount else _ui.value.ayah - 1
-        changeTarget(_ui.value.surahId, prev)
+        val st = _ui.value
+        if (st.ayahCount <= 0) return
+        changeTarget(st.surahId, if (st.ayah <= 1) st.ayahCount else st.ayah - 1)
     }
 
-    private suspend fun flushSaveCurrent() {
-        if (!_ui.value.dirty) return
-        val reciterId = _ui.value.reciter?.id ?: return
-        val key = OverrideKey(reciterId, _ui.value.surahId, _ui.value.ayah)
-        overrides.set(OverrideEntry(key, _ui.value.segments.map { Segment(it.position, it.startMs, it.endMs) }))
-        _ui.value = _ui.value.copy(dirty = false, isOverridden = true)
+    private fun pauseIfLabAyahPlaying() {
+        if (matchesLab(player.state.value) && player.state.value.isPlaying) {
+            player.togglePlayPause()
+        }
     }
 
     private fun load(surahId: Int, ayah: Int) {
         loadJob?.cancel()
-        _ui.value = TimingsLabUiState(isLoading = true, surahId = surahId, ayah = ayah)
+        edited = false
+        recordMarks.clear()
+        _activeWord.value = null
+        _ui.value = TimingsLabUiState(
+            isLoading = true,
+            surahId = surahId,
+            ayah = ayah,
+            overrideCount = _ui.value.overrideCount,
+        )
         loadJob = viewModelScope.launch {
             val reciters = repository.reciters()
             recitersCache = reciters
-            val reciter = reciters.firstOrNull { it.id == settings.settings.value.reciterId }
+            val reciter = reciters.firstOrNull { it.id == settingsRepo.settings.value.reciterId }
                 ?: reciters.first()
-            val content: SurahContent = repository.surahContent(surahId)
+            val content = repository.surahContent(surahId)
             if (surahId != _ui.value.surahId || ayah != _ui.value.ayah) return@launch
-            val ayahs = content.ayahs
-            val ayahIdx = (ayah - 1).coerceIn(0, ayahs.lastIndex)
-            val ayahRow = ayahs[ayahIdx]
-            val timings = if (reciter.hasTimings) repository.timings(reciter.id, surahId) else emptyMap()
+            val ayahRow = content.ayahs[(ayah - 1).coerceIn(0, content.ayahs.lastIndex)]
+            // timings() already fuses saved overrides over the DB row.
+            val segs = repository.timings(reciter.id, surahId)[ayahRow.number].orEmpty()
             val key = OverrideKey(reciter.id, surahId, ayahRow.number)
-            val overridden = overrides.get(key) != null
-            val segs = timings[ayahRow.number].orEmpty().map { LabSegment(it.position, it.startMs, it.endMs) }
             _ui.value = TimingsLabUiState(
                 isLoading = false,
                 surahId = surahId,
@@ -175,237 +227,318 @@ class TimingsLabViewModel(
                 ayah = ayahRow.number,
                 ayahCount = content.surah.ayahCount,
                 reciter = reciter,
-                words = ayahRow.words,
-                segments = segs,
-                isOverridden = overridden,
-                tapExpectedNext = segs.maxOfOrNull { it.position }?.plus(1)?.coerceAtMost(ayahRow.words.size) ?: 1,
+                ayahData = ayahRow,
+                passes = segs,
+                isOverridden = overrides.get(key) != null,
+                overrideCount = _ui.value.overrideCount,
+                speed = player.state.value.speed,
             )
-            settings.update { it.copy(lastSurah = surahId, lastAyah = ayahRow.number) }
+            settingsRepo.update { it.copy(lastSurah = surahId, lastAyah = ayahRow.number) }
         }
     }
+
+    // ── Transport ──────────────────────────────────────────────────────────
 
     fun playPause() {
         val st = _ui.value
         if (st.isLoading) return
-        val content = st
-        val np = player.state.value.nowPlaying
-        val same = np != null && np.surahId == st.surahId && np.ayah == st.ayah && np.reciterId == st.reciter?.id
-        if (same) {
+        if (matchesLab(player.state.value)) {
             player.togglePlayPause()
-            return
+        } else {
+            startLabPlayback(startMs = 0L, loop = st.mode == LabMode.LISTEN)
         }
-        // Start (or restart) a one-item playlist for this ayah only.
+    }
+
+    fun restart() = seekTo(0L, play = true)
+
+    fun cycleSpeed() {
+        val speeds = listOf(1f, 0.75f, 0.5f)
+        val idx = speeds.indexOfFirst { abs(it - player.state.value.speed) < 0.01f }
+        player.setSpeed(speeds[(idx + 1).mod(speeds.size)])
+    }
+
+    fun scrubTo(positionMs: Long) = seekTo(positionMs, play = true)
+
+    private fun seekTo(positionMs: Long, play: Boolean) {
+        val st = _ui.value
+        val ms = positionMs.coerceIn(0L, st.durationMs.coerceAtLeast(0L))
+        if (matchesLab(player.state.value)) {
+            if (play) player.seekToWordAndPlay(st.ayah, ms) else player.seekToWord(st.ayah, ms)
+        } else if (play) {
+            startLabPlayback(startMs = ms, loop = st.mode == LabMode.LISTEN)
+        }
+    }
+
+    /** Loads a one-item playlist for the lab's ayah through the shared
+     * playback service, so caching / audio focus behave exactly as in the
+     * reader. Looping keeps the ayah cycling while tuning. */
+    private fun startLabPlayback(startMs: Long, loop: Boolean) {
+        val st = _ui.value
+        val reciter = st.reciter ?: return
         player.playSurah(
             surahId = st.surahId,
             ayahCount = st.ayah,
             startAyah = st.ayah,
-            reciter = st.reciter ?: return,
+            reciter = reciter,
             surahName = st.surahName,
-            startPositionMs = 0L,
+            startPositionMs = startMs,
             preserveRepeatRange = false,
         )
         viewModelScope.launch {
-            // Wait until state connects, then enable single-ayah looping so the
-            // audio keeps repeating while the user taps marks.
             delay(PLAY_SETTLE_MS)
-            if (loopEnabled) player.setRepeatMode(Player.REPEAT_MODE_ONE)
+            player.setRepeatMode(if (loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF)
         }
     }
 
-    /** When true the lab loops the single-ayah playlist forever (slows edits
-     * way down). Always defaults on when entering the lab. */
-    private var loopEnabled: Boolean = true
+    // ── Record (Re-sync) ───────────────────────────────────────────────────
 
-    fun setLoop(enabled: Boolean) {
-        loopEnabled = enabled
-        player.setRepeatMode(if (enabled) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF)
-    }
-
-    fun seekTo(positionMs: Long) {
+    fun startRecord() {
         val st = _ui.value
-        val same = player.state.value.nowPlaying?.let {
-            it.surahId == st.surahId && it.ayah == st.ayah && it.reciterId == st.reciter?.id
-        } == true
-        if (same) {
-            player.seekToWord(st.ayah, positionMs.coerceIn(0L, st.durationMs.coerceAtLeast(0L)))
-            if (!player.state.value.isPlaying) player.togglePlayPause()
+        if (st.isLoading || st.reciter == null) return
+        recordBackup = st.passes
+        recordMarks.clear()
+        recordPlaybackSeen = false
+        _ui.value = st.copy(
+            mode = LabMode.RECORD,
+            passes = emptyList(),
+            selectedPass = null,
+            recordedMarks = 0,
+        )
+        _activeWord.value = null
+        // Repeat OFF so the stream ending marks the pass complete.
+        if (matchesLab(player.state.value)) {
+            player.setRepeatMode(Player.REPEAT_MODE_OFF)
+            player.seekToWordAndPlay(st.ayah, 0L)
         } else {
-            // Not playing yet: start the playlist at the requested offset.
-            player.playSurah(
-                surahId = st.surahId,
-                ayahCount = st.ayah,
-                startAyah = st.ayah,
-                reciter = st.reciter ?: return,
-                surahName = st.surahName,
-                startPositionMs = positionMs.coerceIn(0L, st.durationMs.coerceAtLeast(0L)),
-                preserveRepeatRange = false,
-            )
+            startLabPlayback(startMs = 0L, loop = false)
         }
     }
 
-    fun replayFromStart() {
-        val st = _ui.value
-        val same = player.state.value.nowPlaying?.let {
-            it.surahId == st.surahId && it.ayah == st.ayah && it.reciterId == st.reciter?.id
-        } == true
-        if (same) {
-            player.seekToWord(st.ayah, 0L)
-            if (!player.state.value.isPlaying) player.togglePlayPause()
-            return
-        }
-        playPause()
-    }
-
-    fun toggleTapMode() {
-        _ui.value = _ui.value.copy(tapMode = !_ui.value.tapMode)
-    }
-
-    /** Drop a mark at the current playhead for [position]. When tap-mode is
-     * on, this is the call from tapping a word glyph. When off, it's the
-     * explicit "+ add segment" button. */
+    /** A word tapped on the stage. In Record it drops that word's start mark
+     * at the playhead (earlier positions again = repeat backtrack); in Listen
+     * it selects the word's mark for tuning and auditions it. */
     fun tapWord(position: Int) {
         val st = _ui.value
-        if (st.reciter == null) return
-        val wordCount = st.words.size
+        val wordCount = st.ayahData?.words?.size ?: return
         val pos = position.coerceIn(1, wordCount)
-        val ms = player.positionMs.coerceAtLeast(0L)
-        val duration = st.durationMs.takeIf { it > 0L }
-        val list = st.segments.toMutableList()
-        val end = duration ?: if (list.isEmpty()) ms + 1 else list.last().endMs.coerceAtLeast(ms + 1)
-        list.add(LabSegment(pos, ms, if (end > ms) end else ms + 1))
-        val sorted = list.sortedBy { it.startMs }
-        recomputeEnds(sorted)
-        val nextExpected = (pos + 1).coerceAtMost(wordCount)
-        _ui.value = st.copy(
-            segments = sorted,
-            dirty = true,
-            tapExpectedNext = nextExpected,
+        if (st.mode == LabMode.RECORD) dropMark(pos) else selectWord(pos)
+    }
+
+    private fun dropMark(position: Int) {
+        val st = _ui.value
+        // Compensate finger reaction latency, scaled to how fast the audio is
+        // actually moving; the Tune card catches whatever this misses.
+        val comp = (TAP_LATENCY_MS * player.state.value.speed).toLong()
+        var start = (player.positionMs - comp).coerceAtLeast(0L)
+        recordMarks.lastOrNull()?.let { prev ->
+            if (start <= prev.startMs) start = prev.startMs + MIN_MARK_GAP_MS
+        }
+        val provisionalEnd = st.durationMs.takeIf { it > start } ?: (start + PROVISIONAL_MARK_MS)
+        recordMarks += Segment(position, start, provisionalEnd)
+        publishRecordMarks()
+    }
+
+    fun undoTap() {
+        val last = recordMarks.removeLastOrNull() ?: return
+        publishRecordMarks()
+        seekTo((last.startMs - UNDO_REWIND_MS).coerceAtLeast(0L), play = true)
+    }
+
+    /** Jump back a few seconds and clear the marks in the overrun, so just
+     * that stretch is re-tapped. */
+    fun rewind() {
+        val target = (_ui.value.positionMs - REWIND_MS).coerceAtLeast(0L)
+        recordMarks.removeAll { it.startMs >= target }
+        publishRecordMarks()
+        seekTo(target, play = true)
+    }
+
+    private fun publishRecordMarks() {
+        edited = true
+        _ui.value = _ui.value.copy(
+            passes = withDerivedEnds(recordMarks.toList(), _ui.value.durationMs),
+            recordedMarks = recordMarks.size,
         )
     }
 
-    private fun recomputeEnds(list: List<LabSegment>) {
-        // End of pass i < last = start of pass i+1; end of last = the
-        // recorded endMs (typically the audio duration). Keeps highlight on
-        // the right pass and letter-fade pacing sensible.
-        for (i in list.indices) {
-            if (i == list.lastIndex) continue
-            val nextStart = list[i + 1].startMs
-            if (list[i].endMs > nextStart || list[i].endMs <= list[i].startMs) {
-                list[i].endMs = nextStart
+    /** Ends the record pass: derives ends, saves, and replays from the top so
+     * the correction is verified immediately. A pass with no taps is treated
+     * as cancelled — the previous marks come back. */
+    fun finishRecord() {
+        val st = _ui.value
+        if (st.mode != LabMode.RECORD) return
+        player.setSpeed(1f)
+        if (recordMarks.isEmpty()) {
+            _ui.value = st.copy(mode = LabMode.LISTEN, passes = recordBackup, recordedMarks = 0)
+            player.setRepeatMode(Player.REPEAT_MODE_ONE)
+            return
+        }
+        val passes = withDerivedEnds(recordMarks.toList(), st.durationMs)
+        recordMarks.clear()
+        _ui.value = st.copy(mode = LabMode.LISTEN, passes = passes, recordedMarks = 0)
+        persistNow()
+        player.setRepeatMode(Player.REPEAT_MODE_ONE)
+        seekTo(0L, play = true)
+    }
+
+    // ── Tune (Listen-mode selection + nudges) ──────────────────────────────
+
+    private fun selectWord(position: Int) {
+        val st = _ui.value
+        val candidates = st.passes.withIndex().filter { it.value.position == position }
+        if (candidates.isEmpty()) return
+        val idx = candidates.minByOrNull { abs(it.value.startMs - st.positionMs) }!!.index
+        _ui.value = st.copy(selectedPass = idx)
+        audition(idx)
+    }
+
+    fun selectPass(index: Int) {
+        if (index !in _ui.value.passes.indices) return
+        _ui.value = _ui.value.copy(selectedPass = index)
+        audition(index)
+    }
+
+    fun closeTune() {
+        _ui.value = _ui.value.copy(selectedPass = null)
+    }
+
+    fun auditionSelected() {
+        _ui.value.selectedPass?.let(::audition)
+    }
+
+    /** Play from just before the mark so the ear judges the (new) start. */
+    private fun audition(index: Int) {
+        val pass = _ui.value.passes.getOrNull(index) ?: return
+        seekTo((pass.startMs - AUDITION_LEAD_MS).coerceAtLeast(0L), play = true)
+    }
+
+    fun setShiftFollowing(enabled: Boolean) {
+        _ui.value = _ui.value.copy(shiftFollowing = enabled)
+    }
+
+    /** Moves the selected mark's start by [deltaMs] (and, with shiftFollowing,
+     * every later mark too). Clamped so marks never reorder. */
+    fun nudgeSelected(deltaMs: Long) {
+        val st = _ui.value
+        val i = st.selectedPass ?: return
+        val passes = st.passes
+        val pass = passes.getOrNull(i) ?: return
+        val floor = passes.getOrNull(i - 1)?.startMs?.plus(MIN_MARK_GAP_MS) ?: 0L
+        val delta = if (st.shiftFollowing) {
+            deltaMs.coerceAtLeast(floor - pass.startMs)
+        } else {
+            val ceil = passes.getOrNull(i + 1)?.startMs?.minus(MIN_MARK_GAP_MS)
+                ?: st.durationMs.takeIf { it > 0L }?.minus(MIN_MARK_GAP_MS)
+                ?: Long.MAX_VALUE
+            deltaMs.coerceIn(floor - pass.startMs, (ceil - pass.startMs).coerceAtLeast(floor - pass.startMs))
+        }
+        if (delta == 0L) return
+        val moved = passes.mapIndexed { j, p ->
+            when {
+                j < i || (!st.shiftFollowing && j > i) -> p
+                else -> p.copy(
+                    startMs = (p.startMs + delta).coerceAtLeast(0L),
+                    endMs = (p.endMs + delta).coerceAtLeast(MIN_MARK_GAP_MS),
+                )
             }
         }
-        // Force non-overlapping ordering by end clamp.
-        val dur = _ui.value.durationMs
-        if (list.isNotEmpty() && dur > 0L && list.last().endMs < list.last().startMs) {
-            list.last().endMs = dur
+        edited = true
+        _ui.value = st.copy(passes = withDerivedEnds(moved, st.durationMs))
+        persistDebounced()
+    }
+
+    fun deleteSelected() {
+        val st = _ui.value
+        val i = st.selectedPass ?: return
+        if (i !in st.passes.indices) return
+        edited = true
+        _ui.value = st.copy(
+            passes = withDerivedEnds(st.passes.filterIndexed { j, _ -> j != i }, st.durationMs),
+            selectedPass = null,
+        )
+        persistNow()
+    }
+
+    /** Contiguity repair after any mutation: a mark may never overlap the next
+     * one, and the final mark ends at the audio duration when its end is
+     * missing or inverted. Valid hand-set / bundled ends are left alone. */
+    private fun withDerivedEnds(passes: List<Segment>, durationMs: Long): List<Segment> {
+        val sorted = passes.sortedBy { it.startMs }
+        return sorted.mapIndexed { i, p ->
+            val next = sorted.getOrNull(i + 1)
+            val end = when {
+                next != null && (p.endMs > next.startMs || p.endMs <= p.startMs) -> next.startMs
+                next == null && p.endMs <= p.startMs ->
+                    durationMs.takeIf { it > p.startMs } ?: (p.startMs + PROVISIONAL_MARK_MS)
+                else -> p.endMs
+            }
+            if (end == p.endMs) p else p.copy(endMs = end)
         }
     }
 
-    fun setSegmentStart(index: Int, value: Long) {
-        val st = _ui.value
-        val updated = st.segments.toMutableList()
-        if (index !in updated.indices) return
-        val ms = value.coerceIn(0L, st.durationMs.coerceAtLeast(value))
-        updated[index] = updated[index].apply { startMs = ms }
-        updated.sortBy { it.startMs }
-        recomputeEnds(updated)
-        _ui.value = st.copy(segments = updated, dirty = true)
-    }
+    // ── Persistence ────────────────────────────────────────────────────────
 
-    fun setSegmentEnd(index: Int, value: Long) {
-        val st = _ui.value
-        val updated = st.segments.toMutableList()
-        if (index !in updated.indices) return
-        updated[index] = updated[index].apply {
-            endMs = value.coerceIn(startMs + 1, st.durationMs.coerceAtLeast(value))
+    private fun persistDebounced() {
+        saveJob?.cancel()
+        saveJob = viewModelScope.launch {
+            delay(SAVE_DEBOUNCE_MS)
+            persistNow()
         }
-        _ui.value = st.copy(segments = updated, dirty = true)
     }
 
-    fun setSegmentPosition(index: Int, value: Int) {
+    private fun persistNow() {
+        saveJob?.cancel()
+        if (!edited) return
         val st = _ui.value
-        val updated = st.segments.toMutableList()
-        if (index !in updated.indices) return
-        updated[index] = updated[index].apply {
-            position = value.coerceIn(1, st.words.size.coerceAtLeast(1))
-        }
-        _ui.value = st.copy(segments = updated, dirty = true)
-    }
-
-    fun removeSegment(index: Int) {
-        val st = _ui.value
-        val updated = st.segments.toMutableList()
-        if (index !in updated.indices) return
-        updated.removeAt(index)
-        recomputeEnds(updated)
-        _ui.value = st.copy(segments = updated, dirty = true)
-    }
-
-    fun save() {
-        val st = _ui.value
-        if (!st.dirty) return
         val reciter = st.reciter ?: return
         val key = OverrideKey(reciter.id, st.surahId, st.ayah)
-        val segs = st.segments
-            .filter { it.endMs > it.startMs }
-            .sortedBy { it.startMs }
-            .map { Segment(it.position, it.startMs, it.endMs) }
-        if (segs.isEmpty()) {
-            overrides.clear(key)
-            _ui.value = st.copy(isOverridden = false, dirty = false)
-        } else {
-            overrides.set(OverrideEntry(key, segs))
-            _ui.value = st.copy(isOverridden = true, dirty = false)
-        }
+        val segs = st.passes.filter { it.endMs > it.startMs }.sortedBy { it.startMs }
+        if (segs.isEmpty()) overrides.clear(key) else overrides.set(OverrideEntry(key, segs))
+        edited = false
+        _ui.value = _ui.value.copy(isOverridden = segs.isNotEmpty())
     }
 
+    /** Reverts this ayah to the bundled DB timings. */
     fun resetOverride() {
         val st = _ui.value
         val reciter = st.reciter ?: return
-        val key = OverrideKey(reciter.id, st.surahId, st.ayah)
-        overrides.clear(key)
+        overrides.clear(OverrideKey(reciter.id, st.surahId, st.ayah))
+        edited = false
         viewModelScope.launch {
-            val timings = if (reciter.hasTimings) repository.timings(reciter.id, st.surahId) else emptyMap()
-            val segs = timings[st.ayah].orEmpty().map { LabSegment(it.position, it.startMs, it.endMs) }
-            _ui.value = st.copy(
-                isOverridden = false,
-                dirty = false,
-                segments = segs,
-                tapExpectedNext = segs.maxOfOrNull { it.position }?.plus(1)?.coerceAtMost(st.words.size) ?: 1,
-            )
+            // With the override gone, timings() serves the DB row again.
+            val segs = repository.timings(reciter.id, st.surahId)[st.ayah].orEmpty()
+            _ui.value = _ui.value.copy(passes = segs, isOverridden = false, selectedPass = null)
         }
     }
 
-    fun revertUnsavedEdits() {
-        val st = _ui.value
-        val reciter = st.reciter ?: return
-        val key = OverrideKey(reciter.id, st.surahId, st.ayah)
-        val stored = overrides.get(key)
-        viewModelScope.launch {
-            val fallback = stored
-                ?: if (reciter.hasTimings) repository.timings(reciter.id, st.surahId)[st.ayah].orEmpty()
-                else emptyList()
-            val segs = fallback.map { LabSegment(it.position, it.startMs, it.endMs) }
-            _ui.value = st.copy(segments = segs, dirty = false)
-        }
+    fun clearAllOverrides() {
+        overrides.clearAll()
+        resetOverride()
     }
 
-    /** Build the patch from the override store snapshot (a Save on the current
-     * ayah first if any are dirty). Returns the [TimingsPatch]; the Screen
-     * converts it to an Intent. */
-    fun buildPatch(): TimingsPatch {
-        if (_ui.value.dirty) save()
-        val overridesMap = overrides.overrides.value
+    /** Called when the Lab page is left: settle everything so the reader
+     * comes back to normal speed and silence. */
+    fun onExit() {
+        if (_ui.value.mode == LabMode.RECORD) finishRecord()
+        persistNow()
+        player.setSpeed(1f)
+        pauseIfLabAyahPlaying()
+    }
+
+    // ── Submission ─────────────────────────────────────────────────────────
+
+    private fun buildPatch(): TimingsPatch {
+        persistNow()
         val reciters = recitersCache
-        return TimingsPatchExporter.build(overridesMap) { id -> reciters.firstOrNull { it.id == id } }
+        return TimingsPatchExporter.build(overrides.overrides.value) { id ->
+            reciters.firstOrNull { it.id == id }
+        }
     }
 
     fun submit(context: Context) {
         val patch = buildPatch()
-        val intent = TimingsPatchExporter.newIssueIntent(patch)
-        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
         try {
-            context.startActivity(intent)
+            context.startActivity(TimingsPatchExporter.newIssueIntent(patch))
         } catch (e: Exception) {
             TimingsPatchExporter.copyToClipboard(context, patch)
         }
@@ -415,19 +548,23 @@ class TimingsLabViewModel(
         TimingsPatchExporter.copyToClipboard(context, buildPatch())
     }
 
-    fun clearAllOverrides() {
-        overrides.clearAll()
-        resetOverride()
-    }
-
     override fun onCleared() {
         super.onCleared()
         pollJob?.cancel()
     }
 
     companion object {
-        private const val TICK_MS = 50L
+        private const val TICK_MS = 33L
         private const val PAUSED_TICK_MS = 250L
         private const val PLAY_SETTLE_MS = 200L
+        /** Finger reaction compensation at 1× (scaled by playback speed). */
+        private const val TAP_LATENCY_MS = 100f
+        private const val MIN_MARK_GAP_MS = 10L
+        private const val PROVISIONAL_MARK_MS = 600L
+        private const val AUDITION_LEAD_MS = 800L
+        private const val UNDO_REWIND_MS = 1_200L
+        private const val REWIND_MS = 4_000L
+        private const val END_GUARD_MS = 80L
+        private const val SAVE_DEBOUNCE_MS = 600L
     }
 }
