@@ -81,6 +81,7 @@ class TimingsLabViewModel(
     private var loadJob: Job? = null
     private var pollJob: Job? = null
     private var saveJob: Job? = null
+    private var auditionJob: Job? = null
     @Volatile private var recitersCache: List<Reciter> = emptyList()
 
     /** True once any edit touched the working copy; gates auto-save so merely
@@ -172,11 +173,14 @@ class TimingsLabViewModel(
         changeTarget(s.lastSurah.takeIf { it in 1..114 } ?: 1, s.lastAyah.coerceAtLeast(1))
     }
 
-    fun changeTarget(surahId: Int, ayah: Int) {
+    /** [focusWordPosition] is the word that was long-pressed in the reader:
+     * its mark is selected and auditioned as soon as the ayah loads, so the
+     * fix loop starts without another tap. */
+    fun changeTarget(surahId: Int, ayah: Int, focusWordPosition: Int? = null) {
         if (_ui.value.mode == LabMode.RECORD) finishRecord()
         persistNow()
         pauseIfLabAyahPlaying()
-        load(surahId, ayah)
+        load(surahId, ayah, focusWordPosition)
     }
 
     fun nextAyah() {
@@ -197,8 +201,9 @@ class TimingsLabViewModel(
         }
     }
 
-    private fun load(surahId: Int, ayah: Int) {
+    private fun load(surahId: Int, ayah: Int, focusWordPosition: Int? = null) {
         loadJob?.cancel()
+        auditionJob?.cancel()
         edited = false
         recordMarks.clear()
         _activeWord.value = null
@@ -233,6 +238,8 @@ class TimingsLabViewModel(
                 speed = player.state.value.speed,
             )
             settingsRepo.update { it.copy(lastSurah = surahId, lastAyah = ayahRow.number) }
+            // Long-pressed word from the reader: jump straight into tuning it.
+            if (focusWordPosition != null) selectWord(focusWordPosition)
         }
     }
 
@@ -260,7 +267,10 @@ class TimingsLabViewModel(
 
     private fun seekTo(positionMs: Long, play: Boolean) {
         val st = _ui.value
-        val ms = positionMs.coerceIn(0L, st.durationMs.coerceAtLeast(0L))
+        // Duration is unknown (0) until the media item loads — don't clamp the
+        // target to it then, or the first audition would always start at 0;
+        // the player clamps out-of-range seeks itself.
+        val ms = positionMs.coerceIn(0L, st.durationMs.takeIf { it > 0L } ?: Long.MAX_VALUE)
         if (matchesLab(player.state.value)) {
             if (play) player.seekToWordAndPlay(st.ayah, ms) else player.seekToWord(st.ayah, ms)
         } else if (play) {
@@ -289,7 +299,7 @@ class TimingsLabViewModel(
         )
         viewModelScope.launch {
             delay(PLAY_SETTLE_MS)
-if (loop) {
+            if (loop) {
                 // Wrap exactly at the last mark's end so the listener hears
                 // the whole verse before the loop — matches the reader.
                 val endMs = st.passes.lastOrNull()?.endMs
@@ -415,11 +425,22 @@ if (loop) {
     }
 
     fun closeTune() {
+        auditionJob?.cancel()
         _ui.value = _ui.value.copy(selectedPass = null)
     }
 
     fun auditionSelected() {
         _ui.value.selectedPass?.let(::audition)
+    }
+
+    /** Once a burst of nudges settles, replay from just before the new start
+     * so every adjustment is judged by ear without reaching for Replay. */
+    private fun auditionAfterNudge() {
+        auditionJob?.cancel()
+        auditionJob = viewModelScope.launch {
+            delay(NUDGE_AUDITION_MS)
+            auditionSelected()
+        }
     }
 
     /** Play from just before the mark so the ear judges the (new) start. */
@@ -461,12 +482,14 @@ if (loop) {
         edited = true
         _ui.value = st.copy(passes = withDerivedEnds(moved, st.durationMs))
         persistDebounced()
+        auditionAfterNudge()
     }
 
     fun deleteSelected() {
         val st = _ui.value
         val i = st.selectedPass ?: return
         if (i !in st.passes.indices) return
+        auditionJob?.cancel()
         edited = true
         _ui.value = st.copy(
             passes = withDerivedEnds(st.passes.filterIndexed { j, _ -> j != i }, st.durationMs),
@@ -535,6 +558,7 @@ if (loop) {
     /** Called when the Lab page is left: settle everything so the reader
      * comes back to normal speed and silence. */
     fun onExit() {
+        auditionJob?.cancel()
         if (_ui.value.mode == LabMode.RECORD) finishRecord()
         persistNow()
         player.setSpeed(1f)
@@ -578,6 +602,8 @@ if (loop) {
         private const val MIN_MARK_GAP_MS = 10L
         private const val PROVISIONAL_MARK_MS = 600L
         private const val AUDITION_LEAD_MS = 800L
+        /** Quiet gap after the last nudge before the automatic re-audition. */
+        private const val NUDGE_AUDITION_MS = 550L
         private const val UNDO_REWIND_MS = 1_200L
         private const val REWIND_MS = 4_000L
         private const val END_GUARD_MS = 80L

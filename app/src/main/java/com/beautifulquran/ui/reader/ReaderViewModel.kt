@@ -149,6 +149,19 @@ class ReaderViewModel(
                 .drop(1)
                 .collect { onReciterChanged() }
         }
+        // Timings Lab corrections land immediately: whenever the override
+        // store changes, re-pull this surah's fused timings so the highlight
+        // follows the edit the moment the Lab sheet is lowered.
+        viewModelScope.launch {
+            repository.timingOverridesChanged?.drop(1)?.collect {
+                val id = surahId.takeIf { it != 0 } ?: return@collect
+                val reciter = _uiState.value.currentReciter ?: return@collect
+                val refreshed = repository.timings(reciter.id, id)
+                if (surahId != id) return@collect
+                timings = refreshed
+                _uiState.value = _uiState.value.copy(hasTimings = refreshed.isNotEmpty())
+            }
+        }
     }
 
     fun load(surahId: Int) {
@@ -169,11 +182,9 @@ class ReaderViewModel(
         loadJob = viewModelScope.launch {
             val reciters = repository.reciters()
             val reciter = currentReciter(reciters)
-            val loadedTimings = if (reciter.hasTimings) {
-                repository.timings(reciter.id, surahId)
-            } else {
-                emptyMap()
-            }
+            // Always pull timings — a reciter with no bundled data can still
+            // have hand-made corrections from the Timings Lab fused in.
+            val loadedTimings = repository.timings(reciter.id, surahId)
             val content = repository.surahContent(surahId)
             if (this@ReaderViewModel.surahId != surahId) return@launch
             timings = loadedTimings
@@ -191,7 +202,7 @@ class ReaderViewModel(
         if (surahId == 0) return
         val reciters = _uiState.value.reciters.ifEmpty { repository.reciters() }
         val reciter = currentReciter(reciters)
-        timings = if (reciter.hasTimings) repository.timings(reciter.id, surahId) else emptyMap()
+        timings = repository.timings(reciter.id, surahId)
         _uiState.value = _uiState.value.copy(
             currentReciter = reciter,
             hasTimings = timings.isNotEmpty(),
