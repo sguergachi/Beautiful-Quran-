@@ -1,0 +1,39 @@
+package com.beautifulquran.data
+
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+/**
+ * Settings enums are persisted by ordinal; a stale ordinal (an entry removed
+ * in an app update) must degrade to the default, never crash on startup.
+ */
+class EnumForOrdinalTest {
+
+    @Test
+    fun `valid ordinal maps to its entry`() {
+        assertEquals(
+            ThemeMode.DARK,
+            enumForOrdinal(ThemeMode.entries, ThemeMode.DARK.ordinal, ThemeMode.SYSTEM),
+        )
+    }
+
+    @Test
+    fun `stale ordinal falls back to the default`() {
+        assertEquals(
+            ThemeMode.SYSTEM,
+            enumForOrdinal(ThemeMode.entries, ThemeMode.entries.size, ThemeMode.SYSTEM),
+        )
+        assertEquals(
+            ReadingMode.ARABIC_ENGLISH,
+            enumForOrdinal(ReadingMode.entries, 99, ReadingMode.ARABIC_ENGLISH),
+        )
+    }
+
+    @Test
+    fun `negative ordinal falls back to the default`() {
+        assertEquals(
+            AyahSelectorSide.LEFT,
+            enumForOrdinal(AyahSelectorSide.entries, -1, AyahSelectorSide.LEFT),
+        )
+    }
+}

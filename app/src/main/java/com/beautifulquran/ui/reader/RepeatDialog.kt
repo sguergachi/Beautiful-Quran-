@@ -1,8 +1,6 @@
 package com.beautifulquran.ui.reader
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -33,6 +31,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.media3.common.Player
 import com.beautifulquran.ui.home.SearchDialWheel
 import com.beautifulquran.ui.theme.LocalQuranAccents
+import com.beautifulquran.ui.theme.quietClickable
 
 /** How playback should loop, chosen on the repeat sheet. */
 enum class RepeatChoice { OFF, ONE_AYAH, WHOLE_SURAH, AYAH_RANGE }
@@ -154,11 +153,7 @@ private fun RepeatOption(label: String, selected: Boolean, onSelect: () -> Unit)
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onSelect,
-            ),
+            .quietClickable(onClick = onSelect),
     ) {
         RadioButton(selected = selected, onClick = onSelect)
         Text(

@@ -92,8 +92,12 @@ def fetch(url: str, name: str) -> Path:
         return dest
     print(f"  downloading {url}")
     req = urllib.request.Request(url, headers={"User-Agent": "beautiful-quran-build/1.0"})
-    with urllib.request.urlopen(req, timeout=120) as r, open(dest, "wb") as f:
+    # Download to a tmp file and rename: an interrupted download must never
+    # leave a partial file that the cache check above would serve on rerun.
+    tmp = dest.with_suffix(dest.suffix + ".tmp")
+    with urllib.request.urlopen(req, timeout=120) as r, open(tmp, "wb") as f:
         f.write(r.read())
+    tmp.replace(dest)
     return dest
 
 
@@ -389,6 +393,28 @@ def adjust_segments(segs, n_words, surah, ayah, stats):
     return adjusted or None
 
 
+# A reciter shipping with fewer timed ayahs than this indicates a broken
+# source file; fail the build instead of shipping silent gaps.
+COVERAGE_THRESHOLD = 6000
+
+
+def ingest_reciter_timings(rid, word_counts, timing_rows, stats, adjust):
+    """Adjust + store one reciter's segments; returns ayahs covered.
+
+    ``adjust((surah, ayah), n_words)`` returns the cleaned segments for that
+    ayah or None; None counts as missing.
+    """
+    covered = 0
+    for key, n in word_counts.items():
+        segs = adjust(key, n)
+        if segs:
+            timing_rows.append((rid, key[0], key[1], json.dumps(segs, separators=(",", ":"))))
+            covered += 1
+        else:
+            stats["missing"] += 1
+    return covered
+
+
 DDL = """
 CREATE TABLE surahs (
   id INTEGER PRIMARY KEY,
@@ -457,20 +483,18 @@ def main():
     print("[4/5] building words table")
     words = []
     gloss_mismatch = []
-    qcf_missing = []
     for (s, a), (text, _tr) in sorted(ayahs.items()):
         arabic_words = text.split()
         glosses = wbw.get((s, a), [])
         if len(glosses) != len(arabic_words):
             gloss_mismatch.append((s, a, len(arabic_words), len(glosses)))
+        try:
+            qcf_aligned = align_qcf_words(arabic_words, qcf_v2.get((s, a), []), s, a)
+        except ValueError as e:
+            print(f"  !! {e}", file=sys.stderr)
+            sys.exit(1)
         for i, w in enumerate(arabic_words):
             g, t = glosses[min(i, len(glosses) - 1)] if glosses else ("", "")
-            if i == 0:
-                try:
-                    qcf_aligned = align_qcf_words(arabic_words, qcf_v2.get((s, a), []), s, a)
-                except ValueError as e:
-                    print(f"  !! {e}", file=sys.stderr)
-                    sys.exit(1)
             qcf = qcf_aligned.get(i + 1)
             if qcf is None:
                 qcf = ("", 0, 0, i + 1)
@@ -478,11 +502,6 @@ def main():
     print(f"  words: {len(words)}; gloss count mismatches (clamped): {len(gloss_mismatch)}")
     for m in gloss_mismatch:
         print(f"    surah {m[0]} ayah {m[1]}: text={m[2]} wbw={m[3]}")
-    if qcf_missing:
-        print(f"  !! missing qcf v2 glyphs: {len(qcf_missing)}", file=sys.stderr)
-        for m in qcf_missing[:20]:
-            print(f"    surah {m[0]} ayah {m[1]} word {m[2]}", file=sys.stderr)
-        sys.exit(1)
 
     timing_rows = []
     reciter_rows = []
@@ -502,44 +521,32 @@ def main():
                 print(f"  {slug}: repeat-aware timings from quran.com (qdc {qdc_id})")
                 data = load_qdc_timings(qdc_id)
                 stats = {"zero_len": 0, "clamped": 0, "repeats": 0, "missing": 0}
-                covered = 0
-                for (s, a), n in word_counts.items():
-                    segs = adjust_qdc_segments(data.get((s, a)), n, stats)
-                    if segs:
-                        timing_rows.append((rid, s, a, json.dumps(segs, separators=(",", ":"))))
-                        covered += 1
-                    else:
-                        stats["missing"] += 1
+                covered = ingest_reciter_timings(
+                    rid, word_counts, timing_rows, stats,
+                    lambda key, n: adjust_qdc_segments(data.get(key), n, stats),
+                )
                 print(
                     f"  {slug}: ayahs covered {covered}/6236, "
                     f"repeat spans {stats['repeats']}, clamped {stats['clamped']}, "
                     f"zero-len {stats['zero_len']}, missing {stats['missing']}"
                 )
-                if covered < 6000:
-                    print(f"  !! coverage below threshold for {slug}", file=sys.stderr)
-                    sys.exit(1)
-                reciter_rows.append((rid, slug, name, style, 1))
-                continue
-            data = load_timings(zp, slug)
-            if data is None:
-                print(f"  !! no timing file matched slug {slug}")
-                reciter_rows.append((rid, slug, name, style, 0))
-                continue
-            stats = {"basmalah_shift": 0, "clamped": 0, "missing": 0}
-            covered = 0
-            for (s, a), n in word_counts.items():
-                segs = adjust_segments(data.get((s, a)), n, s, a, stats)
-                if segs:
-                    timing_rows.append((rid, s, a, json.dumps(segs, separators=(",", ":"))))
-                    covered += 1
-                else:
-                    stats["missing"] += 1
-            print(
-                f"  {slug}: ayahs covered {covered}/6236, "
-                f"basmalah-shifted {stats['basmalah_shift']}, "
-                f"clamped segs {stats['clamped']}, missing {stats['missing']}"
-            )
-            if covered < 6000:
+            else:
+                data = load_timings(zp, slug)
+                if data is None:
+                    print(f"  !! no timing file matched slug {slug}")
+                    reciter_rows.append((rid, slug, name, style, 0))
+                    continue
+                stats = {"basmalah_shift": 0, "clamped": 0, "missing": 0}
+                covered = ingest_reciter_timings(
+                    rid, word_counts, timing_rows, stats,
+                    lambda key, n: adjust_segments(data.get(key), n, key[0], key[1], stats),
+                )
+                print(
+                    f"  {slug}: ayahs covered {covered}/6236, "
+                    f"basmalah-shifted {stats['basmalah_shift']}, "
+                    f"clamped segs {stats['clamped']}, missing {stats['missing']}"
+                )
+            if covered < COVERAGE_THRESHOLD:
                 print(f"  !! coverage below threshold for {slug}", file=sys.stderr)
                 sys.exit(1)
             reciter_rows.append((rid, slug, name, style, 1))

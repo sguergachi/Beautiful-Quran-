@@ -5,6 +5,9 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+/** CI exports unset secrets as empty strings; treat those as absent. */
+fun env(name: String): String? = System.getenv(name)?.takeIf { it.isNotBlank() }
+
 android {
     namespace = "com.beautifulquran"
     compileSdk = 35
@@ -24,11 +27,13 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        // Store keystore; not committed. Credentials can be overridden from
+        // the environment (CI secrets) and default to the local values.
         create("release") {
             storeFile = rootProject.file("release.keystore")
-            storePassword = "division"
-            keyAlias = "beautifulquran"
-            keyPassword = "division"
+            storePassword = env("RELEASE_KEYSTORE_PASSWORD") ?: "division"
+            keyAlias = env("RELEASE_KEY_ALIAS") ?: "beautifulquran"
+            keyPassword = env("RELEASE_KEY_PASSWORD") ?: "division"
         }
     }
 
@@ -43,7 +48,15 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.getByName("release")
+            // Sign with the store keystore when it exists; otherwise fall back
+            // to the debug keystore so CI and fresh clones can still
+            // assembleRelease. Note the two signatures cannot update over each
+            // other on a device — store builds need the real keystore present.
+            signingConfig = if (rootProject.file("release.keystore").exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
@@ -101,7 +114,6 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons)
-    implementation(libs.androidx.navigation.compose)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.session)
     implementation(libs.media3.datasource)

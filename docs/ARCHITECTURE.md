@@ -29,7 +29,7 @@ app (runtime)                                           ▼
 ## Principles
 
 1. **Offline-first, no backend.** All text, translations, and word timings ship
-   inside the APK. Only recitation audio streams (and is cached, 256 MB LRU).
+   inside the APK. Only recitation audio streams (and is cached, 1 GB LRU).
    No accounts, no analytics, no API keys — the app works in airplane mode
    once audio is cached.
 2. **The data pipeline is a build step, not app code.** Everything fragile
@@ -42,8 +42,8 @@ app (runtime)                                           ▼
    Android dependencies.
 4. **Small over clever.** No Hilt (a hand-rolled ViewModel factory over
    Application-scoped singletons), no Room (a 100-line raw-SQLite wrapper),
-   no navigation library beyond navigation-compose. Every dependency earns
-   its place.
+   no navigation library at all (the three sheets are a hand-rolled paper
+   stack in `MainActivity`). Every dependency earns its place.
 
 ## The data pipeline (`tools/build_db.py`)
 
@@ -130,13 +130,16 @@ per-item derivedStateOf in the reader list  ──►  one ayah recomposes
 
 `PlaybackService` is a standard `MediaSessionService`: lock-screen and
 notification controls, audio focus, becoming-noisy handling, wake mode for
-streaming. Audio flows through a `CacheDataSource` backed by a 256 MB LRU
+streaming. Audio flows through a `CacheDataSource` backed by a 1 GB LRU
 `SimpleCache`, so an ayah streams once and replays from disk afterwards.
 
 ## UI structure
 
-Three full-screen "sheets", one visible at a time
-(`NavHost` with slide-and-fade transitions):
+Three full-screen "sheets", one visible at a time. Navigation is a
+hand-rolled **paper stack** (`PaperStackApp` in `MainActivity`): the sheets
+sit on top of each other like pages of a book, and moving between them is a
+horizontal page turn — draggable, fling-able, with page-turn audio
+(`PageTurnSounds`) tracking the live sheet position:
 
 - `home/HomeScreen` — surah list with search and a continue-listening card.
 - `reader/ReaderScreen` — the follow-along view. Composed of

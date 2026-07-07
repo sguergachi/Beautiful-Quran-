@@ -1,8 +1,6 @@
 package com.beautifulquran.ui.theme
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.size
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -267,7 +265,6 @@ fun IslamicReturnToAyahButton(
 ) {
     val accents = LocalQuranAccents.current
     val colors = MaterialTheme.colorScheme
-    val interaction = remember { MutableInteractionSource() }
     val ink = remember { Animatable(0f) }
     val rotation by animateFloatAsState(
         targetValue = if (pointUp) 180f else 0f,
@@ -294,11 +291,7 @@ fun IslamicReturnToAyahButton(
                 contentDescription = "Return to ayah"
                 role = Role.Button
             }
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = onClick,
-            ),
+            .quietClickable(onClick = onClick),
     ) {
         val s = min(this.size.width, this.size.height)
         val c = s / 2f

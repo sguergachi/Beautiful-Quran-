@@ -95,7 +95,7 @@ janky", first ask: is this the release APK?
 
 ExoPlayer does its own threading; the UI only ever reads
 `currentPosition` (cheap, main-thread-safe by design) and receives listener
-callbacks. Audio is cached through a 256 MB LRU `CacheDataSource`, so repeat
+callbacks. Audio is cached through a 1 GB LRU `CacheDataSource`, so repeat
 listening doesn't touch the network at all.
 
 ## Deliberate trade-offs
