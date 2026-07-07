@@ -84,6 +84,7 @@ This app is free, ad-free, and collects no data.
 fun SettingsScreen(
     viewModel: SettingsViewModel,
     onBack: () -> Unit,
+    onOpenTimingsLab: () -> Unit = {},
 ) {
     val settings by viewModel.settings.settings.collectAsStateWithLifecycle()
     val reciters by viewModel.reciters.collectAsStateWithLifecycle()
@@ -249,7 +250,10 @@ fun SettingsScreen(
 
                 if (developerModeEnabled) {
                     Spacer(Modifier.height(48.dp))
-                    DeveloperSection(viewModel)
+                    DeveloperSection(
+                        viewModel = viewModel,
+                        onOpenTimingsLab = onOpenTimingsLab,
+                    )
                 }
 
                 Spacer(Modifier.height(48.dp))
@@ -268,7 +272,10 @@ fun SettingsScreen(
 
 /** Testing tools for development builds; controls here may change or vanish. */
 @Composable
-private fun DeveloperSection(viewModel: SettingsViewModel) {
+private fun DeveloperSection(
+    viewModel: SettingsViewModel,
+    onOpenTimingsLab: () -> Unit,
+) {
     val context = LocalContext.current
     // Created on first audition tap: a SoundPool with nine loaded samples is
     // too heavy to spin up just because the settings sheet composed.
@@ -313,6 +320,33 @@ private fun DeveloperSection(viewModel: SettingsViewModel) {
             Spacer(Modifier.size(12.dp))
             Text(flip.name, style = MaterialTheme.typography.bodyLarge)
         }
+    }
+
+    Spacer(Modifier.height(28.dp))
+    Text("Timings Lab", style = MaterialTheme.typography.bodyLarge)
+    Text(
+        text = "Open the Musixmatch-style editor for word-level highlight " +
+            "timings and repeats. Corrections are saved on device and " +
+            "immediately take effect in the reader; submit them as a " +
+            "GitHub Issue patch from inside the Lab.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+    )
+    Spacer(Modifier.height(10.dp))
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .quietClickable(onClick = onOpenTimingsLab)
+            .padding(vertical = 8.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.PlayArrow,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(Modifier.size(12.dp))
+        Text("Open Timings Lab", style = MaterialTheme.typography.bodyLarge)
     }
 }
 

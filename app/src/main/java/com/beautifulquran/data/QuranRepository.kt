@@ -7,11 +7,20 @@ import com.beautifulquran.data.model.Segment
 import com.beautifulquran.data.model.Surah
 import com.beautifulquran.data.model.SurahContent
 import com.beautifulquran.data.model.Word
+import com.beautifulquran.timingslab.OverrideKey
+import com.beautifulquran.timingslab.TimingOverrides
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
-class QuranRepository(private val database: QuranDatabase) {
+class QuranRepository(
+    private val database: QuranDatabase,
+    /** Optional on-device override store produced by the Timings Lab. When
+     * set, any (reciter, surah, ayah) the user has hand-corrected is served
+     * here instead of the bundled DB row. Null keeps this class usable from
+     * JVM unit tests that don't ship an override store. */
+    private val timingOverrides: TimingOverrides? = null,
+) {
 
     // @Volatile: read/written from Dispatchers.IO workers. Worst case without
     // a lock is one redundant query; the result is identical either way.
@@ -84,10 +93,12 @@ class QuranRepository(private val database: QuranDatabase) {
         SurahContent(surah, ayahs)
     }
 
-    /** ayah number -> word segments, for one reciter and surah. */
+    /** ayah number -> word segments, for one reciter and surah. Any
+     * hand-corrected override from the Timings Lab takes precedence over the
+     * bundled DB row, so the reader immediately reflects edits. */
     suspend fun timings(reciterId: Int, surahId: Int): Map<Int, List<Segment>> =
         withContext(Dispatchers.IO) {
-            database.db.rawQuery(
+            val dbTimings = database.db.rawQuery(
                 "SELECT ayah_number, segments FROM timings WHERE reciter_id = ? AND surah_id = ?",
                 arrayOf(reciterId.toString(), surahId.toString()),
             ).use { c ->
@@ -97,6 +108,19 @@ class QuranRepository(private val database: QuranDatabase) {
                     }
                 }
             }
+            if (timingOverrides == null) return@withContext dbTimings
+            val overrides = timingOverrides.overrides.value
+            if (overrides.isEmpty() || !overrides.keys.any { it.reciterId == reciterId && it.surahId == surahId }) {
+                return@withContext dbTimings
+            }
+            val merged = dbTimings.toMutableMap()
+            for (entry in overrides) {
+                val key = entry.key
+                if (key.reciterId == reciterId && key.surahId == surahId) {
+                    merged[key.ayah] = entry.value
+                }
+            }
+            merged
         }
 
     companion object {
