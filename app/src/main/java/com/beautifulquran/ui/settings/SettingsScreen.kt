@@ -40,7 +40,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -153,24 +155,17 @@ fun SettingsScreen(
                 Spacer(Modifier.height(32.dp))
                 SectionLabel("Reading")
                 Spacer(Modifier.height(10.dp))
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    ReadingMode.entries.forEachIndexed { index, mode ->
-                        SegmentedButton(
-                            selected = settings.readingMode == mode,
-                            onClick = { viewModel.settings.update { it.copy(readingMode = mode) } },
-                            shape = SegmentedButtonDefaults.itemShape(index, ReadingMode.entries.size),
-                            colors = greenSegmentedButtonColors(),
-                        ) {
-                            Text(
-                                text = when (mode) {
-                                    ReadingMode.ARABIC_ENGLISH -> "Arabic & English"
-                                    ReadingMode.ENGLISH_ONLY -> "English"
-                                },
-                                style = MaterialTheme.typography.labelMedium,
-                            )
+                EnumSegmentedRow(
+                    entries = ReadingMode.entries,
+                    selected = settings.readingMode,
+                    label = { mode ->
+                        when (mode) {
+                            ReadingMode.ARABIC_ENGLISH -> "Arabic & English"
+                            ReadingMode.ENGLISH_ONLY -> "English"
                         }
-                    }
-                }
+                    },
+                    onSelect = { mode -> viewModel.settings.update { it.copy(readingMode = mode) } },
+                )
 
                 Spacer(Modifier.height(24.dp))
                 SectionLabel("Text size")
@@ -210,24 +205,17 @@ fun SettingsScreen(
                 Spacer(Modifier.height(24.dp))
                 SectionLabel("Ayah selector")
                 Spacer(Modifier.height(10.dp))
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    AyahSelectorSide.entries.forEachIndexed { index, side ->
-                        SegmentedButton(
-                            selected = settings.ayahSelectorSide == side,
-                            onClick = { viewModel.settings.update { it.copy(ayahSelectorSide = side) } },
-                            shape = SegmentedButtonDefaults.itemShape(index, AyahSelectorSide.entries.size),
-                            colors = greenSegmentedButtonColors(),
-                        ) {
-                            Text(
-                                text = when (side) {
-                                    AyahSelectorSide.LEFT -> "Left side"
-                                    AyahSelectorSide.RIGHT -> "Right side"
-                                },
-                                style = MaterialTheme.typography.labelMedium,
-                            )
+                EnumSegmentedRow(
+                    entries = AyahSelectorSide.entries,
+                    selected = settings.ayahSelectorSide,
+                    label = { side ->
+                        when (side) {
+                            AyahSelectorSide.LEFT -> "Left side"
+                            AyahSelectorSide.RIGHT -> "Right side"
                         }
-                    }
-                }
+                    },
+                    onSelect = { side -> viewModel.settings.update { it.copy(ayahSelectorSide = side) } },
+                )
 
                 Spacer(Modifier.height(32.dp))
                 SectionLabel("Theme")
@@ -262,9 +250,11 @@ fun SettingsScreen(
 private fun DeveloperSection(viewModel: SettingsViewModel) {
     val settings by viewModel.settings.settings.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val sounds = remember { PageTurnSounds(context) }
-    DisposableEffect(sounds) {
-        onDispose { sounds.release() }
+    // Created on first audition tap: a SoundPool with nine loaded samples is
+    // too heavy to spin up just because the settings sheet composed.
+    var sounds by remember { mutableStateOf<PageTurnSounds?>(null) }
+    DisposableEffect(Unit) {
+        onDispose { sounds?.release() }
     }
 
     SectionLabel("Developer")
@@ -283,29 +273,17 @@ private fun DeveloperSection(viewModel: SettingsViewModel) {
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
     )
     Spacer(Modifier.height(10.dp))
-    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-        ArabicRenderMode.entries.forEachIndexed { index, mode ->
-            SegmentedButton(
-                selected = settings.arabicRenderMode == mode,
-                onClick = {
-                    viewModel.settings.update { it.copy(arabicRenderMode = mode) }
-                },
-                shape = SegmentedButtonDefaults.itemShape(
-                    index = index,
-                    count = ArabicRenderMode.entries.size,
-                ),
-                colors = greenSegmentedButtonColors(),
-            ) {
-                Text(
-                    text = when (mode) {
-                        ArabicRenderMode.RESPONSIVE_HAFS -> "Responsive"
-                        ArabicRenderMode.QCF_MUSHAF -> "QCF"
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                )
+    EnumSegmentedRow(
+        entries = ArabicRenderMode.entries,
+        selected = settings.arabicRenderMode,
+        label = { mode ->
+            when (mode) {
+                ArabicRenderMode.RESPONSIVE_HAFS -> "Responsive"
+                ArabicRenderMode.QCF_MUSHAF -> "QCF"
             }
-        }
-    }
+        },
+        onSelect = { mode -> viewModel.settings.update { it.copy(arabicRenderMode = mode) } },
+    )
 
     Spacer(Modifier.height(24.dp))
     Text("Page turn sounds", style = MaterialTheme.typography.bodyLarge)
@@ -321,7 +299,10 @@ private fun DeveloperSection(viewModel: SettingsViewModel) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .quietClickable { sounds.auditionFlip(index) }
+                .quietClickable {
+                    (sounds ?: PageTurnSounds(context).also { sounds = it })
+                        .auditionFlip(index)
+                }
                 .padding(vertical = 8.dp),
         ) {
             Icon(
@@ -465,6 +446,29 @@ private fun SettingToggle(label: String, checked: Boolean, onChange: (Boolean) -
                 uncheckedBorderColor = MaterialTheme.colorScheme.outline,
             ),
         )
+    }
+}
+
+/** One segmented row per enum setting: entries in declaration order, the
+ * app's green selection colors, quiet labels. */
+@Composable
+private fun <T> EnumSegmentedRow(
+    entries: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelect: (T) -> Unit,
+) {
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        entries.forEachIndexed { index, entry ->
+            SegmentedButton(
+                selected = selected == entry,
+                onClick = { onSelect(entry) },
+                shape = SegmentedButtonDefaults.itemShape(index, entries.size),
+                colors = greenSegmentedButtonColors(),
+            ) {
+                Text(text = label(entry), style = MaterialTheme.typography.labelMedium)
+            }
+        }
     }
 }
 

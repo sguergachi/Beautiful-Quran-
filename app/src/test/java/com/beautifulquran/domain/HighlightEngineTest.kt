@@ -102,4 +102,54 @@ class HighlightEngineTest {
         assertEquals(4, info.highWater)
         assertEquals(4, info.repeatStart)
     }
+
+    @Test
+    fun `second repeat chain in the same ayah starts fresh`() {
+        // 1,2,(repeat 1),3,4,(repeat 3,4): two independent backtracks.
+        val twoChains = listOf(
+            Segment(1, 0, 1000),
+            Segment(2, 1000, 2000),
+            Segment(1, 2000, 3000),
+            Segment(3, 3000, 4000),
+            Segment(4, 4000, 5000),
+            Segment(3, 5000, 6000),
+            Segment(4, 6000, 7000),
+        )
+        val first = HighlightEngine.activeInfo(twoChains, 2500)!!
+        assertEquals(true, first.isRepeat)
+        assertEquals(1, first.repeatStart)
+        assertEquals(2, first.highWater)
+
+        // Word 3's first pass is new material — chain over.
+        val between = HighlightEngine.activeInfo(twoChains, 3500)!!
+        assertEquals(false, between.isRepeat)
+        assertEquals(3, between.repeatStart)
+
+        val second = HighlightEngine.activeInfo(twoChains, 6500)!!
+        assertEquals(true, second.isRepeat)
+        assertEquals(3, second.repeatStart)
+        assertEquals(4, second.highWater)
+    }
+
+    @Test
+    fun `repeat back to the first word holds the whole chain`() {
+        val fromStart = listOf(
+            Segment(1, 0, 1000),
+            Segment(2, 1000, 2000),
+            Segment(1, 2000, 3000),
+            Segment(2, 3000, 4000),
+        )
+        val info = HighlightEngine.activeInfo(fromStart, 3500)!!
+        assertEquals(2, info.position)
+        assertEquals(true, info.isRepeat)
+        assertEquals(1, info.repeatStart)
+        assertEquals(2, info.highWater)
+    }
+
+    @Test
+    fun `position exactly on a repeat segment boundary belongs to the repeat`() {
+        val info = HighlightEngine.activeInfo(withRepeat, 3000)!!
+        assertEquals(2, info.position)
+        assertEquals(true, info.isRepeat)
+    }
 }

@@ -38,6 +38,39 @@ internal fun parseAyahReference(query: String): AyahReference? =
         )
     }
 
+/** What a search query resolves to: the surahs to list, and — when the query
+ * was a valid `surah:ayah` reference — the ayah to open the match at. */
+internal data class SurahFilterResult(val surahs: List<Surah>, val ayahTarget: Int? = null)
+
+/** The home search: blank shows everything; a `surah:ayah` reference resolves
+ * to that one surah (empty when out of range); anything else matches names
+ * (transliteration/translation case-insensitively, Arabic exactly) or the
+ * bare surah number. */
+internal fun filterSurahs(surahs: List<Surah>, query: String): SurahFilterResult {
+    val reference = parseAyahReference(query)
+    return when {
+        query.isBlank() -> SurahFilterResult(surahs)
+        reference != null -> {
+            val surah = surahs.firstOrNull { it.id == reference.surah }
+            val ayahInRange = reference.ayah == null ||
+                reference.ayah in 1..(surah?.ayahCount ?: 0)
+            if (surah != null && ayahInRange) {
+                SurahFilterResult(listOf(surah), reference.ayah)
+            } else {
+                SurahFilterResult(emptyList())
+            }
+        }
+        else -> SurahFilterResult(
+            surahs.filter {
+                it.nameTransliteration.contains(query, ignoreCase = true) ||
+                    it.nameTranslation.contains(query, ignoreCase = true) ||
+                    it.nameArabic.contains(query) ||
+                    it.id.toString() == query.trim()
+            },
+        )
+    }
+}
+
 class HomeViewModel(
     private val repository: QuranRepository,
     private val settings: SettingsRepository,
@@ -48,28 +81,7 @@ class HomeViewModel(
 
     val uiState: StateFlow<HomeUiState> =
         combine(query, allSurahs, settings.settings) { q, surahs, prefs ->
-            val reference = parseAyahReference(q)
-            var ayahTarget: Int? = null
-            val filtered = when {
-                q.isBlank() -> surahs
-                reference != null -> {
-                    val surah = surahs.firstOrNull { it.id == reference.surah }
-                    val ayahInRange = reference.ayah == null ||
-                        reference.ayah in 1..(surah?.ayahCount ?: 0)
-                    if (surah != null && ayahInRange) {
-                        ayahTarget = reference.ayah
-                        listOf(surah)
-                    } else {
-                        emptyList()
-                    }
-                }
-                else -> surahs.filter {
-                    it.nameTransliteration.contains(q, ignoreCase = true) ||
-                        it.nameTranslation.contains(q, ignoreCase = true) ||
-                        it.nameArabic.contains(q) ||
-                        it.id.toString() == q.trim()
-                }
-            }
+            val (filtered, ayahTarget) = filterSurahs(surahs, q)
             HomeUiState(
                 query = q,
                 surahs = filtered,

@@ -1,5 +1,6 @@
 package com.beautifulquran.data
 
+import android.database.Cursor
 import com.beautifulquran.data.model.Ayah
 import com.beautifulquran.data.model.Reciter
 import com.beautifulquran.data.model.Segment
@@ -12,32 +13,35 @@ import kotlinx.serialization.json.Json
 
 class QuranRepository(private val database: QuranDatabase) {
 
+    // @Volatile: read/written from Dispatchers.IO workers. Worst case without
+    // a lock is one redundant query; the result is identical either way.
+    @Volatile
     private var surahsCache: List<Surah>? = null
+
+    @Volatile
     private var recitersCache: List<Reciter>? = null
 
-    suspend fun surahs(): List<Surah> = withContext(Dispatchers.IO) {
-        surahsCache ?: database.db.rawQuery(
-            "SELECT id, name_arabic, name_transliteration, name_translation, revelation_place, ayah_count FROM surahs ORDER BY id",
-            null,
-        ).use { c ->
+    /** Runs [sql] and maps every row with [map] — the shape of every query here. */
+    private fun <T> queryList(sql: String, args: Array<String>? = null, map: (Cursor) -> T): List<T> =
+        database.db.rawQuery(sql, args).use { c ->
             buildList {
-                while (c.moveToNext()) {
-                    add(Surah(c.getInt(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getInt(5)))
-                }
+                while (c.moveToNext()) add(map(c))
             }
+        }
+
+    suspend fun surahs(): List<Surah> = withContext(Dispatchers.IO) {
+        surahsCache ?: queryList(
+            "SELECT id, name_arabic, name_transliteration, name_translation, revelation_place, ayah_count FROM surahs ORDER BY id",
+        ) { c ->
+            Surah(c.getInt(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getInt(5))
         }.also { surahsCache = it }
     }
 
     suspend fun reciters(): List<Reciter> = withContext(Dispatchers.IO) {
-        recitersCache ?: database.db.rawQuery(
+        recitersCache ?: queryList(
             "SELECT id, slug, name, style, has_timings FROM reciters ORDER BY id",
-            null,
-        ).use { c ->
-            buildList {
-                while (c.moveToNext()) {
-                    add(Reciter(c.getInt(0), c.getString(1), c.getString(2), c.getString(3), c.getInt(4) == 1))
-                }
-            }
+        ) { c ->
+            Reciter(c.getInt(0), c.getString(1), c.getString(2), c.getString(3), c.getInt(4) == 1)
         }.also { recitersCache = it }
     }
 
@@ -70,16 +74,12 @@ class QuranRepository(private val database: QuranDatabase) {
             }
             map
         }
-        val ayahs = database.db.rawQuery(
+        val ayahs = queryList(
             "SELECT ayah_number, text_uthmani, translation_en, page FROM ayahs WHERE surah_id = ? ORDER BY ayah_number",
             arrayOf(surahId.toString()),
-        ).use { c ->
-            buildList {
-                while (c.moveToNext()) {
-                    val n = c.getInt(0)
-                    add(Ayah(surahId, n, c.getString(1), c.getString(2), c.getInt(3), words[n].orEmpty()))
-                }
-            }
+        ) { c ->
+            val n = c.getInt(0)
+            Ayah(surahId, n, c.getString(1), c.getString(2), c.getInt(3), words[n].orEmpty())
         }
         SurahContent(surah, ayahs)
     }
@@ -102,10 +102,15 @@ class QuranRepository(private val database: QuranDatabase) {
     companion object {
         private val json = Json { ignoreUnknownKeys = true }
 
+        /** Best-effort like the rest of the parse: a malformed row (the DB is
+         * build-validated, so only conceivable via corruption) yields no
+         * highlighting for that ayah rather than crashing the reader. */
         fun parseSegments(raw: String): List<Segment> =
-            json.decodeFromString<List<List<Long>>>(raw)
-                .filter { it.size >= 3 }
-                .map { Segment(it[0].toInt(), it[1], it[2]) }
-                .sortedBy { it.startMs }
+            runCatching {
+                json.decodeFromString<List<List<Long>>>(raw)
+                    .filter { it.size >= 3 }
+                    .map { Segment(it[0].toInt(), it[1], it[2]) }
+                    .sortedBy { it.startMs }
+            }.getOrDefault(emptyList())
     }
 }

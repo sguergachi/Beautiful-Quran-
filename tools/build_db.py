@@ -393,6 +393,28 @@ def adjust_segments(segs, n_words, surah, ayah, stats):
     return adjusted or None
 
 
+# A reciter shipping with fewer timed ayahs than this indicates a broken
+# source file; fail the build instead of shipping silent gaps.
+COVERAGE_THRESHOLD = 6000
+
+
+def ingest_reciter_timings(rid, word_counts, timing_rows, stats, adjust):
+    """Adjust + store one reciter's segments; returns ayahs covered.
+
+    ``adjust((surah, ayah), n_words)`` returns the cleaned segments for that
+    ayah or None; None counts as missing.
+    """
+    covered = 0
+    for key, n in word_counts.items():
+        segs = adjust(key, n)
+        if segs:
+            timing_rows.append((rid, key[0], key[1], json.dumps(segs, separators=(",", ":"))))
+            covered += 1
+        else:
+            stats["missing"] += 1
+    return covered
+
+
 DDL = """
 CREATE TABLE surahs (
   id INTEGER PRIMARY KEY,
@@ -499,44 +521,32 @@ def main():
                 print(f"  {slug}: repeat-aware timings from quran.com (qdc {qdc_id})")
                 data = load_qdc_timings(qdc_id)
                 stats = {"zero_len": 0, "clamped": 0, "repeats": 0, "missing": 0}
-                covered = 0
-                for (s, a), n in word_counts.items():
-                    segs = adjust_qdc_segments(data.get((s, a)), n, stats)
-                    if segs:
-                        timing_rows.append((rid, s, a, json.dumps(segs, separators=(",", ":"))))
-                        covered += 1
-                    else:
-                        stats["missing"] += 1
+                covered = ingest_reciter_timings(
+                    rid, word_counts, timing_rows, stats,
+                    lambda key, n: adjust_qdc_segments(data.get(key), n, stats),
+                )
                 print(
                     f"  {slug}: ayahs covered {covered}/6236, "
                     f"repeat spans {stats['repeats']}, clamped {stats['clamped']}, "
                     f"zero-len {stats['zero_len']}, missing {stats['missing']}"
                 )
-                if covered < 6000:
-                    print(f"  !! coverage below threshold for {slug}", file=sys.stderr)
-                    sys.exit(1)
-                reciter_rows.append((rid, slug, name, style, 1))
-                continue
-            data = load_timings(zp, slug)
-            if data is None:
-                print(f"  !! no timing file matched slug {slug}")
-                reciter_rows.append((rid, slug, name, style, 0))
-                continue
-            stats = {"basmalah_shift": 0, "clamped": 0, "missing": 0}
-            covered = 0
-            for (s, a), n in word_counts.items():
-                segs = adjust_segments(data.get((s, a)), n, s, a, stats)
-                if segs:
-                    timing_rows.append((rid, s, a, json.dumps(segs, separators=(",", ":"))))
-                    covered += 1
-                else:
-                    stats["missing"] += 1
-            print(
-                f"  {slug}: ayahs covered {covered}/6236, "
-                f"basmalah-shifted {stats['basmalah_shift']}, "
-                f"clamped segs {stats['clamped']}, missing {stats['missing']}"
-            )
-            if covered < 6000:
+            else:
+                data = load_timings(zp, slug)
+                if data is None:
+                    print(f"  !! no timing file matched slug {slug}")
+                    reciter_rows.append((rid, slug, name, style, 0))
+                    continue
+                stats = {"basmalah_shift": 0, "clamped": 0, "missing": 0}
+                covered = ingest_reciter_timings(
+                    rid, word_counts, timing_rows, stats,
+                    lambda key, n: adjust_segments(data.get(key), n, key[0], key[1], stats),
+                )
+                print(
+                    f"  {slug}: ayahs covered {covered}/6236, "
+                    f"basmalah-shifted {stats['basmalah_shift']}, "
+                    f"clamped segs {stats['clamped']}, missing {stats['missing']}"
+                )
+            if covered < COVERAGE_THRESHOLD:
                 print(f"  !! coverage below threshold for {slug}", file=sys.stderr)
                 sys.exit(1)
             reciter_rows.append((rid, slug, name, style, 1))

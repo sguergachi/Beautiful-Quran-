@@ -28,6 +28,27 @@ variants). This is a findings document — nothing has been changed yet.*
 | 1.2 | `QcfGlyphLine`/`ResponsiveHafsAyah` duplicated machinery | ✅ Fixed | Extracted `WordInkPalette.colorFor` (the one word-color rule), `rememberLetterSweeps`, and `Modifier.wordTapTarget` (hit-testing with optional `onMiss`). The two annotated-string append loops stay local — they differ genuinely (pause-mark spans vs. ayah-number tail). Tests pass. |
 | 4.1 | `ReaderScreen.kt` at 1,849 lines | ✅ Fixed | Move-only split: `AyahSelectorRail.kt` (482 — rail + `settleDialWheel`/`rubberBandDialPosition`/`symbolicAyahBarCount`, the pure helpers now `internal` for future tests) and `PlaybackNotificationSheet.kt` (453 — sheet + `InkRevealShape` + `WordFadeText` + fruit constants). ReaderScreen.kt is now 982 lines; unused imports pruned. Tests pass. |
 | 4.6 | `ReaderScreen` composable ~840 lines, tangled state clusters | ✅ Fixed | `PlaybackPermissionState` (+`rememberPlaybackPermissionState`) now lives with the sheet — one parked-action field replaces the show-flag/pending-action pair, 5 call sites use `notifPermission.request { }`. `SurahSearchState` (+saveable factory) names the search cluster; `closeSearch` folded in. Tests pass. |
+| 2.1 | `scope.launch { ensureController() }` ×10 | ✅ Fixed | `withController { }` helper; all one-shot commands are now single-expression functions. |
+| 2.2 | Four near-identical seek methods | ✅ Fixed | Collapsed into private `seekTo(ayah, positionMs, play, playIfOutOfRange)`; the four public names remain as documented one-liners. |
+| 2.3 | Repeat-state reset duplicated in `clearRepeatRange`/`stop` | ✅ Fixed | `resetRepeatState()`. The listener/monitor "seek back + play" pair was left as-is — 2 lines each with different follow-ups; extraction would obscure more than it saves. |
+| 2.4 | `activeWord`/`activeAyah` duplicated polling pipeline | ✅ Fixed | `pollingWhileLoaded(key, sample)` — the poll/distinct/stateIn backbone exists once; the two flows are now just their sampling logic. Tests pass. |
+| 2.5 | `player.playSurah(...)` argument block triplicated | ✅ Fixed | Private `startSurah(startAyah, startPositionMs, preserveRepeatRange)`. |
+| — | Merged `origin/master` (9 commits: landing page, release signing, play-last-verse fixes) | ✅ Done | One conflict in ReaderViewModel: upstream's "clear repeat range when playing a specific ayah" (d1adec3) carried into the refactored shape as `startSurah(..., preserveRepeatRange = false)` — same net effect (the boundary monitor self-terminates when the range nulls). Build + tests green after merge. |
+| 3.1 | Cursor-loop boilerplate ×4, unsynchronized caches | ✅ Fixed | `queryList(sql, args, map)` helper; caches marked `@Volatile` with a comment on why that suffices. |
+| 3.3 | `parseSegments` throws on malformed JSON | ✅ Fixed | `runCatching { … }.getOrDefault(emptyList())` — a corrupt row costs that ayah's highlighting, never the reader. Pinned by test. |
+| P5 | Settings: 3× segmented-row blocks; eager `PageTurnSounds` | ✅ Fixed | Generic `EnumSegmentedRow(entries, selected, label, onSelect)`; developer-section `SoundPool` now created on first audition tap. RepeatDialog's twin wheels left as-is (flagged optional — two calls with different bindings, extraction saves nothing). |
+| 7.3 | `build_db.py` duplicated reciter-coverage loop | ✅ Fixed | `ingest_reciter_timings(rid, word_counts, timing_rows, stats, adjust)` + named `COVERAGE_THRESHOLD`; both source branches share the loop and threshold. `py_compile` clean. |
+| 8.1 | No tests for the mediaId protocol | ✅ Added | `MediaIdTest` — round-trip + malformed ids (3 tests). |
+| 8.2 | Enum-ordinal robustness untested | ✅ Added | Logic extracted to internal `enumForOrdinal`; `EnumForOrdinalTest` covers stale/negative ordinals (3 tests). |
+| 8.3 | `parseSegments` malformed input untested | ✅ Added | 1 test pinning the degrade-to-empty behavior. |
+| 8.4 | Home search filtering untested/inline | ✅ Added | Extracted internal `filterSurahs(surahs, query): SurahFilterResult` (same pattern as `parseAyahReference`); `SurahFilterTest` covers blank/name/Arabic/number/reference/out-of-range (8 tests). |
+| 8.5 | `HighlightEngine.activeInfo` repeat edges untested | ✅ Added | 3 tests: two chains in one ayah, repeat back to word 1, exact boundary. |
+
+**Final state:** 38 unit tests, 0 failures (was 20). `./gradlew test` green on debug + release; `minifyReleaseWithR8` green. `assembleRelease` fails only at `validateSigningRelease` — the upstream-merged release signing config expects a local `release.keystore` that is (correctly) not committed; provide it locally or via CI secret to produce a signed APK.
+
+**Deliberately not done** (see sections below for rationale): §6.3 icon dependency (note-only), §8 items 6–10 (need their host refactors or an instrumented harness), the listener/monitor seek-back micro-extraction in 2.3.
+
+---
 
 ---
 

@@ -32,4 +32,12 @@ class SegmentsParserTest {
     fun `empty array parses to empty list`() {
         assertEquals(0, QuranRepository.parseSegments("[]").size)
     }
+
+    @Test
+    fun `malformed json degrades to no highlighting instead of throwing`() {
+        assertEquals(0, QuranRepository.parseSegments("not json").size)
+        assertEquals(0, QuranRepository.parseSegments("{\"a\":1}").size)
+        assertEquals(0, QuranRepository.parseSegments("[[1,0,\"end\"]]").size)
+        assertEquals(0, QuranRepository.parseSegments("").size)
+    }
 }

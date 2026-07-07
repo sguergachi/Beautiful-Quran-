@@ -31,10 +31,14 @@ data class Settings(
     val lastAyah: Int = 1,
 )
 
-/** Reads an enum stored by ordinal, falling back to [default] if the stored
- * ordinal no longer maps to an entry (e.g. after an entry is removed). */
+/** Maps a persisted ordinal back to an enum entry, falling back to [default]
+ * when it no longer maps (e.g. after an entry was removed in an update). */
+internal fun <E : Enum<E>> enumForOrdinal(entries: List<E>, ordinal: Int, default: E): E =
+    entries.getOrNull(ordinal) ?: default
+
+/** Reads an enum stored by ordinal, tolerating stale ordinals. */
 private inline fun <reified E : Enum<E>> SharedPreferences.enum(key: String, default: E): E =
-    enumValues<E>().getOrNull(getInt(key, default.ordinal)) ?: default
+    enumForOrdinal(enumValues<E>().toList(), getInt(key, default.ordinal), default)
 
 class SettingsRepository(context: Context) {
 
