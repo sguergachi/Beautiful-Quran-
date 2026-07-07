@@ -131,7 +131,18 @@ private fun PaperStackApp() {
     val scope = rememberCoroutineScope()
     val settingsLayer = if (selectedSurahId == 0) AYAH_LAYER else SETTINGS_LAYER
     val labLayer = settingsLayer + 1
-    val deepestLayer = if (labEntryRequested) labLayer else settingsLayer
+    /**
+     * Live depth of the stack: [labLayer] once the Lab has been requested,
+     * [settingsLayer] otherwise. Defined as a function rather than a `val`
+     * so callers ([settleTo], the drag lambdas) always see the *current*
+     * [labEntryRequested] — a `val` snapshot is captured by the composition
+     * in which it was computed, so a caller closure created before the Lab
+     * was requested (labEntryRequested still false) would clamp an
+     * animateTo(labLayer) back down to settingsLayer and land on Settings.
+     * The local delegated property reads through its MutableState at call
+     * time, so the new value is visible to stale closures too.
+     */
+    fun deepestLayer(): Int = if (labEntryRequested) labLayer else settingsLayer
 
     val context = LocalContext.current
     val pageTurnSounds = remember { PageTurnSounds(context) }
@@ -145,7 +156,7 @@ private fun PaperStackApp() {
     }
 
     suspend fun settleTo(layer: Int) {
-        val boundedLayer = layer.coerceIn(COVER_LAYER, deepestLayer)
+        val boundedLayer = layer.coerceIn(COVER_LAYER, deepestLayer())
         val distance = abs(boundedLayer - stackPosition.value)
         settledLayer = boundedLayer
         stackPosition.animateTo(
@@ -198,7 +209,7 @@ private fun PaperStackApp() {
                 gestureKey = selectedSurahId,
                 position = { stackPosition.value },
                 maxLayer = {
-                    if (selectedSurahId == 0 && stackPosition.value <= COVER_LAYER + 0.01f) COVER_LAYER else deepestLayer
+                    if (selectedSurahId == 0 && stackPosition.value <= COVER_LAYER + 0.01f) COVER_LAYER else deepestLayer()
                 },
                 gesturesBlocked = { ayahSelectorExpanded },
                 onDragStart = {
@@ -208,7 +219,7 @@ private fun PaperStackApp() {
                     val maxLayer = if (selectedSurahId == 0 && dragStartPosition <= COVER_LAYER + 0.01f) {
                         COVER_LAYER
                     } else {
-                        deepestLayer
+                        deepestLayer()
                     }
                     // A single gesture may advance at most one layer, so a hard swipe
                     // from the cover lands on the reader instead of overshooting to settings.
