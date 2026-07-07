@@ -39,10 +39,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -87,6 +89,16 @@ fun SettingsScreen(
     val settings by viewModel.settings.settings.collectAsStateWithLifecycle()
     val reciters by viewModel.reciters.collectAsStateWithLifecycle()
 
+    var developerTapCount by remember { mutableStateOf(0) }
+    var developerModeEnabled by remember { mutableStateOf(false) }
+
+    if (developerTapCount > 0) {
+        LaunchedEffect(developerTapCount) {
+            delay(1500L)
+            developerTapCount = 0
+        }
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -118,7 +130,15 @@ fun SettingsScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 28.dp),
             ) {
-                AppHeader()
+                AppHeader(
+                    onLogoClick = {
+                        developerTapCount++
+                        if (developerTapCount >= 3) {
+                            developerModeEnabled = !developerModeEnabled
+                            developerTapCount = 0
+                        }
+                    }
+                )
 
                 Spacer(Modifier.height(32.dp))
 
@@ -228,8 +248,10 @@ fun SettingsScreen(
                     )
                 }
 
-                Spacer(Modifier.height(48.dp))
-                DeveloperSection(viewModel)
+                if (developerModeEnabled) {
+                    Spacer(Modifier.height(48.dp))
+                    DeveloperSection(viewModel)
+                }
 
                 Spacer(Modifier.height(48.dp))
                 SectionLabel("About & attributions")
@@ -317,7 +339,7 @@ private fun DeveloperSection(viewModel: SettingsViewModel) {
 }
 
 @Composable
-private fun AppHeader() {
+private fun AppHeader(onLogoClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -331,7 +353,8 @@ private fun AppHeader() {
             modifier = Modifier
                 .size(52.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)),
+                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f))
+                .quietClickable(onClick = onLogoClick),
         ) {
             androidx.compose.foundation.Image(
                 painter = painterResource(R.drawable.ic_launcher_foreground),
