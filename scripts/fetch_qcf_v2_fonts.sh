@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# The QCF/QPC V2 page fonts are tracked in the repo but NOT bundled into the
+# app. They live outside src/main/assets so Gradle never packages them into the
+# APK. See docs/CONNECTED_ARABIC_RENDERING.md ("QCF renderer status") for why.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
-ASSET_DIR="$REPO_ROOT/app/src/main/assets"
+ASSET_DIR="$REPO_ROOT/app/qcf-v2-fonts"
+mkdir -p "$ASSET_DIR"
 OUT_ARCHIVE="$ASSET_DIR/qcf-v2-fonts.tar.xz"
 OUT_PART_PREFIX="$OUT_ARCHIVE.part"
 BASE_URL="${QCF_V2_FONT_BASE_URL:-https://raw.githubusercontent.com/nuqayah/qpc-fonts/master/mushaf-v2}"

@@ -55,7 +55,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.BuildConfig
 import com.beautifulquran.R
 import com.beautifulquran.data.AyahSelectorSide
-import com.beautifulquran.data.ArabicRenderMode
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.PageTurnSounds
@@ -248,7 +247,6 @@ fun SettingsScreen(
 /** Testing tools for development builds; controls here may change or vanish. */
 @Composable
 private fun DeveloperSection(viewModel: SettingsViewModel) {
-    val settings by viewModel.settings.settings.collectAsStateWithLifecycle()
     val context = LocalContext.current
     // Created on first audition tap: a SoundPool with nine loaded samples is
     // too heavy to spin up just because the settings sheet composed.
@@ -266,26 +264,6 @@ private fun DeveloperSection(viewModel: SettingsViewModel) {
     )
 
     Spacer(Modifier.height(20.dp))
-    Text("Arabic renderer", style = MaterialTheme.typography.bodyLarge)
-    Text(
-        text = "Applies to Arabic-only reading (word-by-word off).",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-    )
-    Spacer(Modifier.height(10.dp))
-    EnumSegmentedRow(
-        entries = ArabicRenderMode.entries,
-        selected = settings.arabicRenderMode,
-        label = { mode ->
-            when (mode) {
-                ArabicRenderMode.RESPONSIVE_HAFS -> "Responsive"
-                ArabicRenderMode.QCF_MUSHAF -> "QCF"
-            }
-        },
-        onSelect = { mode -> viewModel.settings.update { it.copy(arabicRenderMode = mode) } },
-    )
-
-    Spacer(Modifier.height(24.dp))
     Text("Page turn sounds", style = MaterialTheme.typography.bodyLarge)
     Text(
         text = "Tap to hear the whole flip (lift → sweep → drop). In use, the " +

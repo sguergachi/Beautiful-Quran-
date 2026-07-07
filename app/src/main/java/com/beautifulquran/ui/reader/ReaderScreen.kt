@@ -74,7 +74,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.input.ImeAction
@@ -84,9 +83,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import com.beautifulquran.QuranApp
 import com.beautifulquran.data.AyahSelectorSide
-import com.beautifulquran.data.ArabicRenderMode
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.ui.theme.IslamicReturnToAyahButton
 import com.beautifulquran.ui.theme.absorbPointerEvents
@@ -283,42 +280,6 @@ fun ReaderScreen(
         label = "topBarAlpha",
     )
 
-    val context = LocalContext.current
-    val qcfFontProvider = remember(context) {
-        (context.applicationContext as QuranApp).qcfFontProvider
-    }
-    val qcfExtractionProgress by qcfFontProvider.extractionProgress.collectAsStateWithLifecycle()
-    val needsQcfFonts =
-        settings.readingMode != ReadingMode.ENGLISH_ONLY &&
-            !settings.showWordGloss &&
-            settings.arabicRenderMode == ArabicRenderMode.QCF_MUSHAF
-    var qcfFontsReady by remember(surahId) { mutableStateOf(false) }
-    var qcfFontError by remember(surahId) { mutableStateOf<String?>(null) }
-    LaunchedEffect(uiState.content, needsQcfFonts) {
-        val content = uiState.content
-        if (content == null) {
-            qcfFontsReady = false
-            qcfFontError = null
-            return@LaunchedEffect
-        }
-        if (!needsQcfFonts) {
-            qcfFontsReady = true
-            qcfFontError = null
-            return@LaunchedEffect
-        }
-        qcfFontsReady = false
-        qcfFontError = null
-        val pages = content.ayahs
-            .flatMap { ayah -> ayah.words.map { it.qcfPage } }
-            .filter { it in 1..604 }
-            .distinct()
-        val failed = qcfFontProvider.preload(pages)
-        if (failed.isEmpty()) {
-            qcfFontsReady = true
-        } else {
-            qcfFontError = "Could not load Mushaf font pages: ${failed.sorted().joinToString()}"
-        }
-    }
     val notifPermission = rememberPlaybackPermissionState()
 
     // The permission prompt is not a dialog — it is an ink bleed that turns
@@ -676,40 +637,9 @@ fun ReaderScreen(
                 )
             }
         }
-        if (content == null || !qcfFontsReady) {
-            val showQcfProgress = content != null && needsQcfFonts && !qcfFontsReady
-            val qcfProgressText = when {
-                qcfFontError != null -> qcfFontError.orEmpty()
-                showQcfProgress && qcfExtractionProgress.error != null ->
-                    qcfExtractionProgress.error.orEmpty()
-                showQcfProgress && qcfExtractionProgress.isComplete ->
-                    "Loading Mushaf pages"
-                showQcfProgress ->
-                    "Preparing Mushaf fonts ${qcfExtractionProgress.percent}%"
-                else -> null
-            }
+        if (content == null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    if (showQcfProgress && !qcfExtractionProgress.isComplete) {
-                        CircularProgressIndicator(
-                            progress = { qcfExtractionProgress.fraction },
-                        )
-                    } else {
-                        CircularProgressIndicator()
-                    }
-                    if (qcfProgressText != null) {
-                        Text(
-                            text = qcfProgressText,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 28.dp),
-                        )
-                    }
-                }
+                CircularProgressIndicator()
             }
             return@Scaffold
         }
@@ -803,7 +733,6 @@ fun ReaderScreen(
                                 showGloss = settings.showWordGloss,
                                 showTransliteration = settings.showTransliteration,
                                 showTranslation = settings.showTranslation,
-                                arabicRenderMode = settings.arabicRenderMode,
                                 searchQuery = activeQuery,
                                 keepActiveWordInView = followEnabled && recitingActive,
                                 onWordClick = { word ->

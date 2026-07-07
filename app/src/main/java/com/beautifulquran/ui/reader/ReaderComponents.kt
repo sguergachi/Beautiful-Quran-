@@ -100,15 +100,7 @@ private fun wordFadeAlpha(progress: Float): Float {
     return resting + (WordVisualState.Active.inkAlpha() - resting) * progress.coerceIn(0f, 1f)
 }
 
-private val QuranPauseMarks = setOf('ۖ', 'ۗ', 'ۘ', 'ۙ', 'ۚ', 'ۛ', 'ۜ', '۩')
-
-private fun String.quranPauseMarks(): String =
-    filter { it in QuranPauseMarks }
-
-private fun String.withoutTrailingQcfPauseGlyphs(count: Int): String =
-    if (count <= 0) this else dropLast(count.coerceAtMost(length))
-
-private data class QcfLineText(
+private data class RenderedLineText(
     val text: AnnotatedString,
     val wordRanges: List<IntRange>,
 )
@@ -149,7 +141,6 @@ private fun animatedInkAlpha(state: WordVisualState): State<Float> =
 
 const val MIN_SWEEP_MS = 140
 const val MAX_SWEEP_MS = 8_000
-private const val ARABIC_ONLY_QCF_FONT_MULTIPLIER = 1.05f
 private const val ARABIC_ONLY_HAFS_FONT_MULTIPLIER = 1.0f
 
 /**
@@ -525,149 +516,6 @@ private fun Modifier.wordTapTarget(
     detectTapGestures { tap ->
         val wordIndex = layoutResult?.wordIndexAt(tap, ranges, hitSlopPx) ?: -1
         if (wordIndex >= 0) onWordClick(words[wordIndex]) else onMiss?.invoke()
-    }
-}
-
-@Composable
-private fun QcfGlyphLine(
-    words: List<Word>,
-    states: List<WordVisualState>,
-    repeats: List<Boolean>,
-    fontSize: TextUnit,
-    activeSweepMs: Int?,
-    onWordClick: ((Word) -> Unit)?,
-) {
-    val context = LocalContext.current
-    val hitSlopPx = with(LocalDensity.current) { 8.dp.toPx() }
-    val provider = remember(context) {
-        (context.applicationContext as QuranApp).qcfFontProvider
-    }
-    val page = words.firstOrNull()?.qcfPage ?: return
-    val fontFamily = provider.cachedFontFamily(page) ?: return
-    val palette = rememberWordInkPalette()
-    val sweeps = rememberLetterSweeps(states, activeSweepMs)
-    val style = ArabicWordStyle.merge(
-        TextStyle(
-            fontFamily = fontFamily,
-            fontSize = fontSize,
-            lineHeight = 1.75.em,
-            textAlign = TextAlign.Center,
-        ),
-    )
-    var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
-
-    val wordRanges = mutableListOf<IntRange>()
-    val annotatedLineText = buildAnnotatedString {
-        words.forEachIndexed { index, word ->
-            val pauseMarks = word.arabic.quranPauseMarks()
-            val qcfText = word.qcfV2.withoutTrailingQcfPauseGlyphs(pauseMarks.length)
-            val wordColor = palette.colorFor(
-                state = states.getOrElse(index) { WordVisualState.Plain },
-                repeat = repeats.getOrElse(index) { false },
-                sweep = sweeps[index].value,
-            )
-
-            val start = length
-            withStyle(SpanStyle(color = wordColor)) {
-                append(qcfText)
-            }
-            if (pauseMarks.isNotEmpty()) {
-                withStyle(
-                    SpanStyle(
-                        color = wordColor,
-                        fontFamily = HafsFontFamily,
-                    ),
-                ) {
-                    append(" ")
-                    append(pauseMarks)
-                }
-            }
-            wordRanges += start until length
-            if (index != words.lastIndex) append(" ")
-        }
-    }
-    val lineText = QcfLineText(annotatedLineText, wordRanges)
-
-    Text(
-        text = lineText.text,
-        style = style,
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(
-                if (onWordClick == null) {
-                    Modifier
-                } else {
-                    Modifier.wordTapTarget(
-                        words = words,
-                        ranges = lineText.wordRanges,
-                        layoutResult = layoutResult,
-                        hitSlopPx = hitSlopPx,
-                        onWordClick = onWordClick,
-                    )
-                },
-            ),
-        onTextLayout = { layoutResult = it },
-    )
-}
-
-@Composable
-private fun QcfGlyphAyah(
-    ayah: Ayah,
-    activeWordPosition: Int?,
-    highWater: Int,
-    repeatActive: Boolean,
-    repeatStart: Int,
-    isActiveAyah: Boolean,
-    fontSize: TextUnit,
-    sweepMs: Int?,
-    onAyahClick: () -> Unit,
-    onWordClick: ((Word) -> Unit)?,
-) {
-    fun qcfStateFor(word: Word): WordVisualState = when {
-        !isActiveAyah -> WordVisualState.Plain
-        activeWordPosition == null -> WordVisualState.Upcoming
-        activeWordPosition in word.position..word.qcfSpanEnd -> WordVisualState.Active
-        word.qcfSpanEnd < activeWordPosition -> WordVisualState.Recited
-        word.qcfSpanEnd <= highWater -> WordVisualState.Recited
-        else -> WordVisualState.Upcoming
-    }
-    // A glyph belongs to the active repeat chain when its word span overlaps
-    // [repeatStart, activeWordPosition]; the whole re-recited section then holds
-    // orange until the chain completes.
-    fun inRepeatChain(word: Word): Boolean =
-        repeatActive &&
-            activeWordPosition != null &&
-            word.position <= activeWordPosition &&
-            word.qcfSpanEnd >= repeatStart
-
-    val lines = remember(ayah.words) {
-        ayah.words
-            // Blank QCF rows are timing continuations covered by the previous
-            // multi-word Mushaf glyph; qcfSpanEnd keeps highlight mapping intact.
-            .filter { it.qcfV2.isNotBlank() }
-            .groupBy { it.qcfPage to it.qcfLine }
-            .toSortedMap(compareBy<Pair<Int, Int>> { it.first }.thenBy { it.second })
-            .values
-            .toList()
-    }
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(3.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .quietClickable(onClick = onAyahClick),
-    ) {
-        lines.forEach { lineWords ->
-            QcfGlyphLine(
-                words = lineWords,
-                states = lineWords.map(::qcfStateFor),
-                repeats = lineWords.map(::inRepeatChain),
-                fontSize = fontSize,
-                activeSweepMs = sweepMs,
-                onWordClick = onWordClick,
-            )
-        }
     }
 }
 
