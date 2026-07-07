@@ -11,9 +11,6 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK, ROYAL_GREEN }
 /** What flows on the sheet: Arabic with English under each word, or English only. */
 enum class ReadingMode { ARABIC_ENGLISH, ENGLISH_ONLY }
 
-/** Renderer used by Arabic-only mode when word glosses are hidden. */
-enum class ArabicRenderMode { RESPONSIVE_HAFS, QCF_MUSHAF }
-
 /** Which screen edge the ayah selector rail lives on. */
 enum class AyahSelectorSide { LEFT, RIGHT }
 
@@ -24,7 +21,6 @@ data class Settings(
     val showWordGloss: Boolean = true,
     val showTransliteration: Boolean = false,
     val showTranslation: Boolean = true,
-    val arabicRenderMode: ArabicRenderMode = ArabicRenderMode.RESPONSIVE_HAFS,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val ayahSelectorSide: AyahSelectorSide = AyahSelectorSide.LEFT,
     val lastSurah: Int = 0,
@@ -55,7 +51,6 @@ class SettingsRepository(context: Context) {
         showWordGloss = prefs.getBoolean("showWordGloss", true),
         showTransliteration = prefs.getBoolean("showTransliteration", false),
         showTranslation = prefs.getBoolean("showTranslation", true),
-        arabicRenderMode = prefs.enum("arabicRenderMode", ArabicRenderMode.RESPONSIVE_HAFS),
         themeMode = prefs.enum("themeMode", ThemeMode.SYSTEM),
         ayahSelectorSide = prefs.enum("ayahSelectorSide", AyahSelectorSide.LEFT),
         lastSurah = prefs.getInt("lastSurah", 0),
@@ -72,7 +67,6 @@ class SettingsRepository(context: Context) {
             putBoolean("showWordGloss", next.showWordGloss)
             putBoolean("showTransliteration", next.showTransliteration)
             putBoolean("showTranslation", next.showTranslation)
-            putInt("arabicRenderMode", next.arabicRenderMode.ordinal)
             putInt("themeMode", next.themeMode.ordinal)
             putInt("ayahSelectorSide", next.ayahSelectorSide.ordinal)
             putInt("lastSurah", next.lastSurah)

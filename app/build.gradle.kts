@@ -75,8 +75,6 @@ android {
         noCompress += "db"
         noCompress += "ttf"
         noCompress += "xz"
-        noCompress += "part0"
-        noCompress += "part1"
     }
     lint {
         // Media3's @UnstableApi opt-in trips lintVital on release builds; the
