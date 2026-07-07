@@ -61,7 +61,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.beautifulquran.QuranApp
-import com.beautifulquran.data.ArabicRenderMode
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.data.model.Ayah
 import com.beautifulquran.data.model.Word
@@ -564,10 +563,8 @@ private fun ResponsiveHafsAyah(
             append("﴾")
         }
     }
-    val lineText = QcfLineText(annotatedText, wordRanges)
-
     Text(
-        text = lineText.text,
+        text = annotatedText,
         style = style,
         modifier = Modifier
             .fillMaxWidth()
@@ -578,7 +575,7 @@ private fun ResponsiveHafsAyah(
                 } else {
                     Modifier.wordTapTarget(
                         words = ayah.words,
-                        ranges = lineText.wordRanges,
+                        ranges = wordRanges,
                         layoutResult = layoutResult,
                         hitSlopPx = hitSlopPx,
                         onWordClick = onWordClick,
@@ -664,7 +661,6 @@ fun AyahBlock(
     showGloss: Boolean,
     showTransliteration: Boolean,
     showTranslation: Boolean,
-    arabicRenderMode: ArabicRenderMode,
     searchQuery: String? = null,
     keepActiveWordInView: Boolean = false,
     onWordClick: ((Word) -> Unit)?,
@@ -783,29 +779,15 @@ fun AyahBlock(
             }
         } else {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                when (arabicRenderMode) {
-                    ArabicRenderMode.RESPONSIVE_HAFS -> ResponsiveHafsAyah(
-                        ayah = ayah,
-                        states = ayah.words.map(::stateFor),
-                        repeats = ayah.words.map(::inRepeatChain),
-                        fontSize = ArabicWordStyle.fontSize * fontScale * ARABIC_ONLY_HAFS_FONT_MULTIPLIER,
-                        activeSweepMs = sweepMs,
-                        onAyahClick = onAyahClick,
-                        onWordClick = onWordClick?.let { handler -> { word -> handler(word) } },
-                    )
-                    ArabicRenderMode.QCF_MUSHAF -> QcfGlyphAyah(
-                        ayah = ayah,
-                        activeWordPosition = activeWordPosition,
-                        highWater = highWater,
-                        repeatActive = isRepeatActive,
-                        repeatStart = repeatStart,
-                        isActiveAyah = isActiveAyah,
-                        fontSize = ArabicWordStyle.fontSize * fontScale * ARABIC_ONLY_QCF_FONT_MULTIPLIER,
-                        sweepMs = sweepMs,
-                        onAyahClick = onAyahClick,
-                        onWordClick = onWordClick?.let { handler -> { word -> handler(word) } },
-                    )
-                }
+                ResponsiveHafsAyah(
+                    ayah = ayah,
+                    states = ayah.words.map(::stateFor),
+                    repeats = ayah.words.map(::inRepeatChain),
+                    fontSize = ArabicWordStyle.fontSize * fontScale * ARABIC_ONLY_HAFS_FONT_MULTIPLIER,
+                    activeSweepMs = sweepMs,
+                    onAyahClick = onAyahClick,
+                    onWordClick = onWordClick?.let { handler -> { word -> handler(word) } },
+                )
             }
         }
         if (showTranslation && readingMode == ReadingMode.ARABIC_ENGLISH) {
