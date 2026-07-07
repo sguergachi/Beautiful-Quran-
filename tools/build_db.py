@@ -346,9 +346,73 @@ def load_qdc_timings(qdc_id: int):
     return out
 
 
+# The qdc aligner's output carries artifacts that read as false repeats once
+# HighlightEngine treats any non-forward word position as a backtrack:
+#   * split words — one word emitted as two consecutive segments with the same
+#     position and a ~0 ms gap; the second half looks like an instant re-say;
+#   * mislabeled strays — a single segment carrying the wrong word index
+#     (often a sound-alike of an earlier word, e.g. 49:9 فَإِن tagged as وَإِن),
+#     an isolated backjump the recitation never follows up on;
+#   * forward spikes — the same mislabel in the other direction; the too-large
+#     index inflates the high-water mark so every following normal word until
+#     that index reads as a repeat.
+# Genuine repeats are multi-segment chains that walk forward again after the
+# backjump; none of the rules below can trigger on one (verified against the
+# shipped data: real chains contain zero same-position duplicates, and their
+# backtracked segments are always followed by another chain member, not a jump
+# past the high-water mark).
+QDC_SPLIT_MERGE_GAP_MS = 150  # observed split gaps are 0–50 ms
+QDC_SPIKE_JUMP = 3  # a forward jump this large that instantly retreats is noise
+
+
+def clean_qdc_artifacts(segs, stats):
+    """Remove aligner artifacts (see above) from one ayah's time-sorted
+    segments. Dropped spans are folded into the previous segment so the
+    karaoke sweep has no holes. Runs to a fixpoint because a dropped spike can
+    reunite the two halves of a split word."""
+    changed = True
+    while changed:
+        changed = False
+        merged = [segs[0]]
+        for pos, start, end in segs[1:]:
+            last = merged[-1]
+            if pos == last[0] and start - last[2] <= QDC_SPLIT_MERGE_GAP_MS:
+                last[2] = max(last[2], end)
+                stats["merged_splits"] += 1
+                changed = True
+            else:
+                merged.append([pos, start, end])
+        kept = []
+        running_max = -1
+        for i, (pos, start, end) in enumerate(merged):
+            prev = kept[-1] if kept else None
+            next_pos = merged[i + 1][0] if i + 1 < len(merged) else None
+            stray = (
+                prev is not None
+                and pos < prev[0]
+                and (next_pos is None or next_pos > running_max)
+            )
+            spike = (
+                prev is not None
+                and pos >= running_max + QDC_SPIKE_JUMP
+                and next_pos is not None
+                and next_pos < pos
+            )
+            if stray or spike:
+                prev[2] = max(prev[2], end)
+                stats["dropped_strays"] += 1
+                changed = True
+                continue
+            kept.append([pos, start, end])
+            running_max = max(running_max, pos)
+        segs = kept
+    return segs
+
+
 def adjust_qdc_segments(segs, n_words, stats):
     """Clamp quran.com segments (already 1-based, ayah-relative) to our canonical
-    word count while PRESERVING repeats; count the re-recited spans."""
+    word count while PRESERVING repeats; scrub aligner artifacts that would read
+    as repeats that aren't in the audio; count the re-recited spans."""
     if not segs:
         return None
     adjusted = []
@@ -362,6 +426,7 @@ def adjust_qdc_segments(segs, n_words, stats):
         adjusted.append([pos, start, end])
     if not adjusted:
         return None
+    adjusted = clean_qdc_artifacts(adjusted, stats)
     running_max = -1
     for pos, _, _ in adjusted:
         if pos <= running_max:
@@ -601,7 +666,10 @@ def main():
                 # Repeat-aware timings from quran.com instead of quran-align.
                 print(f"  {slug}: repeat-aware timings from quran.com (qdc {qdc_id})")
                 data = load_qdc_timings(qdc_id)
-                stats = {"zero_len": 0, "clamped": 0, "repeats": 0, "missing": 0}
+                stats = {
+                    "zero_len": 0, "clamped": 0, "repeats": 0, "missing": 0,
+                    "merged_splits": 0, "dropped_strays": 0,
+                }
                 covered = ingest_reciter_timings(
                     rid, word_counts, timing_rows, stats,
                     lambda key, n: adjust_qdc_segments(data.get(key), n, stats),
@@ -609,7 +677,9 @@ def main():
                 print(
                     f"  {slug}: ayahs covered {covered}/6236, "
                     f"repeat spans {stats['repeats']}, clamped {stats['clamped']}, "
-                    f"zero-len {stats['zero_len']}, missing {stats['missing']}"
+                    f"zero-len {stats['zero_len']}, missing {stats['missing']}, "
+                    f"split-words merged {stats['merged_splits']}, "
+                    f"stray mislabels dropped {stats['dropped_strays']}"
                 )
             else:
                 data = load_timings(zp, slug)

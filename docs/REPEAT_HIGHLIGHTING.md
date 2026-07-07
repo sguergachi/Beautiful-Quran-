@@ -65,12 +65,12 @@ ear-verified (Mishary 2:14, Hani 2:16); **verify the rest before enabling.**
 |---|---|---|
 | Mishary Alafasy (murattal) | 7 | ✅ enabled, ear-verified |
 | Hani ar-Rifai | 5 | ✅ enabled, ear-verified |
-| Al-Husary (murattal) | 6 | yes (unverified) |
+| Al-Husary (murattal) | 6 | ✅ enabled (not ear-verified) |
 | Al-Husary — **Muallim** (teaching) | 12 | yes (dense; not yet imported) |
-| AbdulBaset (murattal) | 2 | yes (unverified) |
-| Minshawi (murattal) | 9 | yes (unverified) |
+| AbdulBaset (murattal) | 2 | ✅ enabled (not ear-verified) |
+| Minshawi (murattal) | 9 | ✅ enabled (not ear-verified) |
 | Minshawi (mujawwad) | 8 | yes (very dense) |
-| As-Sudais | 3 | yes (also fills our missing-timings gap) |
+| As-Sudais | 3 | ✅ enabled (not ear-verified; also fills our missing-timings gap) |
 | Ash-Shuraym | 10 | no (one-pass) |
 | AbdulBaset (mujawwad) | 1 | no (one-pass) |
 
@@ -108,11 +108,45 @@ of quran-align:
   repeats, and caches the assembled result in `tools/.cache/qdc_<id>.json`.
 - `adjust_qdc_segments()` clamps word positions to our canonical word count,
   drops zero-length spans, keeps repeats, and counts the repeat spans.
+- `clean_qdc_artifacts()` scrubs three aligner artifact classes that would
+  otherwise render as repeats the reciter never made (see below).
 
-Mishary yields **4,372 repeat spans** at full 6,236/6,236 coverage; Hani yields
-**2,151 repeat spans** at 6,235/6,236 (one ayah has no quran.com segments and
-falls back to whole-ayah highlighting). Everyone not in `QDC_REPEAT_RECITERS`
-still uses quran-align exactly as before.
+After cleanup, Mishary yields **2,744 repeat spans** at full 6,236/6,236
+coverage; Hani yields **1,857 repeat spans** at 6,235/6,236 (one ayah has no
+quran.com segments and falls back to whole-ayah highlighting). Everyone not in
+`QDC_REPEAT_RECITERS` still uses quran-align exactly as before.
+
+## False repeats: the qdc artifacts we scrub
+
+The raw qdc segments are aligner output, and roughly a quarter of their
+apparent backtracks were **not audible repeats**. Three artifact classes
+(all confirmed structurally against the shipped data; the single-word class
+was also the subject of a user's ear report on Hani):
+
+1. **Split words.** One word emitted as two consecutive segments with the same
+   position and a 0–50 ms gap (`… [6, 5660, 8140], [6, 8140, 10350] …`). The
+   second half satisfies `position <= maxBefore`, so it bloomed orange as an
+   instant one-word "repeat." Hani had 176 of these chains; Mishary 378.
+   Fix: merge same-position, time-contiguous neighbours
+   (`QDC_SPLIT_MERGE_GAP_MS`).
+2. **Mislabeled strays.** A single segment carrying a wrong, *earlier* word
+   index — often a sound-alike (49:9 goes `… 7, [1], 9 …`: word 8 فَإِن was
+   tagged as word 1 وَإِن) — then the recitation continues forward past the
+   high-water mark. A real repeat never does this: it walks forward again as a
+   chain. Fix: drop an isolated backjump segment whose successor jumps past
+   the high-water mark, folding its span into the previous word.
+3. **Forward spikes.** The same mislabel in the other direction (`… 2, [8],
+   3, 4, 5 …`). Worse than it looks: the spike inflates `highWater`, so every
+   normal word after it (3–7 here) satisfied the backtrack test and a long
+   false orange chain appeared. Fix: drop a segment that jumps ≥
+   `QDC_SPIKE_JUMP` past the high-water mark and immediately retreats.
+
+None of these rules can touch a genuine repeat: real chains re-walk forward
+after the backjump (so their members are never "isolated"), and the shipped
+data contained zero same-position duplicates inside real chains. Ear-verified
+repeats (Mishary 2:14, Hani 2:38's `12,13,14 — 12,13,14`) survive cleanup
+byte-identical. The cleanup runs to a fixpoint because dropping a spike can
+reunite the two halves of a split word (9:51: `4, [7], 4` → `4, 4` → merged).
 
 ## The rendering path
 
