@@ -1,57 +1,175 @@
 # Timings Lab
 
-A Musixmatch-style in-app editor for the word-level timing / repeat data that
-drives the follow-along highlight. It exists because **the bundled timings come
-from open datasets that are imperfect**: only Mishary and Hani are ear-verified
-for repeats (see [REPEAT_HIGHLIGHTING.md](REPEAT_HIGHLIGHTING.md)), all reciter
-timings are within ±73 ms on average but individual ayahs can be audibly off,
-and there is no way to ship a fix without regenerating the whole DB.
+A Musixmatch-style, WYSIWYG editor for the word-level timing / repeat data
+that drives the follow-along highlight. It exists because the bundled timings
+come from open datasets that are imperfect: individual ayahs can be audibly
+off, repeats are only ear-verified for two reciters (see
+[REPEAT_HIGHLIGHTING.md](REPEAT_HIGHLIGHTING.md)), and there was no way to
+ship a fix without regenerating the whole DB. The Lab closes that loop:
+notice a mistimed word while reading → long-press it → fix it in seconds →
+the reader is corrected immediately → submit the correction upstream when
+convenient.
 
-The Lab lets you:
+## The one design rule
 
-1. Play the recitation for any single ayah.
-2. **Tap each word as the reciter says it** to drop replacement start marks —
-   ordering, repeats, and orange-highlighted backtracks included.
-3. Fine-tune each segment's start / end / target word position by hand.
-4. Save the result — it overrides the bundled DB on-device **and** takes effect
-   in the reader immediately.
-5. **Submit the corrections** as a structured GitHub Issue body with a one-tap
-   deep-link, so the maintainer can land them into `tools/build_db.py`'s data
-   pipeline with one paste.
+**The editor is the reader.** The center of the Lab is the actual `AyahBlock`
+the reader renders — same connected script / word-gloss modes, same letter
+fade, same orange repeat wash, same fonts and font scale — live-driven by the
+*edited* segments through the same `HighlightEngine`. You never look at
+numbers to judge a correction; you watch the real fade land on the real
+recitation, exactly as the reader will show it.
 
-The Lab does not write to `quran.db`. It uses a separate on-device "override
-store." Corrections leave the device only when you submit them — the rest of
-the app keeps working offline.
+Everything else follows from that rule. There is no segments table, no
+sliders, no start/end forms. Two verbs cover every correction:
+
+### Verb 1 — Re-sync (record a tap pass, like Musixmatch)
+
+Hit **Re-sync**. The ayah restarts (at 1×, ¾× or ½× — marks are stored in
+true audio time either way) and you tap each word at the moment the reciter
+begins it. Each tap drops that word's start mark at the playhead and the word
+inks in under your finger — because taps *are* segments and the highlight is
+driven from segments, the karaoke fade follows your taps in real time.
+
+* **Repeats need no special mode.** When the reciter re-recites an earlier
+  phrase, tap those words again as they happen. A mark whose word position is
+  ≤ the furthest word already marked *is* a repeat backtrack — the same
+  encoding the DB uses — and the words take the orange wash immediately.
+* **Slip a tap?** `Undo` removes the last mark and rewinds to just before it;
+  `↺ 4s` rewinds four seconds and clears the marks you overran, so you re-tap
+  just that stretch.
+* Taps are compensated ~100 ms (scaled by playback speed) for finger
+  reaction latency; the Tune card catches anything the compensation misses.
+* When the audio ends (or you hit **Done**) the pass is saved and the ayah
+  replays from the top so you immediately verify your work — Musixmatch's
+  "check your sync" step, automatic.
+
+Ends are derived, not tapped: each mark's end is the next mark's start, and
+the last mark ends at the audio duration. That matches the reader's hold
+behaviour (a word stays lit until the next begins).
+
+### Verb 2 — Tune (tap a word, nudge its start)
+
+For a single word that's slightly off there's no need to re-tap the ayah. In
+Listen mode, tap the word: the Lab selects its mark, seeks to ~0.8 s before
+it, and plays — you hear the word and watch whether the ink lands with the
+voice. A small card offers:
+
+* **−50 ms / +50 ms** nudges and a **fine-tune drag strip** (~3 ms per px)
+  for continuous adjustment.
+* **Replay** — re-audition from just before the (new) start.
+* **Shift following words too** — applies the nudge to every later mark;
+  this is the drift fixer when a whole tail of an ayah is uniformly late.
+* **Delete mark** — removes a spurious pass (e.g. an alignment-noise repeat).
+* If the word was recited more than once, **pass chips** (`6.4s`, `10.6s ·
+  repeat`) pick which pass you're tuning.
+
+A slim timeline strip above the transport shows every mark (gold; orange for
+repeat passes), the selected mark, and the live playhead; tap or drag it to
+scrub.
+
+### No save button
+
+Edits persist automatically — on finishing a re-sync, after a nudge settles,
+when you change ayah, and when you leave the Lab. The override store is tiny
+and atomic, so there is nothing to lose and nothing to remember. `Reset ayah
+to bundled` (overflow menu) reverts to the shipped DB row; `Clear all
+corrections` empties the store.
 
 ## Where it lives
 
-* **Entry points** (two):
-  - **From the reader**: long-press any word in any ayah. The Lab opens on that
-    exact (surah, ayah) — perfect for "I just spotted a mistimed word, let me
-    fix it now." Works in all three reading modes (Arabic+gloss, English-only,
-    connected/ ResponsiveHafsAyah).
-  - **From Settings**: Settings → tap the app logo **three times** (the existing
-    developer unlock) → "Timings Lab" row in the Developer section opens the
-    paper stack one more page deeper (it sits beneath the Settings sheet, just
-    like Settings sits beneath the Reader). Resume on the last surah/ayah you
-    visited in the reader.
-* **Same reciter as the reader**: the Lab edits the reciter currently selected
-  in Settings; switching reciters clears the lab panel and reloads segments.
-* **Same playback service**: the Lab uses the existing `PlaybackService`
-  (`PlayerController`) with a one-item playlist so looping, audio focus, and
-  caching work exactly as in the reader.
+* **From the reader** (primary): long-press any word in any reading mode →
+  the Lab opens on that exact (surah, ayah). This is the "fix it the moment
+  you notice it" path.
+* **From Settings**: triple-tap the logo (developer unlock) → *Timings Lab*
+  opens on the last-read ayah.
+* The Lab edits the reciter currently selected in Settings and uses the
+  shared `PlayerController`/`PlaybackService` (one-item playlist, ayah loop
+  on by default in Listen mode), so caching, audio focus and speed behave
+  exactly as in the reader.
+* Reciters with no bundled timings at all (e.g. As-Sudais) work too — the
+  Lab starts from zero marks and a re-sync pass creates the ayah's timings
+  from scratch.
 
 ## Data model
 
-### Override store
+### On-device override store
 
-`filesDir/timing-overrides.json`. One small file, written atomically (tmp +
-rename) on every save:
+`filesDir/timing-overrides.json`, written atomically (tmp + rename). One
+entry per touched `(reciterId, surahId, ayah)` holding the **whole**
+replacement segments list — not a diff — in the exact wire shape the DB uses:
+`[position_1based, start_ms, end_ms]`, sorted by `start_ms`, positions may
+backtrack to encode repeats.
+
+### Repository fusion
+
+`QuranRepository.timings(reciterId, surahId)` is the single point where
+timings leave the DB; overrides are fused there, so the reader and the Lab
+read the same corrected numbers with no extra wiring:
+
+```
+db timings row            ─┐
+TimingOverrides[key]      ─┴─►  Map<ayah, List<Segment>>  ─►  HighlightEngine
+                                (override wins when present)
+```
+
+The Lab's live preview additionally runs `HighlightEngine` directly over its
+in-memory working copy, so you see edits *before* they're persisted.
+
+## Screen anatomy
+
+```
+┌──────────────────────────────────────────────┐
+│ ‹   Al-Baqarah · ‹ Ayah 14 ›          ⋯      │  header: nav, reciter,
+│         Mishary Alafasy · edited             │  overflow (submit/copy/reset)
+├──────────────────────────────────────────────┤
+│                                              │
+│          ← the real AyahBlock →              │  live karaoke preview;
+│    (reader rendering, live highlight,        │  tap word = tune (Listen)
+│     orange repeats, translation, …)          │  tap word = drop mark (Rec)
+│                                              │
+├──────────────────────────────────────────────┤
+│  [tune card, when a word is selected]        │  −50 · replay · +50, drag
+│                                              │  strip, shift-rest, delete
+├──────────────────────────────────────────────┤
+│  ──┼────╵──╵───╵────◆───╵──╵───────────────  │  timeline: marks + playhead
+│  ▶   ⟲   1×                      [● Re-sync] │  transport + record pill
+│  "Play to watch · tap a word to tune it"     │  contextual hint line
+│  3 ayahs corrected on this device · Submit   │  pending-corrections ribbon
+└──────────────────────────────────────────────┘
+```
+
+While recording, the transport swaps to `[■ Done] [↺ 4s] [⌫ Undo]` with a
+mark counter, and the hint line reads "Tap each word the moment it's
+recited — tap earlier words again for repeats."
+
+## Getting corrections upstream
+
+The device is where corrections are *made*; GitHub is how they *travel*.
+Free, no backend, no auth beyond the GitHub account:
+
+1. **Submit** (overflow, or the ribbon) builds a pre-filled
+   `github.com/…/issues/new` deep-link: a human-readable summary, a
+   verification checklist, and the full patch as a fenced ```json``` block.
+   One tap opens it in the browser; **Copy patch** is the clipboard fallback
+   (and covers very large patches that exceed URL limits).
+2. Maintainer saves the JSON block to `tools/timing_overrides/<anything>.json`
+   in the repo and runs `python3 tools/build_db.py`.
+3. `build_db.py` fetches/normalizes the open-dataset timings as usual, then
+   **applies every file in `tools/timing_overrides/` on top**, replacing (or
+   adding) the matching `(reciter, surah, ayah)` rows — with position-range
+   validation — before writing `quran.db`. Committed override files are
+   therefore permanent: every future DB rebuild reapplies them.
+4. Ship: bump `DB_FILE_NAME` (`quran-vN.db`) in `QuranDatabase.kt`, commit
+   the regenerated DB + the override file. Once the fixed DB is bundled, the
+   on-device override for that ayah can be cleared (or simply left — it now
+   matches the DB).
+
+The patch JSON shape (also the shape `tools/timing_overrides/*.json` accepts):
 
 ```json
 {
   "schema": 1,
-  "device": "<Build.MANUFACTURER>/<Build.MODEL>",
+  "device": "Google/Pixel 8",
   "appVersion": "0.1",
   "edits": [
     {
@@ -59,185 +177,43 @@ rename) on every save:
       "reciterSlug": "Alafasy_128kbps",
       "surahId": 2,
       "ayah": 14,
-      "note": null,
-      "segments": [[7, 6400, 8212], [8, 8212, 9016], ... ]
+      "segments": [[7, 6400, 8212], [8, 8212, 9016]]
     }
   ]
 }
 ```
 
-* `segments` is the same shape the DB uses: `[position_1based, start_ms,
-  end_ms]`, sorted by `start_ms`, and the **position may backtrack** (e.g.
-  `... 11, [7, ...]]`) to encode a repeat — exactly the same wire format that
-  `QuranRepository.parseSegments` already understands.
-* The Lab always stores one entry per `(reciter, surah, ayah)` you've touched:
-  the **whole** segments list for that ayah, not a diff against the DB. This
-  keeps the store's behaviour unambiguous and the submission paste-trivial
-  (a maintainer replaces the whole ayah row, not a merge).
-
-### Repository integration
-
-`QuranRepository.timings(reciterId, surahId)` is the only place timings leave
-the DB; the Lab overrides are fused here, **before** they ever reach
-`HighlightEngine`. So both the Lab preview and the real reader see the same
-corrected numbers by reading through the repository.
-
-```
-QuranRepository.timings(reciter_id, surah):
-    db timings row            ─┐
-    TimingOverrides.for(key)  ─┴─► Map<ayah, List<Segment>>  ► HighlightEngine
-                                  (override wins when present)
-```
-
-No in-memory cache of timings is held at repo layer: `timings()` re-queries
-the DB on every reader load, which happens once per surah open + on reciter
-switch — override edits save synchronously enough that a "back" tap into the
-reader picks them up.
-
-## Editor UX
-
-Layout, top to bottom:
-
-1. **Context bar:** *Surah N · Name — Ayah K (Mishary …)*. Source: Settings'
-   last-surah/last-ayah on open (or the surah the reader was on when you went
-   to Settings; small wheel lets you change either without leaving the Lab).
-2. **Ayah word strip:** the Arabic words rendered in order. **Tap-mode on**:
-   tapping a word drops a start-mark for that position at the live playhead
-   and auto-fills adjacent ends (`seg[i].end = seg[i+1].start`; last seg ends
-   at audio duration). **Tap-mode off:** tapping seeks the player to that
-   word's existing start; long-press previews the karaoke highlight from there.
-   Words already covered by an existing pass show a small underline in green;
-   words covered by a **repeat pass** underline in orange (mirrors the reader).
-3. **Playhead scrubber:** a slider bound to live player position. Drag re-seeks.
-   Two handles define a loop window so you can audition a sub-region tightly.
-4. **Segments list:** one row per pass, sorted by `start_ms`. Each row:
-   - A position chip (`#7`) → tap opens a wheel to change which word index the
-     pass points at (this is how you mark a repeat: change the index of a row
-     to an earlier word index to record a backtrack).
-   - Start handle (drag) ↔ fine +/- 10 ms buttons. End handle likewise.
-   - The Karaoke-fill span (between this row's start and the next row's start)
-     is drawn into the scrubber behind the handle, so visual order = temporal
-     order and overlap is obvious.
-   - A × to delete the pass.
-   - **Repeat passes are shown in orange** (same accent as the reader); a row
-     is a repeat pass when `position <= max(positions before it)`.
-5. **Toolbar:** Play/Pause · Replay segment · Tempo (0.75/1/0.5×, slower than
-   reader for tap accuracy) · Tap-mode toggle · Undo.
-6. **Save bar:** Reset (revert this ayah to DB timings, clears its override),
-   Revert unsaved, Save (writes the override file + takes effect in reader),
-   **Submit corrections** (opens GitHub new-issue sheet with the patch).
-
-### The repeat encoding workflow
-
-There is no separate "repeat editor" — a repeat is just **a segment whose
-position is ≤ the highest position already seen**. Two ways to make one:
-
-* **Live tap:** turn Tap-mode on; while the reciter re-recites a phrase, just
-  tap those words again as they happen. The Lab's active position starts at 1
-  and increments from the last segment *only along the current repeat chain*;
-  tapping word 7 right after tapping word 11 unambiguously encodes "they said
-  7 again" and the Lab moves active straight to 7, then 8…11 will be the next
-  taps. (See `TapMode` in `TimingsLabViewModel`.) Orange rendering auto-flags
-  the backtrack.
-* **Manual:** add a new row with the "＋" button, set its position chip to
-  the earlier word index, drag its start to where in the audio the re-recite
-  begins.
-
-Either way the result is numeric segments; the reader's existing
-`HighlightEngine.activeInfo` — already tested and shipped — handles the rest
-(`isRepeat`, `highWater`, `repeatStart`) without changes.
-
-## Submission workflow
-
-The Lab's `Submit corrections` button composes a **GitHub new-issue deep-link**
-and opens it via Android's `ACTION_VIEW`. Free, no auth, no extra service.
-
-URL target: `https://github.com/sguergachi/Beautiful-Quran-/issues/new` with
-`title` and `body` query params. Body contains:
-
-```
-Timings patch from device lab — {N} edited ayah{N==1?"":"s"}.
-
-## Apply
-
-Drop the JSON under the fence into `tools/timing_overrides/*.json` and run:
-`python3 tools/apply_timing_overrides.py`.
-
-## Verification
-
-- [ ] Ear-verified against the bundled recitation
-- [ ] Segments are sorted by start_ms
-- [ ] Word positions are in [1, word_count]
-
-```json
-{
-  "schema": 1,
-  "device": "...",
-  "appVersion": "0.1",
-  "reciterSlug": "Alafasy_128kbps",
-  "edits": [
-    { "surahId": 2, "ayah": 14, "segments": [[7, 6400, 8212], ...] }
-  ]
-}
-```
-
-— the maintainer only needs to paste it into `tools/timing_overrides/{rid}.json`
-and run `apply_timing_overrides.py`; the script (described in §Repo-side
-contradiction below) updates the in-cache quran-align/qdc data and rebuilds
-`quran.db`. Repo-side tooling lives in a follow-up commit so this Lab is
-useful in isolation even before that script exists — a contributor can also
-just paste the JSON into a comment.
-
-### Fallback for big patches
-
-A `Copy to clipboard` button is always available next to Submit, with the
-same body. The maintainer can then paste it any other channel (Telegram,
-email, gist). The Lab deliberately keeps all per-edit overrides in one file
-so `Copy` produces a self-contained, sorted payload.
-
-### One issue per session (not per patch)
-
-The first time you Submit in a session, the lab captures the created issue
-URL into SharedPreferences (`timingLabLastIssueUrl`). Subsequent Submit calls
-in the same session append a *new comment* to that issue (`{issueUrl}#issue-
-new` launches the comment-composer pre-filled) rather than opening another
-issue thread. This keeps the history per device coherent for review.
-
 ## Layering & files
 
 ```
 timingslab/
-    TimingOverrides.kt        override store (load/save/clear), StateFlow<Map>
-    TimingsLabViewModel.kt     state + tap-mode + live playhead polling loop
-    TimingsLabScreen.kt        Scaffold + word strip + scrubber + list + toolbar
-                                (paper styled; reuses QuranAccents / theme)
-    SegmentListRow.kt          one pass row (position chip, start/end handles)
-    TimingsPatch.kt            serialise overrides → GitHub issue URL/body
-QuranRepository.timings()      merges overrides over DB timings
-PlayerController.playSingleAyah(surahId, ayah, reciter, name, startMs, loop)
-SettingsScreen DeveloperSection  "Timings Lab" entry (after the page-turn sounds)
-MainActivity.PaperStackApp      adds TIMINGS_LAB_LAYER; back returns to Settings
+    TimingOverrides.kt      override store (load/save/clear), StateFlow<Map>
+    TimingsLabViewModel.kt  Listen/Record state machine, live ActiveWord flow,
+                            tap marks, nudges, auto-save, undo/rewind
+    TimingsLabScreen.kt     header + AyahBlock stage + tune card + timeline +
+                            transport (paper styled, quietClickable, no ripple)
+    TimingsPatch.kt         overrides → GitHub issue deep-link / clipboard
+data/QuranRepository.kt     timings() fuses overrides over the DB
+ui/reader/ReaderComponents  AyahBlock — reused as-is for the live preview
+tools/build_db.py           applies tools/timing_overrides/*.json at build time
+tools/timing_overrides/     committed, reviewed correction patches
 ```
 
 ## Conventions kept
 
-* No ripple indications — interacts via content motion (paper style).
-* No Material ink; uses `quietClickable`.
-* No new dependencies — AndroidX, kotlinx-serialization-json (already in),
-  nothing else.
-* Works offline for editing; only Submit needs the network (and it just opens
-  a URL).
-* No DB writes from app space. The bundled `quran.db` stays read-only.
+* No ripple / Material ink — `quietClickable`, content answers with motion.
+* No new dependencies.
+* Editing is fully offline; only Submit touches the network (it just opens a
+  URL).
+* The bundled `quran.db` stays read-only on device; corrections live in the
+  override store until they come back bundled in the next DB.
 
-## Non-goals (intentionally; revisit later)
+## Non-goals (intentionally)
 
-* **No editing of WBW gloss / reciters / ayah text.** That data is fully
-  build-time; perfecting it requires source changes, not in-app taps.
-* **No sync.** The Lab is a one-way "tap → submit" workflow; corrections do
-  not round-trip back into the app. They will when the next release ships the
-  bundled DB with them merged in.
-* **No multi-ayah batch editor view.** You edit one ayah at a time (any change
-  to a different ayah saves the current one in the same file automatically).
-* **No waveform rendering.** The recitations are short (~3-30 s); the playhead
-  + segment bars cover what tap-mode and drags need. Adding the waveform is a
-  follow-up.
+* No waveform rendering — the tune card's audition loop ("hear it, watch it,
+  nudge it") replaces visual waveform picking at these ayah lengths.
+* No editing of ayah text / gloss / reciter metadata — build-time data.
+* No multi-ayah batch view — corrections are per-ayah by nature; ‹ › steps
+  between neighbours quickly.
+* No automatic round-trip — corrections return to devices inside the next
+  bundled DB, not via sync.
