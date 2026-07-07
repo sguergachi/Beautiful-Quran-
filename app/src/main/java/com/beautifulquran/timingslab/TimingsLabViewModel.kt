@@ -289,7 +289,7 @@ class TimingsLabViewModel(
         )
         viewModelScope.launch {
             delay(PLAY_SETTLE_MS)
-            if (loop) {
+if (loop) {
                 // Wrap exactly at the last mark's end so the listener hears
                 // the whole verse before the loop — matches the reader.
                 val endMs = st.passes.lastOrNull()?.endMs
