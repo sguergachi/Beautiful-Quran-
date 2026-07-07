@@ -18,6 +18,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
@@ -52,6 +53,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -175,6 +177,7 @@ fun ReaderScreen(
     var followEnabled by remember { mutableStateOf(true) }
     var showRepeatDialog by remember { mutableStateOf(false) }
     var requestedJumpAyah by remember { mutableIntStateOf(0) }
+    var labEntryRequest by remember { mutableStateOf<LabEntryRequest?>(null) }
 
     // In-surah English search: matches are ayahs whose translation or any
     // word gloss contains the query.
@@ -756,8 +759,13 @@ fun ReaderScreen(
                                         viewModel.playFromAyah(ayah.number)
                                     }
                                 },
-                                onWordLongClick = {
-                                    onEditTimings(ayah.surahId, ayah.number)
+                                onWordLongClick = { word ->
+                                    labEntryRequest = LabEntryRequest(
+                                        surahId = ayah.surahId,
+                                        ayah = ayah.number,
+                                        wordArabic = word.arabic,
+                                        wordPosition = word.position,
+                                    )
                                 },
                             )
                         }
@@ -869,6 +877,56 @@ fun ReaderScreen(
             },
         )
     }
+
+    labEntryRequest?.let { req ->
+        LabEntryConfirmDialog(
+            request = req,
+            onDismiss = { labEntryRequest = null },
+            onConfirm = {
+                labEntryRequest = null
+                onEditTimings(req.surahId, req.ayah)
+            },
+        )
+    }
+}
+
+private data class LabEntryRequest(
+    val surahId: Int,
+    val ayah: Int,
+    val wordArabic: String,
+    val wordPosition: Int,
+)
+
+@Composable
+private fun LabEntryConfirmDialog(
+    request: LabEntryRequest,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit timings?") },
+        text = {
+            Column {
+                Text(
+                    text = "Open the Timings Lab for Surah ${request.surahId}, Ayah ${request.ayah}?",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = "Word: ${request.wordArabic} (#${request.wordPosition})",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("Open Lab") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 
 private tailrec fun Context.findActivity(): Activity? = when (this) {
