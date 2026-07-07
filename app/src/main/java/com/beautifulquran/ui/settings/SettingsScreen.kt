@@ -137,7 +137,8 @@ fun SettingsScreen(
                             developerModeEnabled = !developerModeEnabled
                             developerTapCount = 0
                         }
-                    }
+                    },
+                    onLogoLongClick = onOpenTimingsLab,
                 )
 
                 Spacer(Modifier.height(32.dp))
@@ -252,7 +253,6 @@ fun SettingsScreen(
                     Spacer(Modifier.height(48.dp))
                     DeveloperSection(
                         viewModel = viewModel,
-                        onOpenTimingsLab = onOpenTimingsLab,
                     )
                 }
 
@@ -274,7 +274,6 @@ fun SettingsScreen(
 @Composable
 private fun DeveloperSection(
     viewModel: SettingsViewModel,
-    onOpenTimingsLab: () -> Unit,
 ) {
     val context = LocalContext.current
     // Created on first audition tap: a SoundPool with nine loaded samples is
@@ -321,37 +320,13 @@ private fun DeveloperSection(
             Text(flip.name, style = MaterialTheme.typography.bodyLarge)
         }
     }
-
-    Spacer(Modifier.height(28.dp))
-    Text("Timings Lab", style = MaterialTheme.typography.bodyLarge)
-    Text(
-        text = "Open the Musixmatch-style editor for word-level highlight " +
-            "timings and repeats. Corrections are saved on device and " +
-            "immediately take effect in the reader; submit them as a " +
-            "GitHub Issue patch from inside the Lab.",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-    )
-    Spacer(Modifier.height(10.dp))
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .quietClickable(onClick = onOpenTimingsLab)
-            .padding(vertical = 8.dp),
-    ) {
-        Icon(
-            imageVector = Icons.Rounded.PlayArrow,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(Modifier.size(12.dp))
-        Text("Open Timings Lab", style = MaterialTheme.typography.bodyLarge)
-    }
 }
 
 @Composable
-private fun AppHeader(onLogoClick: () -> Unit) {
+private fun AppHeader(
+    onLogoClick: () -> Unit,
+    onLogoLongClick: () -> Unit,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -366,7 +341,10 @@ private fun AppHeader(onLogoClick: () -> Unit) {
                 .size(52.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f))
-                .quietClickable(onClick = onLogoClick),
+                .quietClickable(
+                    onClick = onLogoClick,
+                    onLongClick = onLogoLongClick,
+                ),
         ) {
             androidx.compose.foundation.Image(
                 painter = painterResource(R.drawable.ic_launcher_foreground),

@@ -3,7 +3,6 @@ package com.beautifulquran.timingslab
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.media3.common.Player
 import com.beautifulquran.data.QuranRepository
 import com.beautifulquran.data.Settings
 import com.beautifulquran.data.SettingsRepository
@@ -271,7 +270,11 @@ class TimingsLabViewModel(
 
     /** Loads a one-item playlist for the lab's ayah through the shared
      * playback service, so caching / audio focus behave exactly as in the
-     * reader. Looping keeps the ayah cycling while tuning. */
+     * reader. Looping uses the same range-repeat path as the reader
+     * (setRepeatRange(ayah, ayah)) so the boundary monitor wraps the loop
+     * ~80 ms before the audio actually ends — never entering STATE_ENDED —
+     * instead of fighting ExoPlayer's own REPEAT_MODE_ONE at the seam, which
+     * stuttered the last word on every wrap. */
     private fun startLabPlayback(startMs: Long, loop: Boolean) {
         val st = _ui.value
         val reciter = st.reciter ?: return
@@ -286,7 +289,15 @@ class TimingsLabViewModel(
         )
         viewModelScope.launch {
             delay(PLAY_SETTLE_MS)
-            player.setRepeatMode(if (loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF)
+            if (loop) {
+                // Wrap exactly at the last mark's end so the listener hears
+                // the whole verse before the loop — matches the reader.
+                val endMs = st.passes.lastOrNull()?.endMs
+                    ?.takeIf { it > 0L }
+                player.setRepeatRange(st.ayah, st.ayah, endMs)
+            } else {
+                player.clearRepeatRange()
+            }
         }
     }
 
@@ -307,7 +318,7 @@ class TimingsLabViewModel(
         _activeWord.value = null
         // Repeat OFF so the stream ending marks the pass complete.
         if (matchesLab(player.state.value)) {
-            player.setRepeatMode(Player.REPEAT_MODE_OFF)
+            player.clearRepeatRange()
             player.seekToWordAndPlay(st.ayah, 0L)
         } else {
             startLabPlayback(startMs = 0L, loop = false)
@@ -370,16 +381,21 @@ class TimingsLabViewModel(
         player.setSpeed(1f)
         if (recordMarks.isEmpty()) {
             _ui.value = st.copy(mode = LabMode.LISTEN, passes = recordBackup, recordedMarks = 0)
-            player.setRepeatMode(Player.REPEAT_MODE_ONE)
+            player.setRepeatRange(st.ayah, st.ayah, lastMarkEnd(labPasses = recordBackup))
             return
         }
         val passes = withDerivedEnds(recordMarks.toList(), st.durationMs)
         recordMarks.clear()
         _ui.value = st.copy(mode = LabMode.LISTEN, passes = passes, recordedMarks = 0)
         persistNow()
-        player.setRepeatMode(Player.REPEAT_MODE_ONE)
+        player.setRepeatRange(st.ayah, st.ayah, lastMarkEnd(labPasses = passes))
         seekTo(0L, play = true)
     }
+
+    /** Wrap the loop exactly at the last mark's end so the whole verse still
+     * plays before the wrap — matches the reader's per-ayah repeat range. */
+    private fun lastMarkEnd(labPasses: List<Segment>): Long? =
+        labPasses.lastOrNull()?.endMs?.takeIf { it > 0L }
 
     // ── Tune (Listen-mode selection + nudges) ──────────────────────────────
 
