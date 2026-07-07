@@ -271,16 +271,18 @@ class ReaderViewModel(
     }
 
     fun playFromAyah(ayah: Int) {
-        if (startSurah(ayah)) rememberPosition(ayah)
+        // Playing a specific ayah abandons any active repeat range.
+        if (startSurah(ayah, preserveRepeatRange = false)) rememberPosition(ayah)
     }
 
     fun playFromWord(ayah: Int, positionMs: Long) {
         val reciter = _uiState.value.currentReciter ?: return
         val np = playerState.value.nowPlaying
         if (np != null && np.surahId == surahId && np.reciterId == reciter.id) {
+            player.clearRepeatRange()
             player.seekToWordAndPlay(ayah, positionMs)
             rememberPosition(ayah)
-        } else if (startSurah(ayah, startPositionMs = positionMs)) {
+        } else if (startSurah(ayah, startPositionMs = positionMs, preserveRepeatRange = false)) {
             rememberPosition(ayah)
         }
     }
