@@ -49,6 +49,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
@@ -964,7 +965,6 @@ fun OrnateSurahTitle(
 @Composable
 fun PageBreak(page: Int, useArabicIndicDigits: Boolean = true) {
     val accents = LocalQuranAccents.current
-    val pageNumberStyle = MaterialTheme.typography.labelSmall
     val pageNumberSize = 12.sp
     val pageNumberColor = accents.gold.copy(alpha = 0.68f)
     Column(
@@ -978,7 +978,7 @@ fun PageBreak(page: Int, useArabicIndicDigits: Boolean = true) {
         ) {
             Text(
                 text = page.toString(),
-                style = pageNumberStyle,
+                style = MaterialTheme.typography.labelSmall,
                 fontSize = pageNumberSize,
                 color = pageNumberColor,
             )
@@ -991,7 +991,12 @@ fun PageBreak(page: Int, useArabicIndicDigits: Boolean = true) {
             Spacer(Modifier.width(8.dp))
             Text(
                 text = if (useArabicIndicDigits) page.toArabicIndic() else page.toString(),
-                style = pageNumberStyle,
+                // Keep the Arabic-Indic digits at the same 12sp as the Western
+                // numeral, but ask for a serif fallback so they stay in the
+                // same family class as the EB Garamond label.
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontFamily = FontFamily.Serif,
+                ),
                 fontSize = pageNumberSize,
                 color = pageNumberColor,
             )
