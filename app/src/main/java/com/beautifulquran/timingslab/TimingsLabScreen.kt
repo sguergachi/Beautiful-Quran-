@@ -34,9 +34,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -203,8 +202,10 @@ private fun LabHeader(
             .fillMaxWidth()
             .padding(horizontal = 4.dp, vertical = 2.dp),
     ) {
-        IconButton(onClick = { viewModel.onExit(); onBack() }) {
-            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+        // The Lab is a sheet that rose over the reader; the chevron lowers it
+        // back onto the exact page it came from. onExit runs in the closer.
+        IconButton(onClick = onBack) {
+            Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Close")
         }
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,

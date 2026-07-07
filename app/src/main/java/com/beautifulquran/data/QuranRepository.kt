@@ -10,6 +10,7 @@ import com.beautifulquran.data.model.Word
 import com.beautifulquran.timingslab.OverrideKey
 import com.beautifulquran.timingslab.TimingOverrides
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
@@ -21,6 +22,12 @@ class QuranRepository(
      * JVM unit tests that don't ship an override store. */
     private val timingOverrides: TimingOverrides? = null,
 ) {
+
+    /** Change signal for the Lab's on-device corrections: emits whenever the
+     * override store changes so callers holding a [timings] snapshot can
+     * re-pull it. Null when constructed without a store (JVM unit tests). */
+    val timingOverridesChanged: StateFlow<Map<OverrideKey, List<Segment>>>?
+        get() = timingOverrides?.overrides
 
     // @Volatile: read/written from Dispatchers.IO workers. Worst case without
     // a lock is one redundant query; the result is identical either way.

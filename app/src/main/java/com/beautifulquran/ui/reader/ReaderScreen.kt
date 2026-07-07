@@ -18,7 +18,6 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
@@ -53,7 +52,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -74,8 +72,10 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.input.ImeAction
@@ -144,9 +144,9 @@ fun ReaderScreen(
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onAyahSelectorExpandedChange: (Boolean) -> Unit = {},
-    /** Opens the Timings Lab on a given (surah, ayah). Press-and-hold on a word
-     *  routes here so the lab starts at that ayah. */
-    onEditTimings: (surahId: Int, ayah: Int) -> Unit = { _, _ -> },
+    /** Opens the Timings Lab in place, over this sheet. Press-and-hold on a
+     *  word routes here so the Lab rises already focused on that exact word. */
+    onEditTimings: (surahId: Int, ayah: Int, wordPosition: Int) -> Unit = { _, _, _ -> },
 ) {
     LaunchedEffect(surahId) { viewModel.load(surahId) }
     DisposableEffect(onAyahSelectorExpandedChange) {
@@ -177,7 +177,7 @@ fun ReaderScreen(
     var followEnabled by remember { mutableStateOf(true) }
     var showRepeatDialog by remember { mutableStateOf(false) }
     var requestedJumpAyah by remember { mutableIntStateOf(0) }
-    var labEntryRequest by remember { mutableStateOf<LabEntryRequest?>(null) }
+    val haptics = LocalHapticFeedback.current
 
     // In-surah English search: matches are ayahs whose translation or any
     // word gloss contains the query.
@@ -760,12 +760,12 @@ fun ReaderScreen(
                                     }
                                 },
                                 onWordLongClick = { word ->
-                                    labEntryRequest = LabEntryRequest(
-                                        surahId = ayah.surahId,
-                                        ayah = ayah.number,
-                                        wordArabic = word.arabic,
-                                        wordPosition = word.position,
-                                    )
+                                    // Straight into the Lab, no confirmation:
+                                    // the hold is the intent, the haptic is
+                                    // the answer, and closing the Lab lands
+                                    // right back on this word.
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onEditTimings(ayah.surahId, ayah.number, word.position)
                                 },
                             )
                         }
@@ -878,55 +878,6 @@ fun ReaderScreen(
         )
     }
 
-    labEntryRequest?.let { req ->
-        LabEntryConfirmDialog(
-            request = req,
-            onDismiss = { labEntryRequest = null },
-            onConfirm = {
-                labEntryRequest = null
-                onEditTimings(req.surahId, req.ayah)
-            },
-        )
-    }
-}
-
-private data class LabEntryRequest(
-    val surahId: Int,
-    val ayah: Int,
-    val wordArabic: String,
-    val wordPosition: Int,
-)
-
-@Composable
-private fun LabEntryConfirmDialog(
-    request: LabEntryRequest,
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit,
-) {
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Edit timings?") },
-        text = {
-            Column {
-                Text(
-                    text = "Open the Timings Lab for Surah ${request.surahId}, Ayah ${request.ayah}?",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = "Word: ${request.wordArabic} (#${request.wordPosition})",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm) { Text("Open Lab") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-    )
 }
 
 private tailrec fun Context.findActivity(): Activity? = when (this) {

@@ -55,8 +55,10 @@ it, and plays — you hear the word and watch whether the ink lands with the
 voice. A small card offers:
 
 * **−50 ms / +50 ms** nudges and a **fine-tune drag strip** (~3 ms per px)
-  for continuous adjustment.
-* **Replay** — re-audition from just before the (new) start.
+  for continuous adjustment. Once a burst of nudges settles (~½ s), the Lab
+  **re-auditions automatically** from just before the new start, so every
+  adjustment is judged by ear without another tap.
+* **Replay** — re-audition on demand from just before the (new) start.
 * **Shift following words too** — applies the nudge to every later mark;
   this is the drift fixer when a whole tail of an ayah is uniformly late.
 * **Delete mark** — removes a spurious pass (e.g. an alignment-noise repeat).
@@ -77,11 +79,19 @@ corrections` empties the store.
 
 ## Where it lives
 
-* **From the reader** (primary): long-press any word in any reading mode →
-  the Lab opens on that exact (surah, ayah). This is the "fix it the moment
-  you notice it" path.
-* **From Settings**: triple-tap the logo (developer unlock) → *Timings Lab*
-  opens on the last-read ayah.
+The Lab is **not a page in the paper stack** — it is a work sheet that rises
+in place over whatever is open (usually the reader) and lowers back onto it.
+Entry and exit never route through Settings.
+
+* **From the reader** (primary): long-press any word in any reading mode —
+  no confirmation, the hold is the intent and a haptic is the answer. The
+  sheet rises on that exact (surah, ayah) with **the pressed word already
+  selected and auditioning**, so the fix loop starts without another tap.
+  Back (or the ▾ chevron) lowers the sheet onto the same reader page, which
+  already reflects the correction — the reader re-pulls fused timings the
+  moment the override store changes.
+* **From Settings**: long-press the logo (developer unlock) → *Timings Lab*
+  rises over Settings on the last-read ayah.
 * The Lab edits the reciter currently selected in Settings and uses the
   shared `PlayerController`/`PlaybackService` (one-item playlist, ayah loop
   on by default in Listen mode), so caching, audio focus and speed behave
@@ -119,8 +129,8 @@ in-memory working copy, so you see edits *before* they're persisted.
 
 ```
 ┌──────────────────────────────────────────────┐
-│ ‹   Al-Baqarah · ‹ Ayah 14 ›          ⋯      │  header: nav, reciter,
-│         Mishary Alafasy · edited             │  overflow (submit/copy/reset)
+│ ▾   Al-Baqarah · ‹ Ayah 14 ›          ⋯      │  header: close (lowers the
+│         Mishary Alafasy · edited             │  sheet), reciter, overflow
 ├──────────────────────────────────────────────┤
 │                                              │
 │          ← the real AyahBlock →              │  live karaoke preview;
