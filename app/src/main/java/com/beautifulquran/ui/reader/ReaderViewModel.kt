@@ -9,6 +9,7 @@ import com.beautifulquran.data.model.Reciter
 import com.beautifulquran.data.model.Segment
 import com.beautifulquran.data.model.SurahContent
 import com.beautifulquran.domain.HighlightEngine
+import com.beautifulquran.playback.NowPlaying
 import com.beautifulquran.playback.PlayerController
 import com.beautifulquran.playback.PlayerUiState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
