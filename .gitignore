@@ -13,3 +13,4 @@ captures/
 # as app/src/main/assets/quran.db so normal app builds are offline.
 tools/.cache/
 __pycache__/
+release.keystore
