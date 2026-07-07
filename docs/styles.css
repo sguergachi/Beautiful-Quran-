@@ -1,0 +1,464 @@
+/* Beautiful Quran website — paper design system.
+ *
+ * The metaphor is a single sheet of paper: no cards, no elevation, no dividers.
+ * Hierarchy comes from spacing, size, and ink strength. Ornament is drawn,
+ * gilded, and used with restraint. Everything is set in the same serif family
+ * the app uses.
+ */
+
+:root {
+  --paper: #faf3e8;
+  --surface: #fffbf2;
+  --surface-high: #f2e7d5;
+  --ink: #1c1b18;
+  --ink-muted: #6e6858;
+  --green: #0e5c4a;
+  --green-dim: #9bb8af;
+  --green-pale: #d7e8e1;
+  --green-faint: #e8f3ee;
+  --gold: #b8901c;
+  --gold-bright: #e9cd7a;
+  --gold-deep: #8a6b1e;
+
+  --emboss-dark: rgba(0, 0, 0, 0.14);
+  --emboss-light: rgba(255, 255, 255, 0.35);
+
+  --body: 'EB Garamond', Georgia, 'Times New Roman', serif;
+  --display: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  --arabic: 'Noto Naskh Arabic', 'Amiri', 'Scheherazade New', 'Times New Roman', serif;
+
+  --radius: 20px;
+  --max-width: 640px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0a0b0c;
+    --surface: #111315;
+    --surface-high: #1a1d20;
+    --ink: #e8e2d5;
+    --ink-muted: #97917f;
+    --green: #7fb8a4;
+    --green-dim: #568276;
+    --green-pale: #1a1d20;
+    --green-faint: #111315;
+    --gold: #d9b44a;
+    --gold-bright: #edd188;
+    --gold-deep: #9a7b2a;
+
+    --emboss-dark: rgba(0, 0, 0, 0.4);
+    --emboss-light: rgba(255, 255, 255, 0.12);
+  }
+}
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 18px;
+}
+
+body {
+  font-family: var(--body);
+  font-size: 17px;
+  line-height: 26px;
+  color: var(--ink);
+  background: var(--paper);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-variant-numeric: oldstyle-nums;
+  font-feature-settings: 'kern' 1, 'liga' 1, 'onum' 1;
+}
+
+a {
+  color: var(--green);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.2s;
+}
+
+a:hover {
+  color: var(--ink);
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* The page is the sheet. */
+.page {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 28px;
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 0 20px;
+  }
+}
+
+.sheet {
+  padding: 78px 0 96px;
+  /* Edges dissolve into the paper, like ink fading off the sheet. */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 48px,
+    black calc(100% - 48px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 48px,
+    black calc(100% - 48px),
+    transparent 100%
+  );
+}
+
+@media (max-width: 600px) {
+  .sheet {
+    padding: 62px 0 72px;
+  }
+}
+
+/* Header */
+.hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.hero-text {
+  min-width: 0;
+}
+
+.arabic-title {
+  font-family: var(--arabic);
+  font-size: 36px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.app-title {
+  font-family: var(--display);
+  font-size: 2.4rem;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.subtitle {
+  font-size: 15px;
+  line-height: 22px;
+  font-style: italic;
+  color: var(--ink-muted);
+  margin-top: 4px;
+}
+
+.rosette {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  margin-top: 6px;
+}
+
+@media (max-width: 460px) {
+  .app-title {
+    font-size: 2rem;
+  }
+
+  .arabic-title {
+    font-size: 30px;
+  }
+
+  .rosette {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+.tagline {
+  font-family: var(--display);
+  font-size: 1.15rem;
+  font-style: italic;
+  color: var(--green);
+  margin: 20px 0 24px;
+}
+
+p {
+  margin-bottom: 1em;
+}
+
+h2 {
+  font-family: var(--display);
+  font-size: 1.45rem;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-top: 2.4em;
+  margin-bottom: 0.55em;
+  color: var(--ink);
+}
+
+h2:first-of-type {
+  margin-top: 0;
+}
+
+/* Feature list — app home rows: a quiet gold number, then the line. */
+.feature-list {
+  list-style: none;
+  counter-reset: feature;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 32px;
+  margin: 24px 0 28px;
+}
+
+.feature-list li {
+  position: relative;
+  padding-left: 26px;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.feature-list li::before {
+  counter-increment: feature;
+  content: counter(feature);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 20px;
+  font-size: 13px;
+  line-height: 22px;
+  color: var(--gold);
+  opacity: 0.75;
+}
+
+@media (max-width: 560px) {
+  .feature-list {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  margin: 28px 0 32px;
+}
+
+.btn {
+  display: inline-block;
+  font-family: var(--body);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 22px;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: var(--green);
+  padding: 12px 28px;
+  text-decoration: none;
+  border-radius: var(--radius);
+  transition: background 0.25s;
+}
+
+.btn:hover {
+  color: #fff;
+  background: #0a4a3b;
+}
+
+@media (prefers-color-scheme: dark) {
+  .btn:hover {
+    background: #6a9e8b;
+  }
+}
+
+.btn-secondary {
+  display: inline-block;
+  font-family: var(--body);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 22px;
+  color: var(--green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--green-dim);
+  padding: 10px 4px;
+  transition: color 0.2s, text-decoration-color 0.2s;
+}
+
+.btn-secondary:hover {
+  color: var(--ink);
+  text-decoration-color: var(--green);
+}
+
+@media (max-width: 460px) {
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .btn,
+  .btn-secondary {
+    text-align: center;
+  }
+}
+
+/* Screenshots */
+.screenshots {
+  display: flex;
+  gap: 16px;
+  margin: 24px 0 32px;
+  overflow-x: auto;
+  padding: 4px 4px 24px;
+  scroll-snap-type: x mandatory;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 12px,
+    black calc(100% - 12px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 12px,
+    black calc(100% - 12px),
+    transparent 100%
+  );
+}
+
+.screenshots figure {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  width: 180px;
+}
+
+.screenshots img {
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  background: var(--surface-high);
+}
+
+.screenshots figcaption {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 17px;
+  letter-spacing: 0.3px;
+  text-align: center;
+  color: var(--ink-muted);
+}
+
+.screenshots {
+  scrollbar-width: none;
+}
+
+.screenshots::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .screenshots figure {
+    width: 156px;
+  }
+}
+
+/* Attribution block */
+.attribution {
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--ink-muted);
+  margin: 24px 0;
+}
+
+.attribution strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.attribution p {
+  margin-bottom: 0.75em;
+}
+
+/* Footer */
+.footer-links {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 32px;
+}
+
+.footer-links a {
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--ink-muted);
+  text-decoration: none;
+}
+
+.footer-links a:hover {
+  color: var(--green);
+}
+
+.footer-note {
+  text-align: center;
+  padding: 8px 0 48px;
+  font-size: 13px;
+  line-height: 17px;
+  letter-spacing: 0.4px;
+  color: var(--ink-muted);
+}
+
+/* Privacy page */
+.back-link {
+  display: inline-block;
+  margin-top: 32px;
+  font-size: 15px;
+  font-style: italic;
+  color: var(--ink-muted);
+  text-decoration: none;
+}
+
+.back-link:hover {
+  color: var(--green);
+}
+
+.privacy h1 {
+  font-family: var(--display);
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-bottom: 0.15em;
+}
+
+.privacy ul {
+  margin-bottom: 1em;
+  padding-left: 1.3em;
+}
+
+.privacy li {
+  margin-bottom: 0.4em;
+}
+
+.privacy code {
+  font-family: var(--body);
+  font-size: 0.9em;
+  color: var(--ink);
+  background: var(--surface-high);
+  padding: 0 0.2em;
+  border-radius: 4px;
+}
