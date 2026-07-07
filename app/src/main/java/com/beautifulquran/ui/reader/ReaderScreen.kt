@@ -334,10 +334,14 @@ fun ReaderScreen(
 
     val scrolledAyah = remember(readerItems) {
         derivedStateOf {
-            val item = readerItems.getOrNull(listState.firstVisibleItemIndex)
-            when (item) {
-                is LazyItem.AyahItem -> item.ayahIndex + 1
-                else -> 1
+            val visibleAyahItemInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull {
+                readerItems.getOrNull(it.index) is LazyItem.AyahItem
+            }
+            if (visibleAyahItemInfo != null) {
+                val item = readerItems[visibleAyahItemInfo.index] as LazyItem.AyahItem
+                item.ayahIndex + 1
+            } else {
+                1
             }
         }
     }
