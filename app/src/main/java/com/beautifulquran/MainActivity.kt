@@ -166,9 +166,13 @@ private fun PaperStackApp() {
         scope.launch { settleTo(layer) }
     }
 
-    fun openTimingsLab() {
+    fun openTimingsLab(surahId: Int? = null, ayah: Int? = null) {
         labEntryRequested = true
-        timingsLabViewModel.initFromLastOpened()
+        if (surahId != null && ayah != null) {
+            timingsLabViewModel.changeTarget(surahId, ayah)
+        } else {
+            timingsLabViewModel.initFromLastOpened()
+        }
         animateTo(labLayer)
     }
 
@@ -236,7 +240,7 @@ private fun PaperStackApp() {
                 onBack = {
                     animateTo(if (selectedSurahId == 0) COVER_LAYER else AYAH_LAYER)
                 },
-                onOpenTimingsLab = ::openTimingsLab,
+                onOpenTimingsLab = { openTimingsLab() },
             )
         }
 
@@ -271,6 +275,7 @@ private fun PaperStackApp() {
                         onBack = { animateTo(COVER_LAYER) },
                         onOpenSettings = { animateTo(SETTINGS_LAYER) },
                         onAyahSelectorExpandedChange = { ayahSelectorExpanded = it },
+                        onEditTimings = { sid, a -> openTimingsLab(sid, a) },
                     )
                 }
             }

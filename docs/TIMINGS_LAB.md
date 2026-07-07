@@ -25,10 +25,16 @@ the app keeps working offline.
 
 ## Where it lives
 
-* **Entry point**: Settings → tap the app logo **three times** (the existing
-  developer unlock) → "Timings Lab" row in the Developer section opens the
-  paper stack one more page deeper (it sits beneath the Settings sheet, just
-  like Settings sits beneath the Reader).
+* **Entry points** (two):
+  - **From the reader**: long-press any word in any ayah. The Lab opens on that
+    exact (surah, ayah) — perfect for "I just spotted a mistimed word, let me
+    fix it now." Works in all three reading modes (Arabic+gloss, English-only,
+    connected/ ResponsiveHafsAyah).
+  - **From Settings**: Settings → tap the app logo **three times** (the existing
+    developer unlock) → "Timings Lab" row in the Developer section opens the
+    paper stack one more page deeper (it sits beneath the Settings sheet, just
+    like Settings sits beneath the Reader). Resume on the last surah/ayah you
+    visited in the reader.
 * **Same reciter as the reader**: the Lab edits the reciter currently selected
   in Settings; switching reciters clears the lab panel and reloads segments.
 * **Same playback service**: the Lab uses the existing `PlaybackService`

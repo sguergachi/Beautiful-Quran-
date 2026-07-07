@@ -283,6 +283,7 @@ private fun Modifier.wordUnitBehavior(
     active: Boolean,
     keepInView: Boolean,
     onClick: (() -> Unit)?,
+    onLongClick: (() -> Unit)? = null,
 ): Modifier {
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val density = LocalDensity.current
@@ -304,7 +305,15 @@ private fun Modifier.wordUnitBehavior(
     return this
         .bringIntoViewRequester(bringIntoViewRequester)
         .onSizeChanged { wordSize = it }
-        .let { m -> if (onClick != null) m.quietClickable(onClick = onClick) else m }
+        .let { m ->
+            when {
+                onClick != null && onLongClick != null ->
+                    m.quietClickable(onLongClick = onLongClick, onClick = onClick)
+                onClick != null -> m.quietClickable(onClick = onClick)
+                onLongClick != null -> m.quietClickable(onLongClick = onLongClick, onClick = {})
+                else -> m
+            }
+        }
 }
 
 /** The two-layer karaoke text every word unit renders: the base ink, plus an
@@ -349,12 +358,13 @@ fun WordUnit(
     searchHit: Boolean,
     keepInView: Boolean,
     onClick: (() -> Unit)?,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val highlight = rememberWordHighlight(state, repeat, sweepMs)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .wordUnitBehavior(highlight.isActive, keepInView, onClick)
+            .wordUnitBehavior(highlight.isActive, keepInView, onClick, onLongClick)
             .padding(horizontal = 5.dp, vertical = 2.dp),
     ) {
         HighlightLayeredText(
@@ -407,6 +417,7 @@ fun ConnectedArabicWordUnit(
     sweepMs: Int?,
     keepInView: Boolean,
     onClick: (() -> Unit)?,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val highlight = rememberWordHighlight(state, repeat, sweepMs)
     HighlightLayeredText(
@@ -416,7 +427,7 @@ fun ConnectedArabicWordUnit(
         color = MaterialTheme.colorScheme.onBackground,
         style = ArabicWordStyle.copy(fontSize = ArabicWordStyle.fontSize * fontScale),
         modifier = Modifier
-            .wordUnitBehavior(highlight.isActive, keepInView, onClick)
+            .wordUnitBehavior(highlight.isActive, keepInView, onClick, onLongClick)
             .padding(horizontal = 4.dp, vertical = 3.dp),
     )
 }
@@ -432,6 +443,7 @@ fun EnglishWordUnit(
     searchHit: Boolean,
     keepInView: Boolean,
     onClick: (() -> Unit)?,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val highlight = rememberWordHighlight(state, repeat, sweepMs)
     HighlightLayeredText(
@@ -450,7 +462,7 @@ fun EnglishWordUnit(
             lineHeight = 1.55.em,
         ),
         modifier = Modifier
-            .wordUnitBehavior(highlight.isActive, keepInView, onClick)
+            .wordUnitBehavior(highlight.isActive, keepInView, onClick, onLongClick)
             .padding(horizontal = 3.dp, vertical = 2.dp),
     )
 }
@@ -510,12 +522,19 @@ private fun Modifier.wordTapTarget(
     layoutResult: TextLayoutResult?,
     hitSlopPx: Float,
     onWordClick: (Word) -> Unit,
+    onWordLongClick: ((Word) -> Unit)? = null,
     onMiss: (() -> Unit)? = null,
-): Modifier = pointerInput(ranges, words, layoutResult) {
-    detectTapGestures { tap ->
-        val wordIndex = layoutResult?.wordIndexAt(tap, ranges, hitSlopPx) ?: -1
-        if (wordIndex >= 0) onWordClick(words[wordIndex]) else onMiss?.invoke()
-    }
+): Modifier = pointerInput(ranges, words, layoutResult, onWordLongClick) {
+    detectTapGestures(
+        onTap = { tap ->
+            val wordIndex = layoutResult?.wordIndexAt(tap, ranges, hitSlopPx) ?: -1
+            if (wordIndex >= 0) onWordClick(words[wordIndex]) else onMiss?.invoke()
+        },
+        onLongPress = if (onWordLongClick == null) null else { pos ->
+            val wordIndex = layoutResult?.wordIndexAt(pos, ranges, hitSlopPx) ?: -1
+            if (wordIndex >= 0) onWordLongClick(words[wordIndex])
+        },
+    )
 }
 
 @Composable
@@ -527,6 +546,7 @@ private fun ResponsiveHafsAyah(
     activeSweepMs: Int?,
     onAyahClick: () -> Unit,
     onWordClick: ((Word) -> Unit)?,
+    onWordLongClick: ((Word) -> Unit)? = null,
 ) {
     val palette = rememberWordInkPalette()
     val ayahMarkInk = LocalQuranAccents.current.gold
@@ -579,6 +599,7 @@ private fun ResponsiveHafsAyah(
                         layoutResult = layoutResult,
                         hitSlopPx = hitSlopPx,
                         onWordClick = onWordClick,
+                        onWordLongClick = onWordLongClick,
                         onMiss = onAyahClick,
                     )
                 },
@@ -664,6 +685,7 @@ fun AyahBlock(
     searchQuery: String? = null,
     keepActiveWordInView: Boolean = false,
     onWordClick: ((Word) -> Unit)?,
+    onWordLongClick: ((Word) -> Unit)? = null,
     onAyahClick: () -> Unit,
 ) {
     fun hits(word: Word) =
@@ -738,6 +760,7 @@ fun AyahBlock(
                         searchHit = hits(word),
                         keepInView = keepActiveWordInView && wordState == WordVisualState.Active,
                         onClick = onWordClick?.let { handler -> { handler(word) } },
+                        onLongClick = onWordLongClick?.let { handler -> { handler(word) } },
                     )
                 }
                 Box(
@@ -772,6 +795,7 @@ fun AyahBlock(
                             searchHit = hits(word),
                             keepInView = keepActiveWordInView && wordState == WordVisualState.Active,
                             onClick = onWordClick?.let { handler -> { handler(word) } },
+                            onLongClick = onWordLongClick?.let { handler -> { handler(word) } },
                         )
                     }
                     ArabicAyahNumberUnit(ayah.number, fontScale)
@@ -787,6 +811,7 @@ fun AyahBlock(
                     activeSweepMs = sweepMs,
                     onAyahClick = onAyahClick,
                     onWordClick = onWordClick?.let { handler -> { word -> handler(word) } },
+                    onWordLongClick = onWordLongClick?.let { handler -> { word -> handler(word) } },
                 )
             }
         }
