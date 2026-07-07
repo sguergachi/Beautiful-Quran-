@@ -5,6 +5,7 @@ import com.beautifulquran.data.QuranDatabase
 import com.beautifulquran.data.QuranRepository
 import com.beautifulquran.data.SettingsRepository
 import com.beautifulquran.playback.PlayerController
+import com.beautifulquran.timingslab.TimingOverrides
 
 class QuranApp : Application() {
 
@@ -14,11 +15,15 @@ class QuranApp : Application() {
         private set
     lateinit var player: PlayerController
         private set
+    lateinit var timingOverrides: TimingOverrides
+        private set
 
     override fun onCreate() {
         super.onCreate()
-        repository = QuranRepository(QuranDatabase(this))
+        val overrides = TimingOverrides(this)
+        repository = QuranRepository(QuranDatabase(this), overrides)
         settings = SettingsRepository(this)
         player = PlayerController(this)
+        timingOverrides = overrides
     }
 }

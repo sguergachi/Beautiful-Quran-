@@ -142,6 +142,9 @@ fun ReaderScreen(
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onAyahSelectorExpandedChange: (Boolean) -> Unit = {},
+    /** Opens the Timings Lab on a given (surah, ayah). Press-and-hold on a word
+     *  routes here so the lab starts at that ayah. */
+    onEditTimings: (surahId: Int, ayah: Int) -> Unit = { _, _ -> },
 ) {
     LaunchedEffect(surahId) { viewModel.load(surahId) }
     DisposableEffect(onAyahSelectorExpandedChange) {
@@ -752,6 +755,9 @@ fun ReaderScreen(
                                         followEnabled = true
                                         viewModel.playFromAyah(ayah.number)
                                     }
+                                },
+                                onWordLongClick = {
+                                    onEditTimings(ayah.surahId, ayah.number)
                                 },
                             )
                         }

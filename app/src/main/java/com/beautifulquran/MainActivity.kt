@@ -57,6 +57,8 @@ import com.beautifulquran.ui.reader.ReaderScreen
 import com.beautifulquran.ui.reader.ReaderViewModel
 import com.beautifulquran.ui.settings.SettingsScreen
 import com.beautifulquran.ui.settings.SettingsViewModel
+import com.beautifulquran.timingslab.TimingsLabScreen
+import com.beautifulquran.timingslab.TimingsLabViewModel
 import com.beautifulquran.ui.theme.BeautifulQuranTheme
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -118,14 +120,18 @@ private fun PaperStackApp() {
     val homeViewModel: HomeViewModel = viewModel(factory = AppViewModelFactory)
     val readerViewModel: ReaderViewModel = viewModel(factory = AppViewModelFactory)
     val settingsViewModel: SettingsViewModel = viewModel(factory = AppViewModelFactory)
+    val timingsLabViewModel: TimingsLabViewModel = viewModel(factory = AppViewModelFactory)
 
     var selectedSurahId by rememberSaveable { mutableIntStateOf(0) }
     var selectedStartAyah by rememberSaveable { mutableIntStateOf(0) }
     var settledLayer by rememberSaveable { mutableIntStateOf(COVER_LAYER) }
     var ayahSelectorExpanded by remember { mutableStateOf(false) }
+    var labEntryRequested by remember { mutableStateOf(false) }
     val stackPosition = remember { Animatable(settledLayer.toFloat()) }
     val scope = rememberCoroutineScope()
     val settingsLayer = if (selectedSurahId == 0) AYAH_LAYER else SETTINGS_LAYER
+    val labLayer = settingsLayer + 1
+    val deepestLayer = if (labEntryRequested) labLayer else settingsLayer
 
     val context = LocalContext.current
     val pageTurnSounds = remember { PageTurnSounds(context) }
@@ -139,7 +145,7 @@ private fun PaperStackApp() {
     }
 
     suspend fun settleTo(layer: Int) {
-        val boundedLayer = layer.coerceIn(COVER_LAYER, settingsLayer)
+        val boundedLayer = layer.coerceIn(COVER_LAYER, deepestLayer)
         val distance = abs(boundedLayer - stackPosition.value)
         settledLayer = boundedLayer
         stackPosition.animateTo(
@@ -150,14 +156,31 @@ private fun PaperStackApp() {
                 easing = StackMotionEasing,
             ),
         )
+        // The Lab page is rendered conditionally; once we settle on it pull it
+        // into the composition tree, and once we settle away from it tear down
+        // its leaf views.
+        labEntryRequested = boundedLayer >= labLayer
     }
 
     fun animateTo(layer: Int) {
         scope.launch { settleTo(layer) }
     }
 
+    fun openTimingsLab(surahId: Int? = null, ayah: Int? = null) {
+        labEntryRequested = true
+        if (surahId != null && ayah != null) {
+            timingsLabViewModel.changeTarget(surahId, ayah)
+        } else {
+            timingsLabViewModel.initFromLastOpened()
+        }
+        animateTo(labLayer)
+    }
+
     BackHandler(enabled = settledLayer > COVER_LAYER || stackPosition.value > COVER_LAYER + 0.01f) {
-        animateTo((stackPosition.value.roundToInt() - 1).coerceAtLeast(COVER_LAYER))
+        val currentDepth = stackPosition.value.roundToInt()
+        val target = if (currentDepth >= labLayer) settingsLayer
+            else (currentDepth - 1).coerceAtLeast(COVER_LAYER)
+        animateTo(target)
     }
 
     LaunchedEffect(selectedSurahId) {
@@ -175,7 +198,7 @@ private fun PaperStackApp() {
                 gestureKey = selectedSurahId,
                 position = { stackPosition.value },
                 maxLayer = {
-                    if (selectedSurahId == 0 && stackPosition.value <= COVER_LAYER + 0.01f) COVER_LAYER else settingsLayer
+                    if (selectedSurahId == 0 && stackPosition.value <= COVER_LAYER + 0.01f) COVER_LAYER else deepestLayer
                 },
                 gesturesBlocked = { ayahSelectorExpanded },
                 onDragStart = {
@@ -185,7 +208,7 @@ private fun PaperStackApp() {
                     val maxLayer = if (selectedSurahId == 0 && dragStartPosition <= COVER_LAYER + 0.01f) {
                         COVER_LAYER
                     } else {
-                        settingsLayer
+                        deepestLayer
                     }
                     // A single gesture may advance at most one layer, so a hard swipe
                     // from the cover lands on the reader instead of overshooting to settings.
@@ -217,7 +240,24 @@ private fun PaperStackApp() {
                 onBack = {
                     animateTo(if (selectedSurahId == 0) COVER_LAYER else AYAH_LAYER)
                 },
+                onOpenTimingsLab = { openTimingsLab() },
             )
+        }
+
+        if (labEntryRequested || page > settingsLayer - 0.01f) {
+            key("lab") {
+                PaperPage(
+                    layer = PaperLayer.Lab,
+                    stackPosition = page,
+                    settingsLayer = settingsLayer,
+                    modifier = Modifier.zIndex(0.6f),
+                ) {
+                    TimingsLabScreen(
+                        viewModel = timingsLabViewModel,
+                        onBack = { animateTo(settingsLayer) },
+                    )
+                }
+            }
         }
 
         if (selectedSurahId != 0) {
@@ -235,6 +275,7 @@ private fun PaperStackApp() {
                         onBack = { animateTo(COVER_LAYER) },
                         onOpenSettings = { animateTo(SETTINGS_LAYER) },
                         onAyahSelectorExpandedChange = { ayahSelectorExpanded = it },
+                        onEditTimings = { sid, a -> openTimingsLab(sid, a) },
                     )
                 }
             }
@@ -262,6 +303,7 @@ private fun PaperStackApp() {
 
 private enum class PaperLayer {
     Settings,
+    Lab,
     Ayah,
     Cover,
 }
@@ -277,6 +319,7 @@ private fun PaperPage(
     val turning = when (layer) {
         PaperLayer.Cover -> stackPosition.coerceIn(0f, 1f)
         PaperLayer.Ayah -> (stackPosition - 1f).coerceIn(0f, 1f)
+        PaperLayer.Lab -> (stackPosition - settingsLayer).coerceIn(0f, 1f)
         PaperLayer.Settings -> 0f
     }
     Box(
@@ -317,6 +360,18 @@ private fun Modifier.paperLayerTransform(
             translationX = width * 0.035f * (1f - reveal)
             scaleX = 0.97f + 0.03f * reveal
             scaleY = 0.97f + 0.03f * reveal
+        }
+        // The Lab slides in from the right over Settings, mirroring the way a
+        // stacked sheet enters from below. Offscreen to the right while the
+        // stack rests at Settings depth, in place once the stack reaches one
+        // layer deeper.
+        PaperLayer.Lab -> {
+            val reveal = (stackPosition - settingsLayer.toFloat()).coerceIn(0f, 1f)
+            translationX = width * (1f - reveal)
+            rotationY = -3f * (1f - reveal)
+            scaleX = 0.985f + 0.015f * reveal
+            scaleY = 0.985f + 0.015f * reveal
+            shadowElevation = 16f * reveal
         }
     }
 }

@@ -1,5 +1,7 @@
 package com.beautifulquran.ui.theme
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -11,19 +13,35 @@ import androidx.compose.ui.semantics.Role
  * The app-wide tap: no ripple, no Material ink — content answers with motion
  * instead, preserving the paper feel (docs/DESIGN.md). Every tappable element
  * on a sheet should use this rather than a raw [clickable].
+ *
+ * Pass [onLongClick] to handle press-and-hold; the long-press carries the
+ * same quiet treatment (no ink ripple).
  */
+@OptIn(ExperimentalFoundationApi::class)
 fun Modifier.quietClickable(
     enabled: Boolean = true,
     role: Role? = null,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ): Modifier =
-    clickable(
-        interactionSource = null,
-        indication = null,
-        enabled = enabled,
-        role = role,
-        onClick = onClick,
-    )
+    if (onLongClick == null) {
+        clickable(
+            interactionSource = null,
+            indication = null,
+            enabled = enabled,
+            role = role,
+            onClick = onClick,
+        )
+    } else {
+        combinedClickable(
+            interactionSource = null,
+            indication = null,
+            enabled = enabled,
+            role = role,
+            onLongClick = onLongClick,
+            onClick = onClick,
+        )
+    }
 
 /**
  * Consumes every touch that lands on this element, so content beneath never
