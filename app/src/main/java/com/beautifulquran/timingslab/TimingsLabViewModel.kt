@@ -53,8 +53,10 @@ data class TimingsLabUiState(
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
     val speed: Float = 1f,
-    /** Marks dropped in the current record pass (enables Undo). */
+    /** Marks dropped in the current record pass (enables the in-pass Undo). */
     val recordedMarks: Int = 0,
+    /** True when there's a prior edit state to revert to via the Undo button. */
+    val canUndo: Boolean = false,
     val error: String? = null,
 )
 
@@ -91,6 +93,15 @@ class TimingsLabViewModel(
     /** Marks of the in-flight record pass in tap order (kept sorted because
      * the playhead only moves forward between rewinds). */
     private val recordMarks = mutableListOf<Segment>()
+
+    /** Snapshots of [TimingsLabUiState.passes] before each discrete edit, so the
+     * Undo button can step back through them. Cleared when the ayah changes. */
+    private val undoStack = ArrayDeque<List<Segment>>()
+
+    /** Marks captured when a slide begins but not yet committed to [undoStack] —
+     * it lands there only if the slide actually moves the mark, so an empty
+     * grab never leaves a no-op Undo step. */
+    private var pendingUndo: List<Segment>? = null
 
     /** Working copy as it was when Re-sync started; restored on cancel. */
     private var recordBackup: List<Segment> = emptyList()
@@ -206,6 +217,8 @@ class TimingsLabViewModel(
         auditionJob?.cancel()
         edited = false
         recordMarks.clear()
+        undoStack.clear()
+        pendingUndo = null
         _activeWord.value = null
         _ui.value = TimingsLabUiState(
             isLoading = true,
@@ -396,6 +409,8 @@ class TimingsLabViewModel(
         }
         val passes = withDerivedEnds(recordMarks.toList(), st.durationMs)
         recordMarks.clear()
+        // Undo after a re-sync reverts to whatever the ayah held before it.
+        pushUndo(recordBackup)
         _ui.value = st.copy(mode = LabMode.LISTEN, passes = passes, recordedMarks = 0)
         persistNow()
         player.setRepeatRange(st.ayah, st.ayah, lastMarkEnd(labPasses = passes))
@@ -453,6 +468,36 @@ class TimingsLabViewModel(
         _ui.value = _ui.value.copy(shiftFollowing = enabled)
     }
 
+    // ── Undo ────────────────────────────────────────────────────────────────
+
+    /** Snapshots the current marks so the next edit can be reverted. */
+    private fun pushUndo(snapshot: List<Segment> = _ui.value.passes) {
+        undoStack.addLast(snapshot)
+        while (undoStack.size > UNDO_LIMIT) undoStack.removeFirst()
+        if (!_ui.value.canUndo) _ui.value = _ui.value.copy(canUndo = true)
+    }
+
+    /** Called at the start of a slide: arms an Undo snapshot that is only kept
+     * if the drag actually moves the mark (committed on the first real nudge),
+     * so one Undo reverts the whole drag, not each pixel of it. */
+    fun beginAdjust() {
+        pendingUndo = _ui.value.passes
+    }
+
+    /** Reverts the most recent edit (a slide, an add-repeat, a delete, a
+     * re-sync, or a reset). */
+    fun undo() {
+        val prev = undoStack.removeLastOrNull() ?: return
+        auditionJob?.cancel()
+        edited = true
+        _ui.value = _ui.value.copy(
+            passes = prev,
+            selectedPass = _ui.value.selectedPass?.takeIf { it in prev.indices },
+            canUndo = undoStack.isNotEmpty(),
+        )
+        persistNow()
+    }
+
     /** Moves the selected mark's start by [deltaMs] (and, with shiftFollowing,
      * every later mark too). Clamped so marks never reorder. */
     fun nudgeSelected(deltaMs: Long) {
@@ -470,6 +515,8 @@ class TimingsLabViewModel(
             deltaMs.coerceIn(floor - pass.startMs, (ceil - pass.startMs).coerceAtLeast(floor - pass.startMs))
         }
         if (delta == 0L) return
+        // First real movement of this slide: commit the armed Undo snapshot.
+        pendingUndo?.let { pushUndo(it); pendingUndo = null }
         val moved = passes.mapIndexed { j, p ->
             when {
                 j < i || (!st.shiftFollowing && j > i) -> p
@@ -493,6 +540,7 @@ class TimingsLabViewModel(
         val st = _ui.value
         val i = st.selectedPass ?: return
         val sel = st.passes.getOrNull(i) ?: return
+        pushUndo()
         val seed = maxOf(sel.startMs + REPEAT_SEED_GAP_MS, st.positionMs)
         val ceil = st.durationMs.takeIf { it > 0L }?.minus(MIN_MARK_GAP_MS)
             ?: (seed + PROVISIONAL_MARK_MS)
@@ -513,6 +561,7 @@ class TimingsLabViewModel(
         val i = st.selectedPass ?: return
         if (i !in st.passes.indices) return
         auditionJob?.cancel()
+        pushUndo()
         edited = true
         _ui.value = st.copy(
             passes = withDerivedEnds(st.passes.filterIndexed { j, _ -> j != i }, st.durationMs),
@@ -564,6 +613,7 @@ class TimingsLabViewModel(
     fun resetOverride() {
         val st = _ui.value
         val reciter = st.reciter ?: return
+        pushUndo()
         overrides.clear(OverrideKey(reciter.id, st.surahId, st.ayah))
         edited = false
         viewModelScope.launch {
@@ -628,6 +678,8 @@ class TimingsLabViewModel(
          * playhead isn't already past it. */
         private const val REPEAT_SEED_GAP_MS = 500L
         private const val AUDITION_LEAD_MS = 800L
+        /** Depth of the Undo history kept per ayah. */
+        private const val UNDO_LIMIT = 40
         /** Quiet gap after the last nudge before the automatic re-audition. */
         private const val NUDGE_AUDITION_MS = 550L
         private const val UNDO_REWIND_MS = 1_200L

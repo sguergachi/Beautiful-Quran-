@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -61,8 +62,10 @@ import com.beautifulquran.timingslab.TimingsLabScreen
 import com.beautifulquran.timingslab.TimingsLabViewModel
 import com.beautifulquran.ui.theme.BeautifulQuranTheme
 import com.beautifulquran.ui.theme.InkRevealOverlay
+import com.beautifulquran.ui.theme.LocalQuranAccents
+import com.beautifulquran.ui.theme.TimingsLabAccents
 import com.beautifulquran.ui.theme.absorbPointerEvents
-import com.beautifulquran.ui.theme.playbackNotificationColorScheme
+import com.beautifulquran.ui.theme.timingsLabColorScheme
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -295,21 +298,26 @@ private fun PaperStackApp(themeMode: ThemeMode) {
         // opening a hole back to the exact page it came from. The contrasting
         // palette (a dark workbench on paper, and vice-versa) is what makes the
         // bloom read against the reader, which shares the reader's own colours.
-        val labColors = playbackNotificationColorScheme(themeMode)
+        val labColors = timingsLabColorScheme(themeMode)
         InkRevealOverlay(
             visible = labVisible,
             backgroundColor = labColors.background,
             modifier = Modifier.zIndex(3f),
         ) {
+            // The workbench is always a dark contrasting surface, so it takes
+            // the dark accent set too — otherwise the reader's light-tuned gold
+            // washes out on the green/night background.
             MaterialTheme(colorScheme = labColors, typography = MaterialTheme.typography) {
-                Box(Modifier.fillMaxSize()) {
-                    // Opaque workbench: touches on its quiet areas land here,
-                    // never on the reader resting beneath.
-                    Box(Modifier.matchParentSize().absorbPointerEvents())
-                    TimingsLabScreen(
-                        viewModel = timingsLabViewModel,
-                        onBack = ::closeTimingsLab,
-                    )
+                CompositionLocalProvider(LocalQuranAccents provides TimingsLabAccents) {
+                    Box(Modifier.fillMaxSize()) {
+                        // Opaque workbench: touches on its quiet areas land here,
+                        // never on the reader resting beneath.
+                        Box(Modifier.matchParentSize().absorbPointerEvents())
+                        TimingsLabScreen(
+                            viewModel = timingsLabViewModel,
+                            onBack = ::closeTimingsLab,
+                        )
+                    }
                 }
             }
         }

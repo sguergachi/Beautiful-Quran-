@@ -38,6 +38,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.MoreHoriz
@@ -81,20 +82,19 @@ import com.beautifulquran.ui.theme.ArabicWordStyle
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.QuranAccents
 import com.beautifulquran.ui.theme.quietClickable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToLong
 
-/** Milliseconds spanned by the slide bar / timeline at zoom 0 (coarse). Not
- * the true audio length — just the travel a full-width drag covers before the
- * view zooms in, so even long ayahs move at a sane coarse rate. */
-private const val FULL_SPAN_HINT_MS = 6_000f
-/** Milliseconds spanned at deepest zoom — a ~half-second window across the
- * whole bar gives sub-millisecond-per-pixel placement. */
-private const val MIN_ZOOM_SPAN_MS = 550f
-/** Finger speed (px/ms) at or above which the view stays fully zoomed out. */
-private const val ZOOM_FAST_PX_PER_MS = 1.6f
-/** Per-event easing of the live zoom toward its speed-derived target. */
-private const val ZOOM_SMOOTHING = 0.2f
+/** Milliseconds the slide bar covers across its full width while adjusting —
+ * fixed, so control feels consistent; small moves give fine (~ms) control and
+ * a full swipe still travels a few seconds. */
+private const val DRAG_SPAN_MS = 3_500f
+/** Visible timeline window at deepest zoom (zoom = 1), centred on the mark. */
+private const val MIN_ZOOM_SPAN_MS = 2_200f
+/** How long the zoom lingers after the slide bar is released before easing back
+ * out — the Apple-timeline "stay zoomed while I work" beat. */
+private const val ZOOM_HOLD_MS = 320L
 
 private fun fmtTime(ms: Long): String {
     val total = ms.coerceAtLeast(0L)
@@ -186,6 +186,23 @@ fun TimingsLabScreen(
         // millisecond precision, then eases back out on release.
         var zoom by remember { mutableFloatStateOf(0f) }
         val zoomScope = rememberCoroutineScope()
+        var zoomJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+        // Apple-timeline zoom: grabbing the slide bar zooms in and *holds* there
+        // through pauses; releasing waits a beat, then eases back out. No longer
+        // tied to drag speed, so it never flickers in and out as you move.
+        fun zoomIn() {
+            zoomJob?.cancel()
+            zoomJob = zoomScope.launch {
+                animate(zoom, 1f, animationSpec = tween(200)) { v, _ -> zoom = v }
+            }
+        }
+        fun zoomOut() {
+            zoomJob?.cancel()
+            zoomJob = zoomScope.launch {
+                delay(ZOOM_HOLD_MS)
+                animate(zoom, 0f, animationSpec = tween(360)) { v, _ -> zoom = v }
+            }
+        }
 
         EditTimeline(ui, viewModel, accents, zoom = zoom)
 
@@ -198,12 +215,8 @@ fun TimingsLabScreen(
                 ui = ui,
                 viewModel = viewModel,
                 accents = accents,
-                onZoom = { zoom = it },
-                onZoomRelease = {
-                    zoomScope.launch {
-                        animate(zoom, 0f, animationSpec = tween(260)) { v, _ -> zoom = v }
-                    }
-                },
+                onGrab = { viewModel.beginAdjust(); zoomIn() },
+                onRelease = { zoomOut() },
             )
         }
 
@@ -351,8 +364,8 @@ private fun AdjustPanel(
     ui: TimingsLabUiState,
     viewModel: TimingsLabViewModel,
     accents: QuranAccents,
-    onZoom: (Float) -> Unit,
-    onZoomRelease: () -> Unit,
+    onGrab: () -> Unit,
+    onRelease: () -> Unit,
 ) {
     val index = ui.selectedPass ?: return
     val pass = ui.passes.getOrNull(index) ?: return
@@ -427,7 +440,7 @@ private fun AdjustPanel(
         }
 
         Spacer(Modifier.height(10.dp))
-        AdjustSlider(accents = markColor, onZoom = onZoom, onRelease = onZoomRelease) { deltaMs ->
+        AdjustSlider(accents = markColor, onGrab = onGrab, onRelease = onRelease) { deltaMs ->
             viewModel.nudgeSelected(deltaMs)
         }
 
@@ -451,16 +464,15 @@ private fun AdjustPanel(
 }
 
 /**
- * The slide bar. Horizontal drag nudges the selected marker; sensitivity
- * tracks how deeply the timeline is zoomed, and the zoom itself follows drag
- * speed — slower drags zoom deeper (finer, ~millisecond control), quick drags
- * stay coarse. [onZoom] streams the live zoom (0 = full, 1 = deepest) so the
- * timeline above reacts; [onRelease] lets it ease back out.
+ * The slide bar. A horizontal drag nudges only the selected marker at a fixed,
+ * fine sensitivity. Grabbing it ([onGrab]) snapshots for Undo and zooms the
+ * timeline in; the zoom *holds* through pauses and only eases back out after
+ * release ([onRelease]) — Apple-timeline style, never flickering with speed.
  */
 @Composable
 private fun AdjustSlider(
     accents: Color,
-    onZoom: (Float) -> Unit,
+    onGrab: () -> Unit,
     onRelease: () -> Unit,
     onNudge: (Long) -> Unit,
 ) {
@@ -476,29 +488,13 @@ private fun AdjustSlider(
             .onSizeChanged { widthPx = it.width.toFloat().coerceAtLeast(1f) }
             .pointerInput(Unit) {
                 var remainder = 0f
-                var zoom = 0f
-                var lastNanos = 0L
                 detectHorizontalDragGestures(
-                    onDragStart = { lastNanos = System.nanoTime(); zoom = 0f },
+                    onDragStart = { onGrab() },
                     onDragEnd = { onRelease() },
                     onDragCancel = { onRelease() },
                 ) { change, dragAmount ->
                     change.consume()
-                    val now = System.nanoTime()
-                    val dtMs = ((now - lastNanos) / 1_000_000f).coerceIn(1f, 64f)
-                    lastNanos = now
-                    // Finger speed → target zoom: slow drags dig in for fine
-                    // control, fast drags stay zoomed out for coarse travel.
-                    val speed = kotlin.math.abs(dragAmount) / dtMs // px per ms
-                    val targetZoom = (1f - speed / ZOOM_FAST_PX_PER_MS).coerceIn(0f, 1f)
-                    zoom += (targetZoom - zoom) * ZOOM_SMOOTHING
-                    onZoom(zoom)
-                    // Visible span shrinks with zoom, so the same pixel covers
-                    // fewer milliseconds the deeper you are.
-                    val spanMs = androidx.compose.ui.util.lerp(
-                        FULL_SPAN_HINT_MS, MIN_ZOOM_SPAN_MS, zoom,
-                    )
-                    val ms = dragAmount * (spanMs / widthPx) + remainder
+                    val ms = dragAmount * (DRAG_SPAN_MS / widthPx) + remainder
                     val whole = ms.roundToLong()
                     remainder = ms - whole
                     if (whole != 0L) onNudge(whole)
@@ -666,12 +662,20 @@ private fun TransportBar(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            IconButton(
+                onClick = viewModel::undo,
+                enabled = ui.canUndo,
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Rounded.Undo,
+                    contentDescription = "Undo",
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        .copy(alpha = if (ui.canUndo) 1f else 0.3f),
+                )
+            }
             LabPill(speedLabel(ui.speed), accents.gold) { viewModel.cycleSpeed() }
-            Text(
-                text = "${fmtTime(ui.positionMs)} / ${fmtTime(ui.durationMs)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-            )
             Spacer(Modifier.weight(1f))
             LabPill("●  Re-sync", accents.gold, filled = true, enabled = !ui.isLoading) {
                 viewModel.startRecord()
@@ -754,7 +758,7 @@ private fun HintLine(ui: TimingsLabUiState, accents: QuranAccents) {
         ui.passes.isEmpty() && !ui.isLoading ->
             "No timings yet for this ayah — hit Re-sync and tap along"
         ui.selectedPass != null ->
-            "Slide to adjust the start — drag slower to zoom in · ＋ Add repeat to mark a repetition"
+            "Slide to adjust the start — it zooms in while you work · ＋ Add repeat to mark a repetition"
         else -> "Play to follow along · tap a word (or a marker) to adjust its timing"
     }
     Text(

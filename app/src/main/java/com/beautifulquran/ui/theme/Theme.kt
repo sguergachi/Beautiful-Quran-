@@ -225,6 +225,19 @@ fun playbackNotificationColorScheme(themeMode: ThemeMode): ColorScheme {
     }
 }
 
+/** The Timings Lab's contrasting workbench palette: always Royal Green so it
+ * reads as a distinct surface over the reader — except under the Royal Green
+ * theme itself, where Nightfall provides the contrast instead. */
+fun timingsLabColorScheme(themeMode: ThemeMode): ColorScheme = when (themeMode) {
+    ThemeMode.ROYAL_GREEN -> DarkColors
+    else -> RoyalGreenColors
+}
+
+/** The Lab is always a dark contrasting surface, so its gold/orange accents use
+ * the dark set regardless of the user's theme — the reader's own accents are
+ * tuned for a light page and wash out on this green/night workbench. */
+val TimingsLabAccents: QuranAccents = DarkAccents
+
 @Composable
 fun BeautifulQuranTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
