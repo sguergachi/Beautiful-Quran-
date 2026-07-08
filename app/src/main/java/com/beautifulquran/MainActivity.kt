@@ -267,6 +267,7 @@ private fun PaperStackApp() {
                         onOpenSettings = { animateTo(SETTINGS_LAYER) },
                         onAyahSelectorExpandedChange = { ayahSelectorExpanded = it },
                         onEditTimings = { sid, a, word -> openTimingsLab(sid, a, word) },
+                        keepStatusBarVisible = labVisible,
                     )
                 }
             }

@@ -20,15 +20,18 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -101,6 +104,7 @@ private fun repeatFlags(passes: List<Segment>): List<Boolean> {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TimingsLabScreen(
     viewModel: TimingsLabViewModel,
@@ -116,7 +120,10 @@ fun TimingsLabScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
+            // Ignoring visibility: if the sheet rises while the reader still
+            // has the status bar hidden (mid-recitation), the header must not
+            // slide under the notch for the frames before the bar comes back.
+            .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)
             .navigationBarsPadding(),
     ) {
         LabHeader(ui, viewModel, accents, onBack)
