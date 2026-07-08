@@ -65,7 +65,7 @@ import com.beautifulquran.ui.theme.InkRevealOverlay
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.TimingsLabAccents
 import com.beautifulquran.ui.theme.absorbPointerEvents
-import com.beautifulquran.ui.theme.timingsLabColorScheme
+import com.beautifulquran.ui.theme.contrastingOverlayColorScheme
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -298,7 +298,7 @@ private fun PaperStackApp(themeMode: ThemeMode) {
         // opening a hole back to the exact page it came from. The contrasting
         // palette (a dark workbench on paper, and vice-versa) is what makes the
         // bloom read against the reader, which shares the reader's own colours.
-        val labColors = timingsLabColorScheme(themeMode)
+        val labColors = contrastingOverlayColorScheme(themeMode)
         InkRevealOverlay(
             visible = labVisible,
             backgroundColor = labColors.background,

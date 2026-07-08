@@ -89,7 +89,7 @@ import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.ui.theme.IslamicReturnToAyahButton
 import com.beautifulquran.ui.theme.absorbPointerEvents
-import com.beautifulquran.ui.theme.playbackNotificationColorScheme
+import com.beautifulquran.ui.theme.contrastingOverlayColorScheme
 import com.beautifulquran.ui.theme.verticalFadingEdges
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -854,7 +854,7 @@ fun ReaderScreen(
         // so the callbacks fire only once the paper has receded.
         if (notifPermission.sheetVisible) {
             PlaybackNotificationSheet(
-                colors = playbackNotificationColorScheme(settings.themeMode),
+                colors = contrastingOverlayColorScheme(settings.themeMode),
                 modifier = Modifier.zIndex(2f),
                 onDismiss = notifPermission::dismiss,
                 onAllow = notifPermission::allow,

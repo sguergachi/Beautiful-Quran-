@@ -212,30 +212,18 @@ fun themePreviewColors(themeMode: ThemeMode): List<Color> {
     }
 }
 
-@Composable
-fun playbackNotificationColorScheme(themeMode: ThemeMode): ColorScheme {
-    val systemDark = isSystemInDarkTheme()
-    val currentIsNightfall = themeMode == ThemeMode.DARK ||
-        (themeMode == ThemeMode.SYSTEM && systemDark)
-
-    return when {
-        themeMode == ThemeMode.ROYAL_GREEN -> LightColors
-        currentIsNightfall -> RoyalGreenColors
-        else -> DarkColors
-    }
-}
-
-/** The Timings Lab's contrasting workbench palette: always Royal Green so it
- * reads as a distinct surface over the reader — except under the Royal Green
- * theme itself, where Nightfall provides the contrast instead. */
-fun timingsLabColorScheme(themeMode: ThemeMode): ColorScheme = when (themeMode) {
+/** The contrasting "overlay" palette shared by the Timings Lab and the
+ * notification prompt, so the two look the same: always Royal Green so it reads
+ * as a distinct surface over the reader — except under the Royal Green theme
+ * itself, where Nightfall provides the contrast instead. */
+fun contrastingOverlayColorScheme(themeMode: ThemeMode): ColorScheme = when (themeMode) {
     ThemeMode.ROYAL_GREEN -> DarkColors
     else -> RoyalGreenColors
 }
 
-/** The Lab is always a dark contrasting surface, so its gold/orange accents use
- * the dark set regardless of the user's theme — the reader's own accents are
- * tuned for a light page and wash out on this green/night workbench. */
+/** These contrasting overlays are always a dark surface, so their gold/orange
+ * accents use the dark set regardless of the user's theme — the reader's own
+ * accents are tuned for a light page and wash out on this green/night surface. */
 val TimingsLabAccents: QuranAccents = DarkAccents
 
 @Composable
