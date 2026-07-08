@@ -60,8 +60,10 @@ that mark, seeks ~0.8 s before it and plays, and reveals the **slide bar**.
   the full ayah only a beat after you let go. When the slide settles the Lab
   **re-auditions** from just before the new start, so every adjustment is
   judged by ear.
-* **Undo** (transport, ↶) steps back through every edit — each slide, add-
-  repeat, delete, re-sync, and reset — one at a time.
+* **Reset** returns *just this word* to its bundled default — its adjusted
+  mark(s) are replaced by the shipped one(s), every other word left as you set
+  it. Greyed out until the word actually differs from the default. (Whole-ayah
+  reset still lives in the ⋯ menu.)
 * **＋ Add repeat** — stamps a second mark for the selected word at the
   playhead and selects it, so you immediately slide it to where the reciter
   re-recites it. The rest of the ayah is untouched. A mark whose word
@@ -153,10 +155,11 @@ in-memory working copy, so you see edits *before* they're persisted.
 │  ──┼────╵──╵───╵────◆───╵──╵───────────────  │  timeline: gold/orange marks
 │                                              │  + playhead, zooms on adjust
 │  [ ◀  slide to adjust  ▶ ]                    │  slide bar (when selected):
-│  الٓمٓ 6.4s      ＋ Add repeat      Delete      │  word · start · repeat · del
+│  الٓمٓ 6.4s   ＋ Add repeat   Reset   Delete   │  word · start · repeat ·
+│                                              │  reset-to-default · delete
 ├──────────────────────────────────────────────┤
-│  ▶   ⟲   ↶   1×                  [● Re-sync] │  transport: play, restart,
-│                                              │  undo, speed + record pill
+│  ▶   ⟲   1×                      [● Re-sync] │  transport: play, restart,
+│                                              │  speed + record pill
 │  "Slide to adjust · zooms in while you work" │  contextual hint line
 │  3 ayahs corrected on this device · Submit   │  pending-corrections ribbon
 └──────────────────────────────────────────────┘

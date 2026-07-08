@@ -38,6 +38,9 @@ data class TimingsLabUiState(
      * preview runs HighlightEngine straight over this list, so edits are
      * visible before they persist. */
     val passes: List<Segment> = emptyList(),
+    /** The bundled (shipped) marks for this ayah, with no overrides — the
+     * target of a per-word "Reset to default". */
+    val defaultPasses: List<Segment> = emptyList(),
     val mode: LabMode = LabMode.LISTEN,
     /** Index into [passes] of the mark being tuned, or null. */
     val selectedPass: Int? = null,
@@ -55,8 +58,6 @@ data class TimingsLabUiState(
     val speed: Float = 1f,
     /** Marks dropped in the current record pass (enables the in-pass Undo). */
     val recordedMarks: Int = 0,
-    /** True when there's a prior edit state to revert to via the Undo button. */
-    val canUndo: Boolean = false,
     val error: String? = null,
 )
 
@@ -93,15 +94,6 @@ class TimingsLabViewModel(
     /** Marks of the in-flight record pass in tap order (kept sorted because
      * the playhead only moves forward between rewinds). */
     private val recordMarks = mutableListOf<Segment>()
-
-    /** Snapshots of [TimingsLabUiState.passes] before each discrete edit, so the
-     * Undo button can step back through them. Cleared when the ayah changes. */
-    private val undoStack = ArrayDeque<List<Segment>>()
-
-    /** Marks captured when a slide begins but not yet committed to [undoStack] —
-     * it lands there only if the slide actually moves the mark, so an empty
-     * grab never leaves a no-op Undo step. */
-    private var pendingUndo: List<Segment>? = null
 
     /** Working copy as it was when Re-sync started; restored on cancel. */
     private var recordBackup: List<Segment> = emptyList()
@@ -217,8 +209,6 @@ class TimingsLabViewModel(
         auditionJob?.cancel()
         edited = false
         recordMarks.clear()
-        undoStack.clear()
-        pendingUndo = null
         _activeWord.value = null
         _ui.value = TimingsLabUiState(
             isLoading = true,
@@ -234,8 +224,10 @@ class TimingsLabViewModel(
             val content = repository.surahContent(surahId)
             if (surahId != _ui.value.surahId || ayah != _ui.value.ayah) return@launch
             val ayahRow = content.ayahs[(ayah - 1).coerceIn(0, content.ayahs.lastIndex)]
-            // timings() already fuses saved overrides over the DB row.
+            // timings() already fuses saved overrides over the DB row;
+            // bundledTimings() is the un-overridden shipped default, for reset.
             val segs = repository.timings(reciter.id, surahId)[ayahRow.number].orEmpty()
+            val defaults = repository.bundledTimings(reciter.id, surahId)[ayahRow.number].orEmpty()
             val key = OverrideKey(reciter.id, surahId, ayahRow.number)
             _ui.value = TimingsLabUiState(
                 isLoading = false,
@@ -246,6 +238,7 @@ class TimingsLabViewModel(
                 reciter = reciter,
                 ayahData = ayahRow,
                 passes = segs,
+                defaultPasses = defaults,
                 isOverridden = overrides.get(key) != null,
                 overrideCount = _ui.value.overrideCount,
                 speed = player.state.value.speed,
@@ -409,8 +402,6 @@ class TimingsLabViewModel(
         }
         val passes = withDerivedEnds(recordMarks.toList(), st.durationMs)
         recordMarks.clear()
-        // Undo after a re-sync reverts to whatever the ayah held before it.
-        pushUndo(recordBackup)
         _ui.value = st.copy(mode = LabMode.LISTEN, passes = passes, recordedMarks = 0)
         persistNow()
         player.setRepeatRange(st.ayah, st.ayah, lastMarkEnd(labPasses = passes))
@@ -468,34 +459,29 @@ class TimingsLabViewModel(
         _ui.value = _ui.value.copy(shiftFollowing = enabled)
     }
 
-    // ── Undo ────────────────────────────────────────────────────────────────
+    // ── Reset a word to its bundled default ─────────────────────────────────
 
-    /** Snapshots the current marks so the next edit can be reverted. */
-    private fun pushUndo(snapshot: List<Segment> = _ui.value.passes) {
-        undoStack.addLast(snapshot)
-        while (undoStack.size > UNDO_LIMIT) undoStack.removeFirst()
-        if (!_ui.value.canUndo) _ui.value = _ui.value.copy(canUndo = true)
+    /** The marks the selected word shipped with (may be empty if the word had
+     * no bundled timing). Null when nothing is selected. */
+    private fun selectedWordDefault(): Pair<Int, List<Segment>>? {
+        val st = _ui.value
+        val pos = st.selectedPass?.let { st.passes.getOrNull(it)?.position } ?: return null
+        return pos to st.defaultPasses.filter { it.position == pos }
     }
 
-    /** Called at the start of a slide: arms an Undo snapshot that is only kept
-     * if the drag actually moves the mark (committed on the first real nudge),
-     * so one Undo reverts the whole drag, not each pixel of it. */
-    fun beginAdjust() {
-        pendingUndo = _ui.value.passes
-    }
-
-    /** Reverts the most recent edit (a slide, an add-repeat, a delete, a
-     * re-sync, or a reset). */
-    fun undo() {
-        val prev = undoStack.removeLastOrNull() ?: return
+    /** Reverts just the selected word to its bundled default — its adjusted
+     * mark(s) are replaced by the shipped one(s), every other word untouched. */
+    fun resetSelectedWordToDefault() {
+        val st = _ui.value
+        val (pos, def) = selectedWordDefault() ?: return
         auditionJob?.cancel()
         edited = true
-        _ui.value = _ui.value.copy(
-            passes = prev,
-            selectedPass = _ui.value.selectedPass?.takeIf { it in prev.indices },
-            canUndo = undoStack.isNotEmpty(),
-        )
+        val rebuilt = withDerivedEnds(st.passes.filter { it.position != pos } + def, st.durationMs)
+        // Re-select the word's (now default) first mark if it still exists.
+        val newSel = rebuilt.indexOfFirst { it.position == pos }.takeIf { it >= 0 }
+        _ui.value = st.copy(passes = rebuilt, selectedPass = newSel)
         persistNow()
+        newSel?.let { audition(it) }
     }
 
     /** Moves the selected mark's start by [deltaMs] (and, with shiftFollowing,
@@ -515,8 +501,6 @@ class TimingsLabViewModel(
             deltaMs.coerceIn(floor - pass.startMs, (ceil - pass.startMs).coerceAtLeast(floor - pass.startMs))
         }
         if (delta == 0L) return
-        // First real movement of this slide: commit the armed Undo snapshot.
-        pendingUndo?.let { pushUndo(it); pendingUndo = null }
         val moved = passes.mapIndexed { j, p ->
             when {
                 j < i || (!st.shiftFollowing && j > i) -> p
@@ -540,7 +524,6 @@ class TimingsLabViewModel(
         val st = _ui.value
         val i = st.selectedPass ?: return
         val sel = st.passes.getOrNull(i) ?: return
-        pushUndo()
         val seed = maxOf(sel.startMs + REPEAT_SEED_GAP_MS, st.positionMs)
         val ceil = st.durationMs.takeIf { it > 0L }?.minus(MIN_MARK_GAP_MS)
             ?: (seed + PROVISIONAL_MARK_MS)
@@ -561,7 +544,6 @@ class TimingsLabViewModel(
         val i = st.selectedPass ?: return
         if (i !in st.passes.indices) return
         auditionJob?.cancel()
-        pushUndo()
         edited = true
         _ui.value = st.copy(
             passes = withDerivedEnds(st.passes.filterIndexed { j, _ -> j != i }, st.durationMs),
@@ -613,7 +595,6 @@ class TimingsLabViewModel(
     fun resetOverride() {
         val st = _ui.value
         val reciter = st.reciter ?: return
-        pushUndo()
         overrides.clear(OverrideKey(reciter.id, st.surahId, st.ayah))
         edited = false
         viewModelScope.launch {
@@ -678,8 +659,6 @@ class TimingsLabViewModel(
          * playhead isn't already past it. */
         private const val REPEAT_SEED_GAP_MS = 500L
         private const val AUDITION_LEAD_MS = 800L
-        /** Depth of the Undo history kept per ayah. */
-        private const val UNDO_LIMIT = 40
         /** Quiet gap after the last nudge before the automatic re-audition. */
         private const val NUDGE_AUDITION_MS = 550L
         private const val UNDO_REWIND_MS = 1_200L
