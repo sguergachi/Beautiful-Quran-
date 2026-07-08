@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.beautifulquran.R
 import com.beautifulquran.ui.theme.DisplayFontFamily
+import com.beautifulquran.ui.theme.InkRevealShape
 import com.beautifulquran.ui.theme.absorbPointerEvents
 import com.beautifulquran.ui.theme.SerifFontFamily
 import kotlinx.coroutines.delay
@@ -127,48 +128,6 @@ private val QuranFruitRotation = AtomicInteger(0)
 
 private fun nextQuranFruitIndex(): Int =
     QuranFruitRotation.getAndIncrement().mod(QuranFruitColorDrawables.size)
-
-// A circle of ink centred at an origin (a fraction of the sheet, so it is
-// size-agnostic); the radius reaches the farthest corner exactly at
-// progress = 1, so the ink covers every corner of the paper.
-//
-// - `punchHole = false` — the sheet is clipped *to* the circle: ink spreads
-//   open from the origin to fill the paper (the enter bleed).
-// - `punchHole = true` — the sheet is the paper *minus* the circle: a hole
-//   opens at the origin and grows outward, revealing the reader beneath (the
-//   exit reveal, from the pressed button).
-private class InkRevealShape(
-    private val originX: Float,
-    private val originY: Float,
-    private val progress: Float,
-    private val punchHole: Boolean = false,
-) : Shape {
-    override fun createOutline(
-        size: Size,
-        layoutDirection: LayoutDirection,
-        density: Density,
-    ): Outline {
-        val cx = size.width * originX
-        val cy = size.height * originY
-        val maxRadius = hypot(
-            max(cx, size.width - cx),
-            max(cy, size.height - cy),
-        )
-        val r = maxRadius * progress
-        val circle = Path().apply {
-            addOval(Rect(cx - r, cy - r, cx + r, cy + r))
-        }
-        val path = if (punchHole) {
-            val sheet = Path().apply {
-                addRect(Rect(0f, 0f, size.width, size.height))
-            }
-            Path().apply { op(sheet, circle, PathOperation.Difference) }
-        } else {
-            circle
-        }
-        return Outline.Generic(path)
-    }
-}
 
 // Not a dialog — the reader sheet itself, soaked in ink, becomes the question.
 // Ink bleeds from the play control across the whole paper (the clip circle),

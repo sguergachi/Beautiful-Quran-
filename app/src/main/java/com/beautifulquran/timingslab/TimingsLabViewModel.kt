@@ -485,6 +485,29 @@ class TimingsLabViewModel(
         auditionAfterNudge()
     }
 
+    /** Adds a repeat pass for the selected word: a new mark at the current
+     * playhead (or just after the selection if the playhead is earlier), then
+     * selects it so the slide bar positions exactly where the repeat lands.
+     * Everything else is left untouched — this never re-syncs the ayah. */
+    fun addRepeat() {
+        val st = _ui.value
+        val i = st.selectedPass ?: return
+        val sel = st.passes.getOrNull(i) ?: return
+        val seed = maxOf(sel.startMs + REPEAT_SEED_GAP_MS, st.positionMs)
+        val ceil = st.durationMs.takeIf { it > 0L }?.minus(MIN_MARK_GAP_MS)
+            ?: (seed + PROVISIONAL_MARK_MS)
+        val start = seed.coerceIn(0L, ceil.coerceAtLeast(0L))
+        val newSeg = Segment(sel.position, start, start + PROVISIONAL_MARK_MS)
+        val merged = withDerivedEnds(st.passes + newSeg, st.durationMs)
+        val newIndex = merged.indexOfFirst { it.position == sel.position && it.startMs == start }
+            .takeIf { it >= 0 } ?: i
+        auditionJob?.cancel()
+        edited = true
+        _ui.value = st.copy(passes = merged, selectedPass = newIndex)
+        persistNow()
+        audition(newIndex)
+    }
+
     fun deleteSelected() {
         val st = _ui.value
         val i = st.selectedPass ?: return
@@ -601,6 +624,9 @@ class TimingsLabViewModel(
         private const val TAP_LATENCY_MS = 100f
         private const val MIN_MARK_GAP_MS = 10L
         private const val PROVISIONAL_MARK_MS = 600L
+        /** Where a new repeat mark seeds relative to the selected mark when the
+         * playhead isn't already past it. */
+        private const val REPEAT_SEED_GAP_MS = 500L
         private const val AUDITION_LEAD_MS = 800L
         /** Quiet gap after the last nudge before the automatic re-audition. */
         private const val NUDGE_AUDITION_MS = 550L

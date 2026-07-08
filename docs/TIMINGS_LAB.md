@@ -38,7 +38,7 @@ driven from segments, the karaoke fade follows your taps in real time.
   `↺ 4s` rewinds four seconds and clears the marks you overran, so you re-tap
   just that stretch.
 * Taps are compensated ~100 ms (scaled by playback speed) for finger
-  reaction latency; the Tune card catches anything the compensation misses.
+  reaction latency; the Adjust slide bar catches anything the compensation misses.
 * When the audio ends (or you hit **Done**) the pass is saved and the ayah
   replays from the top so you immediately verify your work — Musixmatch's
   "check your sync" step, automatic.
@@ -47,31 +47,36 @@ Ends are derived, not tapped: each mark's end is the next mark's start, and
 the last mark ends at the audio duration. That matches the reader's hold
 behaviour (a word stays lit until the next begins).
 
-### Verb 2 — Tune (tap a word, nudge its start)
+### Verb 2 — Adjust (select a word, slide its start)
 
-For a single word that's slightly off there's no need to re-tap the ayah. In
-Listen mode, tap the word: the Lab selects its mark, seeks to ~0.8 s before
-it, and plays — you hear the word and watch whether the ink lands with the
-voice. A small card offers:
+For a word that's slightly off there's no need to re-tap the ayah. **Tap the
+word** (on the verse) **or its marker** (on the timeline): the Lab selects
+that mark, seeks ~0.8 s before it and plays, and reveals the **slide bar**.
 
-* **−50 ms / +50 ms** nudges and a **fine-tune drag strip** (~3 ms per px)
-  for continuous adjustment. Once a burst of nudges settles (~½ s), the Lab
-  **re-auditions automatically** from just before the new start, so every
-  adjustment is judged by ear without another tap.
-* **Replay** — re-audition on demand from just before the (new) start.
-* **Shift following words too** — applies the nudge to every later mark;
-  this is the drift fixer when a whole tail of an ayah is uniformly late.
-* **Delete mark** — removes a spurious pass (e.g. an alignment-noise repeat).
+* **Slide to adjust.** Drag the bar left/right to move *only* that marker's
+  start — nothing else shifts. The catch that makes it precise: the timeline
+  above **zooms in as you slow down**. A quick drag stays zoomed out for
+  coarse travel; ease off and the view tightens around the marker until a
+  pixel is worth under a millisecond. Let go and it eases back to the full
+  ayah. When the slide settles the Lab **re-auditions** from just before the
+  new start, so every adjustment is judged by ear.
+* **＋ Add repeat** — stamps a second mark for the selected word at the
+  playhead and selects it, so you immediately slide it to where the reciter
+  re-recites it. The rest of the ayah is untouched. A mark whose word
+  position is ≤ the furthest word already reached *is* a repeat backtrack
+  (the DB's own encoding), so it takes the orange wash automatically.
+* **Delete** — removes a spurious pass (e.g. an alignment-noise repeat).
 * If the word was recited more than once, **pass chips** (`6.4s`, `10.6s ·
-  repeat`) pick which pass you're tuning.
+  repeat`) pick which pass you're adjusting.
 
-A slim timeline strip above the transport shows every mark (gold; orange for
-repeat passes), the selected mark, and the live playhead; tap or drag it to
-scrub.
+The timeline above the transport shows every mark — **gold for first-pass,
+orange for repeats** — the selected mark enlarged with a handle, and the live
+playhead. When nothing is being adjusted, tap a marker to select it or tap
+elsewhere to scrub.
 
 ### No save button
 
-Edits persist automatically — on finishing a re-sync, after a nudge settles,
+Edits persist automatically — on finishing a re-sync, after a slide settles,
 when you change ayah, and when you leave the Lab. The override store is tiny
 and atomic, so there is nothing to lose and nothing to remember. `Reset ayah
 to bundled` (overflow menu) reverts to the shipped DB row; `Clear all
@@ -79,15 +84,19 @@ corrections` empties the store.
 
 ## Where it lives
 
-The Lab is **not a page in the paper stack** — it is a work sheet that rises
-in place over whatever is open (usually the reader) and lowers back onto it.
-Entry and exit never route through Settings.
+The Lab is **not a page in the paper stack** — it is a contrasting workbench
+that **blooms in over whatever is open** (usually the reader) as an expanding
+ink spot, the same ink-bleed language as the notification prompt, and closes
+by opening a hole back to the exact page it came from. Its palette is the
+reader's inverted (a dark workbench on paper, and vice-versa) — that contrast
+is what makes the bloom read, since the surface would otherwise share the
+reader's own colours. Entry and exit never route through Settings.
 
 * **From the reader** (primary): long-press any word in any reading mode —
-  no confirmation, the hold is the intent and a haptic is the answer. The
-  sheet rises on that exact (surah, ayah) with **the pressed word already
+  no confirmation, the hold is the intent and a haptic is the answer. The Lab
+  blooms in on that exact (surah, ayah) with **the pressed word already
   selected and auditioning**, so the fix loop starts without another tap.
-  Back (or the ▾ chevron) lowers the sheet onto the same reader page, which
+  Back (or the ▾ chevron) closes it back onto the same reader page, which
   already reflects the correction — the reader re-pulls fused timings the
   moment the override store changes.
 * **From Settings**: long-press the logo (developer unlock) → *Timings Lab*
@@ -134,16 +143,17 @@ in-memory working copy, so you see edits *before* they're persisted.
 ├──────────────────────────────────────────────┤
 │                                              │
 │          ← the real AyahBlock →              │  live karaoke preview;
-│    (reader rendering, live highlight,        │  tap word = tune (Listen)
+│    (reader rendering, live highlight,        │  tap word = select (Listen)
 │     orange repeats, translation, …)          │  tap word = drop mark (Rec)
 │                                              │
 ├──────────────────────────────────────────────┤
-│  [tune card, when a word is selected]        │  −50 · replay · +50, drag
-│                                              │  strip, shift-rest, delete
+│  ──┼────╵──╵───╵────◆───╵──╵───────────────  │  timeline: gold/orange marks
+│                                              │  + playhead, zooms on adjust
+│  [ ◀  slide to adjust  ▶ ]                    │  slide bar (when selected):
+│  الٓمٓ 6.4s      ＋ Add repeat      Delete      │  word · start · repeat · del
 ├──────────────────────────────────────────────┤
-│  ──┼────╵──╵───╵────◆───╵──╵───────────────  │  timeline: marks + playhead
 │  ▶   ⟲   1×                      [● Re-sync] │  transport + record pill
-│  "Play to watch · tap a word to tune it"     │  contextual hint line
+│  "Slide to adjust · drag slower to zoom in"  │  contextual hint line
 │  3 ayahs corrected on this device · Submit   │  pending-corrections ribbon
 └──────────────────────────────────────────────┘
 ```
@@ -200,7 +210,7 @@ timingslab/
     TimingOverrides.kt      override store (load/save/clear), StateFlow<Map>
     TimingsLabViewModel.kt  Listen/Record state machine, live ActiveWord flow,
                             tap marks, nudges, auto-save, undo/rewind
-    TimingsLabScreen.kt     header + AyahBlock stage + tune card + timeline +
+    TimingsLabScreen.kt     header + AyahBlock stage + zoomable timeline + slide bar +
                             transport (paper styled, quietClickable, no ripple)
     TimingsPatch.kt         overrides → GitHub issue deep-link / clipboard
 data/QuranRepository.kt     timings() fuses overrides over the DB
@@ -220,7 +230,7 @@ tools/timing_overrides/     committed, reviewed correction patches
 
 ## Non-goals (intentionally)
 
-* No waveform rendering — the tune card's audition loop ("hear it, watch it,
+* No waveform rendering — the slide bar's audition loop ("hear it, watch it,
   nudge it") replaces visual waveform picking at these ayah lengths.
 * No editing of ayah text / gloss / reciter metadata — build-time data.
 * No multi-ayah batch view — corrections are per-ayah by nature; ‹ › steps

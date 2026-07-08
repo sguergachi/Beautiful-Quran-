@@ -3,6 +3,7 @@ package com.beautifulquran.timingslab
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -55,6 +56,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +67,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -78,11 +81,20 @@ import com.beautifulquran.ui.theme.ArabicWordStyle
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.QuranAccents
 import com.beautifulquran.ui.theme.quietClickable
+import kotlinx.coroutines.launch
 import kotlin.math.roundToLong
 
-private const val NUDGE_STEP_MS = 50L
-/** Fine-tune drag strip sensitivity: milliseconds moved per pixel dragged. */
-private const val DRAG_MS_PER_PX = 3f
+/** Milliseconds spanned by the slide bar / timeline at zoom 0 (coarse). Not
+ * the true audio length — just the travel a full-width drag covers before the
+ * view zooms in, so even long ayahs move at a sane coarse rate. */
+private const val FULL_SPAN_HINT_MS = 6_000f
+/** Milliseconds spanned at deepest zoom — a ~half-second window across the
+ * whole bar gives sub-millisecond-per-pixel placement. */
+private const val MIN_ZOOM_SPAN_MS = 550f
+/** Finger speed (px/ms) at or above which the view stays fully zoomed out. */
+private const val ZOOM_FAST_PX_PER_MS = 1.6f
+/** Per-event easing of the live zoom toward its speed-derived target. */
+private const val ZOOM_SMOOTHING = 0.2f
 
 private fun fmtTime(ms: Long): String {
     val total = ms.coerceAtLeast(0L)
@@ -168,15 +180,33 @@ fun TimingsLabScreen(
             }
         }
 
+        // Editing surface: a zoomable timeline sitting above a slide bar.
+        // Selecting a word (tap it, or its marker) reveals the bar; dragging
+        // it nudges only that marker while the timeline zooms in around it for
+        // millisecond precision, then eases back out on release.
+        var zoom by remember { mutableFloatStateOf(0f) }
+        val zoomScope = rememberCoroutineScope()
+
+        EditTimeline(ui, viewModel, accents, zoom = zoom)
+
         AnimatedVisibility(
             visible = ui.mode == LabMode.LISTEN && ui.selectedPass != null,
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut(),
         ) {
-            TuneCard(ui, viewModel, accents)
+            AdjustPanel(
+                ui = ui,
+                viewModel = viewModel,
+                accents = accents,
+                onZoom = { zoom = it },
+                onZoomRelease = {
+                    zoomScope.launch {
+                        animate(zoom, 0f, animationSpec = tween(260)) { v, _ -> zoom = v }
+                    }
+                },
+            )
         }
 
-        TimelineStrip(ui, viewModel, accents)
         TransportBar(ui, viewModel, accents)
         HintLine(ui, accents)
         if (ui.error != null) {
@@ -311,19 +341,25 @@ private fun OverflowMenu(
     }
 }
 
-// ── Tune card ─────────────────────────────────────────────────────────────
+// ── Adjust panel ──────────────────────────────────────────────────────────
 
+/** Shown when a word (or its marker) is selected. Names the word, offers
+ * Add-repeat / Delete, and hosts the slide bar that nudges only this marker
+ * while zooming the timeline above. No modes, no numeric steppers. */
 @Composable
-private fun TuneCard(
+private fun AdjustPanel(
     ui: TimingsLabUiState,
     viewModel: TimingsLabViewModel,
     accents: QuranAccents,
+    onZoom: (Float) -> Unit,
+    onZoomRelease: () -> Unit,
 ) {
     val index = ui.selectedPass ?: return
     val pass = ui.passes.getOrNull(index) ?: return
     val word = ui.ayahData?.words?.firstOrNull { it.position == pass.position }
     val repeats = remember(ui.passes) { repeatFlags(ui.passes) }
     val isRepeat = repeats.getOrElse(index) { false }
+    val markColor = if (isRepeat) accents.repeatInk else accents.gold
     val siblingPasses = ui.passes.withIndex().filter { it.value.position == pass.position }
 
     Column(
@@ -335,46 +371,33 @@ private fun TuneCard(
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Text(
-                        text = word?.arabic ?: "#${pass.position}",
-                        style = ArabicWordStyle,
-                        fontSize = 24.sp,
-                        color = if (isRepeat) accents.repeatInk else MaterialTheme.colorScheme.onBackground,
-                    )
-                    Text(
-                        text = buildString {
-                            append("starts ")
-                            append(fmtTime(pass.startMs))
-                            if (isRepeat) append(" · repeat")
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (isRepeat) accents.repeatInk else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (word != null && word.translation.isNotBlank()) {
-                    Text(
-                        text = word.translation,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    )
-                }
-            }
+            Text(
+                text = word?.arabic ?: "#${pass.position}",
+                style = ArabicWordStyle,
+                fontSize = 24.sp,
+                color = if (isRepeat) accents.repeatInk else MaterialTheme.colorScheme.onBackground,
+            )
+            Spacer(Modifier.size(10.dp))
+            Text(
+                text = buildString {
+                    append(fmtTime(pass.startMs))
+                    if (isRepeat) append(" · repeat")
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = if (isRepeat) accents.repeatInk else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.weight(1f))
             IconButton(onClick = viewModel::closeTune, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.Rounded.Close,
-                    contentDescription = "Close",
+                    contentDescription = "Done",
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
 
-        // This word was recited more than once: pick which pass to tune.
+        // This word was recited more than once: pick which pass to adjust.
         if (siblingPasses.size > 1) {
             Spacer(Modifier.height(6.dp))
             Row(
@@ -383,7 +406,7 @@ private fun TuneCard(
             ) {
                 siblingPasses.forEach { (i, p) ->
                     val selected = i == index
-                    val chipColor = if (repeatFlags(ui.passes)[i]) accents.repeatInk else accents.gold
+                    val chipColor = if (repeats.getOrElse(i) { false }) accents.repeatInk else accents.gold
                     Text(
                         text = fmtTime(p.startMs),
                         style = MaterialTheme.typography.labelMedium,
@@ -404,13 +427,16 @@ private fun TuneCard(
         }
 
         Spacer(Modifier.height(10.dp))
+        AdjustSlider(accents = markColor, onZoom = onZoom, onRelease = onZoomRelease) { deltaMs ->
+            viewModel.nudgeSelected(deltaMs)
+        }
+
+        Spacer(Modifier.height(8.dp))
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            LabPill("−${NUDGE_STEP_MS} ms", accents.gold) { viewModel.nudgeSelected(-NUDGE_STEP_MS) }
-            LabPill("Replay", accents.gold, filled = true) { viewModel.auditionSelected() }
-            LabPill("+${NUDGE_STEP_MS} ms", accents.gold) { viewModel.nudgeSelected(NUDGE_STEP_MS) }
+            LabPill("＋ Add repeat", accents.repeatInk, filled = true) { viewModel.addRepeat() }
             Spacer(Modifier.weight(1f))
             Text(
                 text = "Delete",
@@ -421,110 +447,122 @@ private fun TuneCard(
                     .padding(horizontal = 8.dp, vertical = 6.dp),
             )
         }
-
-        Spacer(Modifier.height(8.dp))
-        FineTuneStrip(accents) { deltaMs -> viewModel.nudgeSelected(deltaMs) }
-
-        Spacer(Modifier.height(6.dp))
-        QuietToggle(
-            label = "Shift following words too",
-            checked = ui.shiftFollowing,
-            accent = accents.gold,
-            onToggle = { viewModel.setShiftFollowing(!ui.shiftFollowing) },
-        )
     }
 }
 
-/** Continuous fine adjustment: drag anywhere on the strip; ~3 ms per pixel.
- * Sub-millisecond remainders accumulate so slow drags still register. */
+/**
+ * The slide bar. Horizontal drag nudges the selected marker; sensitivity
+ * tracks how deeply the timeline is zoomed, and the zoom itself follows drag
+ * speed — slower drags zoom deeper (finer, ~millisecond control), quick drags
+ * stay coarse. [onZoom] streams the live zoom (0 = full, 1 = deepest) so the
+ * timeline above reacts; [onRelease] lets it ease back out.
+ */
 @Composable
-private fun FineTuneStrip(
-    accents: QuranAccents,
+private fun AdjustSlider(
+    accents: Color,
+    onZoom: (Float) -> Unit,
+    onRelease: () -> Unit,
     onNudge: (Long) -> Unit,
 ) {
-    var remainder by remember { mutableFloatStateOf(0f) }
+    var widthPx by remember { mutableFloatStateOf(1f) }
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .fillMaxWidth()
-            .height(40.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-            .pointerInputFineDrag { dx ->
-                val ms = dx * DRAG_MS_PER_PX + remainder
-                val whole = ms.roundToLong()
-                remainder = ms - whole
-                if (whole != 0L) onNudge(whole)
+            .height(52.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(accents.copy(alpha = 0.10f))
+            .border(0.8.dp, accents.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+            .onSizeChanged { widthPx = it.width.toFloat().coerceAtLeast(1f) }
+            .pointerInput(Unit) {
+                var remainder = 0f
+                var zoom = 0f
+                var lastNanos = 0L
+                detectHorizontalDragGestures(
+                    onDragStart = { lastNanos = System.nanoTime(); zoom = 0f },
+                    onDragEnd = { onRelease() },
+                    onDragCancel = { onRelease() },
+                ) { change, dragAmount ->
+                    change.consume()
+                    val now = System.nanoTime()
+                    val dtMs = ((now - lastNanos) / 1_000_000f).coerceIn(1f, 64f)
+                    lastNanos = now
+                    // Finger speed → target zoom: slow drags dig in for fine
+                    // control, fast drags stay zoomed out for coarse travel.
+                    val speed = kotlin.math.abs(dragAmount) / dtMs // px per ms
+                    val targetZoom = (1f - speed / ZOOM_FAST_PX_PER_MS).coerceIn(0f, 1f)
+                    zoom += (targetZoom - zoom) * ZOOM_SMOOTHING
+                    onZoom(zoom)
+                    // Visible span shrinks with zoom, so the same pixel covers
+                    // fewer milliseconds the deeper you are.
+                    val spanMs = androidx.compose.ui.util.lerp(
+                        FULL_SPAN_HINT_MS, MIN_ZOOM_SPAN_MS, zoom,
+                    )
+                    val ms = dragAmount * (spanMs / widthPx) + remainder
+                    val whole = ms.roundToLong()
+                    remainder = ms - whole
+                    if (whole != 0L) onNudge(whole)
+                }
             },
     ) {
         Text(
-            text = "⟷  drag to fine-tune",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-        )
-    }
-}
-
-private fun Modifier.pointerInputFineDrag(onDrag: (Float) -> Unit): Modifier =
-    pointerInput(Unit) {
-        detectHorizontalDragGestures { change, dragAmount ->
-            change.consume()
-            onDrag(dragAmount)
-        }
-    }
-
-@Composable
-private fun QuietToggle(
-    label: String,
-    checked: Boolean,
-    accent: Color,
-    onToggle: () -> Unit,
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier
-            .quietClickable(onClick = onToggle)
-            .padding(vertical = 4.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(16.dp)
-                .clip(CircleShape)
-                .background(if (checked) accent else Color.Transparent)
-                .border(
-                    width = 1.2.dp,
-                    color = if (checked) accent else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    shape = CircleShape,
-                ),
-        )
-        Text(
-            text = label,
+            text = "◀   slide to adjust   ▶",
             style = MaterialTheme.typography.labelMedium,
-            color = if (checked) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = accents.copy(alpha = 0.8f),
         )
     }
 }
 
 // ── Timeline ──────────────────────────────────────────────────────────────
 
+/**
+ * The marks-and-playhead strip. Repeats are washed orange, first-pass marks
+ * gold, the selected one enlarged with a handle dot. [zoom] (0 = whole ayah,
+ * 1 = deepest) windows the view around the selected marker so a fine drag on
+ * the slide bar reads as a real zoom, not just a slower number.
+ */
 @Composable
-private fun TimelineStrip(
+private fun EditTimeline(
     ui: TimingsLabUiState,
     viewModel: TimingsLabViewModel,
     accents: QuranAccents,
+    zoom: Float,
 ) {
     val duration = ui.durationMs.coerceAtLeast(1L)
     val repeats = remember(ui.passes) { repeatFlags(ui.passes) }
     val trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f)
     val playheadColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+    val guideColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
+
+    // Window the view: full ayah at zoom 0, tightening around the selected
+    // marker as zoom rises. Kept as floats; the Canvas maps time→x through it.
+    val centerMs = ui.selectedPass?.let { ui.passes.getOrNull(it)?.startMs }?.toFloat()
+        ?: (duration / 2f)
+    val spanMs = androidx.compose.ui.util.lerp(duration.toFloat(), MIN_ZOOM_SPAN_MS, zoom)
+        .coerceIn(1f, duration.toFloat())
+    val windowStart = (centerMs - spanMs / 2f).coerceIn(0f, (duration - spanMs).coerceAtLeast(0f))
+    fun xFor(ms: Float, w: Float): Float = ((ms - windowStart) / spanMs) * w
 
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
-            .height(36.dp)
+            .height(40.dp)
             .padding(horizontal = 24.dp)
-            .pointerInputScrub(duration) { ms -> viewModel.scrubTo(ms) },
+            // Tap a marker to select it (the word lights up); tap elsewhere to
+            // scrub. Disabled while zoomed — the slide bar owns that gesture.
+            .pointerInputPick(duration, ui.passes, zoom < 0.02f) { tapX, w ->
+                val nearest = ui.passes.withIndex().minByOrNull {
+                    kotlin.math.abs(xFor(it.value.startMs.toFloat(), w) - tapX)
+                }
+                val hitPx = w * 0.05f
+                if (nearest != null &&
+                    kotlin.math.abs(xFor(nearest.value.startMs.toFloat(), w) - tapX) < hitPx
+                ) {
+                    viewModel.selectPass(nearest.index)
+                } else {
+                    viewModel.scrubTo((windowStart + (tapX / w) * spanMs).toLong())
+                }
+            },
     ) {
         val w = size.width
         val midY = size.height / 2f
@@ -535,11 +573,22 @@ private fun TimelineStrip(
             strokeWidth = 2.dp.toPx(),
             cap = StrokeCap.Round,
         )
+        // Center guide while zoomed, so the selected mark's exact placement reads.
+        if (zoom > 0.02f) {
+            val cx = xFor(centerMs, w)
+            drawLine(
+                color = guideColor,
+                start = Offset(cx, 0f),
+                end = Offset(cx, size.height),
+                strokeWidth = 1.dp.toPx(),
+            )
+        }
         ui.passes.forEachIndexed { i, seg ->
-            val x = (seg.startMs.toFloat() / duration) * w
+            val x = xFor(seg.startMs.toFloat(), w)
+            if (x < -8f || x > w + 8f) return@forEachIndexed
             val selected = i == ui.selectedPass
             val color = if (repeats.getOrElse(i) { false }) accents.repeatInk else accents.gold
-            val tick = if (selected) 13.dp.toPx() else 8.dp.toPx()
+            val tick = if (selected) 14.dp.toPx() else 8.dp.toPx()
             drawLine(
                 color = color,
                 start = Offset(x, midY - tick),
@@ -548,32 +597,32 @@ private fun TimelineStrip(
                 cap = StrokeCap.Round,
             )
             if (selected) {
-                drawCircle(color = color, radius = 3.5.dp.toPx(), center = Offset(x, midY))
+                drawCircle(color = color, radius = 4.dp.toPx(), center = Offset(x, midY))
             }
         }
-        val px = (ui.positionMs.toFloat() / duration).coerceIn(0f, 1f) * w
-        drawLine(
-            color = playheadColor,
-            start = Offset(px, 2.dp.toPx()),
-            end = Offset(px, size.height - 2.dp.toPx()),
-            strokeWidth = 1.6.dp.toPx(),
-        )
-    }
-}
-
-private fun Modifier.pointerInputScrub(durationMs: Long, onScrub: (Long) -> Unit): Modifier =
-    pointerInput(durationMs) {
-        detectTapGestures { tap ->
-            onScrub(((tap.x / size.width) * durationMs).toLong())
-        }
-    }.pointerInput(durationMs) {
-        detectHorizontalDragGestures { change, _ ->
-            change.consume()
-            onScrub(
-                ((change.position.x / size.width).coerceIn(0f, 1f) * durationMs).toLong(),
+        val px = xFor(ui.positionMs.toFloat(), w)
+        if (px in 0f..w) {
+            drawLine(
+                color = playheadColor,
+                start = Offset(px, 2.dp.toPx()),
+                end = Offset(px, size.height - 2.dp.toPx()),
+                strokeWidth = 1.6.dp.toPx(),
             )
         }
     }
+}
+
+/** Tap picking / scrubbing for the timeline, active only when [enabled]
+ * (i.e. not mid-zoom). Reports the tapped x and the canvas width. */
+private fun Modifier.pointerInputPick(
+    durationMs: Long,
+    passes: List<Segment>,
+    enabled: Boolean,
+    onTap: (tapX: Float, width: Float) -> Unit,
+): Modifier = pointerInput(durationMs, passes, enabled) {
+    if (!enabled) return@pointerInput
+    detectTapGestures { tap -> onTap(tap.x, size.width.toFloat()) }
+}
 
 // ── Transport ─────────────────────────────────────────────────────────────
 
@@ -704,7 +753,9 @@ private fun HintLine(ui: TimingsLabUiState, accents: QuranAccents) {
             "Tap each word the moment it's recited — tap earlier words again for repeats"
         ui.passes.isEmpty() && !ui.isLoading ->
             "No timings yet for this ayah — hit Re-sync and tap along"
-        else -> "Play to watch the follow-along · tap a word to tune its start"
+        ui.selectedPass != null ->
+            "Slide to adjust the start — drag slower to zoom in · ＋ Add repeat to mark a repetition"
+        else -> "Play to follow along · tap a word (or a marker) to adjust its timing"
     }
     Text(
         text = text,
