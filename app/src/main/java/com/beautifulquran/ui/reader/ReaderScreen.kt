@@ -147,6 +147,10 @@ fun ReaderScreen(
     /** Opens the Timings Lab in place, over this sheet. Press-and-hold on a
      *  word routes here so the Lab rises already focused on that exact word. */
     onEditTimings: (surahId: Int, ayah: Int, wordPosition: Int) -> Unit = { _, _, _ -> },
+    /** True while the Timings Lab sheet is riding over this reader: playback
+     *  then belongs to the Lab, so the reader must not enter immersive mode
+     *  and hide the status bar out from under the Lab's header. */
+    keepStatusBarVisible: Boolean = false,
 ) {
     LaunchedEffect(surahId) { viewModel.load(surahId) }
     DisposableEffect(onAyahSelectorExpandedChange) {
@@ -217,17 +221,23 @@ fun ReaderScreen(
         }
     }
     val view = LocalView.current
-    DisposableEffect(view, recitingActive) {
+    DisposableEffect(view, recitingActive, keepStatusBarVisible) {
         val window = view.context.findActivity()?.window
         val controller = window?.let { WindowCompat.getInsetsController(it, view) }
         if (recitingActive) {
             window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        // Immersive reading hides the status bar — but not while the Timings
+        // Lab sheet is riding over this reader: the Lab is a workbench, and
+        // its playback must not push the clock off its own header.
+        if (recitingActive && !keepStatusBarVisible) {
             controller?.hide(WindowInsetsCompat.Type.statusBars())
             controller?.systemBarsBehavior =
                 androidx.core.view.WindowInsetsControllerCompat
                     .BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         } else {
-            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             controller?.show(WindowInsetsCompat.Type.statusBars())
         }
         onDispose {
