@@ -54,12 +54,14 @@ word** (on the verse) **or its marker** (on the timeline): the Lab selects
 that mark, seeks ~0.8 s before it and plays, and reveals the **slide bar**.
 
 * **Slide to adjust.** Drag the bar left/right to move *only* that marker's
-  start — nothing else shifts. The catch that makes it precise: the timeline
-  above **zooms in as you slow down**. A quick drag stays zoomed out for
-  coarse travel; ease off and the view tightens around the marker until a
-  pixel is worth under a millisecond. Let go and it eases back to the full
-  ayah. When the slide settles the Lab **re-auditions** from just before the
-  new start, so every adjustment is judged by ear.
+  start — nothing else shifts. The moment you grab it the timeline **zooms in**
+  around the marker and *holds* there while you work (Apple-timeline style —
+  it never flickers in and out as you pause or change speed); it eases back to
+  the full ayah only a beat after you let go. When the slide settles the Lab
+  **re-auditions** from just before the new start, so every adjustment is
+  judged by ear.
+* **Undo** (transport, ↶) steps back through every edit — each slide, add-
+  repeat, delete, re-sync, and reset — one at a time.
 * **＋ Add repeat** — stamps a second mark for the selected word at the
   playhead and selects it, so you immediately slide it to where the reciter
   re-recites it. The rest of the ayah is untouched. A mark whose word
@@ -87,10 +89,11 @@ corrections` empties the store.
 The Lab is **not a page in the paper stack** — it is a contrasting workbench
 that **blooms in over whatever is open** (usually the reader) as an expanding
 ink spot, the same ink-bleed language as the notification prompt, and closes
-by opening a hole back to the exact page it came from. Its palette is the
-reader's inverted (a dark workbench on paper, and vice-versa) — that contrast
-is what makes the bloom read, since the surface would otherwise share the
-reader's own colours. Entry and exit never route through Settings.
+by opening a hole back to the exact page it came from. Its palette is always
+**Royal Green** (and **Nightfall** under the Royal Green theme itself, so the
+two never coincide) with the dark accent set — that contrast is what makes the
+bloom read, since the surface would otherwise share the reader's own colours.
+Entry and exit never route through Settings.
 
 * **From the reader** (primary): long-press any word in any reading mode —
   no confirmation, the hold is the intent and a haptic is the answer. The Lab
@@ -152,8 +155,9 @@ in-memory working copy, so you see edits *before* they're persisted.
 │  [ ◀  slide to adjust  ▶ ]                    │  slide bar (when selected):
 │  الٓمٓ 6.4s      ＋ Add repeat      Delete      │  word · start · repeat · del
 ├──────────────────────────────────────────────┤
-│  ▶   ⟲   1×                      [● Re-sync] │  transport + record pill
-│  "Slide to adjust · drag slower to zoom in"  │  contextual hint line
+│  ▶   ⟲   ↶   1×                  [● Re-sync] │  transport: play, restart,
+│                                              │  undo, speed + record pill
+│  "Slide to adjust · zooms in while you work" │  contextual hint line
 │  3 ayahs corrected on this device · Submit   │  pending-corrections ribbon
 └──────────────────────────────────────────────┘
 ```
