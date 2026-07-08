@@ -84,15 +84,19 @@ corrections` empties the store.
 
 ## Where it lives
 
-The Lab is **not a page in the paper stack** — it is a work sheet that rises
-in place over whatever is open (usually the reader) and lowers back onto it.
-Entry and exit never route through Settings.
+The Lab is **not a page in the paper stack** — it is a contrasting workbench
+that **blooms in over whatever is open** (usually the reader) as an expanding
+ink spot, the same ink-bleed language as the notification prompt, and closes
+by opening a hole back to the exact page it came from. Its palette is the
+reader's inverted (a dark workbench on paper, and vice-versa) — that contrast
+is what makes the bloom read, since the surface would otherwise share the
+reader's own colours. Entry and exit never route through Settings.
 
 * **From the reader** (primary): long-press any word in any reading mode —
-  no confirmation, the hold is the intent and a haptic is the answer. The
-  sheet rises on that exact (surah, ayah) with **the pressed word already
+  no confirmation, the hold is the intent and a haptic is the answer. The Lab
+  blooms in on that exact (surah, ayah) with **the pressed word already
   selected and auditioning**, so the fix loop starts without another tap.
-  Back (or the ▾ chevron) lowers the sheet onto the same reader page, which
+  Back (or the ▾ chevron) closes it back onto the same reader page, which
   already reflects the correction — the reader re-pulls fused timings the
   moment the override store changes.
 * **From Settings**: long-press the logo (developer unlock) → *Timings Lab*

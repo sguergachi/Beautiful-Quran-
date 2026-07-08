@@ -7,12 +7,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -63,7 +60,9 @@ import com.beautifulquran.ui.settings.SettingsViewModel
 import com.beautifulquran.timingslab.TimingsLabScreen
 import com.beautifulquran.timingslab.TimingsLabViewModel
 import com.beautifulquran.ui.theme.BeautifulQuranTheme
+import com.beautifulquran.ui.theme.InkRevealOverlay
 import com.beautifulquran.ui.theme.absorbPointerEvents
+import com.beautifulquran.ui.theme.playbackNotificationColorScheme
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -99,7 +98,7 @@ class MainActivity : ComponentActivity() {
                 // to collapse the top inset (pulling the verse up under the
                 // notch) and flashed back on every loop restart. The reader
                 // instead paints its own opaque bar over that strip.
-                PaperStackApp()
+                PaperStackApp(themeMode = settings.themeMode)
             }
         }
     }
@@ -120,7 +119,7 @@ private const val STACK_OFFSCREEN_OVERSCAN_DP = 24f
 private val StackMotionEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
 
 @Composable
-private fun PaperStackApp() {
+private fun PaperStackApp(themeMode: ThemeMode) {
     val homeViewModel: HomeViewModel = viewModel(factory = AppViewModelFactory)
     val readerViewModel: ReaderViewModel = viewModel(factory = AppViewModelFactory)
     val settingsViewModel: SettingsViewModel = viewModel(factory = AppViewModelFactory)
@@ -291,28 +290,27 @@ private fun PaperStackApp() {
             )
         }
 
-        // The Lab rises as its own sheet over the settled page and lowers
-        // back onto it — entry and exit stay in place, never via Settings.
-        AnimatedVisibility(
+        // The Lab blooms in as a contrasting ink spot over the reader — the
+        // same ink-bleed language as the notification prompt — and closes by
+        // opening a hole back to the exact page it came from. The contrasting
+        // palette (a dark workbench on paper, and vice-versa) is what makes the
+        // bloom read against the reader, which shares the reader's own colours.
+        val labColors = playbackNotificationColorScheme(themeMode)
+        InkRevealOverlay(
             visible = labVisible,
-            enter = slideInVertically(
-                animationSpec = tween(STACK_PAGE_DURATION_MS, easing = StackMotionEasing),
-                initialOffsetY = { it },
-            ),
-            exit = slideOutVertically(
-                animationSpec = tween(STACK_PAGE_DURATION_MS, easing = StackMotionEasing),
-                targetOffsetY = { it },
-            ),
+            backgroundColor = labColors.background,
             modifier = Modifier.zIndex(3f),
         ) {
-            Box(Modifier.fillMaxSize()) {
-                // The sheet is opaque paper: touches on its quiet areas must
-                // land on it, never on the reader resting beneath.
-                Box(Modifier.matchParentSize().absorbPointerEvents())
-                TimingsLabScreen(
-                    viewModel = timingsLabViewModel,
-                    onBack = ::closeTimingsLab,
-                )
+            MaterialTheme(colorScheme = labColors, typography = MaterialTheme.typography) {
+                Box(Modifier.fillMaxSize()) {
+                    // Opaque workbench: touches on its quiet areas land here,
+                    // never on the reader resting beneath.
+                    Box(Modifier.matchParentSize().absorbPointerEvents())
+                    TimingsLabScreen(
+                        viewModel = timingsLabViewModel,
+                        onBack = ::closeTimingsLab,
+                    )
+                }
             }
         }
     }
