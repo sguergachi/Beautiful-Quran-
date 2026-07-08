@@ -100,12 +100,12 @@ class QuranRepository(
         SurahContent(surah, ayahs)
     }
 
-    /** ayah number -> word segments, for one reciter and surah. Any
-     * hand-corrected override from the Timings Lab takes precedence over the
-     * bundled DB row, so the reader immediately reflects edits. */
-    suspend fun timings(reciterId: Int, surahId: Int): Map<Int, List<Segment>> =
+    /** The bundled DB timings for a reciter+surah, with **no** Lab overrides
+     * fused in — the shipped defaults. The Lab uses this to reset a single word
+     * back to how the app shipped it. */
+    suspend fun bundledTimings(reciterId: Int, surahId: Int): Map<Int, List<Segment>> =
         withContext(Dispatchers.IO) {
-            val dbTimings = database.db.rawQuery(
+            database.db.rawQuery(
                 "SELECT ayah_number, segments FROM timings WHERE reciter_id = ? AND surah_id = ?",
                 arrayOf(reciterId.toString(), surahId.toString()),
             ).use { c ->
@@ -115,6 +115,14 @@ class QuranRepository(
                     }
                 }
             }
+        }
+
+    /** ayah number -> word segments, for one reciter and surah. Any
+     * hand-corrected override from the Timings Lab takes precedence over the
+     * bundled DB row, so the reader immediately reflects edits. */
+    suspend fun timings(reciterId: Int, surahId: Int): Map<Int, List<Segment>> =
+        withContext(Dispatchers.IO) {
+            val dbTimings = bundledTimings(reciterId, surahId)
             if (timingOverrides == null) return@withContext dbTimings
             val overrides = timingOverrides.overrides.value
             if (overrides.isEmpty() || !overrides.keys.any { it.reciterId == reciterId && it.surahId == surahId }) {

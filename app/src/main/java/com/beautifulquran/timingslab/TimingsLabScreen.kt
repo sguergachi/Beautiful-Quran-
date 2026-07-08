@@ -38,7 +38,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.MoreHoriz
@@ -215,7 +214,7 @@ fun TimingsLabScreen(
                 ui = ui,
                 viewModel = viewModel,
                 accents = accents,
-                onGrab = { viewModel.beginAdjust(); zoomIn() },
+                onGrab = { zoomIn() },
                 onRelease = { zoomOut() },
             )
         }
@@ -445,12 +444,25 @@ private fun AdjustPanel(
         }
 
         Spacer(Modifier.height(8.dp))
+        // Has this word been moved off the shipped default? If so, offer to
+        // reset just this word back to it — leaving every other word alone.
+        val defForWord = ui.defaultPasses.filter { it.position == pass.position }
+        val curForWord = ui.passes.filter { it.position == pass.position }
+        val canReset = curForWord.map { it.startMs } != defForWord.map { it.startMs }
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             LabPill("＋ Add repeat", accents.repeatInk, filled = true) { viewModel.addRepeat() }
             Spacer(Modifier.weight(1f))
+            Text(
+                text = "Reset",
+                style = MaterialTheme.typography.labelMedium,
+                color = accents.gold.copy(alpha = if (canReset) 1f else 0.3f),
+                modifier = Modifier
+                    .quietClickable(enabled = canReset) { viewModel.resetSelectedWordToDefault() }
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+            )
             Text(
                 text = "Delete",
                 style = MaterialTheme.typography.labelMedium,
@@ -662,19 +674,6 @@ private fun TransportBar(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            IconButton(
-                onClick = viewModel::undo,
-                enabled = ui.canUndo,
-                modifier = Modifier.size(40.dp),
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Rounded.Undo,
-                    contentDescription = "Undo",
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        .copy(alpha = if (ui.canUndo) 1f else 0.3f),
-                )
-            }
             LabPill(speedLabel(ui.speed), accents.gold) { viewModel.cycleSpeed() }
             Spacer(Modifier.weight(1f))
             LabPill("●  Re-sync", accents.gold, filled = true, enabled = !ui.isLoading) {
@@ -758,7 +757,7 @@ private fun HintLine(ui: TimingsLabUiState, accents: QuranAccents) {
         ui.passes.isEmpty() && !ui.isLoading ->
             "No timings yet for this ayah — hit Re-sync and tap along"
         ui.selectedPass != null ->
-            "Slide to adjust the start — it zooms in while you work · ＋ Add repeat to mark a repetition"
+            "Slide to adjust — Reset returns this word to its default · ＋ Add repeat to mark a repetition"
         else -> "Play to follow along · tap a word (or a marker) to adjust its timing"
     }
     Text(
