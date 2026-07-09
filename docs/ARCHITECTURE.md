@@ -155,15 +155,15 @@ ReaderFocusController ── holds the LazyListState; the sole writer to it
   also exposes the shared read-out (`focusedAyah` / `focusedPosition`) the rail
   and the return control both consume.
 - Hand-initiated jumps (selector, search, return-to-verse) pass `preRoll` to
-  `focus()`: the bulk of the distance is covered instantly, then the verse is
-  offset from its landing and *seen* gliding in over a **distance-scaled
-  approach** (`approachDistancePx` / `approachDurationMs`) — further and up to
-  a full second for a bigger jump, briefer when nearby — capped under one
-  viewport and clamped to the residual after teleport so the wind-up never
-  reverses (a reverse wind-up collapses to a pop at list edges).
-  Recitation-follow leaves it off so lyric tracking stays smooth. Concurrent
-  `focus()` calls are serialized on a mutex so a sibling effect cannot cancel
-  the slide mid-flight.
+  `focus()`. The pure `FocusEngine.planJump` owns the whole trajectory:
+  **near** jumps animate the full path (direct interpolation) with a
+  decelerating scroll onto the verse; **far** jumps teleport to a doorstep
+  roughly one viewport short of the target, then rush only that truncated
+  residual so the motion reads as "scrolling to verse N" without waiting on a
+  surah-length trajectory. Duration saturates around half a second.
+  Recitation-follow leaves `preRoll` off so lyric tracking stays a gentle
+  glide. Concurrent `focus()` calls are serialized on a mutex so a sibling
+  effect cannot cancel the slide mid-flight.
 - Word-level `bringIntoView` (in `AyahBlock`) is the engine's *secondary*
   constraint: it only engages inside a verse taller than the viewport, so it
   carries the eye through a long verse without fighting the verse-level anchor.

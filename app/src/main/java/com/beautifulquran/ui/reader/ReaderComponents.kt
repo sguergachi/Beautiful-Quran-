@@ -761,13 +761,15 @@ fun AyahBlock(
         searchQuery != null && word.translation.contains(searchQuery, ignoreCase = true)
     // Non-active ayahs recede softly while another is being recited.
     // State is read inside graphicsLayer so the dim animates draw-phase-only.
+    // Fade out slowly when the selector blooms; snap back quickly when it
+    // clears so a hand-initiated jump's decelerating scroll is visible.
     val blockAlpha = animateFloatAsState(
         targetValue = when {
             obscuredBySelector -> 0.07f
             dimmed -> 0.32f
             else -> 1f
         },
-        animationSpec = tween(600),
+        animationSpec = tween(if (obscuredBySelector) 600 else 120),
         label = "ayahAlpha",
     )
 

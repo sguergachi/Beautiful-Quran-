@@ -47,70 +47,107 @@ object FocusEngine {
      */
     private const val IN_FOCUS_TOLERANCE_FRACTION = 0.18f
 
-    // --- Distance-scaled jump approach ---
-    // A hand-initiated jump animates its final stretch so the reader *sees* the
-    // scroll arrive. The length of that stretch scales with how far the jump is
-    // (in verses), capped, so a longer jump is offset further from its landing
-    // — conveying distance travelled — while never animating the whole surah.
-    // Duration follows the same curve: nearby jumps are brief; far jumps hold
-    // the slide for a full second so the travel reads clearly.
+    // --- Hand-initiated jump planning ---
+    // A jump from verse A to verse B should *feel* like a fast scroll that
+    // decelerates onto the target — not a leisurely glide from an artificial
+    // offset. The engine owns the whole plan:
     //
-    // The ceiling must stay within a single viewport: after a doorstep teleport
-    // the residual travel is typically ≤ ~1 viewport, and an approach longer
-    // than that residual forces a *reverse* wind-up. LazyList clamps that
-    // reverse at the list edges, which collapses the animated leg to nothing
-    // and reads as a pop (the #136 regression).
-
-    /** Shortest approach (nearest jump), as a fraction of the viewport. */
-    private const val APPROACH_MIN_FRACTION = 0.32f
-
-    /** How much each verse of jump distance lengthens the approach. */
-    private const val APPROACH_PER_VERSE_FRACTION = 0.05f
-
-    /** Longest approach (far jumps saturate here), as a fraction of the
-     *  viewport — kept under one viewport so it fits the post-teleport
-     *  residual and never needs a reverse wind-up. */
-    private const val APPROACH_MAX_FRACTION = 0.95f
-
-    /** Duration of the shortest approach (a verse or two away). */
-    private const val APPROACH_MIN_MS = 320
-
-    /** Duration of the longest (saturated) approach — a full second so far
-     *  jumps read as a quick scroll across the page, not a pop. */
-    private const val APPROACH_MAX_MS = 1_000
+    //   • Near  → animate the full path (direct interpolation).
+    //   • Far   → teleport to a doorstep just short of the target, then animate
+    //             only the truncated residual so we never wait on a surah-length
+    //             trajectory. The residual is long enough to read as "rushing
+    //             past verses", short enough to finish in a beat.
+    //
+    // LazyList cannot smoothly animate across hundreds of unmeasured items, so
+    // the far-path teleport is also a correctness requirement — not just a
+    // timing trick.
 
     /**
-     * How far (px) the final, animated stretch of a jump should travel, scaled
-     * by the jump's distance in verses ([jumpDistanceVerses]) and capped at
-     * [APPROACH_MAX_FRACTION] of the viewport. The verse is pre-positioned this
-     * far from its anchor on the approach side, then glided in — the offset is
-     * what gives the sense of distance travelled.
+     * How many items beyond the visible window still count as "near" enough to
+     * animate the full path without a doorstep teleport.
+     */
+    private const val NEAR_EXTRA_ITEMS = 2
+
+    /**
+     * After a far teleport, leave the target as the last (or first) item in the
+     * visible window so it is already measured. The animated leg then rushes
+     * that roughly-one-viewport residual onto the anchor — enough to feel like
+     * travel, short enough to finish in a beat. Leaving the target *outside*
+     * the window would force a snap-to-measure and kill the scroll.
+     */
+    private const val FAR_DOORSTEP_MARGIN_ITEMS = 1
+
+    /** Shortest decelerating scroll (a verse or two away). */
+    private const val JUMP_MIN_MS = 220
+
+    /** Longest decelerating scroll (saturated far residual). Punchy, not leisurely. */
+    private const val JUMP_MAX_MS = 520
+
+    /** Item-distance at which [JUMP_MAX_MS] saturates. */
+    private const val JUMP_DURATION_SATURATE_ITEMS = 12
+
+    /**
+     * Plan a hand-initiated jump from [fromIndex] to [toIndex].
      *
-     * Callers must still clamp this against the real residual delta after
-     * teleport (see [ReaderFocusController.focus]) so a short residual never
-     * triggers a reverse wind-up.
+     * - **Near** ([JumpPlan.doorstepIndex] null): the controller animates
+     *   straight from the current scroll position onto the target's anchor.
+     * - **Far** (doorstep set): the controller snaps to that doorstep first,
+     *   then animates only the short residual — a high-speed decelerating
+     *   scroll that settles on the verse. The doorstep is chosen so the target
+     *   is already laid out (last/first visible item), which is what lets the
+     *   residual be a real pixel scroll instead of a snap-then-nudge.
      */
-    fun approachDistancePx(viewportHeightPx: Int, jumpDistanceVerses: Int): Int {
-        val fraction = (APPROACH_MIN_FRACTION + APPROACH_PER_VERSE_FRACTION * abs(jumpDistanceVerses))
-            .coerceIn(APPROACH_MIN_FRACTION, APPROACH_MAX_FRACTION)
-        return (viewportHeightPx * fraction).roundToInt()
+    fun planJump(
+        fromIndex: Int,
+        toIndex: Int,
+        visibleItemCount: Int,
+        totalItemCount: Int,
+    ): JumpPlan {
+        val delta = toIndex - fromIndex
+        if (delta == 0) {
+            return JumpPlan(doorstepIndex = null, durationMs = JUMP_MIN_MS)
+        }
+        val visible = visibleItemCount.coerceAtLeast(1)
+        val near = abs(delta) <= visible + NEAR_EXTRA_ITEMS
+        if (near) {
+            return JumpPlan(
+                doorstepIndex = null,
+                durationMs = jumpDurationMs(abs(delta)),
+            )
+        }
+        // Put the target at the far edge of the window: after the snap it is
+        // measured, and the residual to the reading-line anchor is ~one
+        // viewport of decelerating scroll.
+        val doorstepSpan = (visible - FAR_DOORSTEP_MARGIN_ITEMS).coerceAtLeast(1)
+        val rawDoorstep = if (delta > 0) toIndex - doorstepSpan else toIndex + doorstepSpan
+        val doorstep = rawDoorstep.coerceIn(0, (totalItemCount - 1).coerceAtLeast(0))
+        return JumpPlan(
+            doorstepIndex = doorstep,
+            durationMs = jumpDurationMs(doorstepSpan),
+        )
     }
 
     /**
-     * How long the animated approach should take, scaled by how far the jump
-     * is in verses so a distant target holds the slide for a full second while
-     * a nearby one stays brief. Independent of the (possibly residual-clamped)
-     * approach length — a far jump near a list edge still reads as a long
-     * travel even when only a short residual remains to animate. Kept in
-     * [APPROACH_MIN_MS]..[APPROACH_MAX_MS].
+     * Duration of the decelerating scroll leg, scaled by how many items that
+     * leg covers. Near jumps of a verse or two are brief; a full doorstep
+     * residual saturates at [JUMP_MAX_MS].
      */
-    fun approachDurationMs(jumpDistanceVerses: Int): Int {
-        // Same verse count at which [approachDistancePx] saturates.
-        val saturatingVerses =
-            (APPROACH_MAX_FRACTION - APPROACH_MIN_FRACTION) / APPROACH_PER_VERSE_FRACTION
-        val t = (abs(jumpDistanceVerses) / saturatingVerses).coerceIn(0f, 1f)
-        return (APPROACH_MIN_MS + (APPROACH_MAX_MS - APPROACH_MIN_MS) * t).roundToInt()
+    fun jumpDurationMs(animatedItemDistance: Int): Int {
+        val t = (abs(animatedItemDistance).toFloat() / JUMP_DURATION_SATURATE_ITEMS)
+            .coerceIn(0f, 1f)
+        return (JUMP_MIN_MS + (JUMP_MAX_MS - JUMP_MIN_MS) * t).roundToInt()
     }
+
+    /**
+     * Whether [target] is far enough from the current window that a smooth glide
+     * would stutter estimating unmeasured verse heights along the way, so the
+     * controller should teleport to a doorstep first and glide the last stretch.
+     *
+     * Prefer [planJump] for hand-initiated jumps — this remains for the
+     * non-preRoll recitation-follow path, which still uses a simple doorstep.
+     */
+    fun shouldTeleport(targetIndexDelta: Int, visibleItemCount: Int): Boolean =
+        abs(targetIndexDelta) > visibleItemCount + NEAR_EXTRA_ITEMS
 
     /** Usable vertical space for reading: the viewport minus any top guard. */
     private fun usable(viewportHeightPx: Int, topGuardPx: Int): Int =
@@ -210,15 +247,20 @@ object FocusEngine {
         }
         return base.coerceIn(1f, readout.lastAyahNumber.toFloat())
     }
-
-    /**
-     * Whether [target] is far enough from the current window that a smooth glide
-     * would stutter estimating unmeasured verse heights along the way, so the
-     * controller should teleport to a doorstep first and glide the last stretch.
-     */
-    fun shouldTeleport(targetIndexDelta: Int, visibleItemCount: Int): Boolean =
-        kotlin.math.abs(targetIndexDelta) > visibleItemCount + 2
 }
+
+/**
+ * Pure plan for a hand-initiated verse jump. Produced by [FocusEngine.planJump];
+ * executed by [ReaderFocusController.focus].
+ *
+ * @param doorstepIndex Item index to snap to before the decelerating scroll, or
+ *   `null` when the full path from the current position should be animated.
+ * @param durationMs Length of the decelerating scroll leg.
+ */
+data class JumpPlan(
+    val doorstepIndex: Int?,
+    val durationMs: Int,
+)
 
 /** Immutable geometry of the verse being focused, in the coordinate system
  *  documented on [FocusEngine]. */
