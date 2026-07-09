@@ -165,57 +165,88 @@ class FocusEngineTest {
         assertTrue(FocusEngine.shouldTeleport(targetIndexDelta = 40, visibleItemCount = 5))
     }
 
-    // ---- distance-scaled approach ----
+    // ---- jump planning (near = direct, far = doorstep + truncated residual) ----
 
     @Test
-    fun `approach grows with jump distance and saturates`() {
-        val near = FocusEngine.approachDistancePx(viewport, jumpDistanceVerses = 1)
-        val mid = FocusEngine.approachDistancePx(viewport, jumpDistanceVerses = 8)
-        val far = FocusEngine.approachDistancePx(viewport, jumpDistanceVerses = 200)
-        assertTrue("a longer jump travels further", near < mid)
+    fun `near jump animates the full path with no doorstep`() {
+        val plan = FocusEngine.planJump(
+            fromIndex = 0,
+            toIndex = 4,
+            visibleItemCount = 5,
+            totalItemCount = 200,
+        )
+        assertEquals(null, plan.doorstepIndex)
+        assertTrue(plan.durationMs in 220..520)
+    }
+
+    @Test
+    fun `far jump teleports to a doorstep that keeps the target laid out`() {
+        val plan = FocusEngine.planJump(
+            fromIndex = 0,
+            toIndex = 200,
+            visibleItemCount = 5,
+            totalItemCount = 300,
+        )
+        // visible-1 (=4) short of the target → target is the last visible item
+        // after the snap, so the residual is a real pixel scroll.
+        assertEquals(196, plan.doorstepIndex)
+        assertTrue("far residual stays punchy", plan.durationMs <= 520)
+        assertTrue(plan.durationMs >= 220)
+    }
+
+    @Test
+    fun `far jump upward places the doorstep past the target`() {
+        val plan = FocusEngine.planJump(
+            fromIndex = 200,
+            toIndex = 10,
+            visibleItemCount = 5,
+            totalItemCount = 300,
+        )
+        assertEquals(14, plan.doorstepIndex)
+    }
+
+    @Test
+    fun `doorstep is clamped to list bounds`() {
+        val plan = FocusEngine.planJump(
+            fromIndex = 0,
+            toIndex = 2,
+            visibleItemCount = 1,
+            totalItemCount = 3,
+        )
+        // Delta 2 > visible+2 (=3)? 2 <= 3, so near — no doorstep.
+        assertEquals(null, plan.doorstepIndex)
+
+        val farAtEnd = FocusEngine.planJump(
+            fromIndex = 0,
+            toIndex = 50,
+            visibleItemCount = 5,
+            totalItemCount = 51,
+        )
+        assertEquals(46, farAtEnd.doorstepIndex)
+        assertTrue(farAtEnd.doorstepIndex!! < 51)
+    }
+
+    @Test
+    fun `jump duration scales with animated distance and saturates`() {
+        val near = FocusEngine.jumpDurationMs(1)
+        val mid = FocusEngine.jumpDurationMs(6)
+        val far = FocusEngine.jumpDurationMs(200)
+        assertTrue(near < mid)
         assertTrue(mid < far)
-        // Nearest jump floors at 0.32 vp; farthest saturates at 0.95 vp —
-        // under one viewport so it fits the post-teleport residual.
-        assertEquals((viewport * 0.37f).toInt(), near) // 0.32 + 0.05*1
-        assertEquals((viewport * 0.95f).toInt(), far)
-        assertTrue("never animates more than one viewport", far <= viewport)
+        assertEquals(220, FocusEngine.jumpDurationMs(0))
+        assertEquals(245, near) // 220 + (520-220)*(1/12)
+        assertEquals(520, far)
     }
 
     @Test
-    fun `approach is symmetric in direction`() {
-        assertEquals(
-            FocusEngine.approachDistancePx(viewport, jumpDistanceVerses = 6),
-            FocusEngine.approachDistancePx(viewport, jumpDistanceVerses = -6),
+    fun `zero-distance jump is a no-op plan`() {
+        val plan = FocusEngine.planJump(
+            fromIndex = 10,
+            toIndex = 10,
+            visibleItemCount = 5,
+            totalItemCount = 100,
         )
-    }
-
-    @Test
-    fun `approach duration scales with jump distance — far jumps hold a full second`() {
-        val shortMs = FocusEngine.approachDurationMs(jumpDistanceVerses = 1)
-        val midMs = FocusEngine.approachDurationMs(jumpDistanceVerses = 6)
-        val longMs = FocusEngine.approachDurationMs(jumpDistanceVerses = 200)
-        assertTrue("nearby jumps are briefer", shortMs < midMs)
-        assertTrue(midMs < longMs)
-        assertEquals("far jumps hold a full second", 1_000, longMs)
-        assertTrue("nearby jumps stay under half a second", shortMs < 500)
-        assertTrue(shortMs >= 320)
-    }
-
-    @Test
-    fun `approach duration is symmetric in direction`() {
-        assertEquals(
-            FocusEngine.approachDurationMs(jumpDistanceVerses = 10),
-            FocusEngine.approachDurationMs(jumpDistanceVerses = -10),
-        )
-    }
-
-    @Test
-    fun `approach never exceeds a typical post-teleport residual`() {
-        // After a doorstep teleport the residual is roughly one viewport of
-        // content. An approach longer than that residual is what collapsed the
-        // slide into a pop (#136); the cap must stay under that budget.
-        val far = FocusEngine.approachDistancePx(viewport, jumpDistanceVerses = 200)
-        val typicalResidual = viewport // ~one viewport of doorstep travel
-        assertTrue(far < typicalResidual)
+        assertEquals(null, plan.doorstepIndex)
+        assertEquals(220, plan.durationMs)
     }
 }

@@ -717,7 +717,11 @@ fun ReaderScreen(
                                 playbackSpeed = playerState.speed,
                                 isActiveAyah = isActive,
                                 dimmed = recitingActive && !isActive,
-                                obscuredBySelector = ayahSelectorExpanded,
+                                // Keep the page readable the moment a jump
+                                // commits — the decelerating scroll is the cue,
+                                // and a 7 % fade would hide it.
+                                obscuredBySelector =
+                                    ayahSelectorExpanded && requestedJumpAyah == 0,
                                 fontScale = settings.fontScale,
                                 showGloss = settings.showWordGloss,
                                 showTransliteration = settings.showTransliteration,

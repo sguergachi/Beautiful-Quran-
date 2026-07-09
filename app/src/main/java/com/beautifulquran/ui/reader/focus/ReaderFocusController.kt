@@ -14,7 +14,6 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlin.math.abs
 
 /**
  * The Compose-facing half of the focus engine: it holds the [LazyListState] and
@@ -113,21 +112,21 @@ class ReaderFocusController internal constructor(
     /**
      * Bring [ayahNumber] into focus — the one entry point for every programmatic
      * scroll. Waits for a real viewport before measuring (killing the
-     * open-before-layout race), teleports to a doorstep when the target is far
-     * off-screen, then glides the last stretch by exact pixels onto the adaptive
-     * anchor. [animate] false snaps instantly (used for the initial settle).
+     * open-before-layout race), then lands the verse on its adaptive anchor.
+     * [animate] false snaps instantly (used for the initial settle).
      *
-     * [preRoll] adds a "we scrolled to get here" cue for jumps the reader
-     * initiates by hand (selector, search, return-to-verse): the bulk of the
-     * distance is covered instantly, then the verse is offset from its landing
-     * and glides in over a **distance-scaled** approach — further and up to a
-     * full second for a bigger jump, briefer when the target is nearby — along
-     * the residual scroll after teleport, so the motion conveys how far it
-     * went instead of popping into view. The approach is capped under one
-     * viewport and clamped to the residual so the wind-up never reverses (a
-     * reverse wind-up collapses to a pop at list edges). Recitation-follow
-     * leaves it off so lyric tracking stays smooth. See
-     * [FocusEngine.approachDistancePx].
+     * [preRoll] is for jumps the reader initiates by hand (selector, search,
+     * return-to-verse). The pure [FocusEngine.planJump] decides the whole
+     * trajectory:
+     * - **Near** — animate the full path from here to the target (direct
+     *   interpolation), decelerating onto the verse.
+     * - **Far** — teleport to a doorstep just short of the target, then rush
+     *   the truncated residual with a high-speed decelerating scroll so the
+     *   motion reads as "scrolling to verse N" without waiting on a
+     *   surah-length trajectory.
+     *
+     * Recitation-follow leaves [preRoll] off so lyric tracking stays a gentle
+     * glide. See [FocusEngine.planJump].
      */
     suspend fun focus(ayahNumber: Int, animate: Boolean, preRoll: Boolean = false) {
         focusMutex.withLock {
@@ -141,98 +140,102 @@ class ReaderFocusController internal constructor(
         val viewportHeight = snapshotFlow { listState.layoutInfo.viewportSize.height }
             .first { it > 0 }
 
-        // Captured before any teleport so the approach length reflects the real
-        // jump distance rather than the tiny residual the teleport leaves behind.
-        val jumpDistanceVerses = itemIndex - listState.firstVisibleItemIndex
-
         val info = listState.layoutInfo
+        val fromIndex = listState.firstVisibleItemIndex
+        val visibleCount = info.visibleItemsInfo.size.coerceAtLeast(1)
+        val totalCount = info.totalItemsCount.coerceAtLeast(1)
+
+        if (preRoll) {
+            // Hand-initiated: the engine owns near-vs-far and the duration.
+            val plan = FocusEngine.planJump(
+                fromIndex = fromIndex,
+                toIndex = itemIndex,
+                visibleItemCount = visibleCount,
+                totalItemCount = totalCount,
+            )
+            if (plan.doorstepIndex != null) {
+                // Far: snap near the target (target already laid out), then rush
+                // the residual with a decelerating scroll onto the anchor.
+                listState.scrollToItem(plan.doorstepIndex)
+            } else {
+                // Near: if the target is not yet measured, animate toward it
+                // first (LazyList interpolates across the short gap). A hard
+                // scrollToItem here would pop and kill the "quick scroll" feel.
+                val laidOut = listState.layoutInfo.visibleItemsInfo
+                    .any { it.index == itemIndex }
+                if (!laidOut) {
+                    listState.animateScrollToItem(itemIndex)
+                }
+            }
+            animateOntoAnchor(
+                itemIndex = itemIndex,
+                viewportHeight = viewportHeight,
+                durationMs = plan.durationMs,
+            )
+            return
+        }
+
+        // Recitation-follow / non-preRoll: soft glide, with a simple doorstep
+        // when the target is far beyond the measured window.
         if (FocusEngine.shouldTeleport(
-                targetIndexDelta = itemIndex - listState.firstVisibleItemIndex,
-                visibleItemCount = info.visibleItemsInfo.size.coerceAtLeast(1),
+                targetIndexDelta = itemIndex - fromIndex,
+                visibleItemCount = visibleCount,
             )
         ) {
-            val visibleCount = info.visibleItemsInfo.size.coerceAtLeast(1)
-            val doorstep = if (itemIndex > listState.firstVisibleItemIndex) {
+            val doorstep = if (itemIndex > fromIndex) {
                 itemIndex - visibleCount
             } else {
                 itemIndex + visibleCount
             }
-            // scrollToItem forces a synchronous remeasure, so layoutInfo is fresh below.
             listState.scrollToItem(
-                doorstep.coerceIn(0, (info.totalItemsCount - 1).coerceAtLeast(0)),
+                doorstep.coerceIn(0, (totalCount - 1).coerceAtLeast(0)),
             )
         }
 
+        val delta = measureGlideDelta(itemIndex, viewportHeight) ?: return
+        if (!animate) {
+            listState.scrollBy(delta.toFloat())
+            return
+        }
+        if (delta != 0) {
+            listState.animateScrollBy(delta.toFloat(), GlideSpec)
+        }
+    }
+
+    /**
+     * Measure the target (forcing a layout if needed) and decelerate onto its
+     * adaptive anchor over [durationMs].
+     */
+    private suspend fun animateOntoAnchor(
+        itemIndex: Int,
+        viewportHeight: Int,
+        durationMs: Int,
+    ) {
+        val delta = measureGlideDelta(itemIndex, viewportHeight) ?: return
+        if (delta == 0) return
+        val spec = tween<Float>(
+            durationMillis = durationMs,
+            easing = FastOutSlowInEasing,
+        )
+        listState.animateScrollBy(delta.toFloat(), spec)
+    }
+
+    /**
+     * Pixels to scroll so [itemIndex] lands on its adaptive anchor. Forces the
+     * item into layout when it is not yet measured (tall neighbours can leave
+     * it just off-screen after a doorstep teleport).
+     */
+    private suspend fun measureGlideDelta(itemIndex: Int, viewportHeight: Int): Int? {
         var target = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == itemIndex }
         if (target == null) {
-            // Rare: neighbours so tall the target is still unmeasured. Park it at
-            // the top (synchronous remeasure) then read its real height.
             listState.scrollToItem(itemIndex)
             target = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == itemIndex }
         }
         val geometry = target?.let {
             TargetGeometry(it.offset, it.size, isLaidOut = true, isAboveWhenOffscreen = false)
-        } ?: return
-
+        } ?: return null
         val anchor = FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, geometry.heightPx)
-        val delta = FocusEngine.glideDeltaPx(geometry, anchor)
-        if (!animate) {
-            listState.scrollBy(delta.toFloat())
-            return
-        }
-        if (!preRoll) {
-            listState.animateScrollBy(delta.toFloat(), GlideSpec)
-            return
-        }
-        // Give the jump a "we scrolled here" cue instead of a pop: the reader
-        // *sees* the scroll arrive at the verse. The bulk of a long jump is
-        // covered instantly, then the verse is pre-positioned a distance-scaled
-        // approach away from its anchor — further for a longer jump — and glided
-        // in along the residual travel, so the motion conveys how far it went.
-        if (jumpDistanceVerses == 0 || delta == 0) {
-            // Re-selecting the verse already at the reading line — nothing to
-            // travel; just settle any residual drift onto the anchor.
-            if (delta != 0) listState.animateScrollBy(delta.toFloat(), GlideSpec)
-            return
-        }
-        // Never ask for more travel than the residual after teleport: a longer
-        // approach would wind up *past* the anchor (reverse direction), and
-        // LazyList clamps that reverse at the list edges — collapsing the
-        // animated leg to a pop. Cap, then fall through to a direct slide when
-        // the residual is already within the approach.
-        val desiredApproach = FocusEngine.approachDistancePx(viewportHeight, jumpDistanceVerses)
-        val approachPx = minOf(desiredApproach, abs(delta))
-        val approachSpec = tween<Float>(
-            durationMillis = FocusEngine.approachDurationMs(jumpDistanceVerses),
-            easing = FastOutSlowInEasing,
-        )
-        if (approachPx >= abs(delta)) {
-            // Already within an approach of the anchor — slide the real distance
-            // directly, with no wind-up wobble.
-            listState.animateScrollBy(delta.toFloat(), approachSpec)
-            return
-        }
-        // Direction follows the residual (not the pre-teleport jump sign) so the
-        // wind-up and the animated leg always share a sign — never a reverse.
-        val animatedLeg = if (delta > 0) approachPx else -approachPx
-        listState.scrollBy((delta - animatedLeg).toFloat())
-        // Remeasure after the wind-up: clamping or item-height changes can
-        // shrink the remaining travel, and animating the *actual* residual
-        // guarantees both a visible slide and a correct landing.
-        val after = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == itemIndex }
-            ?: run {
-                listState.scrollToItem(itemIndex)
-                listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == itemIndex }
-            }
-        val remaining = after?.let {
-            FocusEngine.glideDeltaPx(
-                TargetGeometry(it.offset, it.size, isLaidOut = true, isAboveWhenOffscreen = false),
-                FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, it.size),
-            )
-        } ?: animatedLeg
-        if (remaining != 0) {
-            listState.animateScrollBy(remaining.toFloat(), approachSpec)
-        }
+        return FocusEngine.glideDeltaPx(geometry, anchor)
     }
 
     private fun computeReadoutPosition(): Float {
@@ -269,9 +272,8 @@ class ReaderFocusController internal constructor(
     }
 
     private companion object {
-        /** The smooth recitation-follow glide (also the settle for a re-select).
-         *  Hand-initiated jumps build their own distance-scaled spec instead
-         *  (see [FocusEngine.approachDurationMs]). */
+        /** Soft recitation-follow glide. Hand-initiated jumps use
+         *  [FocusEngine.planJump]'s duration instead. */
         val GlideSpec: AnimationSpec<Float> =
             tween(durationMillis = 700, easing = FastOutSlowInEasing)
     }
