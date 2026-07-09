@@ -31,11 +31,12 @@
   --max-width: 640px;
 
   /* Ink bloom — the app's signature reveal, brought to the page.
-   * Content rests at "upcoming" ink and inks to full as it arrives, on the
+   * Content rests at "upcoming" ink and fades to full as it arrives, on the
    * exact smootherstep curve (6t⁵−15t⁴+10t³) the highlight engine uses for the
-   * word-by-word fade (app: ui/theme/Fade.kt — letterFadeIn / inkWashAlpha).
-   * Upcoming ink here mirrors the engine's ~30–35 % resting alpha. */
-  --upcoming-ink: 0.32;
+   * word-by-word fade (app: ui/theme/Fade.kt — letterFadeIn). Opacity only —
+   * no float/translate — matching how ink blooms on the reader.
+   * Upcoming ink mirrors DESIGN.md (~30 %) / the engine's resting alpha. */
+  --upcoming-ink: 0.30;
   --ink-bloom: 680ms;
   --ease-ink: linear(
     0 0%, 0.0007 4%, 0.0051 8%, 0.0161 12%, 0.0355 17%, 0.0645 21%,
@@ -107,12 +108,11 @@ img {
 
 /* Ink bloom on arrival.
  *
- * Just as the reciter writes each word onto the page — a letter at a time,
- * from upcoming ink to full ink on a smootherstep wash — the page writes
- * itself as you read down it. Each block rests at upcoming ink and blooms to
- * full as it scrolls into view, on the same curve (--ease-ink). A small
- * upward drift echoes the gloss that "rises beneath" each word; nothing
- * scales, bounces, or spins.
+ * Matches the highlight engine's word reveal (ui/theme/Fade.kt — letterFadeIn):
+ * content rests at "upcoming" ink and blooms to full ink on the smootherstep
+ * curve (--ease-ink). Opacity only — no translate, scale, bounce, or float.
+ * The engine writes letters by changing ink strength; the page does the same
+ * for each block as it scrolls into view.
  *
  * Gated on `.js` (set before first paint) so the resting state only exists
  * when the observer can lift it — no script, no JavaScript, no fade: the full
@@ -140,15 +140,11 @@ img {
     .sheet > .back-link
   ) {
     opacity: var(--upcoming-ink);
-    transform: translateY(9px);
-    transition:
-      opacity var(--ink-bloom) var(--ease-ink),
-      transform var(--ink-bloom) var(--ease-ink);
+    transition: opacity var(--ink-bloom) var(--ease-ink);
   }
 
   .js .inked {
     opacity: 1;
-    transform: none;
   }
 }
 

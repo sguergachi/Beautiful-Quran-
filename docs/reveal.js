@@ -1,14 +1,16 @@
 /* Ink bloom on arrival.
  *
  * The website's echo of the app's signature word-by-word reveal: each block of
- * the sheet rests at "upcoming" ink (styles.css) and blooms to full ink as it
- * scrolls into view, on the same smootherstep curve the highlight engine uses.
+ * the sheet rests at "upcoming" ink (styles.css) and fades to full ink as it
+ * scrolls into view, on the same smootherstep curve the highlight engine uses
+ * (Fade.kt — letterFadeIn). Opacity only — no float or translate — matching
+ * how the engine writes ink onto the page.
  *
  * The resting state is CSS, gated on the `.js` class set in the page <head>
  * before first paint, so there is never a flash of full-ink content that then
  * hides. All this script does is lift each block to full ink (`.inked`) the
- * moment it arrives, top-to-bottom, so a screenful reveals as one gentle sweep
- * in the reading direction — the same directional lead as the word wash.
+ * moment it arrives, top-to-bottom, so a screenful blooms as one gentle fade
+ * in the reading direction.
  */
 (function () {
   'use strict';
