@@ -3,12 +3,36 @@
 **Symptom (user report):** sometimes a *single word* blooms orange as a "repeat"
 but the reciter does not actually repeat it in the audio.
 
-**Status: resolved.** Three qdc aligner artifact classes were found; a cleanup
-pass (`clean_qdc_artifacts` in `tools/build_db.py`) now scrubs them, the
-committed `quran.db` was regenerated accordingly, and the DB version was
-bumped to `quran-v9.db`. Summary of the classes and rules lives in
+**Status: resolved (revised — see "Follow-up" below).** Three qdc aligner
+artifact classes were found; a cleanup pass (`clean_qdc_artifacts` in
+`tools/build_db.py`) scrubs them. Summary of the classes and rules lives in
 `docs/REPEAT_HIGHLIGHTING.md` ("False repeats: the qdc artifacts we scrub");
 this file is the raw investigation log.
+
+> **Follow-up (the split-word merge was too aggressive — it ate real repeats).**
+> The first fix (shipped as `quran-v9.db`) merged *every* same-position,
+> time-contiguous segment pair, on the theory that all of them were aligner
+> "split words." That was wrong. A user then reported the opposite symptom —
+> genuine single-word repeats going **un**highlighted — and pointed at the
+> ear-verified Timings Lab correction for **Hani 4:163** (issue #114), where
+> word 20 is audibly said twice.
+>
+> Re-profiling the raw data settled it: of Hani's 178 same-position pairs,
+> **172 have both halves ≥ 500 ms** (shorter-half median ~1.2 s) — two full
+> utterances, i.e. real immediate repeats, not splits. The "0 ms gap" I had
+> read as "one continuous word" is exactly what an immediate repeat with no
+> breath produces. Only a small tail (Hani 6; other reciters 13–55) had a
+> genuine sub-word sliver (one half < ~200–400 ms).
+>
+> The merge was re-keyed on an **absolute duration floor** rather than the gap:
+> `QDC_SPLIT_FRAGMENT_MS = 200` — only fold a same-position neighbour when one
+> span is too short to be a spoken word. Substantial pairs stay as repeats. The
+> stray/spike rules (which were the *real* cause of the original false-positive
+> report) are unchanged. Regenerated as **`quran-v10.db`**. Restored
+> single-word repeats: Mishary 393, Hani 176, Sudais 177, AbdulBaset 169,
+> Minshawi 133, Husary 111. Repeat spans: Mishary 2,744 → 3,142; Hani
+> 1,857 → 2,037. Same-position-pair analysis and the corrected rule are in the
+> git history for this file's directory.
 
 ## Log
 

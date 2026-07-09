@@ -348,35 +348,48 @@ def load_qdc_timings(qdc_id: int):
 
 # The qdc aligner's output carries artifacts that read as false repeats once
 # HighlightEngine treats any non-forward word position as a backtrack:
-#   * split words — one word emitted as two consecutive segments with the same
-#     position and a ~0 ms gap; the second half looks like an instant re-say;
+#   * split slivers — a word whose onset or tail the aligner emits as a tiny
+#     extra segment sharing that word's position; the sliver looks like an
+#     instant re-say. These are sub-word fragments (< QDC_SPLIT_FRAGMENT_MS),
+#     NOT two utterances — a real word is never that short;
 #   * mislabeled strays — a single segment carrying the wrong word index
 #     (often a sound-alike of an earlier word, e.g. 49:9 فَإِن tagged as وَإِن),
 #     an isolated backjump the recitation never follows up on;
 #   * forward spikes — the same mislabel in the other direction; the too-large
 #     index inflates the high-water mark so every following normal word until
 #     that index reads as a repeat.
-# Genuine repeats are multi-segment chains that walk forward again after the
-# backjump; none of the rules below can trigger on one (verified against the
-# shipped data: real chains contain zero same-position duplicates, and their
-# backtracked segments are always followed by another chain member, not a jump
-# past the high-water mark).
-QDC_SPLIT_MERGE_GAP_MS = 150  # observed split gaps are 0–50 ms
+#
+# A genuine single-word repeat also appears as two same-position segments, but
+# BOTH are full utterances (each typically 0.5–2 s; the shorter half's median
+# is ~1.2 s across all six reciters). Keying the sliver merge on an absolute
+# duration floor — not on the gap, which is ~0 ms for a real immediate repeat
+# too — is what separates the two: only a fragment too short to be a spoken
+# word is folded away; two substantial utterances are preserved as a repeat.
+# (An earlier version merged on gap alone and silently ate real repeats such as
+# Hani 4:163 word 20, 1180 ms + 1510 ms — the bug this rule fixes.)
+QDC_SPLIT_MERGE_GAP_MS = 150  # a sliver sits flush against its word (0–50 ms)
+QDC_SPLIT_FRAGMENT_MS = 200  # shorter than this, a same-position span is a
+#                              sub-word fragment, not a second utterance
 QDC_SPIKE_JUMP = 3  # a forward jump this large that instantly retreats is noise
 
 
 def clean_qdc_artifacts(segs, stats):
     """Remove aligner artifacts (see above) from one ayah's time-sorted
-    segments. Dropped spans are folded into the previous segment so the
+    segments. Dropped spans are folded into the neighbouring segment so the
     karaoke sweep has no holes. Runs to a fixpoint because a dropped spike can
-    reunite the two halves of a split word."""
+    reunite a word with its stray sliver."""
     changed = True
     while changed:
         changed = False
         merged = [segs[0]]
         for pos, start, end in segs[1:]:
             last = merged[-1]
-            if pos == last[0] and start - last[2] <= QDC_SPLIT_MERGE_GAP_MS:
+            fragment = min(last[2] - last[1], end - start) < QDC_SPLIT_FRAGMENT_MS
+            if (
+                pos == last[0]
+                and start - last[2] <= QDC_SPLIT_MERGE_GAP_MS
+                and fragment
+            ):
                 last[2] = max(last[2], end)
                 stats["merged_splits"] += 1
                 changed = True
