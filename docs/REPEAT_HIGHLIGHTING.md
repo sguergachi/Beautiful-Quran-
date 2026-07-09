@@ -111,42 +111,62 @@ of quran-align:
 - `clean_qdc_artifacts()` scrubs three aligner artifact classes that would
   otherwise render as repeats the reciter never made (see below).
 
-After cleanup, Mishary yields **2,744 repeat spans** at full 6,236/6,236
-coverage; Hani yields **1,857 repeat spans** at 6,235/6,236 (one ayah has no
+After cleanup, Mishary yields **3,142 repeat spans** at full 6,236/6,236
+coverage; Hani yields **2,037 repeat spans** at 6,235/6,236 (one ayah has no
 quran.com segments and falls back to whole-ayah highlighting). Everyone not in
 `QDC_REPEAT_RECITERS` still uses quran-align exactly as before.
 
 ## False repeats: the qdc artifacts we scrub
 
-The raw qdc segments are aligner output, and roughly a quarter of their
-apparent backtracks were **not audible repeats**. Three artifact classes
-(all confirmed structurally against the shipped data; the single-word class
-was also the subject of a user's ear report on Hani):
+The raw qdc segments are aligner output, and some of their apparent backtracks
+are **not audible repeats**. Three artifact classes are scrubbed:
 
-1. **Split words.** One word emitted as two consecutive segments with the same
-   position and a 0–50 ms gap (`… [6, 5660, 8140], [6, 8140, 10350] …`). The
-   second half satisfies `position <= maxBefore`, so it bloomed orange as an
-   instant one-word "repeat." Hani had 176 of these chains; Mishary 378.
-   Fix: merge same-position, time-contiguous neighbours
-   (`QDC_SPLIT_MERGE_GAP_MS`).
+1. **Split slivers.** The aligner sometimes emits a word's onset or tail as a
+   tiny extra segment sharing that word's position (`… [18, 0, 1410],
+   [18, 1410, 1500], …` — a 90 ms tail). The sliver satisfies
+   `position <= maxBefore`, so it bloomed orange as an instant one-word
+   "repeat." Fix: merge a same-position, time-contiguous neighbour **only when
+   one of the two spans is shorter than `QDC_SPLIT_FRAGMENT_MS` (200 ms)** — too
+   short to be a spoken word. See the warning below: this floor is what keeps
+   the rule from eating real single-word repeats.
 2. **Mislabeled strays.** A single segment carrying a wrong, *earlier* word
    index — often a sound-alike (49:9 goes `… 7, [1], 9 …`: word 8 فَإِن was
    tagged as word 1 وَإِن) — then the recitation continues forward past the
    high-water mark. A real repeat never does this: it walks forward again as a
    chain. Fix: drop an isolated backjump segment whose successor jumps past
-   the high-water mark, folding its span into the previous word.
+   the high-water mark, folding its span into the previous word. This is the
+   class behind the original "single word flashes orange but isn't repeated"
+   report.
 3. **Forward spikes.** The same mislabel in the other direction (`… 2, [8],
    3, 4, 5 …`). Worse than it looks: the spike inflates `highWater`, so every
    normal word after it (3–7 here) satisfied the backtrack test and a long
    false orange chain appeared. Fix: drop a segment that jumps ≥
    `QDC_SPIKE_JUMP` past the high-water mark and immediately retreats.
 
-None of these rules can touch a genuine repeat: real chains re-walk forward
-after the backjump (so their members are never "isolated"), and the shipped
-data contained zero same-position duplicates inside real chains. Ear-verified
-repeats (Mishary 2:14, Hani 2:38's `12,13,14 — 12,13,14`) survive cleanup
-byte-identical. The cleanup runs to a fixpoint because dropping a spike can
-reunite the two halves of a split word (9:51: `4, [7], 4` → `4, 4` → merged).
+> **⚠️ A genuine single-word repeat looks exactly like a split sliver — same
+> position, ~0 ms gap — so the merge must key on *duration*, not the gap.**
+> When a reciter says a word and immediately says it again, qdc emits two
+> same-position segments with no gap between them, identical in shape to a
+> split. The only reliable difference is that a real repeat's two halves are
+> both *full utterances* (across all six reciters the shorter half's median is
+> ~1.2 s), whereas a split's extra piece is a sub-word sliver (< 200 ms). An
+> earlier version of this cleanup merged on the gap alone and silently ate real
+> repeats — e.g. Hani **4:163 word 20** (1180 ms + 1510 ms, ear-confirmed via a
+> Timings Lab correction). The `QDC_SPLIT_FRAGMENT_MS` floor is what fixes that:
+> only slivers fold; two substantial utterances stay a repeat.
+
+None of these rules can touch a genuine repeat: real multi-word chains re-walk
+forward after the backjump (so their members are never "isolated" strays or
+spikes), and single-word repeats are preserved by the duration floor. The
+ear-verified repeats (Mishary 2:14, Hani 2:38's `12,13,14 — 12,13,14`, Hani
+4:163's doubled word 20) survive cleanup. The cleanup runs to a fixpoint
+because dropping a spike can reunite a word with its stray sliver (9:51:
+`4, [7], 4` → `4, 4`, then merged only if one `4` is a sliver).
+
+When a real repeat is still missed or a false one slips through, the per-ayah
+**Timings Lab override** (`tools/timing_overrides/`) is the escape hatch: it
+replaces an ayah's segments verbatim at build time and always wins over the
+heuristic.
 
 ## The rendering path
 
