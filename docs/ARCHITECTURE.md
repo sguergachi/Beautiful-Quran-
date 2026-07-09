@@ -164,6 +164,11 @@ ReaderFocusController ── holds the LazyListState; the sole writer to it
   leaves `preRoll` off so lyric tracking stays a gentle glide. Concurrent
   `focus()` calls are serialized on a mutex so a sibling effect cannot
   cancel the slide mid-flight.
+- Display settings that reflow ayah heights (reading mode, word gloss,
+  transliteration, translation, font scale) trigger a gentle re-`focus` of
+  the pinned verse after the LazyColumn remasures, so the reading line
+  stays on the ayah the reader was looking at instead of drifting with the
+  resize.
 - Word-level `bringIntoView` (in `AyahBlock`) is the engine's *secondary*
   constraint: it only engages inside a verse taller than the viewport, so it
   carries the eye through a long verse without fighting the verse-level anchor.
