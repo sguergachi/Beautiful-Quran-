@@ -44,9 +44,6 @@ data class TimingsLabUiState(
     val mode: LabMode = LabMode.LISTEN,
     /** Index into [passes] of the mark being tuned, or null. */
     val selectedPass: Int? = null,
-    /** When true, nudges also shift every mark after the selected one —
-     * the drift fixer. */
-    val shiftFollowing: Boolean = false,
     /** This ayah has a saved on-device correction. */
     val isOverridden: Boolean = false,
     /** Corrected ayahs in the whole override store (the submit ribbon). */
@@ -455,10 +452,6 @@ class TimingsLabViewModel(
         seekTo((pass.startMs - AUDITION_LEAD_MS).coerceAtLeast(0L), play = true)
     }
 
-    fun setShiftFollowing(enabled: Boolean) {
-        _ui.value = _ui.value.copy(shiftFollowing = enabled)
-    }
-
     // ── Reset a word to its bundled default ─────────────────────────────────
 
     /** The marks the selected word shipped with (may be empty if the word had
@@ -484,34 +477,40 @@ class TimingsLabViewModel(
         newSel?.let { audition(it) }
     }
 
-    /** Moves the selected mark's start by [deltaMs] (and, with shiftFollowing,
-     * every later mark too). Clamped so marks never reorder. */
+    /** Moves the selected mark's start by [deltaMs].
+     *
+     * A **repeat** pass floats free — droppable anywhere in the ayah, even
+     * across other marks, because it's an extra occurrence rather than part of
+     * the ordered first-pass sequence. A **first-pass** word mark stays in
+     * reading order, clamped between its neighbours so the sequence can't
+     * scramble. Ends are re-derived and the selection re-found by identity, so
+     * a repeat that jumps past a neighbour stays selected. */
     fun nudgeSelected(deltaMs: Long) {
         val st = _ui.value
         val i = st.selectedPass ?: return
-        val passes = st.passes
-        val pass = passes.getOrNull(i) ?: return
-        val floor = passes.getOrNull(i - 1)?.startMs?.plus(MIN_MARK_GAP_MS) ?: 0L
-        val delta = if (st.shiftFollowing) {
-            deltaMs.coerceAtLeast(floor - pass.startMs)
+        val pass = st.passes.getOrNull(i) ?: return
+        val maxStart = st.durationMs.takeIf { it > 0L } ?: Long.MAX_VALUE
+        // Repeat = an earlier mark already reached this word's position.
+        val priorMax = st.passes.take(i).maxOfOrNull { it.position } ?: 0
+        val isRepeat = priorMax >= pass.position
+        val newStart = if (isRepeat) {
+            (pass.startMs + deltaMs).coerceIn(0L, maxStart)
         } else {
-            val ceil = passes.getOrNull(i + 1)?.startMs?.minus(MIN_MARK_GAP_MS)
-                ?: st.durationMs.takeIf { it > 0L }?.minus(MIN_MARK_GAP_MS)
+            val floor = st.passes.getOrNull(i - 1)?.startMs?.plus(MIN_MARK_GAP_MS) ?: 0L
+            val ceil = st.passes.getOrNull(i + 1)?.startMs?.minus(MIN_MARK_GAP_MS)
+                ?: maxStart.takeIf { it != Long.MAX_VALUE }?.minus(MIN_MARK_GAP_MS)
                 ?: Long.MAX_VALUE
-            deltaMs.coerceIn(floor - pass.startMs, (ceil - pass.startMs).coerceAtLeast(floor - pass.startMs))
+            (pass.startMs + deltaMs).coerceIn(floor, ceil.coerceAtLeast(floor))
         }
-        if (delta == 0L) return
-        val moved = passes.mapIndexed { j, p ->
-            when {
-                j < i || (!st.shiftFollowing && j > i) -> p
-                else -> p.copy(
-                    startMs = (p.startMs + delta).coerceAtLeast(0L),
-                    endMs = (p.endMs + delta).coerceAtLeast(MIN_MARK_GAP_MS),
-                )
-            }
-        }
+        if (newStart == pass.startMs) return
+        val rebuilt = withDerivedEnds(
+            st.passes.filterIndexed { j, _ -> j != i } + pass.copy(startMs = newStart),
+            st.durationMs,
+        )
+        val newIndex = rebuilt.indexOfFirst { it.position == pass.position && it.startMs == newStart }
+            .takeIf { it >= 0 } ?: i.coerceIn(0, rebuilt.lastIndex)
         edited = true
-        _ui.value = st.copy(passes = withDerivedEnds(moved, st.durationMs))
+        _ui.value = st.copy(passes = rebuilt, selectedPass = newIndex)
         persistDebounced()
         auditionAfterNudge()
     }

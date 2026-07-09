@@ -66,9 +66,13 @@ that mark, seeks ~0.8 s before it and plays, and reveals the **slide bar**.
   reset still lives in the ⋯ menu.)
 * **＋ Add repeat** — stamps a second mark for the selected word at the
   playhead and selects it, so you immediately slide it to where the reciter
-  re-recites it. The rest of the ayah is untouched. A mark whose word
-  position is ≤ the furthest word already reached *is* a repeat backtrack
-  (the DB's own encoding), so it takes the orange wash automatically.
+  re-recites it. The rest of the ayah is untouched. A repeat pass **floats
+  free** — the slide bar places it anywhere in the ayah, even across other
+  marks, since it's an extra occurrence rather than part of the ordered
+  first-pass sequence (first-pass marks stay clamped between their neighbours).
+  A mark whose word position is ≤ the furthest word already reached *is* a
+  repeat backtrack (the DB's own encoding), so it takes the orange wash
+  automatically.
 * **Delete** — removes a spurious pass (e.g. an alignment-noise repeat).
 * If the word was recited more than once, **pass chips** (`6.4s`, `10.6s ·
   repeat`) pick which pass you're adjusting.
