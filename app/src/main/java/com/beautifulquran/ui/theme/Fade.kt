@@ -35,12 +35,11 @@ fun Modifier.letterFadeIn(
     restingAlpha: Float = 0.35f,
 ): Modifier {
     // Alpha profile across the feathered edge, sampled into gradient stops.
-    // smootherstep (6t⁵−15t⁴+10t³) has zero first and second derivative at
-    // both ends, so the wash carries no visible seam where it meets either
-    // the resting or the fully inked letters.
+    // The seam-free smootherstep shape lives in [inkSmootherstep], shared with
+    // the connected Arabic renderer so every mode blooms on one curve.
     val stops = FloatArray(InkProfileStops) { i -> i / (InkProfileStops - 1f) }
     val washColors = stops.map { t ->
-        val s = t * t * t * (t * (t * 6f - 15f) + 10f)
+        val s = inkSmootherstep(t)
         val a = restingAlpha + (1f - restingAlpha) * (if (rtl) s else 1f - s)
         Color.White.copy(alpha = a)
     }
@@ -69,7 +68,7 @@ fun Modifier.letterFadeIn(
             // gentle directional lead in the reading direction. The wash
             // travels one edge-width past the end so the final letter
             // finishes exactly at p = 1.
-            val edge = (w * 1.6f).coerceAtLeast(1f)
+            val edge = (w * InkWashFeather).coerceAtLeast(1f)
             val head = p * (w + edge)
             val brush = if (rtl) {
                 Brush.horizontalGradient(
@@ -96,6 +95,41 @@ fun Modifier.letterFadeIn(
 
 private const val InkProfileStops = 9
 private val FadeLayerBleed = 11.dp
+
+// The ink wash feathers over 1.6× the word's own width, so the reveal reads as a
+// whole-word breath with a gentle directional lead rather than a hard moving
+// edge. The wash head therefore travels the word plus that feather (see below).
+internal const val InkWashFeather = 1.6f
+private const val InkWashSpan = 1f + InkWashFeather
+
+/**
+ * smootherstep (6t⁵−15t⁴+10t³): zero first *and* second derivative at both ends,
+ * so ink blooms in with a soft toe and settles with a soft shoulder — no seam
+ * where the wash meets the resting or the fully inked letters. The one easing
+ * shape behind both the per-letter [letterFadeIn] gradient and the connected
+ * Arabic renderer's per-character opaque spans.
+ */
+internal fun inkSmootherstep(t: Float): Float {
+    val c = t.coerceIn(0f, 1f)
+    return c * c * c * (c * (c * 6f - 15f) + 10f)
+}
+
+/**
+ * The ink-wash alpha for a glyph at reading-direction fraction [pos] (0 at the
+ * first-revealed letter, 1 at the last) while the word's wash is at [progress].
+ *
+ * This is the same bloom [letterFadeIn] paints as a moving gradient mask, sampled
+ * per character so a single-`Text` run — the connected Arabic ayah, where a
+ * per-letter offscreen mask would smear overlapping Quranic marks — can spread
+ * the reveal across its letters in opaque colour instead. Letters ahead of the
+ * wash rest at [restingAlpha]; letters behind it are full ink. Because [pos] is
+ * already normalised to the reading direction, the same formula serves RTL and
+ * LTR alike.
+ */
+fun inkWashAlpha(pos: Float, progress: Float, restingAlpha: Float): Float {
+    val t = (InkWashSpan * progress - pos) / InkWashFeather
+    return restingAlpha + (1f - restingAlpha) * inkSmootherstep(t)
+}
 
 /**
  * Softly dissolves the content at its top and bottom edges, so scrolling
