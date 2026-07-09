@@ -98,18 +98,15 @@ img {
 
 /* Ink bloom on arrival.
  *
- * One-to-one with the reader highlight wash (Fade.kt letterFadeIn → ink-fade.js):
- * a wide smootherstep feather sweeps across the block, writing it from upcoming
- * ink to full ink. No float, translate, scale, or bounce — ink strength only,
- * with a directional lead (RTL for Arabic, LTR otherwise).
+ * Word-by-word port of the reader highlight wash (Fade.kt letterFadeIn →
+ * ink-fade.js). Each `.ink-word` (and atomic units like the rosette) rests at
+ * upcoming ink; JS writes them with the directional smootherstep wash,
+ * staggered 50 ms apart down each line.
  *
- * CSS holds the upcoming floor until JS starts the wash (`.ink-washing`) or
- * finishes (`.inked`). Gated on `.js` (set before first paint) so no-script
- * readers simply see the full sheet.
+ * Blocks hold the upcoming floor until JS wraps words (`.ink-prepared`), so
+ * there is no full-ink flash before the script runs. Gated on `.js`.
  */
 @media (prefers-reduced-motion: no-preference) {
-  /* :where() keeps resting selectors at `.js` specificity so `.ink-washing`
-   * / `.inked` always outrank them. */
   .js :where(
     .arabic-title,
     .app-title,
@@ -125,7 +122,17 @@ img {
     .attribution p,
     .sheet > .footer-links,
     .sheet > .back-link
-  ) {
+  ):not(.ink-prepared) {
+    opacity: var(--upcoming-ink);
+  }
+
+  /* After wrap, the block is full-strength; each word carries the floor. */
+  .js .ink-prepared {
+    opacity: 1;
+  }
+
+  .js .ink-word {
+    display: inline-block;
     opacity: var(--upcoming-ink);
   }
 
