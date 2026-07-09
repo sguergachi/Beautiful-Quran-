@@ -34,6 +34,24 @@ this file is the raw investigation log.
 > 1,857 → 2,037. Same-position-pair analysis and the corrected rule are in the
 > git history for this file's directory.
 
+> **Follow-up 2 (the 200 ms floor was too low — 200–450 ms slivers leaked).**
+> A user reported (issue #123) a remaining false repeat on **Hani 4:143**: word
+> 10 is a 210 ms onset sliver + a 1290 ms body, and the sliver — just above the
+> flat `QDC_SPLIT_FRAGMENT_MS = 200` floor — survived cleanup and bloomed
+> orange. Profiling every same-position adjacent pair across the six qdc reciters
+> showed a whole band of these split slivers in the 200–450 ms range (73 pairs),
+> each a small *fragment* of its same-position neighbour (shorter/longer < 0.35),
+> and several recurring at the **same word across reciters** (27:20, 15:7) — the
+> signature of a systematic aligner split, not an individual reciter's repeat. A
+> real repeat, by contrast, is two comparable full utterances (shorter half
+> ≥ ~500 ms). So the fragment test gained a ratio-gated band above the flat
+> floor: fold a same-position span when it is `< 200 ms`, **or** `< 500 ms and
+> < 0.35×` its neighbour. This removed 73 residual false repeats (Hani 3,
+> including 4:143) while leaving the ear-verified repeats — Hani 4:163 word 20,
+> and every multi-word chain, which is structurally immune because its adjacent
+> segments differ in position — byte-identical. Regenerated as **`quran-v11.db`**.
+> Repeat spans: Mishary 3,142 → 3,128; Hani 2,037 → 2,034.
+
 ## Log
 
 - Read `docs/REPEAT_HIGHLIGHTING.md`. Repeats come from quran.com `qdc` segments

@@ -125,10 +125,15 @@ are **not audible repeats**. Three artifact classes are scrubbed:
    tiny extra segment sharing that word's position (`… [18, 0, 1410],
    [18, 1410, 1500], …` — a 90 ms tail). The sliver satisfies
    `position <= maxBefore`, so it bloomed orange as an instant one-word
-   "repeat." Fix: merge a same-position, time-contiguous neighbour **only when
-   one of the two spans is shorter than `QDC_SPLIT_FRAGMENT_MS` (200 ms)** — too
-   short to be a spoken word. See the warning below: this floor is what keeps
-   the rule from eating real single-word repeats.
+   "repeat." Fix: merge a same-position, time-contiguous neighbour when it is a
+   fragment rather than a full utterance. A span is a fragment when it is either
+   **shorter than `QDC_SPLIT_FRAGMENT_MS` (200 ms)** — too short to be any spoken
+   word — **or shorter than `QDC_SPLIT_FRAGMENT_CEIL_MS` (500 ms) *and* under
+   `QDC_SPLIT_FRAGMENT_RATIO` (0.35) of its neighbour's length** — dwarfed by the
+   word it split off from. The flat floor alone missed slivers in the 200–450 ms
+   band (Hani 4:143 word 10 = a 210 ms onset + 1290 ms body, issue #123, which
+   bloomed as a false repeat); the ratio clause catches those while the warning
+   below keeps the rule from eating real single-word repeats.
 2. **Mislabeled strays.** A single segment carrying a wrong, *earlier* word
    index — often a sound-alike (49:9 goes `… 7, [1], 9 …`: word 8 فَإِن was
    tagged as word 1 وَإِن) — then the recitation continues forward past the
@@ -149,11 +154,14 @@ are **not audible repeats**. Three artifact classes are scrubbed:
 > same-position segments with no gap between them, identical in shape to a
 > split. The only reliable difference is that a real repeat's two halves are
 > both *full utterances* (across all six reciters the shorter half's median is
-> ~1.2 s), whereas a split's extra piece is a sub-word sliver (< 200 ms). An
-> earlier version of this cleanup merged on the gap alone and silently ate real
-> repeats — e.g. Hani **4:163 word 20** (1180 ms + 1510 ms, ear-confirmed via a
-> Timings Lab correction). The `QDC_SPLIT_FRAGMENT_MS` floor is what fixes that:
-> only slivers fold; two substantial utterances stay a repeat.
+> ~1.2 s and is ≥ ~500 ms), whereas a split's extra piece is a sub-word sliver
+> (a fragment: < 200 ms, or < 500 ms but a fraction of the word it split from).
+> An earlier version of this cleanup merged on the gap alone and silently ate
+> real repeats — e.g. Hani **4:163 word 20** (1180 ms + 1510 ms, ear-confirmed
+> via a Timings Lab correction). The duration/ratio fragment test is what fixes
+> that: only slivers fold; two substantial, comparable utterances stay a repeat.
+> The ratio clause keys on the split being *dwarfed* by its neighbour, so it can
+> never touch two peer utterances however the absolute floor is tuned.
 
 None of these rules can touch a genuine repeat: real multi-word chains re-walk
 forward after the backjump (so their members are never "isolated" strays or

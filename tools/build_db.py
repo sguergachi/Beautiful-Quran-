@@ -361,15 +361,32 @@ def load_qdc_timings(qdc_id: int):
 #
 # A genuine single-word repeat also appears as two same-position segments, but
 # BOTH are full utterances (each typically 0.5–2 s; the shorter half's median
-# is ~1.2 s across all six reciters). Keying the sliver merge on an absolute
-# duration floor — not on the gap, which is ~0 ms for a real immediate repeat
-# too — is what separates the two: only a fragment too short to be a spoken
-# word is folded away; two substantial utterances are preserved as a repeat.
-# (An earlier version merged on gap alone and silently ate real repeats such as
-# Hani 4:163 word 20, 1180 ms + 1510 ms — the bug this rule fixes.)
+# is ~1.2 s across all six reciters). Keying the sliver merge on duration — not
+# on the gap, which is ~0 ms for a real immediate repeat too — is what separates
+# the two: only a fragment too short to be a spoken word is folded away; two
+# substantial utterances are preserved as a repeat. (An earlier version merged
+# on gap alone and silently ate real repeats such as Hani 4:163 word 20,
+# 1180 ms + 1510 ms — the bug the duration test fixes.)
+#
+# A flat 200 ms floor, though, is too low: the aligner also emits split slivers
+# in the 200–450 ms range (e.g. Hani 4:143 word 10 = a 210 ms onset + a 1290 ms
+# body — issue #123), which slip past the floor and bloom as false repeats. What
+# still separates these from a real repeat is the *ratio* to their neighbour: a
+# split is one tiny fragment against a full body (shorter/longer well under a
+# third — the same word split by the aligner, often at the same spot across
+# reciters, e.g. 27:20 and 15:7), whereas a real repeat is two comparable
+# utterances. So above the flat floor we fold a same-position span only when it
+# is BOTH under QDC_SPLIT_FRAGMENT_CEIL_MS and a small fraction of its
+# neighbour. Real repeats — whose shorter half is ≥ ~500 ms and comparable to
+# its partner — are untouched by construction.
 QDC_SPLIT_MERGE_GAP_MS = 150  # a sliver sits flush against its word (0–50 ms)
-QDC_SPLIT_FRAGMENT_MS = 200  # shorter than this, a same-position span is a
-#                              sub-word fragment, not a second utterance
+QDC_SPLIT_FRAGMENT_MS = 200  # shorter than this, a same-position span is always
+#                              a sub-word fragment, not a second utterance
+QDC_SPLIT_FRAGMENT_CEIL_MS = 500  # in [FRAGMENT_MS, CEIL) it is a fragment only
+#                                   when dwarfed by its neighbour (see ratio);
+#                                   a real repeat's shorter half is ≥ ~500 ms
+QDC_SPLIT_FRAGMENT_RATIO = 0.35  # shorter/longer below this = a split fragment,
+#                                  not a peer utterance
 QDC_SPIKE_JUMP = 3  # a forward jump this large that instantly retreats is noise
 
 
@@ -384,7 +401,12 @@ def clean_qdc_artifacts(segs, stats):
         merged = [segs[0]]
         for pos, start, end in segs[1:]:
             last = merged[-1]
-            fragment = min(last[2] - last[1], end - start) < QDC_SPLIT_FRAGMENT_MS
+            shorter = min(last[2] - last[1], end - start)
+            longer = max(last[2] - last[1], end - start)
+            fragment = shorter < QDC_SPLIT_FRAGMENT_MS or (
+                shorter < QDC_SPLIT_FRAGMENT_CEIL_MS
+                and shorter < QDC_SPLIT_FRAGMENT_RATIO * longer
+            )
             if (
                 pos == last[0]
                 and start - last[2] <= QDC_SPLIT_MERGE_GAP_MS
