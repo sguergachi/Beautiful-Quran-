@@ -319,11 +319,18 @@ fun ReaderScreen(
             .takeIf { it > 0 }
             ?.coerceIn(1, content.surah.ayahCount)
             ?: return@LaunchedEffect
-        requestedJumpAyah = 0
+        // Do NOT clear requestedJumpAyah before focus() finishes: this effect is
+        // keyed on it, so writing 0 here cancels the coroutine mid-slide and the
+        // jump reads as a pop. Clear in finally once the approach has landed (or
+        // a newer jump has superseded this one).
         followEnabled = isThisSurahPlaying
         viewModel.onAyahBecameActive(target)
         if (isThisSurahPlaying) viewModel.player.seekToAyah(target)
-        focusController.focus(target, animate = true, preRoll = true)
+        try {
+            focusController.focus(target, animate = true, preRoll = true)
+        } finally {
+            if (requestedJumpAyah == target) requestedJumpAyah = 0
+        }
     }
 
     fun selectedPlaybackAyah(): Int {

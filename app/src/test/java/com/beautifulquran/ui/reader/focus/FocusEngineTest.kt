@@ -174,10 +174,11 @@ class FocusEngineTest {
         val far = FocusEngine.approachDistancePx(viewport, jumpDistanceVerses = 200)
         assertTrue("a longer jump travels further", near < mid)
         assertTrue(mid < far)
-        // Nearest jump floors at 0.35 vp; farthest saturates at 1.8 vp.
-        assertEquals((viewport * 0.41f).toInt(), near) // 0.35 + 0.06*1
-        assertEquals((viewport * 1.8f).toInt(), far)
-        assertTrue("never animates more than the cap", far <= (viewport * 1.8f).toInt())
+        // Nearest jump floors at 0.28 vp; farthest saturates at 0.95 vp —
+        // under one viewport so it fits the post-teleport residual.
+        assertEquals((viewport * 0.32f).toInt(), near) // 0.28 + 0.04*1
+        assertEquals((viewport * 0.95f).toInt(), far)
+        assertTrue("never animates more than one viewport", far <= viewport)
     }
 
     @Test
@@ -195,7 +196,17 @@ class FocusEngineTest {
         val shortMs = FocusEngine.approachDurationMs(viewport, shortPx)
         val longMs = FocusEngine.approachDurationMs(viewport, longPx)
         assertTrue(shortMs < longMs)
-        assertTrue("stays brisk", longMs <= 540)
-        assertTrue(shortMs >= 200)
+        assertTrue("stays brisk", longMs <= 560)
+        assertTrue(shortMs >= 280)
+    }
+
+    @Test
+    fun `approach never exceeds a typical post-teleport residual`() {
+        // After a doorstep teleport the residual is roughly one viewport of
+        // content. An approach longer than that residual is what collapsed the
+        // slide into a pop (#136); the cap must stay under that budget.
+        val far = FocusEngine.approachDistancePx(viewport, jumpDistanceVerses = 200)
+        val typicalResidual = viewport // ~one viewport of doorstep travel
+        assertTrue(far < typicalResidual)
     }
 }
