@@ -120,10 +120,10 @@ class ReaderFocusController internal constructor(
      * trajectory:
      * - **Near** — animate the full path from here to the target (direct
      *   interpolation), decelerating onto the verse.
-     * - **Far** — teleport to a doorstep just short of the target, then rush
-     *   the truncated residual with a high-speed decelerating scroll so the
-     *   motion reads as "scrolling to verse N" without waiting on a
-     *   surah-length trajectory.
+     * - **Far** — teleport to a doorstep, then rush a **distance-scaled**
+     *   residual (up to ~48 items / one full second for a ~200-verse jump) so
+     *   the reader *sees* verses fly past before the scroll brakes onto the
+     *   landing — never a one-viewport nudge, never a surah-length wait.
      *
      * Recitation-follow leaves [preRoll] off so lyric tracking stays a gentle
      * glide. See [FocusEngine.planJump].
@@ -146,32 +146,69 @@ class ReaderFocusController internal constructor(
         val totalCount = info.totalItemsCount.coerceAtLeast(1)
 
         if (preRoll) {
-            // Hand-initiated: the engine owns near-vs-far and the duration.
+            // Hand-initiated: the engine owns near-vs-far, residual length, and
+            // duration. Far jumps leave a long stretch to animate so the scroll
+            // reads as travel — not a flicker onto the landing.
             val plan = FocusEngine.planJump(
                 fromIndex = fromIndex,
                 toIndex = itemIndex,
                 visibleItemCount = visibleCount,
                 totalItemCount = totalCount,
             )
+            val avgItemPx = averageLaidOutItemHeightPx().coerceAtLeast(1)
             if (plan.doorstepIndex != null) {
-                // Far: snap near the target (target already laid out), then rush
-                // the residual with a decelerating scroll onto the anchor.
                 listState.scrollToItem(plan.doorstepIndex)
+                // Rush the residual as a single decelerating pixel scroll.
+                // animateScrollBy walks LazyList's measured items as they enter
+                // the window, so a multi-viewport residual actually shows verses
+                // flying past — unlike animateScrollToItem, which can collapse
+                // long jumps into a cross-fade.
+                val signedSpan = if (itemIndex >= plan.doorstepIndex) {
+                    plan.animatedItemSpan
+                } else {
+                    -plan.animatedItemSpan
+                }
+                val rushPx = signedSpan * avgItemPx
+                if (rushPx != 0) {
+                    listState.animateScrollBy(
+                        rushPx.toFloat(),
+                        tween(
+                            durationMillis = plan.durationMs,
+                            easing = FastOutSlowInEasing,
+                        ),
+                    )
+                }
             } else {
-                // Near: if the target is not yet measured, animate toward it
-                // first (LazyList interpolates across the short gap). A hard
-                // scrollToItem here would pop and kill the "quick scroll" feel.
-                val laidOut = listState.layoutInfo.visibleItemsInfo
-                    .any { it.index == itemIndex }
-                if (!laidOut) {
-                    listState.animateScrollToItem(itemIndex)
+                // Near: animate the real pixel path when the target is laid out;
+                // otherwise estimate from average item height so we still get a
+                // continuous scroll instead of a pop.
+                val visible = listState.layoutInfo.visibleItemsInfo
+                    .firstOrNull { it.index == itemIndex }
+                val deltaPx = if (visible != null) {
+                    FocusEngine.glideDeltaPx(
+                        TargetGeometry(
+                            visible.offset,
+                            visible.size,
+                            isLaidOut = true,
+                            isAboveWhenOffscreen = false,
+                        ),
+                        FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, visible.size),
+                    )
+                } else {
+                    (itemIndex - listState.firstVisibleItemIndex) * avgItemPx
+                }
+                if (deltaPx != 0) {
+                    listState.animateScrollBy(
+                        deltaPx.toFloat(),
+                        tween(
+                            durationMillis = plan.durationMs,
+                            easing = FastOutSlowInEasing,
+                        ),
+                    )
                 }
             }
-            animateOntoAnchor(
-                itemIndex = itemIndex,
-                viewportHeight = viewportHeight,
-                durationMs = plan.durationMs,
-            )
+            // Final settle onto the adaptive anchor (corrects estimation drift).
+            settleOntoAnchor(itemIndex, viewportHeight)
             return
         }
 
@@ -202,28 +239,54 @@ class ReaderFocusController internal constructor(
         }
     }
 
+    /** Mean height of currently laid-out items — used to turn an item-span
+     *  residual into pixels for [animateScrollBy]. */
+    private fun averageLaidOutItemHeightPx(): Int {
+        val items = listState.layoutInfo.visibleItemsInfo
+        if (items.isEmpty()) return 0
+        return items.sumOf { it.size } / items.size
+    }
+
     /**
-     * Measure the target (forcing a layout if needed) and decelerate onto its
-     * adaptive anchor over [durationMs].
+     * Nudge [itemIndex] onto its adaptive anchor after a rush scroll. Prefers
+     * another short [animateScrollBy] over [LazyListState.scrollToItem] so an
+     * undershot residual never collapses into a pop at the end.
      */
-    private suspend fun animateOntoAnchor(
-        itemIndex: Int,
-        viewportHeight: Int,
-        durationMs: Int,
-    ) {
-        val delta = measureGlideDelta(itemIndex, viewportHeight) ?: return
-        if (delta == 0) return
-        val spec = tween<Float>(
-            durationMillis = durationMs,
-            easing = FastOutSlowInEasing,
+    private suspend fun settleOntoAnchor(itemIndex: Int, viewportHeight: Int) {
+        var target = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == itemIndex }
+        if (target == null) {
+            val avg = averageLaidOutItemHeightPx().coerceAtLeast(1)
+            val remainingItems = itemIndex - listState.firstVisibleItemIndex
+            if (remainingItems != 0) {
+                listState.animateScrollBy(
+                    (remainingItems * avg).toFloat(),
+                    tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                )
+            }
+            target = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == itemIndex }
+        }
+        if (target == null) {
+            // Last resort — residual estimation was badly off.
+            listState.scrollToItem(itemIndex)
+            target = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == itemIndex }
+                ?: return
+        }
+        val anchor = FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, target.size)
+        val delta = FocusEngine.glideDeltaPx(
+            TargetGeometry(target.offset, target.size, isLaidOut = true, isAboveWhenOffscreen = false),
+            anchor,
         )
-        listState.animateScrollBy(delta.toFloat(), spec)
+        if (delta == 0) return
+        listState.animateScrollBy(
+            delta.toFloat(),
+            tween(durationMillis = 160, easing = FastOutSlowInEasing),
+        )
     }
 
     /**
      * Pixels to scroll so [itemIndex] lands on its adaptive anchor. Forces the
-     * item into layout when it is not yet measured (tall neighbours can leave
-     * it just off-screen after a doorstep teleport).
+     * item into layout when it is not yet measured (used by the soft
+     * recitation-follow path).
      */
     private suspend fun measureGlideDelta(itemIndex: Int, viewportHeight: Int): Int? {
         var target = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == itemIndex }
