@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
   <title>Beautiful Quran</title>
+  <!-- Marks JS as available before first paint, so the ink-bloom reveal can
+       start from upcoming ink without a flash of full-ink content. -->
+  <script>document.documentElement.classList.add('js');</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Noto+Naskh+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -141,5 +144,6 @@
     </div>
     <div class="footer-note">Beautiful Quran &middot; free, ad-free, open source</div>
   </div>
+  <script src="reveal.js"></script>
 </body>
 </html>
