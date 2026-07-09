@@ -1,25 +1,23 @@
-/* Beautiful Quran — web port of ui/theme/Fade.kt letterFadeIn.
+/* Beautiful Quran — web port of ui/theme/Fade.kt ink bloom.
  *
- * One-to-one with the Android highlight wash:
- *   - inkSmootherstep (6t⁵−15t⁴+10t³)
- *   - InkWashFeather = 1.6 (feather wider than the glyph run)
- *   - 9-stop alpha profile across the feather
- *   - progress 0..1 advances the wash head; letters ahead rest at restingAlpha,
- *     letters behind are fully inked (Compose BlendMode.DstIn → CSS mask-image)
+ * The reader highlight is a smootherstep wash (letterFadeIn). With
+ * InkWashFeather = 1.6 the wash is deliberately a whole-word breath with only
+ * a gentle directional lead — for the marketing site (accelerated, not
+ * audio-timed) we animate that breath as per-word opacity on the same curve:
  *
- * On the marketing site the wash is not locked to audio word timings — progress
- * advances on its own clock, accelerated — but the spatial ink effect matches.
+ *   alpha(p) = resting + (1 − resting) × inkSmootherstep(p)
+ *
+ * Words are staggered 50 ms (reveal.js), so the page writes karaoke-style.
+ *
+ * Why opacity, not mask-image / background-clip:text:
+ * Android Chrome + Firefox both failed the earlier mask/clip ports and fell
+ * back to a whole-paragraph fade. Element opacity is universally reliable,
+ * matches the Fade.kt softerstep toe/shoulder, and needs no Canvas.
  */
 (function (root) {
   'use strict';
 
-  /** Matches Fade.kt InkProfileStops. */
-  var INK_PROFILE_STOPS = 9;
-
-  /** Matches Fade.kt InkWashFeather — feather is 1.6× the run width. */
-  var INK_WASH_FEATHER = 1.6;
-
-  /** Matches Fade.kt letterFadeIn default restingAlpha. */
+  /** Matches Fade.kt letterFadeIn default restingAlpha / DESIGN upcoming ink. */
   var DEFAULT_RESTING_ALPHA = 0.35;
 
   /**
@@ -32,118 +30,38 @@
   }
 
   /**
-   * Alpha at parameter t across the feather edge.
-   * Port of the washColors sampling in letterFadeIn.
+   * Ink strength at wash progress p ∈ [0,1].
+   * Matches the letterFadeIn whole-word breath once the wide feather is
+   * accounted for (most of a word's dwell is mid-bloom).
    */
-  function washAlphaAt(t, rtl, restingAlpha) {
-    var s = inkSmootherstep(t);
-    return restingAlpha + (1 - restingAlpha) * (rtl ? s : 1 - s);
-  }
-
-  /**
-   * Build a CSS mask-image linear-gradient that matches the Compose
-   * horizontalGradient + DstIn wash for the given progress (0..1).
-   *
-   * @param {number} progress 0..1 wash head progress
-   * @param {number} widthPx element width in CSS pixels
-   * @param {boolean} rtl true for Arabic (wash right→left)
-   * @param {number} restingAlpha upcoming-ink floor
-   * @returns {string|null} CSS gradient, or null when fully inked
-   */
-  function buildWashMask(progress, widthPx, rtl, restingAlpha) {
+  function inkAlpha(progress, restingAlpha) {
+    var rest = restingAlpha == null ? DEFAULT_RESTING_ALPHA : restingAlpha;
     var p = progress < 0 ? 0 : progress > 1 ? 1 : progress;
-    if (p >= 1) return null;
-    if (!(widthPx > 0)) return null;
-
-    var edge = Math.max(widthPx * INK_WASH_FEATHER, 1);
-    var head = p * (widthPx + edge);
-    var startX;
-    var endX;
-    if (rtl) {
-      startX = widthPx - head;
-      endX = widthPx - head + edge;
-    } else {
-      startX = head - edge;
-      endX = head;
-    }
-
-    var stops = [];
-    function push(x, a) {
-      stops.push('rgba(0,0,0,' + a + ') ' + x + 'px');
-    }
-
-    // Outside the feather, Compose clamps edge colors of the gradient.
-    // LTR: left of startX = full ink; right of endX = resting.
-    // RTL: left of startX = resting; right of endX = full ink.
-    if (!rtl) {
-      push(Math.min(0, startX), 1);
-      for (var i = 0; i < INK_PROFILE_STOPS; i++) {
-        var t = i / (INK_PROFILE_STOPS - 1);
-        push(startX + t * (endX - startX), washAlphaAt(t, false, restingAlpha));
-      }
-      push(Math.max(widthPx, endX), restingAlpha);
-    } else {
-      push(Math.min(0, startX), restingAlpha);
-      for (var j = 0; j < INK_PROFILE_STOPS; j++) {
-        var u = j / (INK_PROFILE_STOPS - 1);
-        push(startX + u * (endX - startX), washAlphaAt(u, true, restingAlpha));
-      }
-      push(Math.max(widthPx, endX), 1);
-    }
-
-    return 'linear-gradient(to right, ' + stops.join(', ') + ')';
-  }
-
-  function setMask(el, mask) {
-    el.style.webkitMaskImage = mask;
-    el.style.maskImage = mask;
-    el.style.webkitMaskSize = '100% 100%';
-    el.style.maskSize = '100% 100%';
-    el.style.webkitMaskRepeat = 'no-repeat';
-    el.style.maskRepeat = 'no-repeat';
-  }
-
-  /** Solid upcoming-ink floor — used when layout width is not ready yet. */
-  function restingMask(restingAlpha) {
-    return 'linear-gradient(to right, rgba(0,0,0,' + restingAlpha + '), rgba(0,0,0,' + restingAlpha + '))';
+    return rest + (1 - rest) * inkSmootherstep(p);
   }
 
   function applyWash(el, progress, rtl, restingAlpha) {
-    var rest = restingAlpha == null ? DEFAULT_RESTING_ALPHA : restingAlpha;
-    var width = el.offsetWidth || el.getBoundingClientRect().width;
-    if (!(width > 0)) {
-      // Avoid a full-ink flash before layout: hold the upcoming floor.
-      setMask(el, restingMask(rest));
-      return;
-    }
-    var mask = buildWashMask(progress, width, !!rtl, rest);
-    if (!mask) {
-      clearWash(el);
-      return;
-    }
-    setMask(el, mask);
+    // rtl is accepted for API parity with letterFadeIn; the site breath is
+    // uniform across the word (directional lead comes from word stagger).
+    void rtl;
+    el.style.opacity = String(inkAlpha(progress, restingAlpha));
   }
 
   function clearWash(el) {
-    el.style.webkitMaskImage = '';
-    el.style.maskImage = '';
-    el.style.webkitMaskSize = '';
-    el.style.maskSize = '';
-    el.style.webkitMaskRepeat = '';
-    el.style.maskRepeat = '';
+    el.style.opacity = '';
   }
 
   /**
-   * Animate the ink wash from progress 0 → 1.
-   * Progress advances linearly with time (like audio position / duration in the
-   * app); the softerstep lives in the feather, not in the clock.
+   * Animate ink from upcoming → full on the Fade.kt smootherstep clock.
+   * Progress advances linearly with time (like audio position/duration);
+   * the curve lives in inkAlpha, not in the clock.
    *
    * @param {HTMLElement} el
    * @param {{ duration?: number, rtl?: boolean, restingAlpha?: number, onDone?: function }} opts
    */
   function animateWash(el, opts) {
     opts = opts || {};
-    var duration = opts.duration != null ? opts.duration : 360;
+    var duration = opts.duration != null ? opts.duration : 280;
     var rtl = !!opts.rtl;
     var resting =
       opts.restingAlpha != null ? opts.restingAlpha : DEFAULT_RESTING_ALPHA;
@@ -157,6 +75,8 @@
       if (t < 1) {
         raf = root.requestAnimationFrame(frame);
       } else {
+        // Leave opacity at 1 via the .inked class; drop the inline so theme
+        // and hover styles keep working.
         clearWash(el);
         if (opts.onDone) opts.onDone();
       }
@@ -171,13 +91,10 @@
 
   root.BeautifulQuranInk = {
     inkSmootherstep: inkSmootherstep,
-    washAlphaAt: washAlphaAt,
-    buildWashMask: buildWashMask,
+    inkAlpha: inkAlpha,
     applyWash: applyWash,
     clearWash: clearWash,
     animateWash: animateWash,
-    INK_PROFILE_STOPS: INK_PROFILE_STOPS,
-    INK_WASH_FEATHER: INK_WASH_FEATHER,
     DEFAULT_RESTING_ALPHA: DEFAULT_RESTING_ALPHA,
   };
 })(typeof window !== 'undefined' ? window : this);

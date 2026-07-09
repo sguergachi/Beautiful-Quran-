@@ -30,10 +30,10 @@
   --radius: 20px;
   --max-width: 640px;
 
-  /* Ink bloom — web port of Fade.kt letterFadeIn (see ink-fade.js).
-   * Resting alpha matches the Compose default (0.35). The directional wash
-   * (smootherstep feather, InkWashFeather 1.6) is applied by JS as a mask;
-   * CSS only holds the pre-wash upcoming floor so there is no full-ink flash. */
+  /* Ink bloom — web port of Fade.kt (see ink-fade.js).
+   * Upcoming floor matches Compose letterFadeIn restingAlpha (0.35).
+   * Words bloom via per-word opacity on inkSmootherstep; CSS only holds the
+   * pre-JS floor so there is no full-ink flash. */
   --upcoming-ink: 0.35;
 }
 
@@ -98,13 +98,12 @@ img {
 
 /* Ink bloom on arrival.
  *
- * Word-by-word port of the reader highlight wash (Fade.kt letterFadeIn →
- * ink-fade.js). Each `.ink-word` (and atomic units like the rosette) rests at
- * upcoming ink; JS writes them with the directional smootherstep wash,
- * staggered 50 ms apart down each line.
+ * Word-by-word Fade.kt breath (ink-fade.js): each `.ink-word` parks at upcoming
+ * ink and blossoms to full on inkSmootherstep, staggered 50 ms. Opacity only —
+ * no translate, mask, or paragraph fade (those failed on Android browsers).
  *
- * Blocks hold the upcoming floor until JS wraps words (`.ink-prepared`), so
- * there is no full-ink flash before the script runs. Gated on `.js`.
+ * Until JS wraps words, blocks rest at the upcoming floor. After wrap, JS owns
+ * each word's opacity via inline style. Gated on `.js`.
  */
 @media (prefers-reduced-motion: no-preference) {
   .js :where(
@@ -122,21 +121,20 @@ img {
     .attribution p,
     .sheet > .footer-links,
     .sheet > .back-link
-  ):not(.ink-prepared) {
+  ):not(.ink-prepared):not(.inked):not(.ink-washing) {
     opacity: var(--upcoming-ink);
   }
 
-  /* After wrap, the block is full-strength; each word carries the floor. */
+  /* After wrap the block itself is full strength; words carry the floor. */
   .js .ink-prepared {
     opacity: 1;
   }
 
   .js .ink-word {
     display: inline-block;
-    opacity: var(--upcoming-ink);
   }
 
-  .js .ink-washing,
+  /* Settled words / atomics — drop any leftover inline and show full ink. */
   .js .inked {
     opacity: 1;
   }
