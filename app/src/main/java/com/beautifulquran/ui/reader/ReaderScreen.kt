@@ -6,13 +6,11 @@ import android.content.ContextWrapper
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -74,7 +72,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
@@ -87,6 +84,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ReadingMode
+import com.beautifulquran.ui.reader.focus.rememberReaderFocusController
 import com.beautifulquran.ui.theme.IslamicReturnToAyahButton
 import com.beautifulquran.ui.theme.absorbPointerEvents
 import com.beautifulquran.ui.theme.contrastingOverlayColorScheme
@@ -94,33 +92,6 @@ import com.beautifulquran.ui.theme.verticalFadingEdges
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
-import kotlin.math.max
-
-// LazyColumn's animateScrollToItem estimates the heights of every unmeasured
-// ayah block along the way and re-anchors as the real ones compose in, which
-// reads as stutter on long jumps. Instead: teleport to just outside the
-// viewport on the approach side, then glide the last stretch by exact pixels.
-private suspend fun LazyListState.smoothScrollToItem(index: Int, scrollOffset: Int) {
-    val visibleCount = layoutInfo.visibleItemsInfo.size.coerceAtLeast(1)
-    if (abs(index - firstVisibleItemIndex) > visibleCount + 2) {
-        val doorstep = if (index > firstVisibleItemIndex) {
-            index - visibleCount
-        } else {
-            index + visibleCount
-        }
-        // scrollToItem forces a synchronous remeasure, so layoutInfo below is fresh.
-        scrollToItem(doorstep.coerceIn(0, (layoutInfo.totalItemsCount - 1).coerceAtLeast(0)))
-    }
-    val target = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
-    if (target != null) {
-        animateScrollBy(
-            value = (target.offset + scrollOffset).toFloat(),
-            animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
-        )
-    } else {
-        animateScrollToItem(index, scrollOffset)
-    }
-}
 
 private sealed interface LazyItem {
     val key: String
@@ -262,25 +233,41 @@ fun ReaderScreen(
         }
     }
 
-    val ayahToItemIndex = remember(readerItems) {
-        readerItems.mapIndexedNotNull { index, item ->
-            if (item is LazyItem.AyahItem) item.ayahIndex to index else null
-        }.toMap()
-    }
-
-    val scrolledAyah = remember(readerItems) {
-        derivedStateOf {
-            val visibleAyahItemInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull {
-                readerItems.getOrNull(it.index) is LazyItem.AyahItem
-            }
-            if (visibleAyahItemInfo != null) {
-                val item = readerItems[visibleAyahItemInfo.index] as LazyItem.AyahItem
-                item.ayahIndex + 1
-            } else {
-                1
+    // Maps between ayah numbers (1-based) and their slot in the lazy item list,
+    // so the focus engine can resolve either direction cheaply.
+    val itemIndexOfAyah = remember(readerItems) {
+        buildMap {
+            readerItems.forEachIndexed { index, item ->
+                if (item is LazyItem.AyahItem) put(item.ayahIndex + 1, index)
             }
         }
     }
+    val ayahNumberByItemIndex = remember(readerItems) {
+        buildMap {
+            readerItems.forEachIndexed { index, item ->
+                if (item is LazyItem.AyahItem) put(index, item.ayahIndex + 1)
+            }
+        }
+    }
+    // The last ayah number in the surah — the highest position the reading
+    // marker can reach. Derived once from the (stable) item list.
+    val lastAyahNumber = remember(readerItems) {
+        readerItems.count { it is LazyItem.AyahItem }.coerceAtLeast(1)
+    }
+    // The one authority over where verses sit and how the reader scrolls to
+    // them: jumps from the selector, recitation-follow, the initial settle, and
+    // return-to-verse all route through this, so nothing fights the list state.
+    val focusController = rememberReaderFocusController(
+        listState = listState,
+        itemIndexOfAyah = itemIndexOfAyah,
+        ayahNumberByItemIndex = ayahNumberByItemIndex,
+        lastAyahNumber = lastAyahNumber,
+    )
+    // The verse at the reading line, and the continuous position through the
+    // surah — the single read-out the rail, the return control, and the play
+    // target all share.
+    val scrolledAyah = focusController.focusedAyah
+    val scrolledAyahPosition = focusController.focusedPosition
 
     // While reciting, chrome recedes into the paper — the words and core
     // transport controls stay present. Read inside graphicsLayer blocks so
@@ -305,63 +292,16 @@ fun ReaderScreen(
 
     // Reading by hand pauses the follow mode via pointerInput.
 
-    val density = LocalDensity.current
-    // Where scrolls anchor the target ayah: the upper third of the viewport.
-    // Computed on demand inside the scroll coroutines below — reading
-    // LazyListState.layoutInfo during composition would subscribe the whole
-    // screen to a value that changes on every scroll frame.
-    val fallbackAnchorPx = with(density) { 120.dp.roundToPx() }
-    fun readingAnchorOffsetPx(): Int {
-        val viewportHeight = listState.layoutInfo.viewportSize.height
-        return if (viewportHeight > 0) (viewportHeight * 0.28f).toInt() else fallbackAnchorPx
-    }
     val statusBarTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
-    // The last ayah number in the surah — the highest position the reading
-    // marker can reach. Derived once from the (stable) item list.
-    val lastAyahNumber = remember(readerItems) {
-        readerItems.count { it is LazyItem.AyahItem }.coerceAtLeast(1)
+    // Where the reciting verse sits relative to its ideal focus, and whether it
+    // is taller than the screen — the return-to-verse control reads the former,
+    // the word-level follow gate reads the latter. Both watch layoutInfo, so
+    // they recompute only when their answer actually changes.
+    val activeAyahPlacement = remember(activeAyah) {
+        derivedStateOf { focusController.placementOf(activeAyah) }
     }
-    val scrolledAyahPosition = remember(readerItems) {
-        derivedStateOf {
-            val info = listState.layoutInfo
-            val visibleAyah = info.visibleItemsInfo.firstOrNull {
-                readerItems.getOrNull(it.index) is LazyItem.AyahItem
-            } ?: return@derivedStateOf scrolledAyah.value.toFloat()
-            val ayahItem = readerItems[visibleAyah.index] as LazyItem.AyahItem
-            val itemScroll = (-visibleAyah.offset).coerceIn(0, visibleAyah.size)
-            val itemProgress = if (visibleAyah.size > 0) {
-                itemScroll.toFloat() / visibleAyah.size.toFloat()
-            } else {
-                0f
-            }
-            val basePosition = ayahItem.ayahIndex + 1f + itemProgress
-            // The final ayah can never scroll up to the anchor, so a position
-            // taken from the first visible ayah tops out short of the end and
-            // the rail's reading marker never reaches the last bar. Once the
-            // surah's tail is on screen, blend the position the rest of the way
-            // to [lastAyahNumber] as the very bottom settles into view.
-            val lastVisible = info.visibleItemsInfo.lastOrNull()
-            if (
-                lastVisible != null &&
-                lastVisible.index == info.totalItemsCount - 1 &&
-                lastVisible.size > 0
-            ) {
-                val bottomBeyondFold =
-                    (lastVisible.offset + lastVisible.size - info.viewportEndOffset).toFloat()
-                val tailSettle = (1f - bottomBeyondFold / lastVisible.size).coerceIn(0f, 1f)
-                // Convex blend, so it always stays between basePosition and the
-                // final ayah; cap it there as a guard against rounding.
-                val tailPosition = basePosition + (lastAyahNumber - basePosition) * tailSettle
-                return@derivedStateOf tailPosition.coerceAtMost(lastAyahNumber.toFloat())
-            }
-            basePosition
-        }
-    }
-    val isAwayFromActiveAyah = remember(activeAyah) {
-        derivedStateOf {
-            val ayah = activeAyah ?: return@derivedStateOf false
-            scrolledAyah.value != ayah
-        }
+    val activeVerseExceedsViewport = remember(activeAyah) {
+        derivedStateOf { focusController.exceedsViewport(activeAyah) }
     }
 
     // A fresh query restarts from its first match…
@@ -370,8 +310,7 @@ fun ReaderScreen(
     LaunchedEffect(searchMatches, currentMatch) {
         val target = searchMatches.getOrNull(currentMatch) ?: return@LaunchedEffect
         followEnabled = false
-        val itemIndex = ayahToItemIndex[target - 1] ?: return@LaunchedEffect
-        listState.smoothScrollToItem(itemIndex, -readingAnchorOffsetPx())
+        focusController.focus(target, animate = true)
     }
 
     LaunchedEffect(requestedJumpAyah) {
@@ -384,8 +323,7 @@ fun ReaderScreen(
         followEnabled = isThisSurahPlaying
         viewModel.onAyahBecameActive(target)
         if (isThisSurahPlaying) viewModel.player.seekToAyah(target)
-        val itemIndex = ayahToItemIndex[target - 1] ?: return@LaunchedEffect
-        listState.smoothScrollToItem(itemIndex, -readingAnchorOffsetPx())
+        focusController.focus(target, animate = true)
     }
 
     fun selectedPlaybackAyah(): Int {
@@ -396,16 +334,14 @@ fun ReaderScreen(
             .coerceIn(1, ayahCount)
     }
 
-    // Lyric-style auto scroll: keep the active ayah in the upper third.
+    // Lyric-style auto scroll: the focus engine keeps the active ayah anchored
+    // (its whole body if it fits, its top pinned if it is taller than the
+    // screen — word-level following then carries the eye through a tall verse).
     LaunchedEffect(activeAyah, followEnabled) {
         val ayah = activeAyah ?: return@LaunchedEffect
         viewModel.onAyahBecameActive(ayah)
         if (!followEnabled) return@LaunchedEffect
-        val itemIndex = ayahToItemIndex[ayah - 1] ?: return@LaunchedEffect
-        listState.animateScrollToItem(
-            index = itemIndex,
-            scrollOffset = -readingAnchorOffsetPx(),
-        )
+        focusController.focus(ayah, animate = true)
     }
 
     // Opening from "Continue listening": settle on the saved ayah once.
@@ -415,11 +351,7 @@ fun ReaderScreen(
         if (!didInitialScroll) {
             didInitialScroll = true
             if (startAyah != null && startAyah in 2..content.ayahs.size) {
-                val itemIndex = ayahToItemIndex[startAyah - 1] ?: return@LaunchedEffect
-                listState.scrollToItem(
-                    index = itemIndex,
-                    scrollOffset = -readingAnchorOffsetPx(),
-                )
+                focusController.focus(startAyah, animate = false)
             }
         }
     }
@@ -596,7 +528,7 @@ fun ReaderScreen(
                     playerState.error == null &&
                         !followEnabled &&
                         recitingActive &&
-                        isAwayFromActiveAyah.value
+                        activeAyahPlacement.value.isAway
                 AnimatedVisibility(
                     visible = playerState.error != null,
                     enter = fadeIn(),
@@ -623,9 +555,8 @@ fun ReaderScreen(
                             .fillMaxWidth()
                             .padding(top = 4.dp, bottom = 6.dp),
                     ) {
-                        val pointUp = activeAyah != null && activeAyah < scrolledAyah.value
                         IslamicReturnToAyahButton(
-                            pointUp = pointUp,
+                            pointUp = activeAyahPlacement.value.pointUp,
                             onClick = { followEnabled = true },
                         )
                     }
@@ -776,7 +707,18 @@ fun ReaderScreen(
                                 showTransliteration = settings.showTransliteration,
                                 showTranslation = settings.showTranslation,
                                 searchQuery = activeQuery,
-                                keepActiveWordInView = followEnabled && recitingActive,
+                                // Word-level following is the focus engine's
+                                // secondary constraint: it only takes over inside
+                                // a verse taller than the screen (where the
+                                // active word must lead the eye down). A verse
+                                // that fits is owned by the verse-level anchor,
+                                // so word-follow stays off and the two never
+                                // fight. `isActive` short-circuits the state read
+                                // so only the reciting block subscribes.
+                                keepActiveWordInView = followEnabled &&
+                                    recitingActive &&
+                                    isActive &&
+                                    activeVerseExceedsViewport.value,
                                 onWordClick = { word ->
                                     val segment = viewModel.segmentsFor(ayah.number)
                                         ?.firstOrNull { it.position == word.position }

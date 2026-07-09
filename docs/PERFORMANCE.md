@@ -66,6 +66,18 @@ an alpha mask with `BlendMode.DstIn` — requires
 offscreen buffer **every frame while scrolling**. The overlay is visually
 identical on a solid background and costs almost nothing.
 
+### 4b. Layout reads confined to derived state and coroutines
+
+`LazyListState.layoutInfo` changes on every scroll frame, so reading it in
+plain composition would recompose the whole reader while scrolling. The focus
+engine (`ReaderFocusController`) reads it only inside `derivedStateOf`
+(`focusedAyah`, `focusedPosition`, verse placement) — which re-notifies only
+when the *derived answer* changes — and inside the `focus()` scroll coroutine.
+The verse-position math itself lives in the pure `FocusEngine`, so it is
+allocation-free and unit-tested off-device. The word-follow gate is read
+behind an `isActive &&` short-circuit, so only the single reciting `AyahBlock`
+ever subscribes to it.
+
 ### 5. Virtualized, keyed, stable lists
 
 - `LazyColumn` everywhere; ayah items are keyed by ayah number so scroll
