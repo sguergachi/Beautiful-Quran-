@@ -130,8 +130,9 @@ img {
     opacity: 1;
   }
 
+  /* Stay inline (not inline-block) so inter-word text-node spaces render. */
   .js .ink-word {
-    display: inline-block;
+    display: inline;
   }
 
   /* Settled words / atomics — drop any leftover inline and show full ink. */
