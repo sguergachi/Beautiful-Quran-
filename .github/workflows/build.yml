@@ -62,12 +62,26 @@ jobs:
           name: BeautifulQuran-apk
           path: BeautifulQuran.apk
 
+      # Only master owns the rolling "latest" release. Feature-branch builds still
+      # run tests + assembleRelease and upload the APK artifact; they must not
+      # contend for the shared tag (concurrent delete/create races fail CI with
+      # HTTP 422 "Release.tag_name already exists" even when tests passed).
       - name: Publish APK to "latest" release
+        if: github.ref == 'refs/heads/master'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete latest --cleanup-tag --yes || true
-          gh release create latest BeautifulQuran.apk \
-            --prerelease \
-            --title "Beautiful Quran — latest build" \
-            --notes "Debug-signed APK built from ${{ github.sha }}. Download on your Android phone and install (allow installs from your browser when prompted)."
+          # Retry a few times: two master pushes can still race on the tag.
+          for attempt in 1 2 3; do
+            gh release delete latest --cleanup-tag --yes || true
+            if gh release create latest BeautifulQuran.apk \
+              --prerelease \
+              --title "Beautiful Quran — latest build" \
+              --notes "Debug-signed APK built from ${{ github.sha }}. Download on your Android phone and install (allow installs from your browser when prompted)."; then
+              exit 0
+            fi
+            echo "Release publish attempt $attempt failed; retrying…"
+            sleep $((attempt * 2))
+          done
+          echo "Failed to publish latest release after retries (APK is still available as a workflow artifact)."
+          exit 1
