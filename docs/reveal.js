@@ -37,8 +37,12 @@
   }
 
   /**
-   * Split text nodes under [root] into <span class="ink-word">…</span>,
-   * attaching trailing whitespace to each word so gaps aren't full-ink.
+   * Split text nodes under [root] into <span class="ink-word">word</span>
+   * with whitespace kept as sibling text nodes between them.
+   *
+   * Spaces must stay outside the spans: browsers collapse trailing whitespace
+   * inside inline-block (and even some inline) boxes, which is what removed
+   * all spacing on Android.
    */
   function wrapWords(root) {
     if (root.dataset.inkWrapped === '1') return;
@@ -56,27 +60,17 @@
     textNodes.forEach(function (textNode) {
       var parts = textNode.nodeValue.split(/(\s+)/);
       var frag = document.createDocumentFragment();
-      var i = 0;
-      while (i < parts.length) {
-        var part = parts[i];
-        if (!part) { i += 1; continue; }
+      parts.forEach(function (part) {
+        if (!part) return;
         if (/^\s+$/.test(part)) {
           frag.appendChild(document.createTextNode(part));
-          i += 1;
-          continue;
+          return;
         }
         var span = document.createElement('span');
         span.className = 'ink-word';
-        var wordText = part;
-        if (i + 1 < parts.length && /^\s+$/.test(parts[i + 1] || '')) {
-          wordText += parts[i + 1];
-          i += 2;
-        } else {
-          i += 1;
-        }
-        span.textContent = wordText;
+        span.textContent = part;
         frag.appendChild(span);
-      }
+      });
       textNode.parentNode.replaceChild(frag, textNode);
     });
   }
