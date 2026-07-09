@@ -119,13 +119,14 @@ class ReaderFocusController internal constructor(
      *
      * [preRoll] adds a "we scrolled to get here" cue for jumps the reader
      * initiates by hand (selector, search, return-to-verse): the bulk of the
-     * distance is covered instantly, then the verse glides in over a
-     * **distance-scaled** approach — a further, slightly longer travel for a
-     * bigger jump — along the residual scroll after teleport, so the motion
-     * conveys how far it went instead of popping into view. The approach is
-     * capped under one viewport and clamped to the residual so the wind-up
-     * never reverses (a reverse wind-up collapses to a pop at list edges).
-     * Recitation-follow leaves it off so lyric tracking stays smooth. See
+     * distance is covered instantly, then the verse is offset from its landing
+     * and glides in over a **distance-scaled** approach — further and up to a
+     * full second for a bigger jump, briefer when the target is nearby — along
+     * the residual scroll after teleport, so the motion conveys how far it
+     * went instead of popping into view. The approach is capped under one
+     * viewport and clamped to the residual so the wind-up never reverses (a
+     * reverse wind-up collapses to a pop at list edges). Recitation-follow
+     * leaves it off so lyric tracking stays smooth. See
      * [FocusEngine.approachDistancePx].
      */
     suspend fun focus(ayahNumber: Int, animate: Boolean, preRoll: Boolean = false) {
@@ -202,7 +203,7 @@ class ReaderFocusController internal constructor(
         val desiredApproach = FocusEngine.approachDistancePx(viewportHeight, jumpDistanceVerses)
         val approachPx = minOf(desiredApproach, abs(delta))
         val approachSpec = tween<Float>(
-            durationMillis = FocusEngine.approachDurationMs(viewportHeight, approachPx),
+            durationMillis = FocusEngine.approachDurationMs(jumpDistanceVerses),
             easing = FastOutSlowInEasing,
         )
         if (approachPx >= abs(delta)) {
