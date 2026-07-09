@@ -61,4 +61,22 @@ class SurahFilterTest {
     fun `unknown surah reference yields no results`() {
         assertEquals(emptyList<Surah>(), filterSurahs(surahs, "3:1").surahs)
     }
+
+    @Test
+    fun `over-long reference numbers degrade gracefully instead of crashing`() {
+        // Regression: these used to throw NumberFormatException and break the
+        // whole search flow. A number too large to be a real reference simply
+        // matches nothing.
+        val result = filterSurahs(surahs, "99999999999:1")
+        assertEquals(emptyList<Surah>(), result.surahs)
+        assertNull(result.ayahTarget)
+        assertEquals(emptyList<Surah>(), filterSurahs(surahs, "2:99999999999").surahs)
+    }
+
+    @Test
+    fun `surrounding whitespace does not hide a name match`() {
+        assertEquals(listOf(surahs[1]), filterSurahs(surahs, "  baqara  ").surahs)
+        assertEquals(listOf(surahs[1]), filterSurahs(surahs, " cow ").surahs)
+        assertEquals(listOf(surahs[2]), filterSurahs(surahs, " 114 ").surahs)
+    }
 }
