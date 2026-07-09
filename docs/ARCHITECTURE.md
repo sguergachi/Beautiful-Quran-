@@ -126,6 +126,35 @@ per-item derivedStateOf in the reader list  ──►  one ayah recomposes
 - Word-level accuracy of the source data is ±73 ms on average — inside the
   ~150 ms window that reads as "in sync" to a human.
 
+## The focus engine
+
+Vertical position in the reader — which verse the reader is looking at, and
+how to scroll a chosen verse into view — is owned by one component so the
+list is never pulled in two directions at once.
+
+```
+FocusEngine   ── pure: (viewport, verse geometry) → anchor / placement / glide delta
+ReaderFocusController ── holds the LazyListState; the sole writer to it
+```
+
+- `ui/reader/focus/FocusEngine` is pure (no Android, JVM-unit-tested like
+  `HighlightEngine`). It computes the **adaptive anchor** — a verse that fits
+  rests fully in view with a little breathing room; a verse taller than the
+  screen has its top pinned so its opening line shows — plus a verse's
+  `placement` (above / below / in focus) and the exact pixel `glideDelta` to
+  bring it to its anchor.
+- `ui/reader/focus/ReaderFocusController` is the Compose glue and the **single
+  writer** to the `LazyListState`. Every programmatic scroll — a selector
+  jump, recitation-follow, the return-to-verse control, the initial
+  continue-listening settle — goes through its one `focus()` suspend, which
+  waits for a real viewport before measuring, teleports to a doorstep when the
+  target is far off-screen, then glides the last stretch by exact pixels. It
+  also exposes the shared read-out (`focusedAyah` / `focusedPosition`) the rail
+  and the return control both consume.
+- Word-level `bringIntoView` (in `AyahBlock`) is the engine's *secondary*
+  constraint: it only engages inside a verse taller than the viewport, so it
+  carries the eye through a long verse without fighting the verse-level anchor.
+
 ## Playback
 
 `PlaybackService` is a standard `MediaSessionService`: lock-screen and
@@ -146,7 +175,8 @@ horizontal page turn — draggable, fling-able, with page-turn audio
   `SurahHeader` + one `AyahBlock` per ayah in a `LazyColumn`;
   `AyahBlock` renders `WordUnit`s (Arabic mode, RTL flow) or
   `EnglishWordUnit`s (English mode, LTR flow); `PlayerBar` sits flat at the
-  bottom.
+  bottom. All scrolling and verse-position logic routes through the focus
+  engine (`reader/focus/`, see below).
 - `settings/SettingsScreen` — reciter, reading mode, text size, display
   toggles, theme, attributions.
 
