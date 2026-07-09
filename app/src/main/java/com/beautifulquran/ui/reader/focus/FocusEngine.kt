@@ -1,5 +1,6 @@
 package com.beautifulquran.ui.reader.focus
 
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -45,6 +46,54 @@ object FocusEngine {
      * viewport. Keeps tiny scroll nudges from flickering the control on and off.
      */
     private const val IN_FOCUS_TOLERANCE_FRACTION = 0.18f
+
+    // --- Distance-scaled jump approach ---
+    // A hand-initiated jump animates its final stretch so the reader *sees* the
+    // scroll arrive. The length of that stretch scales with how far the jump is
+    // (in verses), capped, so a longer jump visibly travels further — conveying
+    // distance — while staying fast and never animating the whole surah.
+
+    /** Shortest approach (nearest jump), as a fraction of the viewport. */
+    private const val APPROACH_MIN_FRACTION = 0.35f
+
+    /** How much each verse of jump distance lengthens the approach. */
+    private const val APPROACH_PER_VERSE_FRACTION = 0.06f
+
+    /** Longest approach (far jumps saturate here), as a fraction of the
+     *  viewport — the ceiling that keeps the glide smooth and quick. */
+    private const val APPROACH_MAX_FRACTION = 1.8f
+
+    /** Duration of the shortest approach. */
+    private const val APPROACH_MIN_MS = 200
+
+    /** Duration of the longest (saturated) approach — still brisk. */
+    private const val APPROACH_MAX_MS = 540
+
+    /**
+     * How far (px) the final, animated stretch of a jump should travel, scaled
+     * by the jump's distance in verses ([jumpDistanceVerses]) and capped at
+     * [APPROACH_MAX_FRACTION] of the viewport. The verse is pre-positioned this
+     * far from its anchor on the approach side, then glided in.
+     */
+    fun approachDistancePx(viewportHeightPx: Int, jumpDistanceVerses: Int): Int {
+        val fraction = (APPROACH_MIN_FRACTION + APPROACH_PER_VERSE_FRACTION * abs(jumpDistanceVerses))
+            .coerceIn(APPROACH_MIN_FRACTION, APPROACH_MAX_FRACTION)
+        return (viewportHeightPx * fraction).roundToInt()
+    }
+
+    /**
+     * How long the animated approach should take, scaled by its length so a
+     * longer travel reads as covering more ground while staying fast. Kept in
+     * [APPROACH_MIN_MS]..[APPROACH_MAX_MS].
+     */
+    fun approachDurationMs(viewportHeightPx: Int, approachPx: Int): Int {
+        if (viewportHeightPx <= 0) return APPROACH_MIN_MS
+        val fraction = (approachPx.toFloat() / viewportHeightPx)
+            .coerceIn(APPROACH_MIN_FRACTION, APPROACH_MAX_FRACTION)
+        val t = (fraction - APPROACH_MIN_FRACTION) /
+            (APPROACH_MAX_FRACTION - APPROACH_MIN_FRACTION)
+        return (APPROACH_MIN_MS + (APPROACH_MAX_MS - APPROACH_MIN_MS) * t).roundToInt()
+    }
 
     /** Usable vertical space for reading: the viewport minus any top guard. */
     private fun usable(viewportHeightPx: Int, topGuardPx: Int): Int =

@@ -156,9 +156,11 @@ ReaderFocusController ── holds the LazyListState; the sole writer to it
   and the return control both consume.
 - Hand-initiated jumps (selector, search, return-to-verse) pass `preRoll` to
   `focus()`: the bulk of the distance is covered instantly, then the verse is
-  *seen* sliding the last short stretch (`PRE_ROLL_FRACTION` of the viewport)
-  into place, in the direction of travel — a "we scrolled here" cue rather than
-  a pop. Recitation-follow leaves it off so lyric tracking stays smooth.
+  *seen* gliding in over a **distance-scaled approach** (`approachDistancePx` /
+  `approachDurationMs`) — a further, slightly longer travel for a bigger jump,
+  capped so it stays fast — from the direction of travel. This gives a felt
+  sense of how far the jump was, rather than a pop. Recitation-follow leaves it
+  off so lyric tracking stays smooth.
 - Word-level `bringIntoView` (in `AyahBlock`) is the engine's *secondary*
   constraint: it only engages inside a verse taller than the viewport, so it
   carries the eye through a long verse without fighting the verse-level anchor.

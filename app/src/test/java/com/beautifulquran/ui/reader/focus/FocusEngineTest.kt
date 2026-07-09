@@ -164,4 +164,38 @@ class FocusEngineTest {
         assertFalse(FocusEngine.shouldTeleport(targetIndexDelta = 3, visibleItemCount = 5))
         assertTrue(FocusEngine.shouldTeleport(targetIndexDelta = 40, visibleItemCount = 5))
     }
+
+    // ---- distance-scaled approach ----
+
+    @Test
+    fun `approach grows with jump distance and saturates`() {
+        val near = FocusEngine.approachDistancePx(viewport, jumpDistanceVerses = 1)
+        val mid = FocusEngine.approachDistancePx(viewport, jumpDistanceVerses = 8)
+        val far = FocusEngine.approachDistancePx(viewport, jumpDistanceVerses = 200)
+        assertTrue("a longer jump travels further", near < mid)
+        assertTrue(mid < far)
+        // Nearest jump floors at 0.35 vp; farthest saturates at 1.8 vp.
+        assertEquals((viewport * 0.41f).toInt(), near) // 0.35 + 0.06*1
+        assertEquals((viewport * 1.8f).toInt(), far)
+        assertTrue("never animates more than the cap", far <= (viewport * 1.8f).toInt())
+    }
+
+    @Test
+    fun `approach is symmetric in direction`() {
+        assertEquals(
+            FocusEngine.approachDistancePx(viewport, jumpDistanceVerses = 6),
+            FocusEngine.approachDistancePx(viewport, jumpDistanceVerses = -6),
+        )
+    }
+
+    @Test
+    fun `approach duration scales with travel but stays brisk`() {
+        val shortPx = FocusEngine.approachDistancePx(viewport, 1)
+        val longPx = FocusEngine.approachDistancePx(viewport, 200)
+        val shortMs = FocusEngine.approachDurationMs(viewport, shortPx)
+        val longMs = FocusEngine.approachDurationMs(viewport, longPx)
+        assertTrue(shortMs < longMs)
+        assertTrue("stays brisk", longMs <= 540)
+        assertTrue(shortMs >= 200)
+    }
 }
