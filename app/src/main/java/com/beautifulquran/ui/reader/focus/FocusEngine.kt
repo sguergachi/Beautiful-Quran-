@@ -160,6 +160,23 @@ object FocusEngine {
     }
 
     /**
+     * How many pixels to scroll **this frame** of a continuous home-onto-target
+     * animation. Given the live [remainingPx] to the landing and the eased
+     * progress (`lastProgress` → [progress], both in 0..1), consumes a matching
+     * fraction of whatever is left — so the motion decelerates smoothly and
+     * always ends exactly on the target even when item heights were estimated.
+     *
+     * When [progress] reaches 1 the entire remaining distance is consumed.
+     */
+    fun homeScrollStep(remainingPx: Float, progress: Float, lastProgress: Float): Float {
+        if (remainingPx == 0f) return 0f
+        if (progress <= lastProgress) return 0f
+        if (progress >= 1f) return remainingPx
+        val denom = (1f - lastProgress).coerceAtLeast(1e-4f)
+        return remainingPx * ((progress - lastProgress) / denom)
+    }
+
+    /**
      * Whether [target] is far enough from the current window that a smooth glide
      * would stutter estimating unmeasured verse heights along the way, so the
      * controller should teleport to a doorstep first and glide the last stretch.

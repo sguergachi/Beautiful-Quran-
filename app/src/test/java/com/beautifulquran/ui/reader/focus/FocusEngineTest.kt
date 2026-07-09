@@ -265,4 +265,50 @@ class FocusEngineTest {
         assertEquals(0, plan.animatedItemSpan)
         assertEquals(280, plan.durationMs)
     }
+
+    // ---- continuous home-scroll steps ----
+
+    @Test
+    fun `home step at full progress consumes the entire remaining distance`() {
+        assertEquals(800f, FocusEngine.homeScrollStep(800f, progress = 1f, lastProgress = 0.7f), 0.001f)
+        assertEquals(-400f, FocusEngine.homeScrollStep(-400f, progress = 1f, lastProgress = 0.5f), 0.001f)
+    }
+
+    @Test
+    fun `home steps across a constant remaining sum to the full distance`() {
+        // Simulate a target whose remaining never changes (already-laid-out
+        // short hop). Stepping through progress must consume everything once.
+        var remaining = 1000f
+        var last = 0f
+        val stops = listOf(0.25f, 0.5f, 0.75f, 1f)
+        for (p in stops) {
+            val step = FocusEngine.homeScrollStep(remaining, p, last)
+            remaining -= step
+            last = p
+        }
+        assertEquals(0f, remaining, 0.01f)
+    }
+
+    @Test
+    fun `home steps adapt when remaining shrinks from height correction`() {
+        // Mid-flight the live remaining drops (taller verses than estimated).
+        // The later steps must still land exactly on whatever is left.
+        var remaining = 1000f
+        var last = 0f
+        remaining -= FocusEngine.homeScrollStep(remaining, 0.4f, last)
+        last = 0.4f
+        // Height correction: more already consumed than progress alone implies.
+        remaining = remaining * 0.5f
+        remaining -= FocusEngine.homeScrollStep(remaining, 0.7f, last)
+        last = 0.7f
+        remaining -= FocusEngine.homeScrollStep(remaining, 1f, last)
+        assertEquals(0f, remaining, 0.01f)
+    }
+
+    @Test
+    fun `home step is zero when progress does not advance`() {
+        assertEquals(0f, FocusEngine.homeScrollStep(500f, progress = 0.3f, lastProgress = 0.3f), 0f)
+        assertEquals(0f, FocusEngine.homeScrollStep(500f, progress = 0.2f, lastProgress = 0.3f), 0f)
+        assertEquals(0f, FocusEngine.homeScrollStep(0f, progress = 0.5f, lastProgress = 0.2f), 0f)
+    }
 }

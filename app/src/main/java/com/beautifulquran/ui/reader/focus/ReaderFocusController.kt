@@ -2,6 +2,7 @@ package com.beautifulquran.ui.reader.focus
 
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
@@ -14,6 +15,7 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.math.abs
 
 /**
  * The Compose-facing half of the focus engine: it holds the [LazyListState] and
@@ -118,12 +120,11 @@ class ReaderFocusController internal constructor(
      * [preRoll] is for jumps the reader initiates by hand (selector, search,
      * return-to-verse). The pure [FocusEngine.planJump] decides the whole
      * trajectory:
-     * - **Near** — animate the full path from here to the target (direct
-     *   interpolation), decelerating onto the verse.
-     * - **Far** — teleport to a doorstep, then rush a **distance-scaled**
-     *   residual (up to ~48 items / one full second for a ~200-verse jump) so
-     *   the reader *sees* verses fly past before the scroll brakes onto the
-     *   landing — never a one-viewport nudge, never a surah-length wait.
+     * - **Near** — one continuous home-scroll from here onto the verse.
+     * - **Far** — teleport to a doorstep, then one continuous home-scroll across
+     *   a distance-scaled residual (up to ~48 items / one full second) that
+     *   re-aims at the live remaining distance every frame — smooth all the way
+     *   until it lands exactly, with no rush-then-settle handoff stutter.
      *
      * Recitation-follow leaves [preRoll] off so lyric tracking stays a gentle
      * glide. See [FocusEngine.planJump].
@@ -146,69 +147,19 @@ class ReaderFocusController internal constructor(
         val totalCount = info.totalItemsCount.coerceAtLeast(1)
 
         if (preRoll) {
-            // Hand-initiated: the engine owns near-vs-far, residual length, and
-            // duration. Far jumps leave a long stretch to animate so the scroll
-            // reads as travel — not a flicker onto the landing.
             val plan = FocusEngine.planJump(
                 fromIndex = fromIndex,
                 toIndex = itemIndex,
                 visibleItemCount = visibleCount,
                 totalItemCount = totalCount,
             )
-            val avgItemPx = averageLaidOutItemHeightPx().coerceAtLeast(1)
-            if (plan.doorstepIndex != null) {
-                listState.scrollToItem(plan.doorstepIndex)
-                // Rush the residual as a single decelerating pixel scroll.
-                // animateScrollBy walks LazyList's measured items as they enter
-                // the window, so a multi-viewport residual actually shows verses
-                // flying past — unlike animateScrollToItem, which can collapse
-                // long jumps into a cross-fade.
-                val signedSpan = if (itemIndex >= plan.doorstepIndex) {
-                    plan.animatedItemSpan
-                } else {
-                    -plan.animatedItemSpan
-                }
-                val rushPx = signedSpan * avgItemPx
-                if (rushPx != 0) {
-                    listState.animateScrollBy(
-                        rushPx.toFloat(),
-                        tween(
-                            durationMillis = plan.durationMs,
-                            easing = FastOutSlowInEasing,
-                        ),
-                    )
-                }
-            } else {
-                // Near: animate the real pixel path when the target is laid out;
-                // otherwise estimate from average item height so we still get a
-                // continuous scroll instead of a pop.
-                val visible = listState.layoutInfo.visibleItemsInfo
-                    .firstOrNull { it.index == itemIndex }
-                val deltaPx = if (visible != null) {
-                    FocusEngine.glideDeltaPx(
-                        TargetGeometry(
-                            visible.offset,
-                            visible.size,
-                            isLaidOut = true,
-                            isAboveWhenOffscreen = false,
-                        ),
-                        FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, visible.size),
-                    )
-                } else {
-                    (itemIndex - listState.firstVisibleItemIndex) * avgItemPx
-                }
-                if (deltaPx != 0) {
-                    listState.animateScrollBy(
-                        deltaPx.toFloat(),
-                        tween(
-                            durationMillis = plan.durationMs,
-                            easing = FastOutSlowInEasing,
-                        ),
-                    )
-                }
+            plan.doorstepIndex?.let { doorstep ->
+                // Far: cover the bulk instantly so the home-scroll only has the
+                // distance-scaled residual to show as travel.
+                listState.scrollToItem(doorstep)
             }
-            // Final settle onto the adaptive anchor (corrects estimation drift).
-            settleOntoAnchor(itemIndex, viewportHeight)
+            // One continuous decelerating home — no second settle phase.
+            animateHomeOnto(itemIndex, viewportHeight, plan.durationMs)
             return
         }
 
@@ -239,48 +190,85 @@ class ReaderFocusController internal constructor(
         }
     }
 
-    /** Mean height of currently laid-out items — used to turn an item-span
-     *  residual into pixels for [animateScrollBy]. */
+    /**
+     * Continuously home onto [itemIndex]'s adaptive anchor over [durationMs].
+     *
+     * Runs as a single [LazyListState.scroll] so the decelerating motion holds
+     * the MutatorMutex the whole way — no rush-then-settle handoff. Each frame
+     * re-reads the live remaining distance (measured when the verse is laid
+     * out, estimated from average item height when not) and scrolls the
+     * FastOutSlowIn fraction of whatever is left — see
+     * [FocusEngine.homeScrollStep]. Uneven ayah heights never produce an
+     * undershoot that then gets corrected in a chunky second phase.
+     */
+    private suspend fun animateHomeOnto(
+        itemIndex: Int,
+        viewportHeight: Int,
+        durationMs: Int,
+    ) {
+        if (abs(remainingPxToAnchor(itemIndex, viewportHeight)) < 0.5f) return
+
+        listState.scroll {
+            var lastProgress = 0f
+            animate(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = tween(
+                    durationMillis = durationMs.coerceAtLeast(1),
+                    easing = FastOutSlowInEasing,
+                ),
+            ) { value, _ ->
+                val remaining = remainingPxToAnchor(itemIndex, viewportHeight)
+                val step = FocusEngine.homeScrollStep(remaining, value, lastProgress)
+                lastProgress = value
+                if (abs(step) >= 0.5f) {
+                    scrollBy(step)
+                }
+            }
+            // Consume any sub-pixel leftover from clamping — invisible as a jump.
+            val leftover = remainingPxToAnchor(itemIndex, viewportHeight)
+            if (abs(leftover) >= 0.5f) {
+                scrollBy(leftover)
+            }
+        }
+    }
+
+    /**
+     * Signed pixels still needed to put [itemIndex] on its adaptive anchor.
+     * Uses real geometry when laid out; otherwise estimates from the average
+     * laid-out item height (updated as new verses enter during the home-scroll).
+     */
+    private fun remainingPxToAnchor(itemIndex: Int, viewportHeight: Int): Float {
+        val visible = listState.layoutInfo.visibleItemsInfo
+            .firstOrNull { it.index == itemIndex }
+        if (visible != null) {
+            val anchor = FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, visible.size)
+            return FocusEngine.glideDeltaPx(
+                TargetGeometry(
+                    visible.offset,
+                    visible.size,
+                    isLaidOut = true,
+                    isAboveWhenOffscreen = false,
+                ),
+                anchor,
+            ).toFloat()
+        }
+        val avg = averageLaidOutItemHeightPx().coerceAtLeast(1)
+        val indexDelta = itemIndex - listState.firstVisibleItemIndex
+        // Approximate the target's top as if every intervening item were `avg`
+        // tall, accounting for the partial scroll of the first visible item.
+        val approxTop = indexDelta * avg - listState.firstVisibleItemScrollOffset
+        val approxAnchor = FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, avg)
+        return (approxTop - approxAnchor).toFloat()
+    }
+
+    /** Mean height of currently laid-out items — used when the target is not
+     *  yet measured. Recomputed each frame so the estimate improves as verses
+     *  rush past during a far home-scroll. */
     private fun averageLaidOutItemHeightPx(): Int {
         val items = listState.layoutInfo.visibleItemsInfo
         if (items.isEmpty()) return 0
         return items.sumOf { it.size } / items.size
-    }
-
-    /**
-     * Nudge [itemIndex] onto its adaptive anchor after a rush scroll. Prefers
-     * another short [animateScrollBy] over [LazyListState.scrollToItem] so an
-     * undershot residual never collapses into a pop at the end.
-     */
-    private suspend fun settleOntoAnchor(itemIndex: Int, viewportHeight: Int) {
-        var target = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == itemIndex }
-        if (target == null) {
-            val avg = averageLaidOutItemHeightPx().coerceAtLeast(1)
-            val remainingItems = itemIndex - listState.firstVisibleItemIndex
-            if (remainingItems != 0) {
-                listState.animateScrollBy(
-                    (remainingItems * avg).toFloat(),
-                    tween(durationMillis = 220, easing = FastOutSlowInEasing),
-                )
-            }
-            target = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == itemIndex }
-        }
-        if (target == null) {
-            // Last resort — residual estimation was badly off.
-            listState.scrollToItem(itemIndex)
-            target = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == itemIndex }
-                ?: return
-        }
-        val anchor = FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, target.size)
-        val delta = FocusEngine.glideDeltaPx(
-            TargetGeometry(target.offset, target.size, isLaidOut = true, isAboveWhenOffscreen = false),
-            anchor,
-        )
-        if (delta == 0) return
-        listState.animateScrollBy(
-            delta.toFloat(),
-            tween(durationMillis = 160, easing = FastOutSlowInEasing),
-        )
     }
 
     /**
