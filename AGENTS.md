@@ -108,3 +108,31 @@ Requires **JDK 17**. No Android device/emulator is needed for tests.
   commit the new asset, and bump the DB version (invariant #1).
 - Update the relevant doc in `docs/` when you change behavior it describes —
   the docs are load-bearing and kept accurate.
+
+## Cursor Cloud specific instructions
+
+The startup snapshot already has the toolchain installed (JDK 17 at
+`/usr/lib/jvm/java-17-openjdk-amd64`, Android SDK at `~/Android/Sdk` with
+platform 35 + build-tools 35.0.0). `JAVA_HOME`/`ANDROID_HOME`/`PATH` are exported
+from `~/.bashrc`, so **login shells are already set up** — standard build/test
+commands from the "Build, test, run" section above work as-is.
+
+- **Build with JDK 17, not the system default.** The system default `java` is 21;
+  builds are only validated on 17. If you invoke Gradle from a non-login shell
+  that didn't source `~/.bashrc`, set `JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64`
+  first, or the AGP/Kotlin build may behave unexpectedly.
+- **`local.properties` is gitignored** and points Gradle at the SDK
+  (`sdk.dir=$HOME/Android/Sdk`). The startup update script re-creates it, so a
+  fresh checkout still builds.
+- **No emulator / no GUI run is possible here.** The VM has no KVM
+  (`/dev/kvm` absent, no `vmx`/`svm` CPU flags) so the x86_64 emulator can't
+  start, and the modern `emulator` refuses ARM64 images on an x86_64 host. Verify
+  changes with `./gradlew testDebugUnitTest` and by building the APK
+  (`assembleDebug` / `assembleRelease`). The signature word-sync feature lives in
+  the pure-JVM `HighlightEngine` and is fully unit-testable without a device.
+  You can also inspect real bundled data directly with
+  `sqlite3 app/src/main/assets/quran.db`.
+- **`./gradlew lintDebug` fails on purpose here.** It reports ~37 pre-existing
+  Media3 `@UnstableApi` opt-in errors. The real lint gate is `lintVitalRelease`,
+  which runs inside `assembleRelease` with `checkReleaseBuilds = false` (see
+  `app/build.gradle.kts`). Don't treat a `lintDebug` failure as a regression.
