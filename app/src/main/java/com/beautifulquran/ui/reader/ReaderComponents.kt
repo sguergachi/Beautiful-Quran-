@@ -75,7 +75,6 @@ import com.beautifulquran.ui.theme.HafsFontFamily
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.TranslationFontFamily
 import com.beautifulquran.ui.theme.gilded
-import com.beautifulquran.ui.theme.inkWashAlpha
 import com.beautifulquran.ui.theme.letterFadeIn
 import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.starAndCrossWeave
@@ -247,20 +246,28 @@ private fun rememberLetterSweep(
 
 /**
  * Whether a word lighting up should start its letter sweep already revealed —
- * true only for a word that enters [WordVisualState.Active] straight from a
- * full-ink state (Plain or Recited), never from the faint Upcoming dim. The
- * decision is captured the moment the word activates so it stays stable for the
- * whole time it is lit, and it is recomputed fresh on the next activation.
+ * true only for a word that enters [WordVisualState.Active] straight from
+ * [WordVisualState.Recited]: a word already recited this pass that lights up
+ * again after a backward seek or a repeat, where re-running the reveal would
+ * flash it full → faint → sweep for no reason.
+ *
+ * A word entering from [WordVisualState.Plain] must NOT be held revealed: that
+ * is the word the listener starts playback from (tap-to-play, or play-from-here
+ * on a resting ayah). Since active and recited words both sit at full ink, the
+ * reveal sweep is the *only* thing that marks a word as the one being recited —
+ * skipping it left the starting word indistinguishable from its resting state,
+ * so the highlight appeared to never land on the word playback began from.
+ *
+ * The decision is captured the moment the word activates so it stays stable for
+ * the whole time it is lit, and it is recomputed fresh on the next activation.
  */
 @Composable
 private fun rememberStartRevealed(state: WordVisualState): Boolean {
     val active = state == WordVisualState.Active
     val previousState = remember { mutableStateOf(state) }
-    val enteredFromFullInk = active &&
-        previousState.value != WordVisualState.Upcoming &&
-        previousState.value != WordVisualState.Active
+    val enteredFromRecited = active && previousState.value == WordVisualState.Recited
     SideEffect { previousState.value = state }
-    return remember(active) { enteredFromFullInk }
+    return remember(active) { enteredFromRecited }
 }
 
 /** Comfortable reading band the active word is kept inside while follow mode
@@ -540,17 +547,6 @@ private class WordInkPalette(
         state == WordVisualState.Upcoming -> fadedInk
         else -> fullInk
     }
-
-    /**
-     * Opaque ink for one glyph of the active word at reading-direction fraction
-     * [pos] (0 = first-revealed letter). The wash spreads across the letters on
-     * the same curve as [letterFadeIn] in the word-by-word modes, but painted as
-     * an opaque colour so overlapping Quranic marks don't smear. Composited over
-     * [paper] up front because a span can't carry a draw-phase alpha.
-     */
-    fun activeInkAt(pos: Float, sweep: Float): Color = fullInk
-        .copy(alpha = inkWashAlpha(pos, sweep, WordVisualState.Upcoming.inkAlpha()))
-        .compositeOver(paper)
 }
 
 @Composable
@@ -630,24 +626,17 @@ private fun ResponsiveHafsAyah(
             val state = states.getOrElse(index) { WordVisualState.Plain }
             val repeat = repeats.getOrElse(index) { false }
             val start = length
-            if (state == WordVisualState.Active && !repeat && word.arabic.isNotEmpty()) {
-                // The active word blooms letter-by-letter: colour each glyph on
-                // the shared ink-wash curve so the reveal spreads across the word
-                // exactly as letterFadeIn does in the word-by-word modes, staying
-                // opaque so overlapping marks don't smear in this single Text run.
-                val sweep = sweeps[index].value
-                val n = word.arabic.length
-                word.arabic.forEachIndexed { charIndex, ch ->
-                    // pos 0 = first letter (rightmost, first revealed in RTL).
-                    val pos = (charIndex + 0.5f) / n
-                    withStyle(SpanStyle(color = palette.activeInkAt(pos, sweep))) {
-                        append(ch)
-                    }
-                }
-            } else {
-                withStyle(SpanStyle(color = palette.colorFor(state, repeat, sweeps[index].value))) {
-                    append(word.arabic)
-                }
+            // The whole ayah is a single shaped Text run, so each word must be
+            // one contiguous colour span: the Uthmanic Hafs script is cursive and
+            // leans on the font's contextual joining and ligature substitution.
+            // Splitting the active word into a colour span per glyph broke it into
+            // separate shaping runs, so its letters lost their connected forms and
+            // fell back to isolated shaping — a visible font flip as the word lit
+            // up and faded. The active word therefore blooms as one uniform wash
+            // (colorFor drives its alpha off the same sweep) rather than
+            // letter-by-letter.
+            withStyle(SpanStyle(color = palette.colorFor(state, repeat, sweeps[index].value))) {
+                append(word.arabic)
             }
             wordRanges += start until length
             append(" ")
