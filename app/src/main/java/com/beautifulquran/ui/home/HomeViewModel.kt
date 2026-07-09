@@ -30,13 +30,17 @@ internal data class AyahReference(val surah: Int, val ayah: Int?)
 /** Matches `aa:bb` or `aa:` (surah number, optional ayah number), ignoring surrounding space. */
 private val ayahReferenceRegex = Regex("""^\s*(\d+)\s*:\s*(\d+)?\s*$""")
 
-internal fun parseAyahReference(query: String): AyahReference? =
-    ayahReferenceRegex.matchEntire(query)?.let { match ->
-        AyahReference(
-            surah = match.groupValues[1].toInt(),
-            ayah = match.groupValues[2].takeIf { it.isNotEmpty() }?.toInt(),
-        )
-    }
+internal fun parseAyahReference(query: String): AyahReference? {
+    val match = ayahReferenceRegex.matchEntire(query) ?: return null
+    // toIntOrNull, not toInt: the regex matches digit runs of any length, so a
+    // long number (e.g. "99999999999:1") overflows Int and would otherwise
+    // throw NumberFormatException from the search flow. An unparseable number
+    // is simply not a reference.
+    val surah = match.groupValues[1].toIntOrNull() ?: return null
+    val ayahText = match.groupValues[2]
+    val ayah = if (ayahText.isEmpty()) null else (ayahText.toIntOrNull() ?: return null)
+    return AyahReference(surah = surah, ayah = ayah)
+}
 
 /** What a search query resolves to: the surahs to list, and — when the query
  * was a valid `surah:ayah` reference — the ayah to open the match at. */
@@ -60,14 +64,20 @@ internal fun filterSurahs(surahs: List<Surah>, query: String): SurahFilterResult
                 SurahFilterResult(emptyList())
             }
         }
-        else -> SurahFilterResult(
-            surahs.filter {
-                it.nameTransliteration.contains(query, ignoreCase = true) ||
-                    it.nameTranslation.contains(query, ignoreCase = true) ||
-                    it.nameArabic.contains(query) ||
-                    it.id.toString() == query.trim()
-            },
-        )
+        else -> {
+            // Match on the trimmed query so stray leading/trailing whitespace
+            // (common from keyboard autocomplete) never hides an otherwise
+            // matching surah name or number.
+            val trimmed = query.trim()
+            SurahFilterResult(
+                surahs.filter {
+                    it.nameTransliteration.contains(trimmed, ignoreCase = true) ||
+                        it.nameTranslation.contains(trimmed, ignoreCase = true) ||
+                        it.nameArabic.contains(trimmed) ||
+                        it.id.toString() == trimmed
+                },
+            )
+        }
     }
 }
 
