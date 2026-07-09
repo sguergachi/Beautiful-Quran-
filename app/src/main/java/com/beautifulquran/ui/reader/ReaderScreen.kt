@@ -824,15 +824,20 @@ fun ReaderScreen(
             }
             val selectorSide = settings.ayahSelectorSide
             val latestActiveAyahForRail by rememberUpdatedState(activeAyah)
+            // The rail follows the recitation only while it is actively playing.
+            // A paused surah keeps a (frozen) active ayah, so following it would
+            // pin the rail to that ayah and stop it tracking the reader's own
+            // scrolling — the rail is visible only when not reciting, and while
+            // visible it should always mirror where the reader is looking.
             val railCurrentAyah = remember(content.surah.ayahCount) {
                 derivedStateOf {
-                    (latestActiveAyahForRail ?: scrolledAyah.value)
+                    (latestActiveAyahForRail?.takeIf { recitingActive } ?: scrolledAyah.value)
                         .coerceIn(1, content.surah.ayahCount)
                 }
             }
             val railCurrentPosition = remember(content.surah.ayahCount) {
                 derivedStateOf {
-                    (latestActiveAyahForRail?.toFloat() ?: scrolledAyahPosition.value)
+                    (latestActiveAyahForRail?.takeIf { recitingActive }?.toFloat() ?: scrolledAyahPosition.value)
                         .coerceIn(1f, content.surah.ayahCount.toFloat())
                 }
             }
