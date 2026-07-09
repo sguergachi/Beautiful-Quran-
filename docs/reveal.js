@@ -1,14 +1,11 @@
-/* Ink bloom on arrival — word-by-word letterFadeIn (ink-fade.js / Fade.kt).
+/* Ink bloom on arrival — word-by-word Fade.kt breath (ink-fade.js).
  *
- * Text is split into per-word spans. As each line scrolls into view, words are
- * written with the highlight-engine wash in reading order, staggered 50 ms
- * apart — the same karaoke cadence as the reader, accelerated (not audio-timed).
+ * Each line is split into .ink-word spans. As blocks enter the viewport,
+ * words ink from upcoming → full on inkSmootherstep, staggered 50 ms —
+ * karaoke cadence matching the reader, accelerated (not audio-timed).
  *
- * Non-text atoms (rosette, screenshots) wash as a single unit. Arabic runs RTL.
- *
- * Critical for Firefox Android: each word is its own paint target. A broken
- * whole-block opacity fade is what the user reported ("white fade of the whole
- * paragraph"); word wrapping + per-word fill washes is the fix.
+ * Per-word opacity only. No paragraph-level fade, no mask-image, no Canvas.
+ * That is the path that works on Chrome + Firefox for Android.
  */
 (function () {
   'use strict';
@@ -24,9 +21,9 @@
     '.attribution p', '.sheet > .footer-links', '.sheet > .back-link'
   ].join(',');
 
-  /** Stagger between successive words — user-requested karaoke beat. */
+  /** Stagger between successive words — karaoke beat. */
   var WORD_STAGGER_MS = 50;
-  /** Accelerated wash duration per word (visible feather, not audio dwell). */
+  /** Accelerated wash duration per word (visible breath, not audio dwell). */
   var WASH_MS = 280;
 
   var blocks = Array.prototype.slice.call(document.querySelectorAll(BLOCK_SELECTOR));
@@ -35,23 +32,13 @@
   var reduceMotion = window.matchMedia &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  function isRtl(el) {
-    if (el.classList && el.classList.contains('arabic-title')) return true;
-    if (el.closest && el.closest('.arabic-title')) return true;
-    var dir = (el.getAttribute && el.getAttribute('dir') || '').toLowerCase();
-    if (dir === 'rtl') return true;
-    // Heuristic: Arabic script in the word itself.
-    if (/[\u0600-\u06FF]/.test(el.textContent || '')) return true;
-    return false;
-  }
-
   function isAtomic(el) {
     return el.matches('.rosette, .screenshots figure');
   }
 
   /**
    * Split text nodes under [root] into <span class="ink-word">…</span>,
-   * preserving whitespace and nested markup (links, strong, etc.).
+   * attaching trailing whitespace to each word so gaps aren't full-ink.
    */
   function wrapWords(root) {
     if (root.dataset.inkWrapped === '1') return;
@@ -74,8 +61,6 @@
         var part = parts[i];
         if (!part) { i += 1; continue; }
         if (/^\s+$/.test(part)) {
-          // Leading / orphan whitespace stays plain (invisible between dim words
-          // once trailing spaces ride with each word below).
           frag.appendChild(document.createTextNode(part));
           i += 1;
           continue;
@@ -83,7 +68,6 @@
         var span = document.createElement('span');
         span.className = 'ink-word';
         var wordText = part;
-        // Attach the following whitespace to this word so gaps aren't full-ink.
         if (i + 1 < parts.length && /^\s+$/.test(parts[i + 1] || '')) {
           wordText += parts[i + 1];
           i += 2;
@@ -110,39 +94,35 @@
     el.classList.add('inked');
   }
 
+  function park(el) {
+    Ink.applyWash(el, 0, false, Ink.DEFAULT_RESTING_ALPHA);
+  }
+
   function washUnit(el, delay) {
     window.setTimeout(function () {
       if (el.classList.contains('inked') || el.classList.contains('ink-washing')) {
         return;
       }
-      var rtl = isRtl(el);
-      // Capture authored ink before the fill wash makes color transparent.
-      if (el.dataset && !el.dataset.inkColor) {
-        var cs = window.getComputedStyle(el);
-        if (cs && cs.color) el.dataset.inkColor = cs.color;
-      }
-      Ink.applyWash(el, 0, rtl, Ink.DEFAULT_RESTING_ALPHA);
+      park(el);
       el.classList.add('ink-washing');
       Ink.animateWash(el, {
         duration: WASH_MS,
-        rtl: rtl,
         restingAlpha: Ink.DEFAULT_RESTING_ALPHA,
         onDone: function () { settle(el); },
       });
     }, delay);
   }
 
-  // Wrap words immediately and park each at upcoming ink (progress 0 wash).
-  // Owning ink per-word from the start avoids any whole-paragraph opacity fade.
+  // Wrap immediately and park every word at upcoming ink — ink is owned per
+  // word from the first paint after JS, never by paragraph opacity.
   blocks.forEach(function (block) {
-    if (isAtomic(block)) return;
+    if (isAtomic(block)) {
+      park(block);
+      return;
+    }
     wrapWords(block);
     block.classList.add('ink-prepared');
-    Array.prototype.forEach.call(block.querySelectorAll('.ink-word'), function (word) {
-      var cs = window.getComputedStyle(word);
-      if (cs && cs.color) word.dataset.inkColor = cs.color;
-      Ink.applyWash(word, 0, isRtl(word), Ink.DEFAULT_RESTING_ALPHA);
-    });
+    Array.prototype.forEach.call(block.querySelectorAll('.ink-word'), park);
   });
 
   if (reduceMotion || !('IntersectionObserver' in window) || !window.requestAnimationFrame) {
@@ -154,8 +134,7 @@
     return;
   }
 
-  // Global word clock across the viewport so cascading lines keep a steady
-  // 50 ms karaoke beat instead of each block restarting at 0.
+  // Global word clock so cascading lines keep a steady 50 ms karaoke beat.
   var nextWordAt = 0;
 
   var observer = new IntersectionObserver(function (entries, obs) {

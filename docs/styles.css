@@ -30,10 +30,10 @@
   --radius: 20px;
   --max-width: 640px;
 
-  /* Ink bloom — web port of Fade.kt letterFadeIn (see ink-fade.js).
-   * Resting alpha matches the Compose default (0.35). The directional wash
-   * (smootherstep feather, InkWashFeather 1.6) is applied by JS as a mask;
-   * CSS only holds the pre-wash upcoming floor so there is no full-ink flash. */
+  /* Ink bloom — web port of Fade.kt (see ink-fade.js).
+   * Upcoming floor matches Compose letterFadeIn restingAlpha (0.35).
+   * Words bloom via per-word opacity on inkSmootherstep; CSS only holds the
+   * pre-JS floor so there is no full-ink flash. */
   --upcoming-ink: 0.35;
 }
 
@@ -98,14 +98,12 @@ img {
 
 /* Ink bloom on arrival.
  *
- * Word-by-word port of the reader highlight wash (Fade.kt letterFadeIn →
- * ink-fade.js). Each `.ink-word` is painted by JS with a directional
- * smootherstep fill (background-clip:text — works on Firefox Android).
- * Staggered 50 ms apart. No whole-block opacity fade — that is what collapsed
- * to a white page-wide fade in Firefox when the mask wash failed.
+ * Word-by-word Fade.kt breath (ink-fade.js): each `.ink-word` parks at upcoming
+ * ink and blossoms to full on inkSmootherstep, staggered 50 ms. Opacity only —
+ * no translate, mask, or paragraph fade (those failed on Android browsers).
  *
- * Until words are prepared, blocks rest at upcoming ink. After wrap, ink-fade.js
- * owns each word's ink. Gated on `.js`.
+ * Until JS wraps words, blocks rest at the upcoming floor. After wrap, JS owns
+ * each word's opacity via inline style. Gated on `.js`.
  */
 @media (prefers-reduced-motion: no-preference) {
   .js :where(
@@ -127,6 +125,7 @@ img {
     opacity: var(--upcoming-ink);
   }
 
+  /* After wrap the block itself is full strength; words carry the floor. */
   .js .ink-prepared {
     opacity: 1;
   }
@@ -135,16 +134,8 @@ img {
     display: inline-block;
   }
 
-  /* Atomics still use opacity as their wash channel (no text to clip). */
-  .js .rosette:not(.inked):not(.ink-washing),
-  .js .screenshots figure:not(.inked):not(.ink-washing) {
-    opacity: var(--upcoming-ink);
-  }
-
-  .js .rosette.ink-washing,
-  .js .rosette.inked,
-  .js .screenshots figure.ink-washing,
-  .js .screenshots figure.inked {
+  /* Settled words / atomics — drop any leftover inline and show full ink. */
+  .js .inked {
     opacity: 1;
   }
 }
