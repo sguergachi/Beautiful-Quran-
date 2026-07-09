@@ -144,6 +144,9 @@ internal fun AyahSelectorRail(
     }
     // Runs settle + grace countdown + commit after a release; cancelled by the next touch.
     var releaseJob by remember { mutableStateOf<Job?>(null) }
+    // The ayah a pending release settled on, so a tap-away can commit exactly
+    // that even mid-grace instead of re-reading a still-animating dialPosition.
+    var pendingCommitAyah by remember { mutableStateOf<Int?>(null) }
     val commitProgress = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val view = LocalView.current
@@ -153,13 +156,36 @@ internal fun AyahSelectorRail(
     LaunchedEffect(expanded) {
         latestOnExpandedChange(expanded)
     }
+
+    // Applies the chosen ayah: jumps the reader if it differs from where it
+    // already sits, then collapses the wheel anchored on that ayah. Shared by
+    // the grace-timeout path and the tap-away path so both actually commit.
+    suspend fun commitSelection(target: Int) {
+        pendingCommitAyah = null
+        if (target != currentAyah.value.coerceIn(1, ayahCount)) {
+            latestOnJumpToAyah(target)
+        }
+        view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+        expanded = false
+        // Collapse stays anchored on the committed ayah — dialPosition is not
+        // touched, so the wheel fades out where the reader left it instead of
+        // snapping back to the pre-jump scroll position.
+        expansion.animateTo(0f, spring(dampingRatio = 1f, stiffness = 200f))
+        commitProgress.snapTo(0f)
+        releaseJob = null
+    }
+
     LaunchedEffect(dismissRequests) {
         if (dismissRequests == 0 || !expanded) return@LaunchedEffect
+        // Tapping away commits the current selection rather than discarding it:
+        // the reader has already scrubbed to an ayah, so dismissing the wheel
+        // means "take me there", not "cancel". A wheel opened without scrubbing
+        // resolves to the current ayah, so the jump is a harmless no-op.
         releaseJob?.cancel()
         releaseJob = null
+        val target = pendingCommitAyah ?: dialPosition.roundToInt().coerceIn(1, ayahCount)
         commitProgress.snapTo(0f)
-        expanded = false
-        expansion.animateTo(0f, spring(dampingRatio = 1f, stiffness = 200f))
+        commitSelection(target)
     }
 
     fun scheduleReleaseCommit(start: Float, velocity: Float) {
@@ -173,23 +199,14 @@ internal fun AyahSelectorRail(
                 setPosition = { dialPosition = it },
             )
             lastHapticAyah = target
+            pendingCommitAyah = target
             // Grace window: the gold underline drains for 1.5s; touching the
             // rail again cancels this job and hands the wheel back for edits.
             commitProgress.animateTo(
                 targetValue = 1f,
                 animationSpec = tween(durationMillis = 1_500, easing = LinearEasing),
             )
-            if (target != currentAyah.value.coerceIn(1, ayahCount)) {
-                latestOnJumpToAyah(target)
-            }
-            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-            expanded = false
-            // Collapse stays anchored on the committed ayah — dialPosition is
-            // not touched, so the wheel fades out where the reader left it
-            // instead of snapping back to the pre-jump scroll position.
-            expansion.animateTo(0f, spring(dampingRatio = 1f, stiffness = 200f))
-            commitProgress.snapTo(0f)
-            releaseJob = null
+            commitSelection(target)
         }
     }
 
@@ -428,6 +445,7 @@ internal fun AyahSelectorRail(
                             var dragged = false
                             releaseJob?.cancel()
                             releaseJob = null
+                            pendingCommitAyah = null
                             scope.launch { commitProgress.snapTo(0f) }
                             velocityTracker.addPosition(down.uptimeMillis, down.position)
                             if (!expanded) {
