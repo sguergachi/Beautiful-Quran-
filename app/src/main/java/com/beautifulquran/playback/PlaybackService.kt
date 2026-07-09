@@ -94,10 +94,15 @@ class PlaybackService : MediaSessionService() {
         mediaSession
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        val player = mediaSession?.player
-        if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
-            stopSelf()
+        // Dismissing the app from Recents ("force close") must stop the
+        // recitation rather than leave it playing in the background. Stop the
+        // player and tear the service (and its media notification) down;
+        // onDestroy releases the player.
+        mediaSession?.player?.run {
+            stop()
+            clearMediaItems()
         }
+        stopSelf()
     }
 
     override fun onDestroy() {
