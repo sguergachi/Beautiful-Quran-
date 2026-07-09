@@ -158,9 +158,11 @@ ReaderFocusController ── holds the LazyListState; the sole writer to it
   `focus()`: the bulk of the distance is covered instantly, then the verse is
   *seen* gliding in over a **distance-scaled approach** (`approachDistancePx` /
   `approachDurationMs`) — a further, slightly longer travel for a bigger jump,
-  capped so it stays fast — from the direction of travel. This gives a felt
-  sense of how far the jump was, rather than a pop. Recitation-follow leaves it
-  off so lyric tracking stays smooth.
+  capped under one viewport and clamped to the residual after teleport so the
+  wind-up never reverses (a reverse wind-up collapses to a pop at list edges).
+  Recitation-follow leaves it off so lyric tracking stays smooth. Concurrent
+  `focus()` calls are serialized on a mutex so a sibling effect cannot cancel
+  the slide mid-flight.
 - Word-level `bringIntoView` (in `AyahBlock`) is the engine's *secondary*
   constraint: it only engages inside a verse taller than the viewport, so it
   carries the eye through a long verse without fighting the verse-level anchor.

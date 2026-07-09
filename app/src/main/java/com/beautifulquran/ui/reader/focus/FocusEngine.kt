@@ -52,28 +52,39 @@ object FocusEngine {
     // scroll arrive. The length of that stretch scales with how far the jump is
     // (in verses), capped, so a longer jump visibly travels further — conveying
     // distance — while staying fast and never animating the whole surah.
+    //
+    // The ceiling must stay within a single viewport: after a doorstep teleport
+    // the residual travel is typically ≤ ~1 viewport, and an approach longer
+    // than that residual forces a *reverse* wind-up. LazyList clamps that
+    // reverse at the list edges, which collapses the animated leg to nothing
+    // and reads as a pop (the #136 regression).
 
     /** Shortest approach (nearest jump), as a fraction of the viewport. */
-    private const val APPROACH_MIN_FRACTION = 0.35f
+    private const val APPROACH_MIN_FRACTION = 0.28f
 
     /** How much each verse of jump distance lengthens the approach. */
-    private const val APPROACH_PER_VERSE_FRACTION = 0.06f
+    private const val APPROACH_PER_VERSE_FRACTION = 0.04f
 
     /** Longest approach (far jumps saturate here), as a fraction of the
-     *  viewport — the ceiling that keeps the glide smooth and quick. */
-    private const val APPROACH_MAX_FRACTION = 1.8f
+     *  viewport — kept under one viewport so it fits the post-teleport
+     *  residual and never needs a reverse wind-up. */
+    private const val APPROACH_MAX_FRACTION = 0.95f
 
     /** Duration of the shortest approach. */
-    private const val APPROACH_MIN_MS = 200
+    private const val APPROACH_MIN_MS = 280
 
     /** Duration of the longest (saturated) approach — still brisk. */
-    private const val APPROACH_MAX_MS = 540
+    private const val APPROACH_MAX_MS = 560
 
     /**
      * How far (px) the final, animated stretch of a jump should travel, scaled
      * by the jump's distance in verses ([jumpDistanceVerses]) and capped at
      * [APPROACH_MAX_FRACTION] of the viewport. The verse is pre-positioned this
      * far from its anchor on the approach side, then glided in.
+     *
+     * Callers must still clamp this against the real residual delta after
+     * teleport (see [ReaderFocusController.focus]) so a short residual never
+     * triggers a reverse wind-up.
      */
     fun approachDistancePx(viewportHeightPx: Int, jumpDistanceVerses: Int): Int {
         val fraction = (APPROACH_MIN_FRACTION + APPROACH_PER_VERSE_FRACTION * abs(jumpDistanceVerses))
