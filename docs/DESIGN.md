@@ -161,9 +161,9 @@ image, so it is crisp at any density and nearly free to render.
 
 - Everything ≤ 400 ms except the deliberate slow moves: chrome recede
   (900 ms), ayah dim (600 ms), and the hand-initiated ayah-jump scroll
-  (≈220 ms nearby → ≈520 ms for a far residual — a fast decelerating
-  rush onto the verse, truncated for long distances so it never waits on
-  a surah-length trajectory).
+  (≈280 ms nearby → a full **1000 ms** for a ~200-verse jump — a fast
+  decelerating rush across a distance-scaled stretch of verses, truncated
+  so it never waits on a surah-length trajectory).
 - Motion is always a fade, a slide, or both; nothing bounces, scales, or
   spins.
 - Auto-scroll keeps the active ayah in the upper third and yields instantly

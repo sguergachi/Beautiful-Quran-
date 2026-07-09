@@ -2,6 +2,7 @@ package com.beautifulquran.ui.reader.focus
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -165,7 +166,7 @@ class FocusEngineTest {
         assertTrue(FocusEngine.shouldTeleport(targetIndexDelta = 40, visibleItemCount = 5))
     }
 
-    // ---- jump planning (near = direct, far = doorstep + truncated residual) ----
+    // ---- jump planning (near = direct, far = long residual up to 1s) ----
 
     @Test
     fun `near jump animates the full path with no doorstep`() {
@@ -176,22 +177,32 @@ class FocusEngineTest {
             totalItemCount = 200,
         )
         assertEquals(null, plan.doorstepIndex)
-        assertTrue(plan.durationMs in 220..520)
+        assertEquals(4, plan.animatedItemSpan)
+        assertTrue(plan.durationMs in 280..1_000)
     }
 
     @Test
-    fun `far jump teleports to a doorstep that keeps the target laid out`() {
-        val plan = FocusEngine.planJump(
+    fun `far jump leaves a long residual that saturates near 200 verses`() {
+        val mid = FocusEngine.planJump(
+            fromIndex = 0,
+            toIndex = 40,
+            visibleItemCount = 5,
+            totalItemCount = 300,
+        )
+        val far = FocusEngine.planJump(
             fromIndex = 0,
             toIndex = 200,
             visibleItemCount = 5,
             totalItemCount = 300,
         )
-        // visible-1 (=4) short of the target → target is the last visible item
-        // after the snap, so the residual is a real pixel scroll.
-        assertEquals(196, plan.doorstepIndex)
-        assertTrue("far residual stays punchy", plan.durationMs <= 520)
-        assertTrue(plan.durationMs >= 220)
+        // Far residual is much longer than one viewport — the reader must see
+        // verses rush past, not a one-screen nudge.
+        assertTrue(far.animatedItemSpan > 5)
+        assertTrue("longer jump animates more content", mid.animatedItemSpan < far.animatedItemSpan)
+        assertEquals(48, far.animatedItemSpan) // saturates at ANIMATED_SPAN_MAX_ITEMS
+        assertEquals(200 - 48, far.doorstepIndex)
+        assertEquals(1_000, far.durationMs)
+        assertTrue(mid.durationMs < far.durationMs)
     }
 
     @Test
@@ -202,7 +213,8 @@ class FocusEngineTest {
             visibleItemCount = 5,
             totalItemCount = 300,
         )
-        assertEquals(14, plan.doorstepIndex)
+        assertEquals(10 + plan.animatedItemSpan, plan.doorstepIndex)
+        assertTrue(plan.animatedItemSpan > 5)
     }
 
     @Test
@@ -213,7 +225,7 @@ class FocusEngineTest {
             visibleItemCount = 1,
             totalItemCount = 3,
         )
-        // Delta 2 > visible+2 (=3)? 2 <= 3, so near — no doorstep.
+        // Delta 2 <= visible+2 (=3), so near — no doorstep.
         assertEquals(null, plan.doorstepIndex)
 
         val farAtEnd = FocusEngine.planJump(
@@ -222,20 +234,23 @@ class FocusEngineTest {
             visibleItemCount = 5,
             totalItemCount = 51,
         )
-        assertEquals(46, farAtEnd.doorstepIndex)
+        assertNotNull(farAtEnd.doorstepIndex)
+        assertTrue(farAtEnd.doorstepIndex!! >= 0)
         assertTrue(farAtEnd.doorstepIndex!! < 51)
+        // Residual cannot exceed the real remaining distance.
+        assertTrue(farAtEnd.animatedItemSpan <= 50)
     }
 
     @Test
-    fun `jump duration scales with animated distance and saturates`() {
+    fun `jump duration scales with jump distance and saturates at one second`() {
         val near = FocusEngine.jumpDurationMs(1)
-        val mid = FocusEngine.jumpDurationMs(6)
+        val mid = FocusEngine.jumpDurationMs(50)
         val far = FocusEngine.jumpDurationMs(200)
         assertTrue(near < mid)
         assertTrue(mid < far)
-        assertEquals(220, FocusEngine.jumpDurationMs(0))
-        assertEquals(245, near) // 220 + (520-220)*(1/12)
-        assertEquals(520, far)
+        assertEquals(280, FocusEngine.jumpDurationMs(0))
+        assertEquals(1_000, far)
+        assertTrue("nearby jumps stay well under a second", near < 400)
     }
 
     @Test
@@ -247,6 +262,7 @@ class FocusEngineTest {
             totalItemCount = 100,
         )
         assertEquals(null, plan.doorstepIndex)
-        assertEquals(220, plan.durationMs)
+        assertEquals(0, plan.animatedItemSpan)
+        assertEquals(280, plan.durationMs)
     }
 }
