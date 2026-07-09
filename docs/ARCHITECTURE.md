@@ -126,6 +126,9 @@ per-item derivedStateOf in the reader list  ──►  one ayah recomposes
 - Word-level accuracy of the source data is ±73 ms on average — inside the
   ~150 ms window that reads as "in sync" to a human.
 
+See [HIGHLIGHT_ENGINE.md](HIGHLIGHT_ENGINE.md) for the engine's model, the
+binary search, and the repeat / high-water logic in full.
+
 ## The focus engine
 
 Vertical position in the reader — which verse the reader is looking at, and
