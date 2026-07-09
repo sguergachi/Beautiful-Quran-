@@ -154,6 +154,11 @@ ReaderFocusController ── holds the LazyListState; the sole writer to it
   target is far off-screen, then glides the last stretch by exact pixels. It
   also exposes the shared read-out (`focusedAyah` / `focusedPosition`) the rail
   and the return control both consume.
+- Hand-initiated jumps (selector, search, return-to-verse) pass `preRoll` to
+  `focus()`: the bulk of the distance is covered instantly, then the verse is
+  *seen* sliding the last short stretch (`PRE_ROLL_FRACTION` of the viewport)
+  into place, in the direction of travel — a "we scrolled here" cue rather than
+  a pop. Recitation-follow leaves it off so lyric tracking stays smooth.
 - Word-level `bringIntoView` (in `AyahBlock`) is the engine's *secondary*
   constraint: it only engages inside a verse taller than the viewport, so it
   carries the eye through a long verse without fighting the verse-level anchor.

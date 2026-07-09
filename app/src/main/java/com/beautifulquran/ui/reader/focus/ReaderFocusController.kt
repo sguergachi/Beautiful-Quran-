@@ -105,12 +105,24 @@ class ReaderFocusController internal constructor(
      * open-before-layout race), teleports to a doorstep when the target is far
      * off-screen, then glides the last stretch by exact pixels onto the adaptive
      * anchor. [animate] false snaps instantly (used for the initial settle).
+     *
+     * [preRoll] adds a deliberate "we scrolled to get here" cue for jumps the
+     * reader initiates by hand (selector, search, return-to-verse): the bulk of
+     * the distance is covered instantly, then the verse *slides* the last short
+     * stretch into place from the direction of travel — down when jumping ahead,
+     * up when jumping back — instead of popping into view. Recitation-follow
+     * leaves it off so lyric tracking stays smooth.
      */
-    suspend fun focus(ayahNumber: Int, animate: Boolean) {
+    suspend fun focus(ayahNumber: Int, animate: Boolean, preRoll: Boolean = false) {
         val itemIndex = itemIndexOfAyah[ayahNumber] ?: return
         // Never measure against a zero viewport — wait for the first real layout.
         val viewportHeight = snapshotFlow { listState.layoutInfo.viewportSize.height }
             .first { it > 0 }
+
+        // Captured before any teleport so the pre-roll slides in the direction
+        // the reader actually travelled (ahead vs back), not the direction of
+        // the tiny residual delta the teleport leaves behind.
+        val jumpingForward = itemIndex >= listState.firstVisibleItemIndex
 
         val info = listState.layoutInfo
         if (FocusEngine.shouldTeleport(
@@ -142,11 +154,30 @@ class ReaderFocusController internal constructor(
         } ?: return
 
         val anchor = FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, geometry.heightPx)
-        val delta = FocusEngine.glideDeltaPx(geometry, anchor).toFloat()
-        if (animate) {
-            listState.animateScrollBy(delta, GlideSpec)
+        val delta = FocusEngine.glideDeltaPx(geometry, anchor)
+        if (!animate) {
+            listState.scrollBy(delta.toFloat())
+            return
+        }
+        if (!preRoll) {
+            listState.animateScrollBy(delta.toFloat(), GlideSpec)
+            return
+        }
+        // Give the jump a "we scrolled here" cue instead of a pop: the verse is
+        // *seen* sliding the last short stretch into its resting place, in the
+        // direction the reader travelled — rising into the anchor when jumping
+        // ahead, descending into it when jumping back.
+        val preRollPx = (viewportHeight * PRE_ROLL_FRACTION).toInt()
+        if (delta in -preRollPx..preRollPx) {
+            // Already within a pre-roll of the anchor — a direct short slide of
+            // the real distance reads cleanly, with no wind-up wobble.
+            listState.animateScrollBy(delta.toFloat(), PreRollSpec)
         } else {
-            listState.scrollBy(delta)
+            // Long jump: cover the bulk instantly, then pre-position one pre-roll
+            // short of the anchor on the approach side and glide the rest in.
+            val animatedLeg = if (jumpingForward) preRollPx else -preRollPx
+            listState.scrollBy((delta - animatedLeg).toFloat())
+            listState.animateScrollBy(animatedLeg.toFloat(), PreRollSpec)
         }
     }
 
@@ -187,6 +218,16 @@ class ReaderFocusController internal constructor(
         /** Matches the reader's established jump feel (see the old smoothScroll). */
         val GlideSpec: AnimationSpec<Float> =
             tween(durationMillis = 700, easing = FastOutSlowInEasing)
+
+        /** The short "slide into place" leg of a hand-initiated jump. Snappier
+         *  than [GlideSpec] because it only ever covers [PRE_ROLL_FRACTION] of
+         *  the viewport — a deliberate settle, not a long glide. */
+        val PreRollSpec: AnimationSpec<Float> =
+            tween(durationMillis = 480, easing = FastOutSlowInEasing)
+
+        /** How much of the viewport the pre-roll slide covers — enough to read
+         *  as motion toward the verse without a long wind-up. */
+        const val PRE_ROLL_FRACTION = 0.28f
     }
 }
 
