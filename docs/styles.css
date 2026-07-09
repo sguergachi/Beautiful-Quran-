@@ -30,20 +30,11 @@
   --radius: 20px;
   --max-width: 640px;
 
-  /* Ink bloom — the app's signature reveal, brought to the page.
-   * Content rests at "upcoming" ink and inks to full as it arrives, on the
-   * exact smootherstep curve (6t⁵−15t⁴+10t³) the highlight engine uses for the
-   * word-by-word fade (app: ui/theme/Fade.kt — letterFadeIn / inkWashAlpha).
-   * Upcoming ink here mirrors the engine's ~30–35 % resting alpha. */
-  --upcoming-ink: 0.32;
-  --ink-bloom: 680ms;
-  --ease-ink: linear(
-    0 0%, 0.0007 4%, 0.0051 8%, 0.0161 12%, 0.0355 17%, 0.0645 21%,
-    0.1035 25%, 0.1522 29%, 0.2099 33%, 0.2752 38%, 0.3466 42%, 0.4222 46%,
-    0.5 50%, 0.5778 54%, 0.6534 58%, 0.7248 62%, 0.7901 67%, 0.8478 71%,
-    0.8965 75%, 0.9355 79%, 0.9645 83%, 0.9839 88%, 0.9949 92%, 0.9993 96%,
-    1 100%
-  );
+  /* Ink bloom — web port of Fade.kt letterFadeIn (see ink-fade.js).
+   * Resting alpha matches the Compose default (0.35). The directional wash
+   * (smootherstep feather, InkWashFeather 1.6) is applied by JS as a mask;
+   * CSS only holds the pre-wash upcoming floor so there is no full-ink flash. */
+  --upcoming-ink: 0.35;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -107,22 +98,18 @@ img {
 
 /* Ink bloom on arrival.
  *
- * Just as the reciter writes each word onto the page — a letter at a time,
- * from upcoming ink to full ink on a smootherstep wash — the page writes
- * itself as you read down it. Each block rests at upcoming ink and blooms to
- * full as it scrolls into view, on the same curve (--ease-ink). A small
- * upward drift echoes the gloss that "rises beneath" each word; nothing
- * scales, bounces, or spins.
+ * One-to-one with the reader highlight wash (Fade.kt letterFadeIn → ink-fade.js):
+ * a wide smootherstep feather sweeps across the block, writing it from upcoming
+ * ink to full ink. No float, translate, scale, or bounce — ink strength only,
+ * with a directional lead (RTL for Arabic, LTR otherwise).
  *
- * Gated on `.js` (set before first paint) so the resting state only exists
- * when the observer can lift it — no script, no JavaScript, no fade: the full
- * sheet is simply there. `.inked` is added by reveal.js as each block arrives.
+ * CSS holds the upcoming floor until JS starts the wash (`.ink-washing`) or
+ * finishes (`.inked`). Gated on `.js` (set before first paint) so no-script
+ * readers simply see the full sheet.
  */
 @media (prefers-reduced-motion: no-preference) {
-  /* The resting selectors are wrapped in :where() so they carry no
-   * specificity of their own — the whole list weighs the same as `.js`. That
-   * lets the single `.inked` reveal rule below outrank every one of them, no
-   * matter how deep the selector, so each block reliably blooms to full ink. */
+  /* :where() keeps resting selectors at `.js` specificity so `.ink-washing`
+   * / `.inked` always outrank them. */
   .js :where(
     .arabic-title,
     .app-title,
@@ -140,15 +127,11 @@ img {
     .sheet > .back-link
   ) {
     opacity: var(--upcoming-ink);
-    transform: translateY(9px);
-    transition:
-      opacity var(--ink-bloom) var(--ease-ink),
-      transform var(--ink-bloom) var(--ease-ink);
   }
 
+  .js .ink-washing,
   .js .inked {
     opacity: 1;
-    transform: none;
   }
 }
 

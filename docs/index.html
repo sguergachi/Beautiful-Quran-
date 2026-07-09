@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
   <title>Beautiful Quran</title>
-  <!-- Marks JS as available before first paint, so the ink-bloom reveal can
-       start from upcoming ink without a flash of full-ink content. -->
+  <!-- Marks JS as available before first paint, so the letterFadeIn wash
+       (ink-fade.js) can start from upcoming ink without a full-ink flash. -->
   <script>document.documentElement.classList.add('js');</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -144,6 +144,7 @@
     </div>
     <div class="footer-note">Beautiful Quran &middot; free, ad-free, open source</div>
   </div>
+  <script src="ink-fade.js"></script>
   <script src="reveal.js"></script>
 </body>
 </html>
