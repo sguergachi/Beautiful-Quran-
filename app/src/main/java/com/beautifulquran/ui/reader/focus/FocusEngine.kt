@@ -49,14 +49,14 @@ object FocusEngine {
 
     // --- Hand-initiated jump planning ---
     // A jump from verse A to verse B should *feel* like a fast scroll that
-    // decelerates onto the target — not a leisurely glide from an artificial
-    // offset. The engine owns the whole plan:
+    // decelerates onto the target. The engine owns the whole plan:
     //
     //   • Near  → animate the full path (direct interpolation).
-    //   • Far   → teleport to a doorstep just short of the target, then animate
-    //             only the truncated residual so we never wait on a surah-length
-    //             trajectory. The residual is long enough to read as "rushing
-    //             past verses", short enough to finish in a beat.
+    //   • Far   → teleport to a doorstep, then animate a *long* residual so the
+    //             reader actually sees verses rush past. The residual length and
+    //             duration both scale with jump distance, saturating at a full
+    //             second of scrolling for a ~200-verse jump — never the whole
+    //             surah, but never a one-viewport nudge either.
     //
     // LazyList cannot smoothly animate across hundreds of unmeasured items, so
     // the far-path teleport is also a correctness requirement — not just a
@@ -69,22 +69,29 @@ object FocusEngine {
     private const val NEAR_EXTRA_ITEMS = 2
 
     /**
-     * After a far teleport, leave the target as the last (or first) item in the
-     * visible window so it is already measured. The animated leg then rushes
-     * that roughly-one-viewport residual onto the anchor — enough to feel like
-     * travel, short enough to finish in a beat. Leaving the target *outside*
-     * the window would force a snap-to-measure and kill the scroll.
+     * Shortest animated residual for a far jump, in items — at least roughly
+     * one viewport so even a modest jump shows real travel.
      */
-    private const val FAR_DOORSTEP_MARGIN_ITEMS = 1
+    private const val ANIMATED_SPAN_MIN_VIEWPORTS = 1
+
+    /**
+     * Longest animated residual (far jumps saturate here), in items. Sized so
+     * a max-distance jump rushes through a long stretch of verses in one
+     * second — enough to read as "we scrolled a long way".
+     */
+    private const val ANIMATED_SPAN_MAX_ITEMS = 48
+
+    /**
+     * Jump distance (in items) at which residual length and duration saturate.
+     * A jump of this many verses gets the full one-second scroll.
+     */
+    private const val JUMP_DISTANCE_SATURATE_ITEMS = 200
 
     /** Shortest decelerating scroll (a verse or two away). */
-    private const val JUMP_MIN_MS = 220
+    private const val JUMP_MIN_MS = 280
 
-    /** Longest decelerating scroll (saturated far residual). Punchy, not leisurely. */
-    private const val JUMP_MAX_MS = 520
-
-    /** Item-distance at which [JUMP_MAX_MS] saturates. */
-    private const val JUMP_DURATION_SATURATE_ITEMS = 12
+    /** Longest decelerating scroll — a full second of visible travel. */
+    private const val JUMP_MAX_MS = 1_000
 
     /**
      * Plan a hand-initiated jump from [fromIndex] to [toIndex].
@@ -92,10 +99,11 @@ object FocusEngine {
      * - **Near** ([JumpPlan.doorstepIndex] null): the controller animates
      *   straight from the current scroll position onto the target's anchor.
      * - **Far** (doorstep set): the controller snaps to that doorstep first,
-     *   then animates only the short residual — a high-speed decelerating
-     *   scroll that settles on the verse. The doorstep is chosen so the target
-     *   is already laid out (last/first visible item), which is what lets the
-     *   residual be a real pixel scroll instead of a snap-then-nudge.
+     *   then animates a distance-scaled residual — longer and up to one second
+     *   for a bigger jump — so the motion reads as rushing across the page.
+     *
+     * [JumpPlan.animatedItemSpan] is how many items that residual covers; the
+     * controller turns it into pixels from the average laid-out item height.
      */
     fun planJump(
         fromIndex: Int,
@@ -104,36 +112,49 @@ object FocusEngine {
         totalItemCount: Int,
     ): JumpPlan {
         val delta = toIndex - fromIndex
+        val distance = abs(delta)
         if (delta == 0) {
-            return JumpPlan(doorstepIndex = null, durationMs = JUMP_MIN_MS)
+            return JumpPlan(
+                doorstepIndex = null,
+                animatedItemSpan = 0,
+                durationMs = JUMP_MIN_MS,
+            )
         }
         val visible = visibleItemCount.coerceAtLeast(1)
-        val near = abs(delta) <= visible + NEAR_EXTRA_ITEMS
+        val near = distance <= visible + NEAR_EXTRA_ITEMS
         if (near) {
             return JumpPlan(
                 doorstepIndex = null,
-                durationMs = jumpDurationMs(abs(delta)),
+                animatedItemSpan = distance,
+                durationMs = jumpDurationMs(distance),
             )
         }
-        // Put the target at the far edge of the window: after the snap it is
-        // measured, and the residual to the reading-line anchor is ~one
-        // viewport of decelerating scroll.
-        val doorstepSpan = (visible - FAR_DOORSTEP_MARGIN_ITEMS).coerceAtLeast(1)
-        val rawDoorstep = if (delta > 0) toIndex - doorstepSpan else toIndex + doorstepSpan
+        // Residual length scales with how far we're jumping: a short hop still
+        // shows ~one viewport of travel; a ~200-verse jump rushes through the
+        // full [ANIMATED_SPAN_MAX_ITEMS] stretch over a full second.
+        val minSpan = (visible * ANIMATED_SPAN_MIN_VIEWPORTS).coerceAtLeast(visible)
+        val t = (distance.toFloat() / JUMP_DISTANCE_SATURATE_ITEMS).coerceIn(0f, 1f)
+        val desiredSpan = (minSpan + (ANIMATED_SPAN_MAX_ITEMS - minSpan) * t)
+            .roundToInt()
+            .coerceIn(minSpan, ANIMATED_SPAN_MAX_ITEMS)
+        // Never ask to animate more than the real remaining distance.
+        val animatedSpan = desiredSpan.coerceAtMost(distance)
+        val rawDoorstep = if (delta > 0) toIndex - animatedSpan else toIndex + animatedSpan
         val doorstep = rawDoorstep.coerceIn(0, (totalItemCount - 1).coerceAtLeast(0))
         return JumpPlan(
             doorstepIndex = doorstep,
-            durationMs = jumpDurationMs(doorstepSpan),
+            animatedItemSpan = animatedSpan,
+            durationMs = jumpDurationMs(distance),
         )
     }
 
     /**
-     * Duration of the decelerating scroll leg, scaled by how many items that
-     * leg covers. Near jumps of a verse or two are brief; a full doorstep
-     * residual saturates at [JUMP_MAX_MS].
+     * Duration of the decelerating scroll, scaled by the jump's full distance
+     * in items so a ~200-verse jump holds a full second while a nearby one
+     * stays brief. Kept in [JUMP_MIN_MS]..[JUMP_MAX_MS].
      */
-    fun jumpDurationMs(animatedItemDistance: Int): Int {
-        val t = (abs(animatedItemDistance).toFloat() / JUMP_DURATION_SATURATE_ITEMS)
+    fun jumpDurationMs(jumpDistanceItems: Int): Int {
+        val t = (abs(jumpDistanceItems).toFloat() / JUMP_DISTANCE_SATURATE_ITEMS)
             .coerceIn(0f, 1f)
         return (JUMP_MIN_MS + (JUMP_MAX_MS - JUMP_MIN_MS) * t).roundToInt()
     }
@@ -255,10 +276,13 @@ object FocusEngine {
  *
  * @param doorstepIndex Item index to snap to before the decelerating scroll, or
  *   `null` when the full path from the current position should be animated.
+ * @param animatedItemSpan How many items the decelerating scroll should cover
+ *   (the residual after a far teleport, or the full near distance).
  * @param durationMs Length of the decelerating scroll leg.
  */
 data class JumpPlan(
     val doorstepIndex: Int?,
+    val animatedItemSpan: Int,
     val durationMs: Int,
 )
 
