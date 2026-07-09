@@ -30,6 +30,31 @@ The naive implementation conflicts with Arabic shaping:
   overlapping strokes, connectors, and marks visually accumulate and make the
   "faded" text look dirty. The faded state must be an opaque color, not alpha.
 
+## Update: one ink-wash bloom across every mode
+
+The shipping Arabic-only view (`ResponsiveHafsAyah`, the single-`Text` Hafs
+renderer) now **spreads** the active word's reveal letter-by-letter, on the same
+curve as the word-by-word modes, instead of fading the whole word at one uniform
+alpha. Every mode therefore shares one bloom:
+
+- The ink-wash shape lives in one place — `inkWashAlpha(pos, progress, resting)`
+  in `ui/theme/Fade.kt` (smootherstep feather, wash head travelling the word plus
+  1.6× its width). `letterFadeIn` paints it as a moving gradient mask for the
+  per-word composables (`WordUnit`, `EnglishWordUnit`); `ResponsiveHafsAyah`
+  samples the *same* function per character and emits one opaque colour span per
+  glyph of the active word.
+- Sampling per character keeps the honoured constraint above: the connected
+  renderer stays a single shaped `Text` run and never applies a per-letter alpha
+  mask to overlapping Quranic marks — each glyph gets a flat opaque colour
+  composited over the paper. Colour-only spans do not split Compose's shaping
+  run, so ligatures and mark positioning are unchanged.
+- `pos` is normalised to the reading direction (0 = first-revealed letter), so
+  the reveal leads from the first letter (rightmost, RTL) exactly as the mask
+  does, and the same formula serves the LTR English lyric flow.
+
+Repeat (orange) blooms in the connected renderer remain a whole-word colour for
+now; only the first-pass ink reveal spreads.
+
 ## What The Sources Say
 
 Quran text sources expose multiple rendering families, and they are not

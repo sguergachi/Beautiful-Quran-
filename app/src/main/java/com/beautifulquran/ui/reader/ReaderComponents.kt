@@ -75,6 +75,7 @@ import com.beautifulquran.ui.theme.HafsFontFamily
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.TranslationFontFamily
 import com.beautifulquran.ui.theme.gilded
+import com.beautifulquran.ui.theme.inkWashAlpha
 import com.beautifulquran.ui.theme.letterFadeIn
 import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.starAndCrossWeave
@@ -539,6 +540,17 @@ private class WordInkPalette(
         state == WordVisualState.Upcoming -> fadedInk
         else -> fullInk
     }
+
+    /**
+     * Opaque ink for one glyph of the active word at reading-direction fraction
+     * [pos] (0 = first-revealed letter). The wash spreads across the letters on
+     * the same curve as [letterFadeIn] in the word-by-word modes, but painted as
+     * an opaque colour so overlapping Quranic marks don't smear. Composited over
+     * [paper] up front because a span can't carry a draw-phase alpha.
+     */
+    fun activeInkAt(pos: Float, sweep: Float): Color = fullInk
+        .copy(alpha = inkWashAlpha(pos, sweep, WordVisualState.Upcoming.inkAlpha()))
+        .compositeOver(paper)
 }
 
 @Composable
@@ -615,14 +627,27 @@ private fun ResponsiveHafsAyah(
     val wordRanges = mutableListOf<IntRange>()
     val annotatedText = buildAnnotatedString {
         ayah.words.forEachIndexed { index, word ->
-            val wordColor = palette.colorFor(
-                state = states.getOrElse(index) { WordVisualState.Plain },
-                repeat = repeats.getOrElse(index) { false },
-                sweep = sweeps[index].value,
-            )
+            val state = states.getOrElse(index) { WordVisualState.Plain }
+            val repeat = repeats.getOrElse(index) { false }
             val start = length
-            withStyle(SpanStyle(color = wordColor)) {
-                append(word.arabic)
+            if (state == WordVisualState.Active && !repeat && word.arabic.isNotEmpty()) {
+                // The active word blooms letter-by-letter: colour each glyph on
+                // the shared ink-wash curve so the reveal spreads across the word
+                // exactly as letterFadeIn does in the word-by-word modes, staying
+                // opaque so overlapping marks don't smear in this single Text run.
+                val sweep = sweeps[index].value
+                val n = word.arabic.length
+                word.arabic.forEachIndexed { charIndex, ch ->
+                    // pos 0 = first letter (rightmost, first revealed in RTL).
+                    val pos = (charIndex + 0.5f) / n
+                    withStyle(SpanStyle(color = palette.activeInkAt(pos, sweep))) {
+                        append(ch)
+                    }
+                }
+            } else {
+                withStyle(SpanStyle(color = palette.colorFor(state, repeat, sweeps[index].value))) {
+                    append(word.arabic)
+                }
             }
             wordRanges += start until length
             append(" ")
