@@ -5,10 +5,17 @@
  *   - InkWashFeather = 1.6 (feather wider than the glyph run)
  *   - 9-stop alpha profile across the feather
  *   - progress 0..1 advances the wash head; letters ahead rest at restingAlpha,
- *     letters behind are fully inked (Compose BlendMode.DstIn → CSS mask-image)
+ *     letters behind are fully inked
  *
- * On the marketing site the wash is not locked to audio word timings — progress
- * advances on its own clock, accelerated — but the spatial ink effect matches.
+ * Firefox (especially Android) is unreliable with mask-image alpha washes on
+ * text, and a failed mask collapses to a whole-element opacity pop — which is
+ * exactly the "white fade of the whole paragraph" bug. Text therefore uses the
+ * same spatial profile painted as a fill gradient via background-clip:text
+ * (the CSS equivalent of Compose's DstIn letter wash). Non-text atoms animate
+ * opacity on the smootherstep clock instead.
+ *
+ * On the marketing site progress is not locked to audio word timings —
+ * accelerated — but the spatial ink effect matches the reader.
  */
 (function (root) {
   'use strict';
@@ -40,17 +47,49 @@
     return restingAlpha + (1 - restingAlpha) * (rtl ? s : 1 - s);
   }
 
+  function parseCssColor(css) {
+    if (!css) return { r: 28, g: 27, b: 24, a: 1 };
+    css = String(css).trim();
+    var m = css.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)$/i);
+    if (m) {
+      return {
+        r: +m[1],
+        g: +m[2],
+        b: +m[3],
+        a: m[4] == null ? 1 : +m[4],
+      };
+    }
+    // Hex fallback (#rgb / #rrggbb)
+    m = css.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (m) {
+      var h = m[1];
+      if (h.length === 3) {
+        return {
+          r: parseInt(h[0] + h[0], 16),
+          g: parseInt(h[1] + h[1], 16),
+          b: parseInt(h[2] + h[2], 16),
+          a: 1,
+        };
+      }
+      return {
+        r: parseInt(h.slice(0, 2), 16),
+        g: parseInt(h.slice(2, 4), 16),
+        b: parseInt(h.slice(4, 6), 16),
+        a: 1,
+      };
+    }
+    return { r: 28, g: 27, b: 24, a: 1 };
+  }
+
+  function rgba(c, alpha) {
+    return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + alpha + ')';
+  }
+
   /**
-   * Build a CSS mask-image linear-gradient that matches the Compose
-   * horizontalGradient + DstIn wash for the given progress (0..1).
-   *
-   * @param {number} progress 0..1 wash head progress
-   * @param {number} widthPx element width in CSS pixels
-   * @param {boolean} rtl true for Arabic (wash right→left)
-   * @param {number} restingAlpha upcoming-ink floor
-   * @returns {string|null} CSS gradient, or null when fully inked
+   * Spatial wash gradient (same stops / geometry as Fade.kt letterFadeIn).
+   * Used as a text fill via background-clip:text.
    */
-  function buildWashMask(progress, widthPx, rtl, restingAlpha) {
+  function buildWashFill(progress, widthPx, rtl, restingAlpha, inkColor) {
     var p = progress < 0 ? 0 : progress > 1 ? 1 : progress;
     if (p >= 1) return null;
     if (!(widthPx > 0)) return null;
@@ -69,7 +108,7 @@
 
     var stops = [];
     function push(x, a) {
-      stops.push('rgba(0,0,0,' + a + ') ' + x + 'px');
+      stops.push(rgba(inkColor, a) + ' ' + x + 'px');
     }
 
     // Outside the feather, Compose clamps edge colors of the gradient.
@@ -94,52 +133,93 @@
     return 'linear-gradient(to right, ' + stops.join(', ') + ')';
   }
 
-  function setMask(el, mask) {
-    el.style.webkitMaskImage = mask;
-    el.style.maskImage = mask;
-    el.style.webkitMaskSize = '100% 100%';
-    el.style.maskSize = '100% 100%';
-    el.style.webkitMaskRepeat = 'no-repeat';
-    el.style.maskRepeat = 'no-repeat';
+  /** @deprecated kept for tests / callers; builds the old alpha-mask form. */
+  function buildWashMask(progress, widthPx, rtl, restingAlpha) {
+    var fill = buildWashFill(progress, widthPx, rtl, restingAlpha, { r: 0, g: 0, b: 0, a: 1 });
+    return fill;
   }
 
-  /** Solid upcoming-ink floor — used when layout width is not ready yet. */
-  function restingMask(restingAlpha) {
-    return 'linear-gradient(to right, rgba(0,0,0,' + restingAlpha + '), rgba(0,0,0,' + restingAlpha + '))';
+  function resolveInkColor(el) {
+    var cs = root.getComputedStyle ? root.getComputedStyle(el) : null;
+    // Prefer the authored color before we make text transparent for clipping.
+    var raw = (el.dataset && el.dataset.inkColor) || (cs && cs.color) || '';
+    return parseCssColor(raw);
   }
 
-  function applyWash(el, progress, rtl, restingAlpha) {
+  function rememberInkColor(el) {
+    if (!el.dataset.inkColor) {
+      var cs = root.getComputedStyle ? root.getComputedStyle(el) : null;
+      if (cs && cs.color) el.dataset.inkColor = cs.color;
+    }
+  }
+
+  function applyTextWash(el, progress, rtl, restingAlpha) {
+    rememberInkColor(el);
     var rest = restingAlpha == null ? DEFAULT_RESTING_ALPHA : restingAlpha;
+    var ink = resolveInkColor(el);
     var width = el.offsetWidth || el.getBoundingClientRect().width;
     if (!(width > 0)) {
-      // Avoid a full-ink flash before layout: hold the upcoming floor.
-      setMask(el, restingMask(rest));
+      // Hold upcoming ink until layout.
+      el.style.color = rgba(ink, rest);
+      el.style.webkitTextFillColor = '';
+      el.style.backgroundImage = '';
+      el.style.backgroundClip = '';
+      el.style.webkitBackgroundClip = '';
       return;
     }
-    var mask = buildWashMask(progress, width, !!rtl, rest);
-    if (!mask) {
+    var fill = buildWashFill(progress, width, !!rtl, rest, ink);
+    if (!fill) {
       clearWash(el);
       return;
     }
-    setMask(el, mask);
+    // background-clip:text paints the Fade.kt wash into the glyphs themselves —
+    // reliable in Firefox Android, unlike mask-image on text.
+    el.style.backgroundImage = fill;
+    el.style.backgroundSize = '100% 100%';
+    el.style.backgroundRepeat = 'no-repeat';
+    el.style.webkitBackgroundClip = 'text';
+    el.style.backgroundClip = 'text';
+    el.style.color = 'transparent';
+    el.style.webkitTextFillColor = 'transparent';
+  }
+
+  function applyAtomWash(el, progress, restingAlpha) {
+    var rest = restingAlpha == null ? DEFAULT_RESTING_ALPHA : restingAlpha;
+    var p = progress < 0 ? 0 : progress > 1 ? 1 : progress;
+    // Whole-word breath for non-text: smootherstep from resting → full.
+    var a = rest + (1 - rest) * inkSmootherstep(p);
+    el.style.opacity = String(a);
+  }
+
+  function isTexty(el) {
+    // Atomic media / SVG — opacity path. Everything else gets the glyph wash.
+    if (!el || !el.matches) return true;
+    return !el.matches('svg, img, .rosette, .screenshots figure');
+  }
+
+  function applyWash(el, progress, rtl, restingAlpha) {
+    if (isTexty(el)) applyTextWash(el, progress, rtl, restingAlpha);
+    else applyAtomWash(el, progress, restingAlpha);
   }
 
   function clearWash(el) {
+    el.style.backgroundImage = '';
+    el.style.backgroundSize = '';
+    el.style.backgroundRepeat = '';
+    el.style.backgroundClip = '';
+    el.style.webkitBackgroundClip = '';
+    el.style.color = '';
+    el.style.webkitTextFillColor = '';
+    el.style.opacity = '';
     el.style.webkitMaskImage = '';
     el.style.maskImage = '';
-    el.style.webkitMaskSize = '';
-    el.style.maskSize = '';
-    el.style.webkitMaskRepeat = '';
-    el.style.maskRepeat = '';
+    el.style.maskMode = '';
   }
 
   /**
    * Animate the ink wash from progress 0 → 1.
    * Progress advances linearly with time (like audio position / duration in the
-   * app); the softerstep lives in the feather, not in the clock.
-   *
-   * @param {HTMLElement} el
-   * @param {{ duration?: number, rtl?: boolean, restingAlpha?: number, onDone?: function }} opts
+   * app); the smootherstep lives in the feather, not in the clock.
    */
   function animateWash(el, opts) {
     opts = opts || {};
@@ -172,6 +252,7 @@
   root.BeautifulQuranInk = {
     inkSmootherstep: inkSmootherstep,
     washAlphaAt: washAlphaAt,
+    buildWashFill: buildWashFill,
     buildWashMask: buildWashMask,
     applyWash: applyWash,
     clearWash: clearWash,

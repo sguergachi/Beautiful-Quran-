@@ -5,6 +5,10 @@
  * apart — the same karaoke cadence as the reader, accelerated (not audio-timed).
  *
  * Non-text atoms (rosette, screenshots) wash as a single unit. Arabic runs RTL.
+ *
+ * Critical for Firefox Android: each word is its own paint target. A broken
+ * whole-block opacity fade is what the user reported ("white fade of the whole
+ * paragraph"); word wrapping + per-word fill washes is the fix.
  */
 (function () {
   'use strict';
@@ -23,7 +27,7 @@
   /** Stagger between successive words — user-requested karaoke beat. */
   var WORD_STAGGER_MS = 50;
   /** Accelerated wash duration per word (visible feather, not audio dwell). */
-  var WASH_MS = 240;
+  var WASH_MS = 280;
 
   var blocks = Array.prototype.slice.call(document.querySelectorAll(BLOCK_SELECTOR));
   if (!blocks.length) return;
@@ -36,6 +40,8 @@
     if (el.closest && el.closest('.arabic-title')) return true;
     var dir = (el.getAttribute && el.getAttribute('dir') || '').toLowerCase();
     if (dir === 'rtl') return true;
+    // Heuristic: Arabic script in the word itself.
+    if (/[\u0600-\u06FF]/.test(el.textContent || '')) return true;
     return false;
   }
 
@@ -62,25 +68,31 @@
 
     textNodes.forEach(function (textNode) {
       var parts = textNode.nodeValue.split(/(\s+)/);
-      if (parts.length === 1 && !/\s/.test(parts[0])) {
-        var alone = document.createElement('span');
-        alone.className = 'ink-word';
-        alone.textContent = parts[0];
-        textNode.parentNode.replaceChild(alone, textNode);
-        return;
-      }
       var frag = document.createDocumentFragment();
-      parts.forEach(function (part) {
-        if (!part) return;
+      var i = 0;
+      while (i < parts.length) {
+        var part = parts[i];
+        if (!part) { i += 1; continue; }
         if (/^\s+$/.test(part)) {
+          // Leading / orphan whitespace stays plain (invisible between dim words
+          // once trailing spaces ride with each word below).
           frag.appendChild(document.createTextNode(part));
-        } else {
-          var span = document.createElement('span');
-          span.className = 'ink-word';
-          span.textContent = part;
-          frag.appendChild(span);
+          i += 1;
+          continue;
         }
-      });
+        var span = document.createElement('span');
+        span.className = 'ink-word';
+        var wordText = part;
+        // Attach the following whitespace to this word so gaps aren't full-ink.
+        if (i + 1 < parts.length && /^\s+$/.test(parts[i + 1] || '')) {
+          wordText += parts[i + 1];
+          i += 2;
+        } else {
+          i += 1;
+        }
+        span.textContent = wordText;
+        frag.appendChild(span);
+      }
       textNode.parentNode.replaceChild(frag, textNode);
     });
   }
@@ -100,8 +112,15 @@
 
   function washUnit(el, delay) {
     window.setTimeout(function () {
-      if (el.classList.contains('inked')) return;
+      if (el.classList.contains('inked') || el.classList.contains('ink-washing')) {
+        return;
+      }
       var rtl = isRtl(el);
+      // Capture authored ink before the fill wash makes color transparent.
+      if (el.dataset && !el.dataset.inkColor) {
+        var cs = window.getComputedStyle(el);
+        if (cs && cs.color) el.dataset.inkColor = cs.color;
+      }
       Ink.applyWash(el, 0, rtl, Ink.DEFAULT_RESTING_ALPHA);
       el.classList.add('ink-washing');
       Ink.animateWash(el, {
@@ -113,14 +132,20 @@
     }, delay);
   }
 
-  // Wrap words immediately so CSS can rest each word at upcoming ink.
+  // Wrap words immediately and park each at upcoming ink (progress 0 wash).
+  // Owning ink per-word from the start avoids any whole-paragraph opacity fade.
   blocks.forEach(function (block) {
     if (isAtomic(block)) return;
     wrapWords(block);
     block.classList.add('ink-prepared');
+    Array.prototype.forEach.call(block.querySelectorAll('.ink-word'), function (word) {
+      var cs = window.getComputedStyle(word);
+      if (cs && cs.color) word.dataset.inkColor = cs.color;
+      Ink.applyWash(word, 0, isRtl(word), Ink.DEFAULT_RESTING_ALPHA);
+    });
   });
 
-  if (reduceMotion || !('IntersectionObserver' in window)) {
+  if (reduceMotion || !('IntersectionObserver' in window) || !window.requestAnimationFrame) {
     blocks.forEach(function (block) {
       unitsFor(block).forEach(settle);
       block.classList.add('ink-prepared');
@@ -129,15 +154,20 @@
     return;
   }
 
+  // Global word clock across the viewport so cascading lines keep a steady
+  // 50 ms karaoke beat instead of each block restarting at 0.
+  var nextWordAt = 0;
+
   var observer = new IntersectionObserver(function (entries, obs) {
-    // Lines top-to-bottom; within each line, words in DOM/reading order at 50 ms.
     var batch = entries
       .filter(function (entry) { return entry.isIntersecting; })
       .sort(function (a, b) {
         return a.boundingClientRect.top - b.boundingClientRect.top;
       });
 
-    var wordIndex = 0;
+    var now = performance.now();
+    if (nextWordAt < now) nextWordAt = now;
+
     batch.forEach(function (entry) {
       var block = entry.target;
       obs.unobserve(block);
@@ -145,11 +175,12 @@
       block.dataset.inkStarted = '1';
 
       unitsFor(block).forEach(function (unit) {
-        washUnit(unit, wordIndex * WORD_STAGGER_MS);
-        wordIndex += 1;
+        var delay = Math.max(0, nextWordAt - now);
+        washUnit(unit, delay);
+        nextWordAt += WORD_STAGGER_MS;
       });
     });
-  }, { rootMargin: '0px 0px -8% 0px', threshold: 0.12 });
+  }, { rootMargin: '0px 0px -6% 0px', threshold: 0.05 });
 
   blocks.forEach(function (el) { observer.observe(el); });
 })();

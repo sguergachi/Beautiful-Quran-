@@ -99,12 +99,13 @@ img {
 /* Ink bloom on arrival.
  *
  * Word-by-word port of the reader highlight wash (Fade.kt letterFadeIn →
- * ink-fade.js). Each `.ink-word` (and atomic units like the rosette) rests at
- * upcoming ink; JS writes them with the directional smootherstep wash,
- * staggered 50 ms apart down each line.
+ * ink-fade.js). Each `.ink-word` is painted by JS with a directional
+ * smootherstep fill (background-clip:text — works on Firefox Android).
+ * Staggered 50 ms apart. No whole-block opacity fade — that is what collapsed
+ * to a white page-wide fade in Firefox when the mask wash failed.
  *
- * Blocks hold the upcoming floor until JS wraps words (`.ink-prepared`), so
- * there is no full-ink flash before the script runs. Gated on `.js`.
+ * Until words are prepared, blocks rest at upcoming ink. After wrap, ink-fade.js
+ * owns each word's ink. Gated on `.js`.
  */
 @media (prefers-reduced-motion: no-preference) {
   .js :where(
@@ -122,22 +123,28 @@ img {
     .attribution p,
     .sheet > .footer-links,
     .sheet > .back-link
-  ):not(.ink-prepared) {
+  ):not(.ink-prepared):not(.inked):not(.ink-washing) {
     opacity: var(--upcoming-ink);
   }
 
-  /* After wrap, the block is full-strength; each word carries the floor. */
   .js .ink-prepared {
     opacity: 1;
   }
 
   .js .ink-word {
     display: inline-block;
+  }
+
+  /* Atomics still use opacity as their wash channel (no text to clip). */
+  .js .rosette:not(.inked):not(.ink-washing),
+  .js .screenshots figure:not(.inked):not(.ink-washing) {
     opacity: var(--upcoming-ink);
   }
 
-  .js .ink-washing,
-  .js .inked {
+  .js .rosette.ink-washing,
+  .js .rosette.inked,
+  .js .screenshots figure.ink-washing,
+  .js .screenshots figure.inked {
     opacity: 1;
   }
 }
