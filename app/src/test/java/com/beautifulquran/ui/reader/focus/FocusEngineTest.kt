@@ -174,9 +174,9 @@ class FocusEngineTest {
         val far = FocusEngine.approachDistancePx(viewport, jumpDistanceVerses = 200)
         assertTrue("a longer jump travels further", near < mid)
         assertTrue(mid < far)
-        // Nearest jump floors at 0.28 vp; farthest saturates at 0.95 vp —
+        // Nearest jump floors at 0.32 vp; farthest saturates at 0.95 vp —
         // under one viewport so it fits the post-teleport residual.
-        assertEquals((viewport * 0.32f).toInt(), near) // 0.28 + 0.04*1
+        assertEquals((viewport * 0.37f).toInt(), near) // 0.32 + 0.05*1
         assertEquals((viewport * 0.95f).toInt(), far)
         assertTrue("never animates more than one viewport", far <= viewport)
     }
@@ -190,14 +190,23 @@ class FocusEngineTest {
     }
 
     @Test
-    fun `approach duration scales with travel but stays brisk`() {
-        val shortPx = FocusEngine.approachDistancePx(viewport, 1)
-        val longPx = FocusEngine.approachDistancePx(viewport, 200)
-        val shortMs = FocusEngine.approachDurationMs(viewport, shortPx)
-        val longMs = FocusEngine.approachDurationMs(viewport, longPx)
-        assertTrue(shortMs < longMs)
-        assertTrue("stays brisk", longMs <= 560)
-        assertTrue(shortMs >= 280)
+    fun `approach duration scales with jump distance — far jumps hold a full second`() {
+        val shortMs = FocusEngine.approachDurationMs(jumpDistanceVerses = 1)
+        val midMs = FocusEngine.approachDurationMs(jumpDistanceVerses = 6)
+        val longMs = FocusEngine.approachDurationMs(jumpDistanceVerses = 200)
+        assertTrue("nearby jumps are briefer", shortMs < midMs)
+        assertTrue(midMs < longMs)
+        assertEquals("far jumps hold a full second", 1_000, longMs)
+        assertTrue("nearby jumps stay under half a second", shortMs < 500)
+        assertTrue(shortMs >= 320)
+    }
+
+    @Test
+    fun `approach duration is symmetric in direction`() {
+        assertEquals(
+            FocusEngine.approachDurationMs(jumpDistanceVerses = 10),
+            FocusEngine.approachDurationMs(jumpDistanceVerses = -10),
+        )
     }
 
     @Test

@@ -50,8 +50,10 @@ object FocusEngine {
     // --- Distance-scaled jump approach ---
     // A hand-initiated jump animates its final stretch so the reader *sees* the
     // scroll arrive. The length of that stretch scales with how far the jump is
-    // (in verses), capped, so a longer jump visibly travels further — conveying
-    // distance — while staying fast and never animating the whole surah.
+    // (in verses), capped, so a longer jump is offset further from its landing
+    // — conveying distance travelled — while never animating the whole surah.
+    // Duration follows the same curve: nearby jumps are brief; far jumps hold
+    // the slide for a full second so the travel reads clearly.
     //
     // The ceiling must stay within a single viewport: after a doorstep teleport
     // the residual travel is typically ≤ ~1 viewport, and an approach longer
@@ -60,27 +62,29 @@ object FocusEngine {
     // and reads as a pop (the #136 regression).
 
     /** Shortest approach (nearest jump), as a fraction of the viewport. */
-    private const val APPROACH_MIN_FRACTION = 0.28f
+    private const val APPROACH_MIN_FRACTION = 0.32f
 
     /** How much each verse of jump distance lengthens the approach. */
-    private const val APPROACH_PER_VERSE_FRACTION = 0.04f
+    private const val APPROACH_PER_VERSE_FRACTION = 0.05f
 
     /** Longest approach (far jumps saturate here), as a fraction of the
      *  viewport — kept under one viewport so it fits the post-teleport
      *  residual and never needs a reverse wind-up. */
     private const val APPROACH_MAX_FRACTION = 0.95f
 
-    /** Duration of the shortest approach. */
-    private const val APPROACH_MIN_MS = 280
+    /** Duration of the shortest approach (a verse or two away). */
+    private const val APPROACH_MIN_MS = 320
 
-    /** Duration of the longest (saturated) approach — still brisk. */
-    private const val APPROACH_MAX_MS = 560
+    /** Duration of the longest (saturated) approach — a full second so far
+     *  jumps read as a quick scroll across the page, not a pop. */
+    private const val APPROACH_MAX_MS = 1_000
 
     /**
      * How far (px) the final, animated stretch of a jump should travel, scaled
      * by the jump's distance in verses ([jumpDistanceVerses]) and capped at
      * [APPROACH_MAX_FRACTION] of the viewport. The verse is pre-positioned this
-     * far from its anchor on the approach side, then glided in.
+     * far from its anchor on the approach side, then glided in — the offset is
+     * what gives the sense of distance travelled.
      *
      * Callers must still clamp this against the real residual delta after
      * teleport (see [ReaderFocusController.focus]) so a short residual never
@@ -93,16 +97,18 @@ object FocusEngine {
     }
 
     /**
-     * How long the animated approach should take, scaled by its length so a
-     * longer travel reads as covering more ground while staying fast. Kept in
+     * How long the animated approach should take, scaled by how far the jump
+     * is in verses so a distant target holds the slide for a full second while
+     * a nearby one stays brief. Independent of the (possibly residual-clamped)
+     * approach length — a far jump near a list edge still reads as a long
+     * travel even when only a short residual remains to animate. Kept in
      * [APPROACH_MIN_MS]..[APPROACH_MAX_MS].
      */
-    fun approachDurationMs(viewportHeightPx: Int, approachPx: Int): Int {
-        if (viewportHeightPx <= 0) return APPROACH_MIN_MS
-        val fraction = (approachPx.toFloat() / viewportHeightPx)
-            .coerceIn(APPROACH_MIN_FRACTION, APPROACH_MAX_FRACTION)
-        val t = (fraction - APPROACH_MIN_FRACTION) /
-            (APPROACH_MAX_FRACTION - APPROACH_MIN_FRACTION)
+    fun approachDurationMs(jumpDistanceVerses: Int): Int {
+        // Same verse count at which [approachDistancePx] saturates.
+        val saturatingVerses =
+            (APPROACH_MAX_FRACTION - APPROACH_MIN_FRACTION) / APPROACH_PER_VERSE_FRACTION
+        val t = (abs(jumpDistanceVerses) / saturatingVerses).coerceIn(0f, 1f)
         return (APPROACH_MIN_MS + (APPROACH_MAX_MS - APPROACH_MIN_MS) * t).roundToInt()
     }
 

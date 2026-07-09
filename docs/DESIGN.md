@@ -159,8 +159,10 @@ image, so it is crisp at any density and nearly free to render.
 
 ## Motion
 
-- Everything ≤ 400 ms except the two deliberate slow moves: chrome recede
-  (900 ms) and ayah dim (600 ms).
+- Everything ≤ 400 ms except the deliberate slow moves: chrome recede
+  (900 ms), ayah dim (600 ms), and the hand-initiated ayah-jump approach
+  (320 ms nearby → 1000 ms when far, distance-scaled so the offset conveys
+  travel).
 - Motion is always a fade, a slide, or both; nothing bounces, scales, or
   spins.
 - Auto-scroll keeps the active ayah in the upper third and yields instantly
