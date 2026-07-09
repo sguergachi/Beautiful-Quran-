@@ -3,6 +3,7 @@ package com.beautifulquran.ui.reader
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -28,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -135,13 +137,24 @@ private fun Rect.expandToInclude(other: Rect): Rect =
 private fun animatedInkAlpha(state: WordVisualState): State<Float> =
     animateFloatAsState(
         targetValue = state.inkAlpha(),
-        animationSpec = tween(if (state == WordVisualState.Active) 250 else 450),
+        // The active word's base ink is carried by the letter sweep, not this
+        // value, so snap it straight to full: that way a word recited faster
+        // than the tween (short words at speed) is already at full ink the
+        // instant it flips to Recited, instead of dipping to a stale mid-fade
+        // value and animating back up (a visible flicker on hand-off).
+        animationSpec = if (state == WordVisualState.Active) snap<Float>() else tween(450),
         label = "inkAlpha",
     )
 
 const val MIN_SWEEP_MS = 140
 const val MAX_SWEEP_MS = 8_000
 private const val ARABIC_ONLY_HAFS_FONT_MULTIPLIER = 1.0f
+
+// The inline ayah end-marker (﴿N﴾) is set smaller than the Quranic words it
+// closes, matching the standalone [AyahNumberMark] used in the other reading
+// modes (20sp against the 30sp word body). Without this the marker inherits the
+// full word size and reads as oversized in the Arabic-only view.
+private const val AYAH_MARK_SIZE_RATIO = 20f / 30f
 
 /**
  * The wash moves at an unhurried, deliberate pace: essentially a steady
@@ -202,20 +215,51 @@ private fun Modifier.repeatInkLayer(
  * the word lights up and runs for [sweepMs] — the time the reciter actually
  * spends on this word — so the last letter finishes inking exactly as the
  * voice moves on.
+ *
+ * When [startRevealed] is true the word begins the sweep already fully inked
+ * (progress 1) instead of snapping to the faint "upcoming" floor. That is the
+ * case for a word that lights up directly from a full-ink state — the first
+ * word after pressing play, or after a seek/jump — where there is no preceding
+ * "upcoming" dim to breathe out of. Snapping such a word to faint made it flash
+ * full → faint → sweep; holding it revealed simply skips the reveal for that
+ * one already-read word and removes the flicker.
  */
 @Composable
-private fun rememberLetterSweep(active: Boolean, sweepMs: Int?): State<Float> {
-    val initialProgress = if (active && sweepMs != null) 0f else 1f
-    val sweep = remember(active) { Animatable(initialProgress) }
-    LaunchedEffect(active, sweepMs) {
-        if (active && sweepMs != null) {
+private fun rememberLetterSweep(
+    active: Boolean,
+    sweepMs: Int?,
+    startRevealed: Boolean = false,
+): State<Float> {
+    val runSweep = active && sweepMs != null && !startRevealed
+    val sweep = remember(active) { Animatable(if (runSweep) 0f else 1f) }
+    LaunchedEffect(active, sweepMs, startRevealed) {
+        val ms = sweepMs
+        if (active && ms != null && !startRevealed) {
             sweep.snapTo(0f)
-            sweep.animateTo(1f, tween(sweepMs, easing = InkSweepEasing))
+            sweep.animateTo(1f, tween(ms, easing = InkSweepEasing))
         } else {
             sweep.snapTo(1f)
         }
     }
     return sweep.asState()
+}
+
+/**
+ * Whether a word lighting up should start its letter sweep already revealed —
+ * true only for a word that enters [WordVisualState.Active] straight from a
+ * full-ink state (Plain or Recited), never from the faint Upcoming dim. The
+ * decision is captured the moment the word activates so it stays stable for the
+ * whole time it is lit, and it is recomputed fresh on the next activation.
+ */
+@Composable
+private fun rememberStartRevealed(state: WordVisualState): Boolean {
+    val active = state == WordVisualState.Active
+    val previousState = remember { mutableStateOf(state) }
+    val enteredFromFullInk = active &&
+        previousState.value != WordVisualState.Upcoming &&
+        previousState.value != WordVisualState.Active
+    SideEffect { previousState.value = state }
+    return remember(active) { enteredFromFullInk }
 }
 
 /** Comfortable reading band the active word is kept inside while follow mode
@@ -268,7 +312,11 @@ private fun rememberWordHighlight(
         isActive = isActive,
         repeat = repeat,
         lyricInk = animatedInkAlpha(state),
-        sweep = rememberLetterSweep(isActive, sweepMs),
+        sweep = rememberLetterSweep(
+            active = isActive,
+            sweepMs = sweepMs,
+            startRevealed = rememberStartRevealed(state),
+        ),
         repeatWash = rememberRepeatWash(repeat, sweepMs.takeIf { isActive }),
     )
 }
@@ -509,6 +557,7 @@ private fun rememberLetterSweeps(
     rememberLetterSweep(
         active = state == WordVisualState.Active,
         sweepMs = activeSweepMs.takeIf { state == WordVisualState.Active },
+        startRevealed = rememberStartRevealed(state),
     )
 }
 
@@ -578,7 +627,12 @@ private fun ResponsiveHafsAyah(
             wordRanges += start until length
             append(" ")
         }
-        withStyle(SpanStyle(color = ayahMarkInk)) {
+        withStyle(
+            SpanStyle(
+                color = ayahMarkInk,
+                fontSize = fontSize * AYAH_MARK_SIZE_RATIO,
+            ),
+        ) {
             append("﴿")
             append(ayah.number.toArabicIndic())
             append("﴾")

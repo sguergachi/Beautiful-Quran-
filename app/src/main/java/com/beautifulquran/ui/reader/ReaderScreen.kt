@@ -316,9 +316,15 @@ fun ReaderScreen(
         return if (viewportHeight > 0) (viewportHeight * 0.28f).toInt() else fallbackAnchorPx
     }
     val statusBarTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
+    // The last ayah number in the surah — the highest position the reading
+    // marker can reach. Derived once from the (stable) item list.
+    val lastAyahNumber = remember(readerItems) {
+        readerItems.count { it is LazyItem.AyahItem }.coerceAtLeast(1)
+    }
     val scrolledAyahPosition = remember(readerItems) {
         derivedStateOf {
-            val visibleAyah = listState.layoutInfo.visibleItemsInfo.firstOrNull {
+            val info = listState.layoutInfo
+            val visibleAyah = info.visibleItemsInfo.firstOrNull {
                 readerItems.getOrNull(it.index) is LazyItem.AyahItem
             } ?: return@derivedStateOf scrolledAyah.value.toFloat()
             val ayahItem = readerItems[visibleAyah.index] as LazyItem.AyahItem
@@ -328,7 +334,27 @@ fun ReaderScreen(
             } else {
                 0f
             }
-            ayahItem.ayahIndex + 1f + itemProgress
+            val basePosition = ayahItem.ayahIndex + 1f + itemProgress
+            // The final ayah can never scroll up to the anchor, so a position
+            // taken from the first visible ayah tops out short of the end and
+            // the rail's reading marker never reaches the last bar. Once the
+            // surah's tail is on screen, blend the position the rest of the way
+            // to [lastAyahNumber] as the very bottom settles into view.
+            val lastVisible = info.visibleItemsInfo.lastOrNull()
+            if (
+                lastVisible != null &&
+                lastVisible.index == info.totalItemsCount - 1 &&
+                lastVisible.size > 0
+            ) {
+                val bottomBeyondFold =
+                    (lastVisible.offset + lastVisible.size - info.viewportEndOffset).toFloat()
+                val tailSettle = (1f - bottomBeyondFold / lastVisible.size).coerceIn(0f, 1f)
+                // Convex blend, so it always stays between basePosition and the
+                // final ayah; cap it there as a guard against rounding.
+                val tailPosition = basePosition + (lastAyahNumber - basePosition) * tailSettle
+                return@derivedStateOf tailPosition.coerceAtMost(lastAyahNumber.toFloat())
+            }
+            basePosition
         }
     }
     val isAwayFromActiveAyah = remember(activeAyah) {
