@@ -13,3 +13,14 @@ Quick essentials (details and rationale in AGENTS.md):
   `QuranDatabase.DB_FILE_NAME` whenever its content changes.
 - UI follows a strict paper metaphor: no dialogs, ripples, shadows, or cards.
   Read `docs/DESIGN.md` before any UI change.
+
+## PR Workflow
+
+When creating pull requests:
+- Create the PR and push your changes
+- Do not check if the PR is already merged or monitor PR status
+- Do not follow up on CI failures, review comments, or merge conflicts
+- Do not worry about PR issues or whether it's mergeable
+- Let the user review and check the PR status themselves
+
+Just make the PR and move on.
