@@ -310,7 +310,7 @@ fun ReaderScreen(
     LaunchedEffect(searchMatches, currentMatch) {
         val target = searchMatches.getOrNull(currentMatch) ?: return@LaunchedEffect
         followEnabled = false
-        focusController.focus(target, animate = true)
+        focusController.focus(target, animate = true, preRoll = true)
     }
 
     LaunchedEffect(requestedJumpAyah) {
@@ -323,7 +323,7 @@ fun ReaderScreen(
         followEnabled = isThisSurahPlaying
         viewModel.onAyahBecameActive(target)
         if (isThisSurahPlaying) viewModel.player.seekToAyah(target)
-        focusController.focus(target, animate = true)
+        focusController.focus(target, animate = true, preRoll = true)
     }
 
     fun selectedPlaybackAyah(): Int {
@@ -337,11 +337,20 @@ fun ReaderScreen(
     // Lyric-style auto scroll: the focus engine keeps the active ayah anchored
     // (its whole body if it fits, its top pinned if it is taller than the
     // screen — word-level following then carries the eye through a tall verse).
+    // The very first scroll after follow turns back on (return-to-verse, or
+    // pressing play from a scrolled-away spot) is a deliberate jump, so it gets
+    // the pre-roll slide; boundary-to-boundary tracking after that stays smooth.
+    var followWasEnabled by remember { mutableStateOf(followEnabled) }
     LaunchedEffect(activeAyah, followEnabled) {
         val ayah = activeAyah ?: return@LaunchedEffect
         viewModel.onAyahBecameActive(ayah)
-        if (!followEnabled) return@LaunchedEffect
-        focusController.focus(ayah, animate = true)
+        if (!followEnabled) {
+            followWasEnabled = false
+            return@LaunchedEffect
+        }
+        val justEnabled = !followWasEnabled
+        followWasEnabled = true
+        focusController.focus(ayah, animate = true, preRoll = justEnabled)
     }
 
     // Opening from "Continue listening": settle on the saved ayah once.
