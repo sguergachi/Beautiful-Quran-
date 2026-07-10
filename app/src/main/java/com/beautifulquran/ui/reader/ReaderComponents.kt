@@ -24,10 +24,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -81,6 +78,7 @@ import com.beautifulquran.ui.theme.ArabicWordStyle
 import com.beautifulquran.ui.theme.GildedFlourish
 import com.beautifulquran.ui.theme.GildedRosette
 import com.beautifulquran.ui.theme.HafsFontFamily
+import com.beautifulquran.ui.theme.IslamicBackToOriginCapsule
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.TranslationFontFamily
 import com.beautifulquran.ui.theme.gilded
@@ -1097,11 +1095,11 @@ fun PageBreak(page: Int, useArabicIndicDigits: Boolean = true) {
 }
 
 /**
- * Quiet floating return after a Root Viewer concordance jump — a single ink
- * line on the page (arrow + chapter · ayah), not a chip and not a dismissible
- * badge. Hosted above the paper stack in MainActivity so it survives closing
- * the reader; tap returns, scroll or page-turn arms the 30s fade. See
- * docs/ROOT_VIEWER.md and docs/DESIGN.md (hierarchy from ink strength).
+ * Opaque floating capsule after a Root Viewer concordance jump — stadium twin
+ * of the return-to-ayah roundel (paper fill, gilt rim, drawn qalam arrow).
+ * Hosted above the paper stack in MainActivity so it survives closing the
+ * reader; tap returns, scroll or page-turn arms the 30s fade. See
+ * docs/ROOT_VIEWER.md and docs/DESIGN.md.
  */
 @Composable
 fun BackToOriginPill(
@@ -1109,48 +1107,11 @@ fun BackToOriginPill(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
-        modifier = modifier
-            .quietClickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 12.dp)
-            .semantics {
-                contentDescription = target.label
-                role = Role.Button
-            },
-    ) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
-            modifier = Modifier.size(18.dp),
-        )
-        Spacer(Modifier.width(10.dp))
-        Text(
-            text = "Back to",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text = target.chapterLabel,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 180.dp),
-        )
-        Text(
-            text = "  ·  ",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f),
-        )
-        Text(
-            text = target.ayahLabel,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-            maxLines = 1,
-        )
-    }
+    IslamicBackToOriginCapsule(
+        chapterLabel = target.chapterLabel,
+        ayahLabel = target.ayahLabel,
+        contentDescription = target.label,
+        onClick = onClick,
+        modifier = modifier,
+    )
 }

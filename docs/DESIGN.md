@@ -27,12 +27,15 @@ Hard rules:
   "Return to the recitation" line, error messages), its own sheet
   (Settings), or an **ink bleed** that turns the current sheet into the
   message (system prompts — see below). The two deliberate exceptions are
-  quiet ink that still obeys the paper rules (no card, elevation, or
-  border): the reader's **Back-to / return-to-ayah** line above the embedded
-  player, and the cover sheet's **floating playback control** — the same
-  transport as the reader's `PlayerBar`, slid up over the chapter list while
-  a verse is loaded. Both share a **10 dp** bottom inset so the paper stack
-  keeps one vertical rhythm when turning between cover and reader.
+  quiet paper ornaments that still obey the paper rules (no Material card,
+  elevation, or ripple): the reader's **return-to-ayah roundel** and the
+  stack-level **Back-to capsule** (opaque stadium with the same gilt rim
+  and drawn qalam arrow as the roundel), both above the embedded player;
+  and the cover sheet's **floating playback control** — the same transport
+  as the reader's `PlayerBar`, slid up over the chapter list while a verse
+  is loaded. The ornaments and the cover transport share a **10 dp** bottom
+  inset so the paper stack keeps one vertical rhythm when turning between
+  cover and reader.
 - **Edges dissolve.** Scrolling content fades out at the top and bottom of
   every sheet — ink fading off the page, not content clipped by a boundary.
 - **Taps have no ripple.** Touch feedback is the content's own motion

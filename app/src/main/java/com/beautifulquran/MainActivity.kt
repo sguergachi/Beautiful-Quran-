@@ -433,12 +433,12 @@ private fun PaperStackApp(
             )
         }
 
-        // Concordance "Back to …" — hosted above the paper stack so it
-        // survives closing the reader / returning to chapter selection.
-        // Sits under ink-bleed overlays; clears 30s after the first hand
-        // scroll or page turn (see LaunchedEffects above). On the cover it
-        // clears the floating playback transport; on the reader it clears
-        // the embedded player bar.
+        // Concordance "Back to …" — opaque floating capsule above the paper
+        // stack so it survives closing the reader / returning to chapter
+        // selection. Sits under ink-bleed overlays; clears 30s after the
+        // first hand scroll or page turn (see LaunchedEffects above). On the
+        // cover it clears the floating playback transport; on the reader it
+        // clears the embedded player bar.
         val abovePlayer = page in 0.5f..1.5f && selectedSurahId != 0
         AnimatedVisibility(
             visible = rootReturnVisible,
