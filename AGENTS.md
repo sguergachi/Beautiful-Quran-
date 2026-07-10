@@ -97,7 +97,8 @@ Requires **JDK 17**. No Android device/emulator is needed for tests.
 | `docs/DESIGN.md` | Any UI/visual change — the paper metaphor and its hard rules |
 | `docs/PERFORMANCE.md` | Anything touching the reader, scrolling, or the highlight loop |
 | `docs/REPEAT_HIGHLIGHTING.md` | Repeat-aware timings and the orange second fade |
-| `docs/TIMINGS_LAB.md` | The in-app timing editor and its patch workflow |
+| `docs/ROOT_VIEWER.md` | Hold-to-reveal root lexicon — concordance counts, ayah jumps, QAC data |
+| `docs/TIMINGS_LAB.md` | The in-app timing editor and its patch workflow (developer mode) |
 | `tools/timing_overrides/README.md` | Committed timing-correction patch format |
 | `PLAN.md` | Historical product/engineering plan — context, not current spec |
 
