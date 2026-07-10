@@ -7,9 +7,10 @@ implementation; it does not change Android behavior.
 
 **Status: implemented (v1) + hosted.** The `web/` package ships the three pure
 engines with Vitest parity, WASM SQLite over the committed `quran.db`,
-paper-stack UI (Home / Reader / Settings), directional ink wash, focus follow,
-bookmarks, root viewer, and a PWA shell. Production build is published to
-GitHub Pages at [`/app/`](https://sguergachi.github.io/Beautiful-Quran-/app/)
+paper-stack UI (Home / Reader / Settings), cold-start entrance cover (closed
+mushaf + isti'adha), directional ink wash, focus follow, bookmarks, root
+viewer, and a PWA shell. Production build is published to GitHub Pages at
+[`/app/`](https://sguergachi.github.io/Beautiful-Quran-/app/)
 (from `docs/app`). See `web/README.md` for run instructions. The sections
 below remain the design record and quality bar.
 
@@ -304,7 +305,8 @@ web/
       player.ts
       cache.ts
     ui/
-      App.tsx           # paper stack
+      App.tsx           # paper stack + entrance ceremony
+      entrance/         # closed mushaf cover (arrive → isti'adha → open)
       home/
       reader/
       settings/

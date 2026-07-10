@@ -31,7 +31,7 @@ src/engine/     pure TS ports of HighlightEngine, FocusEngine, InkEngine, fade m
 src/data/       WASM SQLite (sql.js) over quran.db + settings/bookmarks
 src/playback/   HTMLAudioElement + Media Session + 33 ms position tick
 src/render/     WordUnit / AyahBlock (directional ink wash via CSS mask + rAF)
-src/ui/         paper stack: Home | Reader | Settings + root-viewer ink bleed
+src/ui/         paper stack: Home | Reader | Settings + entrance cover + root viewer
 src/store/      hand-rolled app store (boundary-only React updates)
 ```
 
@@ -40,6 +40,10 @@ Engines are DOM-free and unit-tested against the Android JVM suites. See
 
 ## Notes
 
+- Cold start opens on the closed mushaf (entrance ceremony): title wash, optional
+  isti'adha from the chosen reciter's everyayah pack, then the cover swings open
+  on its left hinge (right→left into the left side) onto the chapter list. Tap
+  or Escape skips; autoplay-blocked or offline falls back to a silent ink wash.
 - First load downloads `quran.db`; a service worker caches the DB, fonts, and
   hashed assets (cache-first). Navigations / `index.html` are network-first so
   a deploy cannot leave phones on a stale shell that points at deleted JS.

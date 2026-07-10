@@ -230,11 +230,12 @@ Ink-bleed overlays (not paper-stack pages) sit above the stack via
 [Timings Lab](TIMINGS_LAB.md) (developer mode only).
 
 On a cold start the whole stack sits behind the **entrance cover**
-(`entrance/EntranceCover`) — the closed mushaf: gilded ornament, the title,
-and the isti'adha recited once (streamed via `entrance/IstiadhaPlayer` from
-the chosen reciter's everyayah pack, `audhubillah.mp3`) before the cover
-swings open onto chapter selection. It is a one-shot ceremony, not a sheet
-in the stack; see the entrance section of [DESIGN.md](DESIGN.md).
+(`entrance/EntranceCover` on Android; `web/src/ui/entrance/` on web) — the
+closed mushaf: gilded ornament, the title, and the isti'adha recited once
+(streamed via a bare audio player from the chosen reciter's everyayah pack,
+`audhubillah.mp3`) before the cover swings open onto chapter selection. It is
+a one-shot ceremony, not a sheet in the stack; see the entrance section of
+[DESIGN.md](DESIGN.md).
 
 ViewModels get their dependencies from `QuranApp` (Application) through
 `AppViewModelFactory`. Settings changes propagate reactively: e.g.

@@ -197,8 +197,9 @@ image, so it is crisp at any density and nearly free to render.
 ## The entrance
 
 The paper metaphor begins before the first sheet: a cold start opens on the
-**closed mushaf** (`ui/entrance/EntranceCover`), and chapter selection is
-what the reader finds when its cover turns. The ceremony has three moments:
+**closed mushaf** (`ui/entrance/EntranceCover` on Android and web), and chapter
+selection is what the reader finds when its cover turns. The ceremony has
+three moments:
 
 1. **Arrival.** The board fades in from the system splash: deep-green
    leather (fixed across themes — a bound book keeps its own boards, colors
@@ -217,11 +218,11 @@ what the reader finds when its cover turns. The ceremony has three moments:
    at a reciter's pace, silently. If a recitation session is already live
    (activity recreated over playback), the du'a stays silent rather than
    reciting over the reciter.
-3. **The opening.** The board swings open on its **right** hinge — an Arabic
-   book — slower and heavier than a page (1150 ms vs 460 ms), with the flip
-   stems pitched slightly down (`PageTurnSounds.playCoverOpen`), revealing
-   the chapter list beneath. The free edge swings toward the right
-   (`rotationY` negative, origin at the right edge).
+3. **The opening.** The board swings open on its **left** hinge — free edge
+   traveling right→left into the left side of the screen — slower and heavier
+   than a page (1150 ms vs 460 ms), with the flip stems pitched slightly down
+   (`PageTurnSounds.playCoverOpen`), revealing the chapter list beneath.
+   (`rotationY` positive, origin at the left edge).
 
 A tap anywhere (or back) opens the cover at once; the ceremony never holds a
 reader hostage, and it plays only once per session (`rememberSaveable`), so
