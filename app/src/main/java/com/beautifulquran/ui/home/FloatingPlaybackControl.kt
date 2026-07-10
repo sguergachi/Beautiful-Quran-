@@ -26,6 +26,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -58,7 +59,8 @@ val FloatingPlaybackListClearance: Dp = 96.dp
  * Paper-native floating transport for the chapter list. Same controls as the
  * reader's embedded [com.beautifulquran.ui.reader.PlayerBar], but it lives as
  * quiet ink over the cover sheet — no card, elevation, or border — and slides
- * up only while a verse is loaded (playing or paused mid-session).
+ * up only while a verse is loaded (playing or paused mid-session). An opaque
+ * paper [Surface] masks the list beneath, matching the embedded bar.
  */
 @Composable
 fun FloatingPlaybackControl(
@@ -88,13 +90,14 @@ fun FloatingPlaybackControl(
         ),
         modifier = modifier,
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(bottom = FloatingPlaybackBottomInset),
-        ) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(bottom = FloatingPlaybackBottomInset),
+            ) {
             TextButton(
                 onClick = onReciterClick,
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
@@ -213,6 +216,7 @@ fun FloatingPlaybackControl(
                     )
                 }
             }
+        }
         }
     }
 }
