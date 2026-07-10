@@ -40,7 +40,10 @@ Engines are DOM-free and unit-tested against the Android JVM suites. See
 
 ## Notes
 
-- First load downloads `quran.db`; a service worker caches the shell + DB.
+- First load downloads `quran.db`; a service worker caches the DB, fonts, and
+  hashed assets (cache-first). Navigations / `index.html` are network-first so
+  a deploy cannot leave phones on a stale shell that points at deleted JS.
+  Bump `CACHE` in `public/sw.js` when changing that contract.
 - `sql.js`’s browser build requests `sql-wasm-browser.wasm` (copied into
   `public/` on `npm install`). Shipping only `sql-wasm.wasm` 404s on Pages.
 - Audio streams from everyayah.com and can be cached by the browser.
