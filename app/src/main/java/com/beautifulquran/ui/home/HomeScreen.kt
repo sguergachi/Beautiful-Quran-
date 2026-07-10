@@ -91,6 +91,13 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
+    val floatingPlayback = uiState.floatingPlayback
+    val showFloatingPlayback = shouldShowFloatingPlayback(floatingPlayback != null)
+    val listBottomPadding = if (showFloatingPlayback) {
+        FloatingPlaybackListClearance
+    } else {
+        48.dp
+    }
 
     // Focus + geometry that anchor the fading dials pane just under the search
     // field, floating over the surah list.
@@ -173,8 +180,12 @@ fun HomeScreen(
                     .fillMaxHeight()
                     .widthIn(max = 640.dp)
                     .fillMaxWidth()
-                    .verticalFadingEdges(color = MaterialTheme.colorScheme.background, top = 24.dp, bottom = 48.dp),
-                contentPadding = PaddingValues(bottom = 48.dp),
+                    .verticalFadingEdges(
+                        color = MaterialTheme.colorScheme.background,
+                        top = 24.dp,
+                        bottom = listBottomPadding,
+                    ),
+                contentPadding = PaddingValues(bottom = listBottomPadding),
             ) {
             item(key = "title") {
                 val accents = LocalQuranAccents.current
@@ -308,6 +319,32 @@ fun HomeScreen(
                     .padding(horizontal = 24.dp)
                     .height(searchPaneHeight)
                     .onGloballyPositioned { searchPaneBounds = it.boundsInRoot() },
+            )
+
+            // Floating transport — same bottom inset as the reader's floating
+            // Back-to / return-to-ayah controls so the paper stack keeps one
+            // vertical rhythm. Embedded PlayerBar takes over on the reader.
+            FloatingPlaybackControl(
+                visible = showFloatingPlayback && !searchFocused,
+                state = uiState.playerState,
+                chapterLabel = floatingPlayback?.surah?.nameTransliteration.orEmpty(),
+                ayahLabel = floatingPlayback?.let { "${it.surah.id}:${it.ayah}" }.orEmpty(),
+                reciterName = uiState.reciterName,
+                onOpenNowPlaying = {
+                    val target = floatingPlayback ?: return@FloatingPlaybackControl
+                    focusManager.clearFocus()
+                    onOpenSurah(target.surah.id, target.ayah)
+                },
+                onReciterClick = onOpenSettings,
+                onPlayPause = viewModel::togglePlayPause,
+                onFastBackward = viewModel::fastBackward,
+                onFastForward = viewModel::fastForward,
+                onRepeatClick = viewModel::cycleRepeatMode,
+                onSpeed = viewModel::cycleSpeed,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .widthIn(max = 640.dp)
+                    .fillMaxWidth(),
             )
         }
     }

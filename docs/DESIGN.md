@@ -26,7 +26,13 @@ Hard rules:
   Anything that would traditionally float becomes a line *in* the page (the
   "Return to the recitation" line, error messages), its own sheet
   (Settings), or an **ink bleed** that turns the current sheet into the
-  message (system prompts — see below).
+  message (system prompts — see below). The two deliberate exceptions are
+  quiet ink that still obeys the paper rules (no card, elevation, or
+  border): the reader's **Back-to / return-to-ayah** line above the embedded
+  player, and the cover sheet's **floating playback control** — the same
+  transport as the reader's `PlayerBar`, slid up over the chapter list while
+  a verse is loaded. Both share a **10 dp** bottom inset so the paper stack
+  keeps one vertical rhythm when turning between cover and reader.
 - **Edges dissolve.** Scrolling content fades out at the top and bottom of
   every sheet — ink fading off the page, not content clipped by a boundary.
 - **Taps have no ripple.** Touch feedback is the content's own motion
@@ -193,6 +199,10 @@ image, so it is crisp at any density and nearly free to render.
   the sheet rather than ink in it.
 - Auto-scroll keeps the active ayah in the upper third and yields instantly
   to the reader's hand; a quiet line above the player offers the way back.
+- On the chapter list, when a verse is loaded (playing or paused mid-session),
+  the floating playback control slides up with the same fade + vertical
+  motion as the reader's Back-to line, using the shared **10 dp** bottom
+  inset. Opening the reader replaces it with the embedded `PlayerBar`.
 
 ## Bookmark strip
 
