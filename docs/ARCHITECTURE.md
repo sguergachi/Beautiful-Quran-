@@ -119,11 +119,13 @@ per-item derivedStateOf in the reader list  ──►  one ayah recomposes
   `mediaId = "surah:ayah:reciterId"`, so `currentMediaItemIndex` ↔ ayah is a
   trivial mapping and ayah-repeat is just `REPEAT_MODE_ONE`. Surahs that open
   with a basmalah preface prepend a dedicated everyayah basmalah clip
-  (`mediaId` ayah `0`, URI `…/bismillah.mp3` or `…/001000.mp3`) so chapter-start
+  (`mediaId` ayah `0`, URI = Al-Fatihah 1:1 / `…/001001.mp3`) so chapter-start
   playback hears the basmalah before ayah 1; playlist indices shift by one when
-  that lead-in is present. That clip sits outside the guaranteed ayah-per-file
-  layout, so if it fails to load `PlaybackService` skips into ayah 1 instead of
-  surfacing a playback error. Range-repeat (loop ayah *m*..*n*) is enforced in the
+  that lead-in is present. Using 1:1 (rather than the optional `bismillah.mp3`)
+  keeps the clip inside the guaranteed ayah-per-file layout and reuses its
+  word timings for the header calligraphy wash. If it still fails to load,
+  `PlaybackService` skips into ayah 1 instead of surfacing a playback error.
+  Range-repeat (loop ayah *m*..*n*) is enforced in the
   controller's listener: whenever the player crosses past the range's last item
   (auto-advance, "next", or end of playlist) it seeks back to the range's first
   item.

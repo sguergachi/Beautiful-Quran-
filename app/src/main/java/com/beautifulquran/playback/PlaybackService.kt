@@ -104,12 +104,11 @@ class PlaybackService : MediaSessionService() {
     }
 
     /**
-     * The basmalah lead-in streams a dedicated everyayah clip that sits
-     * outside the guaranteed ayah-per-file layout, so a reciter pack missing
-     * it must not kill chapter-start playback: when that item is what failed,
-     * skip into ayah 1 and keep reciting. The item stays in the playlist
-     * (indices keep their lead-in layout); errors on ayah items keep the
-     * player's normal error behavior.
+     * The basmalah lead-in streams Al-Fatihah 1:1 (`001001.mp3`), which is
+     * inside the guaranteed ayah-per-file layout. If that item still fails,
+     * skip into ayah 1 and keep reciting rather than killing chapter-start
+     * playback. The item stays in the playlist (indices keep their lead-in
+     * layout); errors on ayah items keep the player's normal error behavior.
      */
     private class BasmalahSkipListener(private val player: Player) : Player.Listener {
 

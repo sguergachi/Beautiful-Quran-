@@ -43,22 +43,12 @@ data class Reciter(
     }
 
     /**
-     * Dedicated everyayah basmalah clip for this reciter. Most packs ship
-     * `bismillah.mp3`; a few only publish the legacy `001000.mp3` alias.
-     * Ayah-1 files themselves usually omit the basmalah, so chapter-start
-     * playback prepends this clip.
+     * Basmalah lead-in audio: Al-Fatihah 1:1 (`001001.mp3`). That file is part
+     * of every everyayah pack (unlike the optional `bismillah.mp3`), and its
+     * word timings are already in the DB — so chapter-start playback and the
+     * calligraphy ink wash share one source of truth.
      */
-    fun basmalahAudioUrl(): String {
-        val file = if (slug in BASMALAH_001000_SLUGS) "001000.mp3" else "bismillah.mp3"
-        return "https://everyayah.com/data/$slug/$file"
-    }
-
-    private companion object {
-        val BASMALAH_001000_SLUGS = setOf(
-            "Minshawy_Murattal_128kbps",
-            "Abdurrahmaan_As-Sudais_192kbps",
-        )
-    }
+    fun basmalahAudioUrl(): String = audioUrl(surah = 1, ayah = 1)
 }
 
 /** One highlighted span: word [position] is active from [startMs] until [endMs]. */

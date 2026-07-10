@@ -52,6 +52,31 @@ class InkEngineTest {
     }
 
     @Test
+    fun `calligraphy wash advances across four basmalah words`() {
+        assertEquals(0f, InkEngine.prefaceWashProgress(activeWord = null, wordSweep = 0f))
+        assertEquals(
+            0.25f,
+            InkEngine.prefaceWashProgress(active(wordPosition = 1), wordSweep = 1f),
+            1e-4f,
+        )
+        assertEquals(
+            0.5f,
+            InkEngine.prefaceWashProgress(active(wordPosition = 2), wordSweep = 1f),
+            1e-4f,
+        )
+        assertEquals(
+            0.625f,
+            InkEngine.prefaceWashProgress(active(wordPosition = 3), wordSweep = 0.5f),
+            1e-4f,
+        )
+        assertEquals(
+            1f,
+            InkEngine.prefaceWashProgress(active(wordPosition = 4), wordSweep = 1f),
+            1e-4f,
+        )
+    }
+
+    @Test
     fun `active ayah with no lit word rests every word at upcoming`() {
         // E.g. during the basmalah lead before the first word's segment.
         assertEquals(

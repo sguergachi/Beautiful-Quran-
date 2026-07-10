@@ -1,7 +1,6 @@
 package com.beautifulquran.data.model
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReciterBasmalahUrlTest {
@@ -15,21 +14,18 @@ class ReciterBasmalahUrlTest {
     )
 
     @Test
-    fun `most reciters use everyayah bismillah mp3`() {
-        val url = reciter("Alafasy_128kbps").basmalahAudioUrl()
+    fun `basmalah lead-in uses Al-Fatihah ayah 1 for every reciter`() {
         assertEquals(
-            "https://everyayah.com/data/Alafasy_128kbps/bismillah.mp3",
-            url,
+            "https://everyayah.com/data/Alafasy_128kbps/001001.mp3",
+            reciter("Alafasy_128kbps").basmalahAudioUrl(),
         )
-    }
-
-    @Test
-    fun `Minshawy and Sudais fall back to 001000 mp3`() {
-        assertTrue(
-            reciter("Minshawy_Murattal_128kbps").basmalahAudioUrl().endsWith("/001000.mp3"),
+        assertEquals(
+            "https://everyayah.com/data/Minshawy_Murattal_128kbps/001001.mp3",
+            reciter("Minshawy_Murattal_128kbps").basmalahAudioUrl(),
         )
-        assertTrue(
-            reciter("Abdurrahmaan_As-Sudais_192kbps").basmalahAudioUrl().endsWith("/001000.mp3"),
+        assertEquals(
+            reciter("Alafasy_128kbps").audioUrl(1, 1),
+            reciter("Alafasy_128kbps").basmalahAudioUrl(),
         )
     }
 }

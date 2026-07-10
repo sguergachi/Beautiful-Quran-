@@ -369,8 +369,10 @@ InkEngine owns that too, as data rather than as animation code:
   `word(...) → InkEngine.Word(state, repeat)`, `sweepMs(activeWord, speed)`
   with the min/max clamps, `startRevealed(previous, current)` — the rule
   that only a Recited→Active transition skips the reveal sweep — and
-  `prefaceState(isActive, dimmed)` for the surah-header basmalah calligraphy
-  (Active during the lead-in clip, Upcoming while recessed, Plain at rest).
+  `prefaceState(isActive, dimmed)` / `prefaceWashProgress(activeWord, sweep)`
+  for the surah-header basmalah VectorDrawable (Active during the Al-Fatihah
+  1:1 lead-in clip, with an RTL `letterFadeIn` wash paced by those four word
+  timings; Upcoming while recessed; Plain at rest).
 - **`InkEngine.Tuning`**: every feel knob in one data class — upcoming alpha,
   ink/mark fade durations, recess, sweep clamps, repeat sweep and fade-out,
   wash feather, and the sweep easing control points. `InkEngine.tuning` is

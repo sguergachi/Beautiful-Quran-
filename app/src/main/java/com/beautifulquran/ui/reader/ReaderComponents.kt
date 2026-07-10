@@ -1050,6 +1050,7 @@ fun AyahBlock(
  * as traditional Naskh manuscript calligraphy beneath the title — not
  * numbered, not an ayah. The glyph follows [InkEngine] ink (Active during the
  * basmalah lead-in, Upcoming while another ayah plays) and is tappable.
+ * When [basmalahActiveWord] is set, the SVG wash advances word-by-word.
  */
 @Composable
 fun SurahHeader(
@@ -1062,6 +1063,8 @@ fun SurahHeader(
     sheen: State<Float>,
     basmalahActive: Boolean = false,
     basmalahDimmed: Boolean = false,
+    basmalahActiveWord: ActiveWord? = null,
+    playbackSpeed: Float = 1f,
     onBasmalahClick: (() -> Unit)? = null,
 ) {
     val accents = LocalQuranAccents.current
@@ -1115,6 +1118,8 @@ fun SurahHeader(
             BasmalahCalligraphy(
                 active = basmalahActive,
                 dimmed = basmalahDimmed,
+                activeWord = basmalahActiveWord,
+                playbackSpeed = playbackSpeed,
                 onClick = onBasmalahClick,
             )
         }

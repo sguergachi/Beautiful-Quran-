@@ -187,14 +187,29 @@ object InkEngine {
         current == State.Active && previous == State.Recited
 
     /**
-     * Ink for the surah-header basmalah calligraphy (a single glyph, not
-     * word-timed): Active while the dedicated lead-in clip plays, Upcoming
-     * while another ayah is recited (same recess as verse words), Plain at
-     * rest on the page.
+     * Ink for the surah-header basmalah calligraphy (a VectorDrawable, not
+     * shaped text): Active while the lead-in clip plays, Upcoming while
+     * another ayah is recited (same recess as verse words), Plain at rest.
      */
     fun prefaceState(isActive: Boolean, dimmed: Boolean): State = when {
         isActive -> State.Active
         dimmed -> State.Upcoming
         else -> State.Plain
+    }
+
+    /**
+     * How far the calligraphy ink wash has traveled (0..1) across the SVG,
+     * driven by the active basmalah word and its intra-word letter sweep.
+     * Consumed by [com.beautifulquran.ui.theme.letterFadeIn] on the
+     * VectorDrawable — the SVG render path for InkEngine.
+     */
+    fun prefaceWashProgress(
+        activeWord: ActiveWord?,
+        wordSweep: Float,
+        wordCount: Int = com.beautifulquran.domain.BASMALAH_WORD_COUNT,
+    ): Float {
+        if (activeWord == null) return 0f
+        val pos = activeWord.wordPosition.coerceIn(1, wordCount)
+        return ((pos - 1) + wordSweep.coerceIn(0f, 1f)) / wordCount.toFloat()
     }
 }

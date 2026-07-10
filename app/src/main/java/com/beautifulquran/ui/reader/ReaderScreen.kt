@@ -87,6 +87,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ReadingMode
+import com.beautifulquran.domain.BASMALAH_PLAYLIST_AYAH
 import com.beautifulquran.ui.reader.focus.rememberReaderFocusController
 import com.beautifulquran.ui.theme.FloatingPaperControl
 import com.beautifulquran.ui.theme.IslamicReturnToAyahButton
@@ -742,6 +743,14 @@ fun ReaderScreen(
                 ) { index ->
                     when (val item = readerItems[index]) {
                         LazyItem.Header -> {
+                            val basmalahWord by remember(isThisSurahPlaying) {
+                                derivedStateOf {
+                                    activeWordState.value?.takeIf {
+                                        isThisSurahPlaying &&
+                                            it.ayah == BASMALAH_PLAYLIST_AYAH
+                                    }
+                                }
+                            }
                             SurahHeader(
                                 chapterNumber = content.surah.id,
                                 nameArabic = content.surah.nameArabic,
@@ -752,6 +761,8 @@ fun ReaderScreen(
                                 sheen = sheen,
                                 basmalahActive = isThisSurahPlaying && activeBasmalah == true,
                                 basmalahDimmed = recitingActive && activeBasmalah != true,
+                                basmalahActiveWord = basmalahWord,
+                                playbackSpeed = playerState.speed,
                                 onBasmalahClick = {
                                     notifPermission.request {
                                         followEnabled = true
