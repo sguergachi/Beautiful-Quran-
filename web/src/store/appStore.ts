@@ -1,3 +1,9 @@
+/**
+ * App store — paper stack, playback, bookmarks, root viewer.
+ *
+ * Paper stack: stackLayer 0=Chapters, 1=Reader, 2=Settings (over reader).
+ * When no surah is open, Settings occupies layer 1.
+ */
 import { useSyncExternalStore } from 'react'
 import type { ActiveWord, Reciter, Surah, SurahContent } from '../data/models'
 import { QuranRepository } from '../data/repository'
@@ -13,6 +19,14 @@ import {
 import { HighlightEngine, PreparedTimings } from '../engine/highlight'
 import { BASMALAH_PLAYLIST_AYAH } from '../engine/basmalah'
 import { player, type PlayerState } from '../playback/player'
+import {
+  COVER_LAYER,
+  READER_LAYER,
+  SETTINGS_LAYER,
+  settingsLayerFor,
+  sheetAtLayer,
+  type StackLayer,
+} from '../ui/paper/stack'
 
 export type Sheet = 'home' | 'reader' | 'settings'
 
@@ -41,6 +55,9 @@ export interface AppState {
   ready: boolean
   error: string | null
   loadLabel: string
+  /** Continuous paper-stack position: 0 Chapters · 1 Reader · 2 Settings. */
+  stackLayer: StackLayer
+  /** Derived top sheet name (for labels / legacy checks). */
   sheet: Sheet
   surahs: Surah[]
   reciters: Reciter[]
@@ -62,15 +79,21 @@ type Listener = () => void
 
 const FADE_LEAD_MS = 400
 
+function deriveSheet(stackLayer: StackLayer, hasReader: boolean): Sheet {
+  return sheetAtLayer(stackLayer, hasReader)
+}
+
 class AppStore {
   private listeners = new Set<Listener>()
   private prepared = new Map<number, PreparedTimings>()
   private lastActiveKey = ''
+  private lastEmitKey = ''
 
   state: AppState = {
     ready: false,
     error: null,
     loadLabel: 'Opening the book…',
+    stackLayer: COVER_LAYER,
     sheet: 'home',
     surahs: [],
     reciters: [],
@@ -90,13 +113,35 @@ class AppStore {
 
   constructor() {
     player.subscribe((ps) => {
-      this.state = { ...this.state, player: ps }
+      const prev = this.state.player
+      this.state = { ...this.state, player: ps, chromeReceded: ps.isPlaying }
       this.recomputeActive(ps)
-      this.state = {
-        ...this.state,
-        chromeReceded: ps.isPlaying,
+
+      // Emit only on UI-visible changes — not every 33 ms position tick.
+      const emitKey = [
+        ps.isPlaying,
+        ps.nowPlaying?.surahId,
+        ps.nowPlaying?.ayah,
+        ps.repeatMode,
+        ps.error ?? '',
+        this.lastActiveKey,
+        this.state.chromeReceded,
+      ].join('|')
+      if (emitKey !== this.lastEmitKey) {
+        this.lastEmitKey = emitKey
+        this.emit()
+        return
       }
-      this.emit()
+      // Still emit if nowPlaying identity changed without key catch
+      if (
+        prev.nowPlaying?.surahId !== ps.nowPlaying?.surahId ||
+        prev.nowPlaying?.ayah !== ps.nowPlaying?.ayah ||
+        prev.isPlaying !== ps.isPlaying ||
+        prev.repeatMode !== ps.repeatMode ||
+        prev.error !== ps.error
+      ) {
+        this.emit()
+      }
     })
   }
 
@@ -114,6 +159,34 @@ class AppStore {
   private set(partial: Partial<AppState>) {
     this.state = { ...this.state, ...partial }
     this.emit()
+  }
+
+  private hasReader(): boolean {
+    return this.state.content != null
+  }
+
+  /** Animate / snap the paper stack to a layer. */
+  setStackLayer(layer: number) {
+    const max = settingsLayerFor(this.hasReader())
+    const stackLayer = Math.max(COVER_LAYER, Math.min(max, Math.round(layer))) as StackLayer
+    this.set({
+      stackLayer,
+      sheet: deriveSheet(stackLayer, this.hasReader()),
+    })
+  }
+
+  /** Peel one sheet back (Settings → Reader → Chapters). */
+  goBack() {
+    if (this.state.rootViewer) {
+      this.closeRootViewer()
+      return
+    }
+    this.setStackLayer(this.state.stackLayer - 1)
+  }
+
+  /** Jump to a specific sheet by clicking its peek. */
+  revealLayer(layer: StackLayer) {
+    this.setStackLayer(layer)
   }
 
   async init() {
@@ -147,7 +220,9 @@ class AppStore {
   }
 
   setSheet(sheet: Sheet) {
-    this.set({ sheet })
+    if (sheet === 'home') this.setStackLayer(COVER_LAYER)
+    else if (sheet === 'reader') this.setStackLayer(READER_LAYER)
+    else this.setStackLayer(settingsLayerFor(this.hasReader()))
   }
 
   setSearch(search: string) {
@@ -201,6 +276,7 @@ class AppStore {
     player.loadSurah(content, reciter, ayah)
     this.set({
       content,
+      stackLayer: READER_LAYER,
       sheet: 'reader',
       settings,
       hasTimings: reciter.hasTimings && map.size > 0,
@@ -324,6 +400,7 @@ class AppStore {
           activeAyah: null,
           activeBasmalah: false,
         }
+        this.lastActiveKey = ''
       }
       return
     }
@@ -366,10 +443,7 @@ class AppStore {
     }
 
     const key = `${activeAyah}:${activeWord?.wordPosition ?? '-'}:${activeWord?.isRepeat ?? false}:${activeBasmalah}`
-    if (key === this.lastActiveKey && this.state.activeBasmalah === activeBasmalah) {
-      // Still update activeWord object only when key changes — already same.
-      return
-    }
+    if (key === this.lastActiveKey) return
     this.lastActiveKey = key
     this.state = {
       ...this.state,
@@ -385,3 +459,5 @@ export const appStore = new AppStore()
 export function useAppState(): AppState {
   return useSyncExternalStore(appStore.subscribe, appStore.getSnapshot, appStore.getSnapshot)
 }
+
+export { COVER_LAYER, READER_LAYER, SETTINGS_LAYER, settingsLayerFor }

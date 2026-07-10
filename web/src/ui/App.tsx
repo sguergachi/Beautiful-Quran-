@@ -34,23 +34,15 @@ export function App() {
     }
   }, [state.settings.themeMode])
 
-  // Browser back: settings → reader/home, reader → home
+  // Escape peels one sheet back through the paper stack.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
-      if (state.rootViewer) {
-        appStore.closeRootViewer()
-        return
-      }
-      if (state.sheet === 'settings') {
-        appStore.setSheet(state.content ? 'reader' : 'home')
-        return
-      }
-      if (state.sheet === 'reader') appStore.setSheet('home')
+      appStore.goBack()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [state.sheet, state.content, state.rootViewer])
+  }, [])
 
   if (!state.ready && !state.error) {
     return (
@@ -71,13 +63,14 @@ export function App() {
     )
   }
 
-  const covered = state.sheet !== 'home'
+  const stack = state.stackLayer
+  const hasReader = state.content != null
 
   return (
-    <div className="app-shell">
-      <HomeScreen covered={covered} />
-      <ReaderScreen />
-      <SettingsScreen />
+    <div className="app-shell" data-stack={stack} data-has-reader={hasReader}>
+      <HomeScreen stackLayer={stack} />
+      <ReaderScreen stackLayer={stack} />
+      <SettingsScreen stackLayer={stack} hasReader={hasReader} />
       <RootViewer />
     </div>
   )

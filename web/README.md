@@ -46,4 +46,6 @@ Engines are DOM-free and unit-tested against the Android JVM suites. See
 - Audio streams from everyayah.com and can be cached by the browser.
 - Click a word to play from there; right-click / long-press opens the Root Word Viewer.
 - Themes: Paper / Nightfall / Royal green (Settings).
+- Form controls use [Base UI](https://base-ui.com) primitives (`Select`,
+  `Switch`, `Slider`, `Input`) styled to the paper kit in `ui/kit/`.
 - Escape returns through Settings → Reader → Chapters.

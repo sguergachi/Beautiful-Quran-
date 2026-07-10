@@ -1,6 +1,7 @@
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import type { ActiveWord, Ayah } from '../data/models'
 import type { ReadingMode } from '../data/settings'
+import { InkEngine } from '../engine/ink'
 import { WordUnit } from './WordUnit'
 
 function toArabicIndic(n: number): string {
@@ -26,7 +27,7 @@ interface Props {
   onHoldWord: (ayah: number, position: number, arabic: string, translation: string) => void
 }
 
-export function AyahBlock({
+function AyahBlockInner({
   ayah,
   activeWord,
   isActiveAyah,
@@ -47,7 +48,6 @@ export function AyahBlock({
   const englishOnly = readingMode === 'english_only'
   const arabicOnly = readingMode === 'arabic_only'
   const markOpacity = focused ? 1 : 0.22
-
   const words = useMemo(() => ayah.words, [ayah.words])
 
   return (
@@ -70,29 +70,18 @@ export function AyahBlock({
       {arabicOnly ? (
         <p className="hafs-ayah" dir="rtl">
           {words.map((w) => {
-            const isActive =
-              isActiveAyah && activeWord?.wordPosition === w.position
-            const upcoming = dimmed || (isActiveAyah && !isActive && (activeWord?.highWater ?? 0) < w.position && (activeWord?.wordPosition ?? 0) < w.position)
-            const recited =
-              isActiveAyah &&
-              activeWord != null &&
-              (w.position < activeWord.wordPosition ||
-                w.position <= (activeWord.highWater ?? activeWord.wordPosition))
-            let opacity = 1
-            if (!isActiveAyah && dimmed) opacity = 0.22
-            else if (isActiveAyah && upcoming && !recited && !isActive) opacity = 0.22
-            const color =
-              isActiveAyah &&
-              activeWord?.isRepeat &&
-              w.position >= (activeWord.repeatStart ?? w.position) &&
-              w.position <= activeWord.wordPosition
-                ? 'var(--repeat)'
-                : undefined
+            const ink = InkEngine.word(w.position, activeWord, isActiveAyah, dimmed)
+            const opacity = InkEngine.inkAlpha(ink.state)
             return (
               <span
                 key={w.position}
-                className="hafs-word"
-                style={{ opacity, color, transition: 'opacity 450ms ease' }}
+                className={`hafs-word${ink.repeat ? ' word-repeat' : ''}${
+                  ink.state === 'Active' ? ' hafs-active' : ''
+                }`}
+                style={{
+                  opacity,
+                  color: ink.repeat ? 'var(--repeat)' : undefined,
+                }}
                 onClick={() => onPlayAyah(ayah.number, true)}
                 onContextMenu={(e) => {
                   e.preventDefault()
@@ -142,3 +131,5 @@ export function AyahBlock({
     </article>
   )
 }
+
+export const AyahBlock = memo(AyahBlockInner)

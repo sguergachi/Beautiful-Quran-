@@ -1,6 +1,14 @@
-import { appStore, useAppState } from '../../store/appStore'
+import {
+  IconNext,
+  IconPause,
+  IconPlay,
+  IconPrev,
+} from '../icons/PlaybackIcons'
+import { PaperInput } from '../kit'
+import { appStore, useAppState, COVER_LAYER, READER_LAYER } from '../../store/appStore'
+import type { StackLayer } from '../paper/stack'
 
-export function HomeScreen({ covered }: { covered: boolean }) {
+export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const state = useAppState()
   const q = state.search.trim().toLowerCase()
   const filtered = !q
@@ -18,16 +26,27 @@ export function HomeScreen({ covered }: { covered: boolean }) {
       ? state.surahs.find((s) => s.id === state.settings.lastSurah)
       : null
 
-  const showFloat = state.player.nowPlaying != null && state.sheet === 'home'
-  const active = state.sheet === 'home'
+  const depth = Math.max(0, stackLayer - COVER_LAYER)
+  const isTop = stackLayer === COVER_LAYER
+  const showFloat = state.player.nowPlaying != null && isTop
 
   return (
     <div
       className="sheet"
       data-name="home"
-      data-active={active}
-      data-covered={covered}
+      data-layer={COVER_LAYER}
+      data-depth={depth}
+      data-active={isTop}
     >
+      {depth > 0 ? (
+        <button
+          type="button"
+          className="sheet-edge-back"
+          aria-label="Back to chapters"
+          onClick={() => appStore.revealLayer(COVER_LAYER)}
+        />
+      ) : null}
+
       <div className="sheet-frame">
         <header className="home-header">
           <h1>Beautiful Quran</h1>
@@ -41,11 +60,13 @@ export function HomeScreen({ covered }: { covered: boolean }) {
         </header>
 
         <div className="search-row">
-          <input
+          <PaperInput
+            id="chapter-search"
+            name="chapter-search"
             type="search"
             placeholder="Search chapters…"
             value={state.search}
-            onChange={(e) => appStore.setSearch(e.target.value)}
+            onValueChange={(v) => appStore.setSearch(v)}
             aria-label="Search chapters"
           />
         </div>
@@ -91,19 +112,24 @@ export function HomeScreen({ covered }: { covered: boolean }) {
 
       {showFloat ? (
         <div className="floating-play">
-          <button type="button" onClick={() => void appStore.prev()}>
-            Prev
-          </button>
-          <button type="button" onClick={() => void appStore.playPause()}>
-            {state.player.isPlaying ? 'Pause' : 'Play'}
-          </button>
-          <button type="button" onClick={() => void appStore.next()}>
-            Next
+          <button type="button" aria-label="Previous ayah" onClick={() => void appStore.prev()}>
+            <IconPrev />
           </button>
           <button
             type="button"
+            aria-label={state.player.isPlaying ? 'Pause' : 'Play'}
+            onClick={() => void appStore.playPause()}
+          >
+            {state.player.isPlaying ? <IconPause /> : <IconPlay />}
+          </button>
+          <button type="button" aria-label="Next ayah" onClick={() => void appStore.next()}>
+            <IconNext />
+          </button>
+          <button
+            type="button"
+            className="float-open"
             onClick={() => {
-              if (state.content) appStore.setSheet('reader')
+              if (state.content) appStore.revealLayer(READER_LAYER)
               else if (state.player.nowPlaying) {
                 appStore.openSurah(
                   state.player.nowPlaying.surahId,

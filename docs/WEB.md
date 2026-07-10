@@ -209,15 +209,22 @@ Three sheets, hand-rolled paper stack (no router chrome):
 
 1. **Home** — surah list, search, continue-listening, floating playback
    control while a verse is loaded.
-2. **Reader** — header + virtualized ayahs + player bar; focus rail;
+2. **Reader** — header + ayahs + icon player bar; focus rail;
    return-to-ayah ornament; bookmark ribbon.
 3. **Settings** — reciter, reading mode, text size, display toggles, theme.
+   Opens as a third sheet **over** the reader when a surah is open
+   (`stackLayer` 0→1→2), so Chapters and Reader peek on the left. Tap the
+   left edge of a peeking sheet to peel back. Escape peels one sheet.
 
 Hard rules from `DESIGN.md` apply unchanged: no dialogs, cards, ripples,
 elevation, borders; hierarchy via spacing / size / ink alpha; ink-bleed
 overlays for root viewer (and later system prompts).
 
-Motion: fade + slide only (≤ 400 ms), except chrome recede (900 ms) and
+Ink wash uses the smootherstep mask from `fade.washMaskImage` (not a blunt
+3-stop wipe). Repeat orange is a second overlay that washes in and dissolves
+over `repeatFadeOutMs`.
+
+Motion: fade + slide only (≤ 420 ms), except chrome recede (900 ms) and
 far ayah jumps (up to 1000 ms via `FocusEngine.planJump`).
 
 Themes: Paper / Nightfall / Royal green — same tokens.
