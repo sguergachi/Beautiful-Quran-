@@ -32,27 +32,28 @@ The naive implementation conflicts with Arabic shaping:
 
 ## Update: one ink-wash bloom across every mode
 
-The shipping Arabic-only view (`ResponsiveHafsAyah`, the single-`Text` Hafs
-renderer) now **spreads** the active word's reveal letter-by-letter, on the same
-curve as the word-by-word modes, instead of fading the whole word at one uniform
-alpha. Every mode therefore shares one bloom:
+The shipping Arabic-only / no-gloss view (`ResponsiveHafsAyah`, the single-`Text`
+Hafs renderer) spreads the active word's reveal on the **same** ink-wash curve as
+the word-by-word modes, without splitting the shaped run:
 
-- The ink-wash shape lives in one place — `inkWashAlpha(pos, progress, resting)`
-  in `ui/theme/Fade.kt` (smootherstep feather, wash head travelling the word plus
+- The ink-wash shape lives in one place — `inkSmootherstep` / `inkWashAlpha` in
+  `ui/theme/Fade.kt` (smootherstep feather, wash head travelling the word plus
   1.6× its width). `letterFadeIn` paints it as a moving gradient mask for the
-  per-word composables (`WordUnit`, `EnglishWordUnit`); `ResponsiveHafsAyah`
-  samples the *same* function per character and emits one opaque colour span per
-  glyph of the active word.
-- Sampling per character keeps the honoured constraint above: the connected
-  renderer stays a single shaped `Text` run and never applies a per-letter alpha
-  mask to overlapping Quranic marks — each glyph gets a flat opaque colour
-  composited over the paper. Colour-only spans do not split Compose's shaping
-  run, so ligatures and mark positioning are unchanged.
-- `pos` is normalised to the reading direction (0 = first-revealed letter), so
-  the reveal leads from the first letter (rightmost, RTL) exactly as the mask
-  does, and the same formula serves the LTR English lyric flow.
+  per-word composables (`WordUnit`, `EnglishWordUnit`).
+- `ResponsiveHafsAyah` cannot use per-glyph `SpanStyle`s: Uthmanic Hafs joining
+  and ligatures break when a word is split into separate colour runs (the
+  "font flip" fixed in #133). It also cannot apply `letterFadeIn` to the whole
+  ayah — that would wash every word.
+- Instead the active word is drawn at full ink as one contiguous span, and
+  `inkBloomOverlay` covers that word's layout boxes with a paper gradient whose
+  alpha is `1 − glyphAlpha`. SrcOver yields the same lerp(paper, ink, α) as a
+  masked full-ink glyph. The sweep is read only at draw time, so the bloom
+  never recomposes or reshapes the ayah.
+- `pos` / the gradient direction are normalised to the reading direction
+  (RTL for Arabic), so the reveal leads from the first letter (rightmost)
+  exactly as `letterFadeIn` does.
 
-Repeat (orange) blooms in the connected renderer remain a whole-word colour for
+Repeat (orange) blooms in the responsive renderer remain a whole-word colour for
 now; only the first-pass ink reveal spreads.
 
 ## What The Sources Say
