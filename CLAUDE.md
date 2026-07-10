@@ -25,10 +25,6 @@ When creating pull requests:
 
 Just make the PR and move on.
 
-**Before starting follow-up work, check whether the current PR is already
-merged** (e.g. `mcp__github__pull_request_read` with method `get`, or `gh pr
-view`). A merged PR is finished — never push follow-up commits onto its branch
-expecting them to reappear in it, and never reuse it. If it is merged, restart
-the branch from the latest default branch (keep the same branch name),
-re-apply the outstanding work, and open a **new** PR. If it is still open,
-continue on the same branch/PR.
+**Before follow-up work:** check whether the PR is already merged. If it is,
+open a **new** PR from a fresh branch off `master` — never push onto a merged
+PR's branch. Full rule in [AGENTS.md](AGENTS.md) ("PR workflow (agents)").

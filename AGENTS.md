@@ -111,6 +111,20 @@ Requires **JDK 17**. No Android device/emulator is needed for tests.
 - Update the relevant doc in `docs/` when you change behavior it describes —
   the docs are load-bearing and kept accurate.
 
+## PR workflow (agents)
+
+Open the PR, push, and move on — do not babysit CI, reviews, or mergeability
+after it is open. **Exception that overrides "don't check PR status":** before
+any follow-up commit on an existing branch/PR, check whether that PR is already
+**merged** (`gh pr view <n> --json state` or equivalent).
+
+- **Still open** → keep committing and pushing on the same branch/PR.
+- **Already merged** → that PR is finished. Do **not** push more commits onto
+  its branch expecting them to land in it, and do **not** reopen or reuse it.
+  Branch fresh from the latest default branch (`master`), re-apply the
+  outstanding work, and open a **new** PR. The opaque-background follow-up that
+  was pushed onto merged #162 is the canonical example of what not to do.
+
 ## Cursor Cloud specific instructions
 
 The startup snapshot already has the toolchain installed (JDK 17 at
