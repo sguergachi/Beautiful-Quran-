@@ -1,23 +1,34 @@
 package com.beautifulquran.ui.theme
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -35,6 +46,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.min
@@ -365,56 +377,182 @@ fun IslamicReturnToAyahButton(
         )
 
         // ── The qalam arrow: three filled strokes with real pen weight.
-        fun pt(x: Float, y: Float) = Offset(c + x * s, c + y * s)
-
-        // Stroke 1 — the shaft, cut at the top like a nib entry, swelling
-        // through the middle and running all the way down to the tip.
-        val shaft = Path().apply {
-            val a = pt(-0.034f, -0.150f)
-            moveTo(a.x, a.y)
-            val nib = pt(0.030f, -0.184f)
-            lineTo(nib.x, nib.y)
-            val c1 = pt(0.044f, -0.060f)
-            val c2 = pt(0.012f, 0.020f)
-            val br = pt(0.015f, 0.150f)
-            cubicTo(c1.x, c1.y, c2.x, c2.y, br.x, br.y)
-            val tip = pt(0.000f, 0.192f)
-            cubicTo(pt(0.012f, 0.172f).x, pt(0.012f, 0.172f).y, pt(0.006f, 0.187f).x, pt(0.006f, 0.187f).y, tip.x, tip.y)
-            val bl = pt(-0.017f, 0.148f)
-            cubicTo(pt(-0.008f, 0.187f).x, pt(-0.008f, 0.187f).y, pt(-0.015f, 0.172f).x, pt(-0.015f, 0.172f).y, bl.x, bl.y)
-            val c3 = pt(-0.032f, 0.020f)
-            val c4 = pt(-0.046f, -0.060f)
-            cubicTo(c3.x, c3.y, c4.x, c4.y, a.x, a.y)
-            close()
-        }
-
-        // Strokes 2 and 3 — the barbs: rooted thick at the tip itself, each
-        // swept up and outward like a pen flick, tapering to a point.
-        fun barb(side: Float) = Path().apply {
-            val tip = pt(side * 0.004f, 0.192f)
-            moveTo(tip.x, tip.y)
-            val o1 = pt(side * -0.070f, 0.158f)
-            val o2 = pt(side * -0.118f, 0.100f)
-            val end = pt(side * -0.150f, 0.038f)
-            cubicTo(o1.x, o1.y, o2.x, o2.y, end.x, end.y)
-            val i1 = pt(side * -0.100f, 0.058f)
-            val i2 = pt(side * -0.055f, 0.100f)
-            val root = pt(side * -0.012f, 0.128f)
-            cubicTo(i1.x, i1.y, i2.x, i2.y, root.x, root.y)
-            close()
-        }
-
-        val arrowInk = colors.primary
-        val p = ink.value
-        fun span(from: Float, to: Float): Float =
-            FastOutSlowInEasing.transform(((p - from) / (to - from)).coerceIn(0f, 1f))
-
         rotate(rotation, center) {
-            inkStroke(shaft, arrowInk, span(0.00f, 0.48f), pt(0f, -0.19f), pt(0f, 0.20f))
-            inkStroke(barb(1f), arrowInk, span(0.42f, 0.74f), pt(0f, 0.18f), pt(-0.16f, 0.03f))
-            inkStroke(barb(-1f), arrowInk, span(0.66f, 1.00f), pt(0f, 0.18f), pt(0.16f, 0.03f))
+            drawQalamArrow(
+                size = s,
+                center = center,
+                ink = colors.primary,
+                progress = ink.value,
+            )
         }
     }
+}
+
+/**
+ * Opaque floating capsule for "Back to" after a concordance jump — the
+ * stadium twin of [IslamicReturnToAyahButton]. Same paper fill, embossed
+ * gilt rim, and reed-pen arrow (pointing back); destination text sits in
+ * the capsule as quiet ink. No Material icon, no chip chrome.
+ */
+@Composable
+fun IslamicBackToOriginCapsule(
+    chapterLabel: String,
+    ayahLabel: String,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    height: Dp = 44.dp,
+) {
+    val accents = LocalQuranAccents.current
+    val colors = MaterialTheme.colorScheme
+    val ink = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        ink.snapTo(0f)
+        ink.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 1100, delayMillis = 80, easing = LinearEasing),
+        )
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .height(height)
+            .widthIn(max = 320.dp)
+            .drawBehind {
+                val h = size.height
+                val r = h / 2f
+                val capsule = Path().apply {
+                    addRoundRect(
+                        RoundRect(
+                            left = 0f,
+                            top = 0f,
+                            right = size.width,
+                            bottom = h,
+                            cornerRadius = CornerRadius(r, r),
+                        ),
+                    )
+                }
+                val gold = Brush.linearGradient(
+                    colors = listOf(accents.goldBright, accents.gold, accents.goldDeep),
+                    start = Offset(0f, 0f),
+                    end = Offset(0f, h),
+                )
+                val edge = Stroke(width = h * 0.045f, join = StrokeJoin.Round)
+                // Opaque paper body — same fill language as the ayah roundel.
+                drawPath(capsule, colors.background)
+                drawPath(
+                    capsule,
+                    Brush.verticalGradient(
+                        0f to accents.gold.copy(alpha = 0.10f),
+                        0.55f to Color.Transparent,
+                        1f to accents.gold.copy(alpha = 0.08f),
+                    ),
+                )
+                embossed(capsule, edge, accents.embossDark, accents.embossLight)
+                drawPath(capsule, gold, style = edge)
+            }
+            .quietClickable(onClick = onClick)
+            .padding(start = 10.dp, end = 18.dp)
+            .semantics {
+                this.contentDescription = contentDescription
+                role = Role.Button
+            },
+    ) {
+        val inkProgress = ink.value
+        Canvas(Modifier.size(28.dp)) {
+            val s = min(this.size.width, this.size.height)
+            val center = Offset(s / 2f, s / 2f)
+            // Tip points left — "back" — same strokes as the roundel's arrow.
+            rotate(90f, center) {
+                drawQalamArrow(
+                    size = s,
+                    center = center,
+                    ink = colors.primary,
+                    progress = inkProgress,
+                )
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = chapterLabel,
+            style = MaterialTheme.typography.titleSmall,
+            color = colors.onSurface.copy(alpha = 0.88f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 160.dp),
+        )
+        Text(
+            text = "  ·  ",
+            style = MaterialTheme.typography.titleSmall,
+            color = colors.onSurface.copy(alpha = 0.28f),
+        )
+        Text(
+            text = ayahLabel,
+            style = MaterialTheme.typography.titleSmall,
+            color = colors.onSurface.copy(alpha = 0.62f),
+            maxLines = 1,
+        )
+    }
+}
+
+/**
+ * Three calligraphic strokes of the reed-pen arrow used by the return-to-ayah
+ * roundel and the Back-to capsule. [progress] 0..1 wipes the ink in.
+ */
+private fun DrawScope.drawQalamArrow(
+    size: Float,
+    center: Offset,
+    ink: Color,
+    progress: Float,
+) {
+    val c = center.x
+    val s = size
+    fun pt(x: Float, y: Float) = Offset(c + x * s, center.y + y * s)
+
+    // Stroke 1 — the shaft, cut at the top like a nib entry, swelling
+    // through the middle and running all the way down to the tip.
+    val shaft = Path().apply {
+        val a = pt(-0.034f, -0.150f)
+        moveTo(a.x, a.y)
+        val nib = pt(0.030f, -0.184f)
+        lineTo(nib.x, nib.y)
+        val c1 = pt(0.044f, -0.060f)
+        val c2 = pt(0.012f, 0.020f)
+        val br = pt(0.015f, 0.150f)
+        cubicTo(c1.x, c1.y, c2.x, c2.y, br.x, br.y)
+        val tip = pt(0.000f, 0.192f)
+        cubicTo(pt(0.012f, 0.172f).x, pt(0.012f, 0.172f).y, pt(0.006f, 0.187f).x, pt(0.006f, 0.187f).y, tip.x, tip.y)
+        val bl = pt(-0.017f, 0.148f)
+        cubicTo(pt(-0.008f, 0.187f).x, pt(-0.008f, 0.187f).y, pt(-0.015f, 0.172f).x, pt(-0.015f, 0.172f).y, bl.x, bl.y)
+        val c3 = pt(-0.032f, 0.020f)
+        val c4 = pt(-0.046f, -0.060f)
+        cubicTo(c3.x, c3.y, c4.x, c4.y, a.x, a.y)
+        close()
+    }
+
+    // Strokes 2 and 3 — the barbs: rooted thick at the tip itself, each
+    // swept up and outward like a pen flick, tapering to a point.
+    fun barb(side: Float) = Path().apply {
+        val tip = pt(side * 0.004f, 0.192f)
+        moveTo(tip.x, tip.y)
+        val o1 = pt(side * -0.070f, 0.158f)
+        val o2 = pt(side * -0.118f, 0.100f)
+        val end = pt(side * -0.150f, 0.038f)
+        cubicTo(o1.x, o1.y, o2.x, o2.y, end.x, end.y)
+        val i1 = pt(side * -0.100f, 0.058f)
+        val i2 = pt(side * -0.055f, 0.100f)
+        val root = pt(side * -0.012f, 0.128f)
+        cubicTo(i1.x, i1.y, i2.x, i2.y, root.x, root.y)
+        close()
+    }
+
+    fun span(from: Float, to: Float): Float =
+        FastOutSlowInEasing.transform(((progress - from) / (to - from)).coerceIn(0f, 1f))
+
+    inkStroke(shaft, ink, span(0.00f, 0.48f), pt(0f, -0.19f), pt(0f, 0.20f))
+    inkStroke(barb(1f), ink, span(0.42f, 0.74f), pt(0f, 0.18f), pt(-0.16f, 0.03f))
+    inkStroke(barb(-1f), ink, span(0.66f, 1.00f), pt(0f, 0.18f), pt(0.16f, 0.03f))
 }
 
 /**

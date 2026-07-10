@@ -92,18 +92,20 @@ Jump behaviour:
   ayah (same "open surah at ayah" path Home already uses), so the reader
   never nests a second bleed or a modal route.
 - **Way back** — after a jump to a different ayah (same or other chapter),
-  a **quiet floating ink line** appears above the paper stack (centred near
+  an **opaque floating capsule** appears above the paper stack (centred near
   the bottom; above the player bar while the reader is open, and above the
-  chapter-list floating transport on the cover): green arrow + soft
-  "Back to" + chapter name · `surah:ayah`. It is hosted in `MainActivity`,
-  not inside the reader sheet, so closing the reader or returning to
-  chapter selection leaves it in view. The whole line is one tap target
-  (returns there); there is no separate dismiss control — the first hand
-  scroll, drag, or paper-stack page turn after the jump settles arms a
-  **30-second** countdown that then clears it (the programmatic settle
-  itself does not start the timer). The ornamented return-to-ayah control
-  yields to this line while it is visible. Ink-bleed overlays (Root Viewer
-  / Lab / chooser) temporarily cover it.
+  chapter-list floating transport on the cover). It is the stadium twin of
+  the return-to-ayah roundel: paper fill, embossed gilt rim, and the same
+  drawn reed-pen arrow (pointing back), with chapter name · `surah:ayah`
+  as quiet ink inside. Hosted in `MainActivity`, not inside the reader
+  sheet, so closing the reader or returning to chapter selection leaves it
+  in view. The whole capsule is one tap target (returns there); there is no
+  separate dismiss control — the first hand scroll, drag, or paper-stack
+  page turn after the jump settles arms a **30-second** countdown that then
+  clears it (the programmatic settle itself does not start the timer). The
+  ornamented return-to-ayah control yields to this capsule while it is
+  visible. Ink-bleed overlays (Root Viewer / Lab / chooser) temporarily
+  cover it.
 - Closing the reader sheet (paper-stack back) does not reopen the lexicon.
 
 Occurrence list ordering: Quranic order (surah, then ayah, then word
