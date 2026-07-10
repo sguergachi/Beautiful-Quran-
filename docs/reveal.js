@@ -1,8 +1,8 @@
 /* Ink bloom on arrival — word-by-word Fade.kt breath (ink-fade.js).
  *
  * Each line is split into .ink-word spans. As blocks enter the viewport,
- * words ink from upcoming → full on inkSmootherstep at a calm reading pace
- * (~300 ms between words, ~200 WPM) — karaoke cadence, not a 50 ms flash.
+ * words ink from upcoming → full on inkSmootherstep a bit quicker than a calm
+ * reading pace (~200 ms between words, ~300 ms bloom) — karaoke cadence.
  *
  * Per-word opacity only. No paragraph-level fade, no mask-image, no Canvas.
  * That is the path that works on Chrome + Firefox for Android.
@@ -21,10 +21,10 @@
     '.attribution p', '.sheet > .footer-links', '.sheet > .back-link'
   ].join(',');
 
-  /** Stagger between successive words — ~200 WPM reading pace (~300 ms/word). */
-  var WORD_STAGGER_MS = 300;
+  /** Stagger between successive words — a bit faster than calm reading. */
+  var WORD_STAGGER_MS = 200;
   /** Per-word ink breath; longer than the stagger so blooms overlap gently. */
-  var WASH_MS = 450;
+  var WASH_MS = 300;
 
   var blocks = Array.prototype.slice.call(document.querySelectorAll(BLOCK_SELECTOR));
   if (!blocks.length) return;
