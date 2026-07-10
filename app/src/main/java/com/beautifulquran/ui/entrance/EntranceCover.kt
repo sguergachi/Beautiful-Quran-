@@ -1,5 +1,8 @@
 package com.beautifulquran.ui.entrance
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
@@ -18,7 +21,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,6 +31,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -38,6 +41,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -47,6 +51,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.ui.theme.CoverAccents
 import com.beautifulquran.ui.theme.CoverLeatherCenter
@@ -62,6 +68,7 @@ import com.beautifulquran.ui.theme.starAndCrossWeave
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** The ceremony's three moments, in order. Skipping jumps straight to Opening. */
@@ -89,9 +96,10 @@ private const val SILENT_WASH_MS = 3_800
 private const val SILENT_HOLD_MS = 600L
 
 /** The cover's hinge open. Deliberately slower than a page turn (460 ms):
- * a bound board is heavier than a sheet. */
+ * a bound board is heavier than a sheet. Negative so the free edge swings
+ * toward the right — an Arabic book hinged on its right edge. */
 private const val OPEN_MS = 1_150
-private const val OPEN_DEGREES = 88f
+private const val OPEN_DEGREES = -88f
 
 /** Same decelerating settle as the paper stack's page turns. */
 private val CoverOpenEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
@@ -106,6 +114,8 @@ private val CoverOpenEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
  * once; offline the du'a still writes itself, silently.
  *
  * Sits over the whole paper stack and leaves composition via [onFinished].
+ * The status bar is hidden for the ceremony so the leather board reads as a
+ * full-bleed cover; it is restored when this composable leaves.
  */
 @Composable
 fun EntranceCover(
@@ -115,6 +125,7 @@ fun EntranceCover(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     val recitationLive by viewModel.recitationLive.collectAsStateWithLifecycle()
 
     var phase by remember { mutableStateOf(EntrancePhase.Arriving) }
@@ -125,55 +136,79 @@ fun EntranceCover(
     // clock) and read only at draw time by the letter wash.
     val duaWash = remember { mutableFloatStateOf(0f) }
     val player = remember { IstiadhaPlayer(context) }
+    // Skip requests cancel the in-flight moment without re-running arrival —
+    // re-keying a phase effect used to replay the title wash.
+    var skipRequested by remember { mutableStateOf(false) }
+
     DisposableEffect(Unit) {
         onDispose { player.release() }
     }
 
+    // Full-bleed leather: hide the status bar for the ceremony, restore after.
+    DisposableEffect(view) {
+        val window = view.context.findActivity()?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        controller?.hide(WindowInsetsCompat.Type.statusBars())
+        controller?.systemBarsBehavior =
+            androidx.core.view.WindowInsetsControllerCompat
+                .BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        onDispose {
+            controller?.show(WindowInsetsCompat.Type.statusBars())
+        }
+    }
+
     fun skipToOpening() {
-        if (phase != EntrancePhase.Opening) phase = EntrancePhase.Opening
+        if (phase != EntrancePhase.Opening) {
+            skipRequested = true
+            phase = EntrancePhase.Opening
+        }
     }
 
     BackHandler(enabled = phase != EntrancePhase.Opening) { skipToOpening() }
 
-    // The ceremony, one moment per phase; a skip re-keys this effect, which
-    // cancels the recitation (its finally releases the stream) cleanly.
-    LaunchedEffect(phase) {
-        when (phase) {
-            EntrancePhase.Arriving -> {
-                sheetAlpha.animateTo(1f, tween(SHEET_FADE_MS, easing = LinearEasing))
-                titleWash.animateTo(1f, tween(TITLE_WASH_MS, easing = LinearEasing))
-                delay(ARRIVAL_HOLD_MS)
-                phase = EntrancePhase.Reciting
-            }
-            EntrancePhase.Reciting -> {
-                // First install may still be extracting the DB — wait briefly.
-                val urls = withTimeoutOrNull(URL_WAIT_MS) {
-                    viewModel.istiadhaUrls.filterNotNull().first()
-                }.orEmpty()
-                val recited = !recitationLive && urls.isNotEmpty() &&
-                    player.recite(urls) { duaWash.floatValue = it }
-                if (!recited) {
-                    // No stream (offline / missing pack / live session) — the
-                    // du'a still arrives on the page, just without a voice.
-                    animate(
-                        initialValue = duaWash.floatValue,
-                        targetValue = 1f,
-                        animationSpec = tween(SILENT_WASH_MS, easing = LinearEasing),
-                    ) { value, _ -> duaWash.floatValue = value }
-                    delay(SILENT_HOLD_MS)
-                }
-                phase = EntrancePhase.Opening
-            }
-            EntrancePhase.Opening -> {
-                player.release()
-                // Open with a settled face even when skipped mid-arrival.
-                sheetAlpha.snapTo(1f)
-                titleWash.snapTo(1f)
-                onOpenBegan()
-                turn.animateTo(1f, tween(OPEN_MS, easing = CoverOpenEasing))
-                onFinished()
+    // One-shot ceremony: arrival (and its title wash) runs exactly once.
+    // Skip cancels the in-flight moment without re-keying this effect —
+    // re-keying on phase used to replay the title wash.
+    LaunchedEffect(Unit) {
+        val moment = launch {
+            sheetAlpha.animateTo(1f, tween(SHEET_FADE_MS, easing = LinearEasing))
+            titleWash.animateTo(1f, tween(TITLE_WASH_MS, easing = LinearEasing))
+            delay(ARRIVAL_HOLD_MS)
+
+            // Don't clobber an early skip that already moved us to Opening.
+            if (phase == EntrancePhase.Arriving) phase = EntrancePhase.Reciting
+            // First install may still be extracting the DB — wait briefly.
+            val urls = withTimeoutOrNull(URL_WAIT_MS) {
+                viewModel.istiadhaUrls.filterNotNull().first()
+            }.orEmpty()
+            val recited = !recitationLive && urls.isNotEmpty() &&
+                player.recite(urls) { duaWash.floatValue = it }
+            if (!recited) {
+                // No stream (offline / missing pack / live session) — the
+                // du'a still arrives on the page, just without a voice.
+                animate(
+                    initialValue = duaWash.floatValue,
+                    targetValue = 1f,
+                    animationSpec = tween(SILENT_WASH_MS, easing = LinearEasing),
+                ) { value, _ -> duaWash.floatValue = value }
+                delay(SILENT_HOLD_MS)
             }
         }
+        // A tap/back cancels arrival or recitation immediately.
+        launch {
+            snapshotFlow { skipRequested }.first { it }
+            moment.cancel()
+        }
+        moment.join()
+
+        player.release()
+        // Open with a settled face even when skipped mid-arrival.
+        sheetAlpha.snapTo(1f)
+        titleWash.snapTo(1f)
+        phase = EntrancePhase.Opening
+        onOpenBegan()
+        turn.animateTo(1f, tween(OPEN_MS, easing = CoverOpenEasing))
+        onFinished()
     }
 
     val accents = CoverAccents
@@ -197,6 +232,7 @@ fun EntranceCover(
                 .fillMaxSize()
                 .graphicsLayer {
                     val t = turn.value
+                    // Right-edge hinge: an Arabic mushaf opens from the right.
                     transformOrigin = TransformOrigin(1f, 0.5f)
                     cameraDistance = 42f * density
                     rotationY = OPEN_DEGREES * t
@@ -245,7 +281,6 @@ fun EntranceCover(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxSize()
-                    .statusBarsPadding()
                     .navigationBarsPadding()
                     .padding(horizontal = 40.dp),
             ) {
@@ -280,9 +315,11 @@ fun EntranceCover(
                     style = MaterialTheme.typography.titleLarge,
                     letterSpacing = 3.sp,
                     color = CoverParchment.copy(alpha = 0.58f),
+                    // Same right-originating wash as the Arabic title — a left
+                    // wash read as a second, mirrored pass of the arrival.
                     modifier = Modifier.letterFadeIn(
                         progress = { titleWash.value },
-                        rtl = false,
+                        rtl = true,
                         restingAlpha = 0f,
                     ),
                 )
@@ -333,4 +370,10 @@ fun EntranceCover(
 private fun openFade(t: Float): Float {
     val f = ((t - 0.62f) / 0.38f).coerceIn(0f, 1f)
     return f * f * (3f - 2f * f)
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

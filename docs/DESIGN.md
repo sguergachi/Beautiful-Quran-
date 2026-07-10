@@ -220,14 +220,19 @@ what the reader finds when its cover turns. The ceremony has three moments:
 3. **The opening.** The board swings open on its **right** hinge — an Arabic
    book — slower and heavier than a page (1150 ms vs 460 ms), with the flip
    stems pitched slightly down (`PageTurnSounds.playCoverOpen`), revealing
-   the chapter list beneath.
+   the chapter list beneath. The free edge swings toward the right
+   (`rotationY` negative, origin at the right edge).
 
 A tap anywhere (or back) opens the cover at once; the ceremony never holds a
 reader hostage, and it plays only once per session (`rememberSaveable`), so
-rotations and process restores land straight on the sheets. The hinge turn is
-the motion-rule counterpart of the bookmark ribbon: the cover is the only
-other physical *object* in the app, and its one rotation is the page-turn
-gesture the stack already speaks, at board weight.
+rotations and process restores land straight on the sheets. The title letter
+wash runs once on arrival (both Arabic and English from the right); skip
+cancels the in-flight moment without replaying it. The status bar is hidden
+for the ceremony so the leather reads full-bleed, and restored when the
+cover leaves. The hinge turn is the motion-rule counterpart of the bookmark
+ribbon: the cover is the only other physical *object* in the app, and its
+one rotation is the page-turn gesture the stack already speaks, at board
+weight.
 
 ## Motion
 
