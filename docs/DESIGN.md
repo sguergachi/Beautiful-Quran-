@@ -121,6 +121,12 @@ Two themes, both "paper":
 
 Gold never marks interaction; green never decorates. One accent each.
 
+**Ruby** `#B3122F` (paper) / `#D64358` (nightfall + royal green) is the one
+deliberate third hue, and it belongs to exactly one thing: a saved verse on the
+[bookmark strip](#bookmark-strip). It is walled off from gold (ornament) and
+green (interaction) precisely so "my marks" can never be misread as decoration
+or as a control — a bookmark is the reader's own ink, not the app's.
+
 ## Type
 
 - **Arabic**: KFGQPC HAFS Uthmanic Script — the King Fahd Complex reference
@@ -179,9 +185,36 @@ image, so it is crisp at any density and nearly free to render.
   decelerating rush across a distance-scaled stretch of verses, truncated
   so it never waits on a surah-length trajectory).
 - Motion is always a fade, a slide, or both; nothing bounces, scales, or
-  spins.
+  spins. The bookmark ribbon (below) is the nearest thing to an exception — it
+  unrolls (a directional reveal) and its tail gives one small settling flutter
+  — but it never overshoots or bounces, and it is the only physical *object* on
+  the sheet rather than ink in it.
 - Auto-scroll keeps the active ayah in the upper third and yields instantly
   to the reader's hand; a quiet line above the player offers the way back.
+
+## Bookmark strip
+
+The mirror twin of the ayah selector rail. The selector answers *where do I
+go*; the strip answers *what did I mark*. It lives flush along the screen edge
+**opposite** the selector (the selector side is a setting, so the strip simply
+takes the other edge), and it obeys the same chrome rules: it fades with the
+rest of the chrome and vanishes entirely while reciting.
+
+- **A saved verse is a short ruby ribbon** hanging at that ayah's proportional
+  height in the surah — the same position mapping the selector's glow uses.
+  Several marks read as ribbons down the page's edge.
+- **Marking is where you are.** A faint ruby *phantom* ribbon tracks the verse
+  you are reading; a tap on the strip drops (or lifts) a ribbon there — no
+  aiming. Tapping an existing ribbon elsewhere jumps to it.
+- **The unroll.** On mark, the ribbon *unrolls downward* from the verse,
+  decelerating into its resting length — no overshoot, no bounce. As it lands,
+  the free tail gives a single small flutter and stills, like real ribbon. That
+  minor settle is the only motion on the strip that isn't pure fade or slide.
+
+Implementation: `ui/reader/BookmarkRibbonStrip.kt`, a single draw-phase Canvas
+mirroring `AyahSelectorRail`'s performance discipline. Bookmarks persist in
+their own SharedPreferences store (`data/BookmarkRepository.kt`), never in the
+read-only `quran.db`.
 
 ## Reading modes
 

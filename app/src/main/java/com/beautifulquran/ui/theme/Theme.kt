@@ -49,6 +49,10 @@ data class QuranAccents(
     /** Warm ink for words the reciter is repeating — a second, orange fade that
      * dissolves back to normal ink once the recitation moves past the repeat. */
     val repeatInk: Color,
+    /** Ruby ribbon of a saved verse — the bookmark strip's ink. Deliberately a
+     * third hue, distinct from [gold] (selection/ornament) and [repeatInk]
+     * (recitation), so "my marks" never reads as navigation or playback. */
+    val bookmarkRibbon: Color,
 )
 
 val LocalQuranAccents = staticCompositionLocalOf {
@@ -59,6 +63,7 @@ val LocalQuranAccents = staticCompositionLocalOf {
         embossDark = Color(0x24000000),
         embossLight = Color(0x59FFFFFF),
         repeatInk = Color(0xFFC2622A),
+        bookmarkRibbon = Color(0xFFB3122F),
     )
 }
 
@@ -186,6 +191,8 @@ private val LightAccents = QuranAccents(
     embossDark = Color(0x24000000),
     embossLight = Color(0x59FFFFFF),
     repeatInk = Color(0xFFB4551E),
+    // Deep ruby: saturated enough to sit as ink on warm paper without glowing.
+    bookmarkRibbon = Color(0xFFB3122F),
 )
 
 private val DarkAccents = QuranAccents(
@@ -195,6 +202,9 @@ private val DarkAccents = QuranAccents(
     embossDark = Color(0x66000000),
     embossLight = Color(0x1FFFFFFF),
     repeatInk = Color(0xFFE0904E),
+    // Lighter, less-saturated ruby so it lifts off near-black and deep green
+    // instead of muddying into the surface. Shared by Nightfall and Royal Green.
+    bookmarkRibbon = Color(0xFFD64358),
 )
 
 @Composable
