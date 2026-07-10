@@ -1,11 +1,6 @@
 package com.beautifulquran.ui.home
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -40,16 +35,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import com.beautifulquran.playback.PlayerUiState
+import com.beautifulquran.ui.theme.FloatingControlBottomInset
+import com.beautifulquran.ui.theme.FloatingPaperEnter
+import com.beautifulquran.ui.theme.FloatingPaperExit
 import com.beautifulquran.ui.theme.quietClickable
-
-/**
- * Bottom clearance shared with the stack-level Back-to capsule and the reader's
- * return-to-ayah ornament ([com.beautifulquran.ui.reader.BackToOriginPill],
- * [com.beautifulquran.ui.theme.IslamicReturnToAyahButton]). Keeping the same
- * inset means the home float and those ornaments sit on one vertical rhythm
- * when the paper stack turns between cover and reader.
- */
-val FloatingPlaybackBottomInset: Dp = 10.dp
 
 /** Extra list padding so the last surah rows clear the floating transport. */
 val FloatingPlaybackListClearance: Dp = 96.dp
@@ -58,7 +47,8 @@ val FloatingPlaybackListClearance: Dp = 96.dp
  * Paper-native floating transport for the chapter list. Same controls as the
  * reader's embedded [com.beautifulquran.ui.reader.PlayerBar], but it lives as
  * quiet ink over the cover sheet — no card, elevation, or border — and slides
- * up only while a verse is loaded (playing or paused mid-session).
+ * up only while a verse is loaded (playing or paused mid-session). Uses the
+ * same enter/exit motion as [com.beautifulquran.ui.theme.FloatingPaperControl].
  */
 @Composable
 fun FloatingPlaybackControl(
@@ -78,14 +68,8 @@ fun FloatingPlaybackControl(
 ) {
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(280)) + slideInVertically(
-            animationSpec = tween(320),
-            initialOffsetY = { it },
-        ),
-        exit = fadeOut(tween(220)) + slideOutVertically(
-            animationSpec = tween(260),
-            targetOffsetY = { it / 2 },
-        ),
+        enter = FloatingPaperEnter,
+        exit = FloatingPaperExit,
         modifier = modifier,
     ) {
         Column(
@@ -93,7 +77,7 @@ fun FloatingPlaybackControl(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(bottom = FloatingPlaybackBottomInset),
+                .padding(bottom = FloatingControlBottomInset),
         ) {
             TextButton(
                 onClick = onReciterClick,
