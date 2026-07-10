@@ -30,7 +30,7 @@ docs/                   Architecture, design language, performance, timings docs
 
 ## Build, test, run
 
-Requires **JDK 17**. No Android device/emulator is needed for tests.
+Requires **JDK 21**. No Android device/emulator is needed for tests.
 
 ```bash
 ./gradlew testDebugUnitTest     # unit tests — run these before committing
@@ -113,19 +113,20 @@ Requires **JDK 17**. No Android device/emulator is needed for tests.
 
 ## Cursor Cloud specific instructions
 
-The startup snapshot already has the toolchain installed (JDK 17 at
-`/usr/lib/jvm/java-17-openjdk-amd64`, Android SDK at `~/Android/Sdk` with
-platform 35 + build-tools 35.0.0). `JAVA_HOME`/`ANDROID_HOME`/`PATH` are exported
-from `~/.bashrc`, so **login shells are already set up** — standard build/test
-commands from the "Build, test, run" section above work as-is.
+The startup snapshot already has the toolchain installed (JDK 21 at
+`/usr/lib/jvm/java-21-openjdk-amd64`, Android SDK at `~/Android/Sdk` with
+platform 35 + build-tools 35.0.0; builds also need platform 37.0 +
+build-tools 36.0.0 for `compileSdk`). `JAVA_HOME`/`ANDROID_HOME`/`PATH` are
+exported from `~/.bashrc`, so **login shells are already set up** — standard
+build/test commands from the "Build, test, run" section above work as-is.
 
-- **Build with JDK 17, not the system default.** The system default `java` is 21;
-  builds are only validated on 17. If you invoke Gradle from a non-login shell
-  that didn't source `~/.bashrc`, set `JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64`
-  first, or the AGP/Kotlin build may behave unexpectedly.
+- **Build with JDK 21.** Prefer Temurin/OpenJDK 21 for the Gradle daemon and
+  `jvmTarget`. If you invoke Gradle from a non-login shell that didn't source
+  `~/.bashrc`, set `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64` first.
 - **`local.properties` is gitignored** and points Gradle at the SDK
   (`sdk.dir=$HOME/Android/Sdk`). The startup update script re-creates it, so a
-  fresh checkout still builds.
+  fresh checkout still builds. Install `platforms;android-37.0` and
+  `build-tools;36.0.0` if they are missing (`compileSdk` uses API 37.0).
 - **No emulator / no GUI run is possible here.** The VM has no KVM
   (`/dev/kvm` absent, no `vmx`/`svm` CPU flags) so the x86_64 emulator can't
   start, and the modern `emulator` refuses ARM64 images on an x86_64 host. Verify
