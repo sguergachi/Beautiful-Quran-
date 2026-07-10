@@ -197,8 +197,9 @@ image, so it is crisp at any density and nearly free to render.
 ## The entrance
 
 The paper metaphor begins before the first sheet: a cold start opens on the
-**closed mushaf** (`ui/entrance/EntranceCover`), and chapter selection is
-what the reader finds when its cover turns. The ceremony has three moments:
+**closed mushaf** (`ui/entrance/EntranceCover` on Android and web), and chapter
+selection is what the reader finds when its cover turns. The ceremony has
+three moments:
 
 1. **Arrival.** The board fades in from the system splash: deep-green
    leather (fixed across themes — a bound book keeps its own boards, colors

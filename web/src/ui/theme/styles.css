@@ -1571,3 +1571,213 @@ select {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* —— Entrance ceremony (closed mushaf) —— */
+.entrance {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  perspective: 1400px;
+  perspective-origin: 100% 50%;
+  /* Full-bleed under the notch / home indicator while the cover is up. */
+  padding: 0;
+}
+
+.entrance-board {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  transform-origin: right center;
+  transform-style: preserve-3d;
+  transition: opacity 550ms linear;
+  -webkit-tap-highlight-color: transparent;
+  color: #e8e2d5;
+  background: transparent;
+  overflow: hidden;
+}
+
+.entrance-board:disabled {
+  cursor: default;
+}
+
+.entrance-board--opening {
+  animation: entrance-cover-open 1150ms cubic-bezier(0.24, 0.02, 0.12, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes entrance-cover-open {
+  0% {
+    transform: perspective(1400px) rotateY(0deg);
+    opacity: 1;
+  }
+  62% {
+    opacity: 1;
+  }
+  100% {
+    transform: perspective(1400px) rotateY(-88deg);
+    opacity: 0;
+  }
+}
+
+.entrance-leather {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse 75% 70% at 50% 42%,
+      #0a382e 0%,
+      #031c15 100%
+    );
+}
+
+.entrance-weave {
+  position: absolute;
+  inset: 0;
+  opacity: 0.05;
+  background-image:
+    linear-gradient(45deg, #d9b44a 1px, transparent 1px),
+    linear-gradient(-45deg, #d9b44a 1px, transparent 1px),
+    linear-gradient(45deg, transparent 48%, #fff 49%, #fff 51%, transparent 52%),
+    linear-gradient(-45deg, transparent 48%, #fff 49%, #fff 51%, transparent 52%);
+  background-size: 72px 72px;
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+}
+
+.entrance-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.entrance-content {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: max(1.5rem, env(safe-area-inset-top, 0px)) 2.5rem
+    max(1.6rem, env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+
+.entrance-top-space {
+  flex: 0.9;
+}
+
+.entrance-mid-space {
+  flex: 0.55;
+}
+
+.entrance-bot-space {
+  flex: 0.5;
+}
+
+.entrance-medallion {
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.12)) drop-shadow(0 -1px 0 rgba(0, 0, 0, 0.35));
+  animation: entrance-sheen 6.5s ease-in-out infinite alternate;
+}
+
+@keyframes entrance-sheen {
+  from {
+    filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.08)) drop-shadow(0 -1px 0 rgba(0, 0, 0, 0.4));
+    opacity: 0.92;
+  }
+  to {
+    filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.22)) drop-shadow(0 -1px 0 rgba(0, 0, 0, 0.28));
+    opacity: 1;
+  }
+}
+
+.entrance-title-ar {
+  margin: 1.75rem 0 0;
+  font-family: var(--font-arabic);
+  font-size: clamp(1.85rem, 7vw, 2.5rem);
+  line-height: 1.6;
+  text-align: center;
+  color: #e8e2d5;
+  background: linear-gradient(180deg, #edd188, #9a7b2a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  opacity: 0;
+}
+
+.entrance-title-en {
+  margin: 0.25rem 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.05rem, 3.5vw, 1.35rem);
+  letter-spacing: 0.2em;
+  text-align: center;
+  color: rgba(232, 226, 213, 0.58);
+  opacity: 0;
+}
+
+.entrance-dua {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  max-width: 22rem;
+  transition: opacity 900ms ease;
+}
+
+.entrance-dua-ar {
+  margin: 0;
+  font-family: var(--font-arabic);
+  font-size: clamp(1.15rem, 4.2vw, 1.5rem);
+  line-height: 1.9;
+  text-align: center;
+  color: #e8e2d5;
+  opacity: 0.12;
+}
+
+.entrance-dua-en {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-style: italic;
+  text-align: center;
+  color: rgba(232, 226, 213, 0.55);
+}
+
+.entrance-hint {
+  margin: 0;
+  padding-bottom: 0.4rem;
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(232, 226, 213, 0.34);
+  transition: opacity 900ms ease;
+}
+
+html[data-entrance='true'],
+html[data-entrance='true'] body {
+  background: #031c15;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entrance-board {
+    transition: none;
+  }
+
+  .entrance-board--opening {
+    animation: none;
+    opacity: 0;
+  }
+
+  .entrance-medallion {
+    animation: none;
+  }
+}

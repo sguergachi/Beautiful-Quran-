@@ -48,6 +48,12 @@ export function basmalahAudioUrl(reciter: Reciter): string {
   return `https://everyayah.com/data/${reciter.slug}/${file}`
 }
 
+/** Isti'adha audio (أعوذ بالله من الشيطان الرجيم) for the entrance cover.
+ * Optional everyayah special — callers must degrade when missing. */
+export function istiadhaAudioUrl(reciter: Reciter): string {
+  return `https://everyayah.com/data/${reciter.slug}/audhubillah.mp3`
+}
+
 /** One highlighted span: word [position] is active from [startMs] until [endMs]. */
 export interface Segment {
   position: number
