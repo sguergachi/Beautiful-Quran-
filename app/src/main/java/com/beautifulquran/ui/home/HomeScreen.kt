@@ -88,12 +88,20 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     onOpenSurah: (surahId: Int, ayah: Int?) -> Unit,
     onOpenSettings: () -> Unit,
+    /** True while the paper stack is on (or near) the chapter list — drives
+     *  the floating transport's enter/exit across page turns. */
+    coverSheetVisible: Boolean = true,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
     val floatingPlayback = uiState.floatingPlayback
-    val showFloatingPlayback = shouldShowFloatingPlayback(floatingPlayback != null)
-    val listBottomPadding = if (showFloatingPlayback) {
+    val showFloatingPlayback = shouldShowFloatingPlayback(
+        nowPlayingPresent = floatingPlayback != null,
+        coverSheetVisible = coverSheetVisible,
+    )
+    // Keep list clearance whenever a session is loaded so enter/exit slides
+    // don't shove the last rows under the bar mid-animation.
+    val listBottomPadding = if (floatingPlayback != null) {
         FloatingPlaybackListClearance
     } else {
         48.dp
@@ -341,6 +349,7 @@ fun HomeScreen(
                 onFastForward = viewModel::fastForward,
                 onRepeatClick = viewModel::cycleRepeatMode,
                 onSpeed = viewModel::cycleSpeed,
+                onClose = viewModel::dismissFloatingPlayback,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .widthIn(max = 640.dp)

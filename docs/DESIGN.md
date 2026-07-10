@@ -203,8 +203,12 @@ image, so it is crisp at any density and nearly free to render.
 - On the chapter list, when a verse is loaded (playing or paused mid-session),
   the floating playback control slides up with the same fade + vertical
   motion as the reader's return-to-ayah / Back-to ornaments
-  (`FloatingPaperControl`), using the shared **10 dp** bottom inset.
-  Opening the reader replaces it with the embedded `PlayerBar`.
+  (`FloatingPaperControl`), using the shared **10 dp** bottom inset. The
+  enter/exit is also tied to the paper-stack page turn: returning to chapter
+  selection plays the entrance; leaving for the reader plays the exit. A
+  quiet Close in the corner dismisses the session (stops playback) so the
+  bar exits the same way. Opening the reader replaces it with the embedded
+  `PlayerBar`.
 
 ## Bookmark strip
 

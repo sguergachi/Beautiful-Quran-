@@ -56,6 +56,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.AppViewModelFactory
 import com.beautifulquran.ui.PageTurnSounds
+import com.beautifulquran.ui.home.FloatingPlaybackCoverVisibleMaxPage
 import com.beautifulquran.ui.home.FloatingPlaybackListClearance
 import com.beautifulquran.ui.home.HomeScreen
 import com.beautifulquran.ui.home.HomeViewModel
@@ -425,6 +426,10 @@ private fun PaperStackApp(
                     animateTo(AYAH_LAYER)
                 },
                 onOpenSettings = { animateTo(SETTINGS_LAYER) },
+                // Drive the float's enter/exit from the live page turn so it
+                // slides in when returning to chapter selection and out when
+                // leaving for the reader — not only when nowPlaying flips.
+                coverSheetVisible = page <= FloatingPlaybackCoverVisibleMaxPage,
             )
         }
 
