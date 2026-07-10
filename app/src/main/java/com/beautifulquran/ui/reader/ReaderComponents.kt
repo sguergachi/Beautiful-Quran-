@@ -115,7 +115,21 @@ private fun wordFadeAlpha(progress: Float): Float {
 private data class RenderedLineText(
     val text: AnnotatedString,
     val wordRanges: List<IntRange>,
+    /** Inclusive range of the trailing ﴿N﴾ mark in [text], if present. */
+    val markRange: IntRange,
 )
+
+/**
+ * Ayah-number opacity shared by every reading mode: recessed verses sit at
+ * upcoming ink; when the verse is in focus the mark fades up to full.
+ */
+@Composable
+private fun rememberAyahMarkAlpha(focused: Boolean): State<Float> =
+    animateFloatAsState(
+        targetValue = if (focused) 1f else WordVisualState.Upcoming.inkAlpha(),
+        animationSpec = tween(450),
+        label = "ayahMarkAlpha",
+    )
 
 private fun TextLayoutResult.wordIndexAt(
     tap: Offset,
@@ -629,6 +643,8 @@ private fun ResponsiveHafsAyah(
      * same upcoming paper so unread ink does not change when this ayah
      * becomes active. */
     dimmed: Boolean,
+    /** 0..1 opacity for the trailing ﴿N﴾ mark — fades to full when focused. */
+    markAlpha: () -> Float,
     fontSize: TextUnit,
     activeSweepMs: Int?,
     onAyahClick: () -> Unit,
@@ -666,6 +682,7 @@ private fun ResponsiveHafsAyah(
     // ayah boundaries do not reshape or flash the run.
     val rendered = remember(ayah, palette.fullInkColor, ayahMarkInk, fontSize) {
         val ranges = ArrayList<IntRange>(ayah.words.size)
+        var markRange = 0..-1
         val text = buildAnnotatedString {
             ayah.words.forEach { word ->
                 val start = length
@@ -678,6 +695,7 @@ private fun ResponsiveHafsAyah(
                 ranges += start until length
                 append(" ")
             }
+            val markStart = length
             withStyle(
                 SpanStyle(
                     color = ayahMarkInk,
@@ -688,8 +706,9 @@ private fun ResponsiveHafsAyah(
                 append(ayah.number.toArabicIndic())
                 append("﴾")
             }
+            markRange = markStart until length
         }
-        RenderedLineText(text = text, wordRanges = ranges)
+        RenderedLineText(text = text, wordRanges = ranges, markRange = markRange)
     }
     Text(
         text = rendered.text,
@@ -700,7 +719,7 @@ private fun ResponsiveHafsAyah(
             .shapedWordBloom(
                 blooms = {
                     val recess = recessCover.value
-                    val blooms = ArrayList<ShapedWordBloom>(states.size + 1)
+                    val blooms = ArrayList<ShapedWordBloom>(states.size + 2)
                     // Faint cover while recessed (all words) or Upcoming while
                     // active. Same cover strength — ayah handoff does not
                     // change unread ink; only the active word starts its bloom.
@@ -717,6 +736,16 @@ private fun ResponsiveHafsAyah(
                             range = range,
                             paper = palette.paperColor,
                             coverAlpha = coverAlpha,
+                        )
+                    }
+                    // ﴿N﴾ mark: paper cover of (1 − markAlpha) so it fades up
+                    // to full gold with the shared ayah-mark animation.
+                    val markCover = (1f - markAlpha()).coerceIn(0f, 1f)
+                    if (markCover > 0f && !rendered.markRange.isEmpty()) {
+                        blooms += ShapedWordBloom.UpcomingDim(
+                            range = rendered.markRange,
+                            paper = palette.paperColor,
+                            coverAlpha = markCover,
                         )
                     }
                     // First-pass ink reveal: paper cover over the shaped full-ink
@@ -918,6 +947,10 @@ fun AyahBlock(
             activeWordPosition != null &&
             word.position in repeatStart..activeWordPosition
 
+    // Shared across gloss, English, and Arabic-only: mark sits at upcoming
+    // ink while recessed, then fades up to full when this verse is in focus.
+    val ayahMarkAlpha = rememberAyahMarkAlpha(focused = !dimmed)
+
     // The ribbon is part of the verse block itself — same Box, same height —
     // so it never "follows" from a floating overlay. Text keeps the existing
     // horizontal inset; the ribbon sits in the outer margin opposite the
@@ -955,14 +988,7 @@ fun AyahBlock(
                     Box(
                         modifier = Modifier
                             .padding(horizontal = 6.dp)
-                            .graphicsLayer {
-                                // Match word-level recess (block alpha stays 1).
-                                alpha = if (dimmed) {
-                                    WordVisualState.Upcoming.inkAlpha()
-                                } else {
-                                    1f
-                                }
-                            },
+                            .graphicsLayer { alpha = ayahMarkAlpha.value },
                         contentAlignment = Alignment.Center,
                     ) {
                         AyahNumberMark(
@@ -997,13 +1023,7 @@ fun AyahBlock(
                             )
                         }
                         Box(
-                            modifier = Modifier.graphicsLayer {
-                                alpha = if (dimmed) {
-                                    WordVisualState.Upcoming.inkAlpha()
-                                } else {
-                                    1f
-                                }
-                            },
+                            modifier = Modifier.graphicsLayer { alpha = ayahMarkAlpha.value },
                         ) {
                             ArabicAyahNumberUnit(ayah.number, fontScale)
                         }
@@ -1018,6 +1038,7 @@ fun AyahBlock(
                         // Same faint cover while another ayah is playing, so
                         // landing on this verse does not change unread ink.
                         dimmed = dimmed,
+                        markAlpha = { ayahMarkAlpha.value },
                         fontSize = ArabicWordStyle.fontSize * fontScale * ARABIC_ONLY_HAFS_FONT_MULTIPLIER,
                         activeSweepMs = sweepMs,
                         onAyahClick = onAyahClick,
