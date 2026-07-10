@@ -1,4 +1,4 @@
-import { openDatabase, queryAll, queryOne } from './database'
+import { openDatabase, queryAll, queryOne, type LoadProgress } from './database'
 import type {
   Ayah,
   Reciter,
@@ -14,8 +14,10 @@ import type {
 let surahsCache: Surah[] | null = null
 let recitersCache: Reciter[] | null = null
 
-export async function ensureReady(): Promise<void> {
-  await openDatabase()
+export async function ensureReady(
+  onProgress?: (p: LoadProgress) => void,
+): Promise<void> {
+  await openDatabase(undefined, onProgress)
 }
 
 export function surahs(): Surah[] {

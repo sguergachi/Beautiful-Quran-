@@ -53,6 +53,10 @@ export class PlayerController {
 
   constructor() {
     this.audio.preload = 'auto'
+    // iOS / mobile: keep playback in-page (no fullscreen takeover).
+    this.audio.setAttribute('playsinline', 'true')
+    this.audio.setAttribute('webkit-playsinline', 'true')
+    ;(this.audio as HTMLAudioElement & { playsInline?: boolean }).playsInline = true
     this.audio.addEventListener('timeupdate', () => this.onTime())
     this.audio.addEventListener('ended', () => void this.onEnded())
     this.audio.addEventListener('play', () => this.patch({ isPlaying: true, error: null }))

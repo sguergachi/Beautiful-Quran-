@@ -40,6 +40,7 @@ export interface RootViewerState {
 export interface AppState {
   ready: boolean
   error: string | null
+  loadLabel: string
   sheet: Sheet
   surahs: Surah[]
   reciters: Reciter[]
@@ -69,6 +70,7 @@ class AppStore {
   state: AppState = {
     ready: false,
     error: null,
+    loadLabel: 'Opening the book…',
     sheet: 'home',
     surahs: [],
     reciters: [],
@@ -116,15 +118,22 @@ class AppStore {
 
   async init() {
     try {
-      await QuranRepository.ensureReady()
+      await QuranRepository.ensureReady((p) => {
+        if (p.phase === 'wasm') {
+          this.set({ loadLabel: 'Preparing the reader…' })
+          return
+        }
+        if (p.total > 0) {
+          const pct = Math.min(99, Math.round((p.loaded / p.total) * 100))
+          this.set({ loadLabel: `Loading the book… ${pct}%` })
+        } else {
+          this.set({ loadLabel: 'Loading the book…' })
+        }
+      })
       const surahs = QuranRepository.surahs()
       const reciters = QuranRepository.reciters()
-      this.set({ ready: true, surahs, reciters, error: null })
+      this.set({ ready: true, surahs, reciters, error: null, loadLabel: '' })
       player.setSpeed(this.state.settings.playbackSpeed)
-      // Resume last surah if any.
-      if (this.state.settings.lastSurah > 0) {
-        // Don't auto-open; just keep continue-listening available.
-      }
     } catch (e) {
       this.set({
         ready: false,

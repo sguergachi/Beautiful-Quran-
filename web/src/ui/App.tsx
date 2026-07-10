@@ -56,7 +56,7 @@ export function App() {
     return (
       <div className="boot">
         <h1>Beautiful Quran</h1>
-        <p>Opening the book…</p>
+        <p>{state.loadLabel || 'Opening the book…'}</p>
         <div className="pulse" aria-hidden="true" />
       </div>
     )
