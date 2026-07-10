@@ -55,6 +55,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -63,6 +64,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
@@ -370,6 +372,50 @@ fun ReaderScreen(
                 focusController.focus(startAyah, animate = false)
             }
         }
+    }
+
+    // Reading-mode / display toggles reflow every ayah's height. LazyList keeps
+    // the same *item index* at the top while the pinned verse drifts away under
+    // the reading line — so re-home onto whichever ayah the reader was looking
+    // at (or following) once the new layout has measured.
+    //
+    // [stickyAyah] is only updated while the layout signature is stable, so the
+    // reflow composition that fires this effect still carries the pre-change
+    // verse rather than the already-drifted read-out.
+    val layoutSignature = listOf(
+        settings.readingMode,
+        settings.showWordGloss,
+        settings.showTransliteration,
+        settings.showTranslation,
+        settings.fontScale,
+    )
+    var lastLayoutSignature by remember { mutableStateOf(layoutSignature) }
+    var stickyAyah by remember { mutableIntStateOf(1) }
+    var layoutFocusSeeded by remember { mutableStateOf(false) }
+    SideEffect {
+        if (layoutSignature == lastLayoutSignature) {
+            stickyAyah = when {
+                followEnabled && activeAyah != null -> activeAyah
+                else -> scrolledAyah.value
+            }.coerceIn(1, lastAyahNumber)
+        }
+    }
+    LaunchedEffect(layoutSignature) {
+        if (!layoutFocusSeeded) {
+            // First composition matches the initial settle above; don't fight it.
+            layoutFocusSeeded = true
+            lastLayoutSignature = layoutSignature
+            return@LaunchedEffect
+        }
+        val pin = stickyAyah.coerceIn(1, lastAyahNumber)
+        // Two frames + a short beat so sibling ayahs finish remasuring before
+        // we glide against the final geometry (otherwise the home lands on a
+        // height that is still shifting).
+        withFrameNanos { }
+        withFrameNanos { }
+        delay(48)
+        focusController.focus(pin, animate = true, preRoll = false)
+        lastLayoutSignature = layoutSignature
     }
 
     // Errors surface as a quiet line on the sheet, then dissolve.
