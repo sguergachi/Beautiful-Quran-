@@ -64,6 +64,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.AbsoluteAlignment
@@ -95,6 +96,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
+/** Grace after a concordance jump so the programmatic settle does not arm the
+ *  "Back to …" dismiss timer. */
+private const val ROOT_RETURN_SETTLE_GRACE_MS = 1_200L
+
+/** How long the "Back to …" pill stays after the first hand scroll/move. */
+private const val ROOT_RETURN_DISMISS_MS = 30_000L
+
 private sealed interface LazyItem {
     val key: String
     data object Header : LazyItem {
@@ -121,6 +129,11 @@ fun ReaderScreen(
      *  MainActivity may intercept this into a chooser that can also open the
      *  Timings Lab. See docs/ROOT_VIEWER.md. */
     onOpenRootViewer: (surahId: Int, ayah: Int, wordPosition: Int) -> Unit = { _, _, _ -> },
+    /** Origin verse after a concordance jump — shown as "Back to …" in the
+     *  return-to-ayah slot until tapped or dismissed. */
+    rootReturnTarget: RootReturnTarget? = null,
+    onRootReturn: () -> Unit = {},
+    onDismissRootReturn: () -> Unit = {},
     /** True while an ink-bleed overlay (Root Viewer / Timings Lab / chooser)
      *  is riding over this reader, so the status bar stays visible under its
      *  header. */
@@ -156,6 +169,11 @@ fun ReaderScreen(
     var showRepeatDialog by remember { mutableStateOf(false) }
     var requestedJumpAyah by remember { mutableIntStateOf(0) }
     val haptics = LocalHapticFeedback.current
+    // First hand scroll/move after a concordance jump arms a 30s countdown
+    // that clears the "Back to …" pill. Programmatic settle of the jump itself
+    // must not arm it — see the grace window below.
+    var rootReturnDismissArmed by remember { mutableStateOf(false) }
+    val onDismissRootReturnLatest = rememberUpdatedState(onDismissRootReturn)
 
     // In-surah English search: matches are ayahs whose translation or any
     // word gloss contains the query.
@@ -334,6 +352,33 @@ fun ReaderScreen(
         } finally {
             if (requestedJumpAyah == target) requestedJumpAyah = 0
         }
+    }
+
+    // Concordance "Back to …" pill: stay until the reader moves by hand, then
+    // clear it 30s after that first scroll/move. Ignore the programmatic
+    // settle that lands the jump itself.
+    LaunchedEffect(rootReturnTarget) {
+        rootReturnDismissArmed = false
+        if (rootReturnTarget == null) return@LaunchedEffect
+        delay(ROOT_RETURN_SETTLE_GRACE_MS)
+        // If the pill was dismissed during the grace window this effect is
+        // cancelled and restarted with a null target — no need to re-check.
+        val baselineIndex = listState.firstVisibleItemIndex
+        val baselineOffset = listState.firstVisibleItemScrollOffset
+        snapshotFlow {
+            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        }.collect { (index, offset) ->
+            if (!rootReturnDismissArmed &&
+                (index != baselineIndex || offset != baselineOffset)
+            ) {
+                rootReturnDismissArmed = true
+            }
+        }
+    }
+    LaunchedEffect(rootReturnDismissArmed, rootReturnTarget) {
+        if (!rootReturnDismissArmed || rootReturnTarget == null) return@LaunchedEffect
+        delay(ROOT_RETURN_DISMISS_MS)
+        onDismissRootReturnLatest.value()
     }
 
     fun selectedPlaybackAyah(): Int {
@@ -586,9 +631,13 @@ fun ReaderScreen(
         bottomBar = {
             Column {
                 // In-plane status: errors stay textual; returning to the
-                // active ayah is a textless ornamented control.
+                // active ayah is a textless ornamented control; a concordance
+                // jump leaves a "Back to …" pill in the same slot.
+                val showRootReturn =
+                    playerState.error == null && rootReturnTarget != null
                 val showReturnToAyah =
                     playerState.error == null &&
+                        !showRootReturn &&
                         !followEnabled &&
                         recitingActive &&
                         activeAyahPlacement.value.isAway
@@ -606,6 +655,23 @@ fun ReaderScreen(
                             .fillMaxWidth()
                             .padding(vertical = 6.dp),
                     )
+                }
+                AnimatedVisibility(
+                    visible = showRootReturn,
+                    enter = fadeIn(tween(220)),
+                    exit = fadeOut(tween(220)),
+                ) {
+                    val target = rootReturnTarget
+                    if (target != null) {
+                        BackToOriginPill(
+                            label = target.label,
+                            onClick = onRootReturn,
+                            onDismiss = onDismissRootReturn,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 28.dp, vertical = 4.dp),
+                        )
+                    }
                 }
                 AnimatedVisibility(
                     visible = showReturnToAyah,
@@ -715,6 +781,7 @@ fun ReaderScreen(
                                         val distance = (change.position - down.position).getDistance()
                                         if (distance > touchSlop) {
                                             dragStarted = true
+                                            rootReturnDismissArmed = true
                                             val dx = change.position.x - down.position.x
                                             val dy = change.position.y - down.position.y
                                             if (abs(dy) > abs(dx)) {

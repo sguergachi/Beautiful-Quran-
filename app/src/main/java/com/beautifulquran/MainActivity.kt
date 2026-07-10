@@ -56,6 +56,7 @@ import com.beautifulquran.ui.home.HomeScreen
 import com.beautifulquran.ui.home.HomeViewModel
 import com.beautifulquran.ui.reader.ReaderScreen
 import com.beautifulquran.ui.reader.ReaderViewModel
+import com.beautifulquran.ui.reader.RootReturnTarget
 import com.beautifulquran.ui.rootviewer.RootViewerScreen
 import com.beautifulquran.ui.rootviewer.RootViewerViewModel
 import com.beautifulquran.ui.rootviewer.WordHoldChooser
@@ -155,6 +156,8 @@ private fun PaperStackApp(
     /** Bumped on every concordance jump so the reader remounts even when the
      * target surah/ayah pair is unchanged. */
     var jumpEpoch by remember { mutableIntStateOf(0) }
+    /** Origin verse for the "Back to …" pill after a concordance jump. */
+    var rootReturnTarget by remember { mutableStateOf<RootReturnTarget?>(null) }
     val stackPosition = remember { Animatable(settledLayer.toFloat()) }
     val scope = rememberCoroutineScope()
     val settingsLayer = if (selectedSurahId == 0) AYAH_LAYER else SETTINGS_LAYER
@@ -230,12 +233,35 @@ private fun PaperStackApp(
     }
 
     fun jumpFromConcordance(surahId: Int, ayah: Int) {
+        val origin = rootViewerViewModel.ui.value
+        // Remember where the hold started so the reader can offer a way back.
+        if (origin.surahId > 0 && origin.ayah > 0 &&
+            (origin.surahId != surahId || origin.ayah != ayah)
+        ) {
+            rootReturnTarget = RootReturnTarget(
+                surahId = origin.surahId,
+                ayah = origin.ayah,
+                surahNameTransliteration = origin.surahNameTransliteration,
+            )
+        }
         closeRootViewer()
         if (surahId != selectedSurahId) {
             readerViewModel.load(surahId)
         }
         selectedSurahId = surahId
         selectedStartAyah = ayah
+        jumpEpoch++
+        animateTo(AYAH_LAYER)
+    }
+
+    fun returnFromConcordanceJump() {
+        val target = rootReturnTarget ?: return
+        rootReturnTarget = null
+        if (target.surahId != selectedSurahId) {
+            readerViewModel.load(target.surahId)
+        }
+        selectedSurahId = target.surahId
+        selectedStartAyah = target.ayah
         jumpEpoch++
         animateTo(AYAH_LAYER)
     }
@@ -329,6 +355,9 @@ private fun PaperStackApp(
                         onOpenSettings = { animateTo(SETTINGS_LAYER) },
                         onAyahSelectorExpandedChange = { ayahSelectorExpanded = it },
                         onOpenRootViewer = { sid, a, word -> onWordLongPress(sid, a, word) },
+                        rootReturnTarget = rootReturnTarget,
+                        onRootReturn = ::returnFromConcordanceJump,
+                        onDismissRootReturn = { rootReturnTarget = null },
                         keepStatusBarVisible = overlayBlocking,
                     )
                 }

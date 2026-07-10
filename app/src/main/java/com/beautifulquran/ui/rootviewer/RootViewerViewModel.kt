@@ -15,6 +15,8 @@ data class RootViewerUiState(
     val isLoading: Boolean = true,
     val surahId: Int = 0,
     val ayah: Int = 0,
+    /** Transliterated chapter name for the word's surah (concordance return pill). */
+    val surahNameTransliteration: String = "",
     val word: Word? = null,
     val morphology: WordMorphology? = null,
     val occurrenceCount: Int = 0,
@@ -37,6 +39,9 @@ class RootViewerViewModel(
     fun open(surahId: Int, ayah: Int, wordPosition: Int) {
         _ui.value = RootViewerUiState(isLoading = true, surahId = surahId, ayah = ayah)
         viewModelScope.launch {
+            val surahName = repository.surahs().firstOrNull { it.id == surahId }
+                ?.nameTransliteration
+                .orEmpty()
             val word = repository.wordAt(surahId, ayah, wordPosition)
             val morph = repository.wordMorphology(surahId, ayah, wordPosition)
             val summary = morph?.root?.takeIf { it.isNotBlank() }?.let { repository.rootSummary(it) }
@@ -44,6 +49,7 @@ class RootViewerViewModel(
                 isLoading = false,
                 surahId = surahId,
                 ayah = ayah,
+                surahNameTransliteration = surahName,
                 word = word,
                 morphology = morph,
                 occurrenceCount = summary?.occurrenceCount ?: 0,
