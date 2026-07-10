@@ -152,4 +152,17 @@ class HighlightEngineTest {
         assertEquals(2, info.position)
         assertEquals(true, info.isRepeat)
     }
+
+    @Test
+    fun `PreparedTimings matches convenience activeInfo and allocates tables once`() {
+        val prepared = HighlightEngine.PreparedTimings.prepare(withRepeat)
+        for (ms in listOf(500L, 2500L, 3500L, 4500L, 5500L, 99999L)) {
+            assertEquals(
+                HighlightEngine.activeInfo(withRepeat, ms),
+                prepared.activeInfo(ms),
+            )
+        }
+        // Same instance answers every tick — no per-call IntArray rebuild.
+        assertEquals(withRepeat, prepared.segments)
+    }
 }

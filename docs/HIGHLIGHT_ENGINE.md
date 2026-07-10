@@ -125,9 +125,12 @@ The whole repeated stretch (`2, 3`) shares `repeatStart == 2`, so it blooms
 and releases as one unit; word 3's *first* pass is new material and is never
 flagged.
 
-The notable allocation on the repeat path is an `IntArray` of size `idx + 1`
-used to resolve `repeatStart`; the plain `activeWord` / `activeSegment`
-lookups do only the binary search.
+Repeat / high-water tables are built once via
+`HighlightEngine.PreparedTimings.prepare(segments)` when a surah's timings
+load. The 33 ms poll then does a binary search + O(1) array lookup and
+allocates nothing until a word boundary emits a new `ActiveWord`. The
+convenience `activeInfo(segments, positionMs)` still rebuilds those tables
+per call (fine for tests and one-shots).
 
 ## How the app consumes it
 
@@ -136,7 +139,7 @@ The engine is a pure function; the *cadence* of calling it lives in
 
 ```
 ExoPlayer.currentPosition ──(polled every 33 ms while playing)──►
-HighlightEngine.activeInfo(segments, positionMs) ──►
+PreparedTimings.activeInfo(positionMs) ──►
 StateFlow<ActiveWord?>  (distinctUntilChanged: emits once per word boundary) ──►
 per-item derivedStateOf in the reader list ──► exactly one AyahBlock recomposes
 ```

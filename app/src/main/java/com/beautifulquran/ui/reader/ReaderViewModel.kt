@@ -79,8 +79,19 @@ class ReaderViewModel(
         combine(bookmarks.bookmarks, loadedSurah) { all, surah ->
             all.filter { it.surahId == surah }.map { it.ayah }.toSet()
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(1_000), emptySet())
+    /** Raw segments for seek / Timings Lab; prepared tables power the poll. */
     private var timings: Map<Int, List<Segment>> = emptyMap()
+    /** Per-ayah repeat/high-water tables built once at load — hot-path lookups
+     * allocate nothing (see [HighlightEngine.PreparedTimings]). */
+    private var preparedTimings: Map<Int, HighlightEngine.PreparedTimings> = emptyMap()
     private var loadJob: Job? = null
+
+    private fun installTimings(loaded: Map<Int, List<Segment>>) {
+        timings = loaded
+        preparedTimings = loaded.mapValues { (_, segs) ->
+            HighlightEngine.PreparedTimings.prepare(segs)
+        }
+    }
 
     /**
      * The polling backbone of the sync engine: while this surah is the loaded
@@ -116,8 +127,8 @@ class ReaderViewModel(
      * holds while paused (like a lyrics player); it only clears when this
      * surah stops being the loaded one. */
     val activeWord: StateFlow<ActiveWord?> = pollingWhileLoaded(key = { it }) { np ->
-        timings[np.ayah]
-            ?.let { HighlightEngine.activeInfo(it, player.positionMs) }
+        preparedTimings[np.ayah]
+            ?.activeInfo(player.positionMs)
             ?.let {
                 ActiveWord(
                     ayah = np.ayah,
@@ -172,7 +183,7 @@ class ReaderViewModel(
                 val reciter = _uiState.value.currentReciter ?: return@collect
                 val refreshed = repository.timings(reciter.id, id)
                 if (surahId != id) return@collect
-                timings = refreshed
+                installTimings(refreshed)
                 _uiState.value = _uiState.value.copy(hasTimings = refreshed.isNotEmpty())
             }
         }
@@ -187,7 +198,7 @@ class ReaderViewModel(
         }
         this.surahId = surahId
         loadedSurah.value = surahId
-        timings = emptyMap()
+        installTimings(emptyMap())
         _uiState.value = ReaderUiState(
             reciters = _uiState.value.reciters,
             currentReciter = _uiState.value.currentReciter,
@@ -202,7 +213,7 @@ class ReaderViewModel(
             val loadedTimings = repository.timings(reciter.id, surahId)
             val content = repository.surahContent(surahId)
             if (this@ReaderViewModel.surahId != surahId) return@launch
-            timings = loadedTimings
+            installTimings(loadedTimings)
             _uiState.value = ReaderUiState(
                 content = content,
                 reciters = reciters,
@@ -217,7 +228,7 @@ class ReaderViewModel(
         if (surahId == 0) return
         val reciters = _uiState.value.reciters.ifEmpty { repository.reciters() }
         val reciter = currentReciter(reciters)
-        timings = repository.timings(reciter.id, surahId)
+        installTimings(repository.timings(reciter.id, surahId))
         _uiState.value = _uiState.value.copy(
             currentReciter = reciter,
             hasTimings = timings.isNotEmpty(),

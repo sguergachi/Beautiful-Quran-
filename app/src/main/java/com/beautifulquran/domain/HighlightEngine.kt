@@ -35,6 +35,63 @@ object HighlightEngine {
         val repeatStart: Int,
     )
 
+    /**
+     * Per-ayah timing table with repeat / high-water metadata precomputed once
+     * at load. The reader's 33 ms poll then does a binary search + O(1) lookup
+     * with **zero allocations** on the hot path (see docs/PERFORMANCE.md).
+     */
+    class PreparedTimings private constructor(
+        val segments: List<Segment>,
+        private val maxBeforeByIndex: IntArray,
+        private val repeatStartByIndex: IntArray,
+    ) {
+        fun activeInfo(positionMs: Long): ActiveInfo? {
+            val idx = activeIndex(segments, positionMs) ?: return null
+            val seg = segments[idx]
+            val maxBefore = maxBeforeByIndex[idx]
+            return ActiveInfo(
+                position = seg.position,
+                startMs = seg.startMs,
+                endMs = seg.endMs,
+                isRepeat = seg.position <= maxBefore,
+                highWater = maxOf(maxBefore, seg.position),
+                repeatStart = repeatStartByIndex[idx],
+            )
+        }
+
+        companion object {
+            fun prepare(segments: List<Segment>): PreparedTimings {
+                val n = segments.size
+                val maxBefore = IntArray(n)
+                val repeatStart = IntArray(n)
+                var runningMax = -1
+                for (i in 0 until n) {
+                    maxBefore[i] = runningMax
+                    val pos = segments[i].position
+                    val isRepeat = pos <= runningMax
+                    repeatStart[i] = if (isRepeat) {
+                        var startIndex = i
+                        while (
+                            startIndex > 0 &&
+                            segments[startIndex - 1].position <= maxBefore[startIndex - 1]
+                        ) {
+                            startIndex--
+                        }
+                        var minPos = segments[startIndex].position
+                        for (j in startIndex + 1..i) {
+                            minPos = minOf(minPos, segments[j].position)
+                        }
+                        minPos
+                    } else {
+                        pos
+                    }
+                    runningMax = maxOf(runningMax, pos)
+                }
+                return PreparedTimings(segments, maxBefore, repeatStart)
+            }
+        }
+    }
+
     fun activeWord(segments: List<Segment>, positionMs: Long): Int? =
         activeSegment(segments, positionMs)?.position
 
@@ -43,42 +100,16 @@ object HighlightEngine {
     fun activeSegment(segments: List<Segment>, positionMs: Long): Segment? =
         activeIndex(segments, positionMs)?.let { segments[it] }
 
-    /** [activeSegment] enriched with repeat / high-water context. */
-    fun activeInfo(segments: List<Segment>, positionMs: Long): ActiveInfo? {
-        val idx = activeIndex(segments, positionMs) ?: return null
-        val maxBeforeByIndex = IntArray(idx + 1)
-        var maxBefore = -1
-        for (i in 0..idx) {
-            maxBeforeByIndex[i] = maxBefore
-            if (i < idx) maxBefore = maxOf(maxBefore, segments[i].position)
-        }
-        val seg = segments[idx]
-        val isRepeat = seg.position <= maxBefore
-        val repeatStart = if (isRepeat) {
-            var startIndex = idx
-            while (
-                startIndex > 0 &&
-                segments[startIndex - 1].position <= maxBeforeByIndex[startIndex - 1]
-            ) {
-                startIndex--
-            }
-            (startIndex..idx).minOf { segments[it].position }
-        } else {
-            seg.position
-        }
-        return ActiveInfo(
-            position = seg.position,
-            startMs = seg.startMs,
-            endMs = seg.endMs,
-            isRepeat = isRepeat,
-            highWater = maxOf(maxBefore, seg.position),
-            repeatStart = repeatStart,
-        )
-    }
+    /** [activeSegment] enriched with repeat / high-water context.
+     *
+     * Prefer [PreparedTimings.activeInfo] on the hot path — this convenience
+     * rebuilds the repeat tables on every call (fine for tests / one-shots). */
+    fun activeInfo(segments: List<Segment>, positionMs: Long): ActiveInfo? =
+        PreparedTimings.prepare(segments).activeInfo(positionMs)
 
     /** Index of the last segment whose start <= [positionMs], or null when
      * nothing should be lit (before the first word or after the last ends). */
-    private fun activeIndex(segments: List<Segment>, positionMs: Long): Int? {
+    internal fun activeIndex(segments: List<Segment>, positionMs: Long): Int? {
         if (segments.isEmpty()) return null
         if (positionMs < segments.first().startMs) return null
         if (positionMs >= segments.last().endMs) return null
