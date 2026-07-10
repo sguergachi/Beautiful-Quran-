@@ -227,8 +227,9 @@ with the rest of the chrome and vanishes entirely while reciting.
 - **Every verse carries a tip; a saved verse carries the whole ribbon.** An
   idle verse shows only the short swallowtail **tip** of the ribbon at the top
   corner — the same shape as a saved mark, just short and faded so it does not
-  pull the eye. Bookmark it and that tip grows into the **entire vertical
-  length** of the block at full ink.
+  pull the eye. Bookmark it and that tip grows nearly the **full vertical
+  length** of the block at full ink, stopping a short breath above the next
+  verse's tip so consecutive ribbons never touch.
 - **Marking is where you tap.** A tap on the verse's ribbon margin marks (or
   unmarks) *that* verse — the tip on the verse you are reading burns a little
   brighter so the affordance finds your eye.

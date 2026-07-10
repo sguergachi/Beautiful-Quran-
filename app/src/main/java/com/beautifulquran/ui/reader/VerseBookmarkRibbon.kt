@@ -41,7 +41,8 @@ import kotlin.math.sin
  * A verse's own bookmark ribbon — ink that belongs to the ayah block, not a
  * floating overlay. Lives in the block's outer margin (opposite the ayah
  * selector). Idle: just the swallowtail tip of the ribbon, soft and quiet.
- * Saved: the full ruby strip down the block. Tap the margin to mark / unmark.
+ * Saved: the ruby strip down the block, stopping short of the next verse's tip.
+ * Tap the margin to mark / unmark.
  *
  * Unfurl is a gravity drop with a traveling cloth wave, a soft overshoot, and
  * a settling flutter. Retract gathers the strip back into the tip.
@@ -53,10 +54,11 @@ private val STRIP_WIDTH = 44.dp
 private const val EDGE_INSET_DP = 8f    // from the block's outer edge
 private const val RIBBON_WIDTH_DP = 11f
 private const val NUB_LENGTH_DP = 14f   // just the swallowtail tip peeking out
+private const val BOTTOM_GAP_DP = 12f   // leave air above the next verse's tip
 private const val NOTCH_DP = 5.5f
 private const val WAVE_AMP_DP = 4.5f    // cloth sway while unfurling
 private const val SETTLE_AMP_DP = 3.2f  // final flutter amplitude
-private const val OVERSHOOT = 0.06f     // tip past the block bottom, then spring back
+private const val OVERSHOOT = 0.06f     // tip past the resting length, then spring back
 /** Retracted tip — a quiet hint, not a mark. */
 private const val NUB_ALPHA = 0.22f
 /** Reading-position tip, still soft vs. a saved ribbon. */
@@ -188,9 +190,13 @@ internal fun VerseBookmarkRibbon(
             val edgeInset = EDGE_INSET_DP.dp.toPx()
             val ribbonW = RIBBON_WIDTH_DP.dp.toPx()
             val nubLen = NUB_LENGTH_DP.dp.toPx()
+            val bottomGap = BOTTOM_GAP_DP.dp.toPx()
             val notch = NOTCH_DP.dp.toPx()
             val waveAmp = WAVE_AMP_DP.dp.toPx()
             val settleAmp = SETTLE_AMP_DP.dp.toPx()
+            // Resting full length stops short of the block bottom so consecutive
+            // saved ribbons (and the next verse's idle tip) never kiss.
+            val fullLen = (h - bottomGap).coerceAtLeast(nubLen)
 
             fun ax(logicalX: Float): Float =
                 if (mirrored) size.width - logicalX else logicalX
@@ -203,8 +209,8 @@ internal fun VerseBookmarkRibbon(
             val tipY = if (progress <= 0.001f) {
                 nubLen
             } else {
-                val travel = (h - nubLen).coerceAtLeast(1f)
-                (nubLen + travel * progress).coerceAtMost(h * 1.08f)
+                val travel = (fullLen - nubLen).coerceAtLeast(1f)
+                (nubLen + travel * progress).coerceAtMost(fullLen * 1.08f)
             }
             val showingRibbon = progress > 0.02f || bookmarked
             val alpha = when {
