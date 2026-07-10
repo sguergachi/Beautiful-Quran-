@@ -34,12 +34,24 @@ Hard rules:
 
 ## The ink bleed
 
-When the app must ask the reader something the system would normally raise in
-a floating dialog — the one case today is the notification-permission prompt
-before the first recitation — it never floats a box. Instead **the sheet you
-are already on becomes the question.** Ink bleeds outward from the point of
-touch (the play control) as a soft-edged circle, soaking the whole paper, and
-when it settles the same sheet reads as the message:
+When the app must present something the system would normally raise as a
+floating dialog or overlay sheet, it never floats a box. Instead **the sheet
+you are already on becomes the message.** Ink bleeds outward from a point of
+origin (the play control, a held word, …) as a soft-edged circle, soaking the
+whole paper, and when it settles the same surface reads as the new content.
+Closing opens a hole back to whatever sat beneath — no push, no stack, no
+window.
+
+The shared composable is `InkRevealOverlay` (`ui/theme/InkReveal.kt`). Three
+surfaces use it today / by design:
+
+| Surface | Origin | What settles after the bloom |
+|---|---|---|
+| Notification permission | Play control | The allow / not-now question (word-by-word lyric fade) |
+| [Root Word Viewer](ROOT_VIEWER.md) | Long-pressed word | Root, form, and concordance for that word |
+| [Timings Lab](TIMINGS_LAB.md) | Long-pressed word (developer mode only) | The timing workbench |
+
+For the notification prompt specifically:
 
 - **Top** — a large display-face title (Cormorant Garamond), the way a
   chapter opens.
@@ -49,11 +61,9 @@ when it settles the same sheet reads as the message:
   (the single green accent), which fade up only after the words have landed,
   so the reader reads before deciding.
 
-Both directions are a seamless fade on the one sheet: the bleed reveals it,
-and answering dissolves it straight back to the recitation underneath — no
-push, no stack, no window. This is the *only* place the app borrows Material's
-ink-spread gesture, and it is justified because here the spreading ink *is* the
-paper metaphor, not a tap ripple (taps still never ripple — see Motion).
+This is the *only* place the app borrows Material's ink-spread gesture, and
+it is justified because here the spreading ink *is* the paper metaphor, not
+a tap ripple (taps still never ripple — see Motion).
 
 ## Ink
 

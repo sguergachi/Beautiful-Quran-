@@ -13,17 +13,19 @@ feature — words lighting up in time with the reciter — is driven by a
 tools/build_db.py  (build time, runs in CI)
    quran-json (npm) ─┐
    WBW gloss (npm)  ─┼─► validate, align, pack ─► app/src/main/assets/quran.db
-   quran-align zip  ─┘
+   quran-align zip  ─┤
+   QAC morphology   ─┘   (roots / lemma / POS — see ROOT_VIEWER.md)
                                                         │
 app (runtime)                                           ▼
    QuranDatabase ── copies asset once, opens read-only SQLite
-   QuranRepository ── typed queries (surahs, ayahs+words, timing segments)
+   QuranRepository ── typed queries (surahs, ayahs+words, timings, morphology)
    SettingsRepository ── SharedPreferences behind a StateFlow
    PlayerController ─┬─ MediaController → PlaybackService (ExoPlayer + cache)
                      └─ PlayerUiState StateFlow (what's playing, where)
    HighlightEngine ── pure: (segments, positionMs) → active word position
-   ViewModels ── HomeViewModel, ReaderViewModel, SettingsViewModel
-   UI ── three sheets: Home, Reader, Settings (Compose + Material 3)
+   ViewModels ── HomeViewModel, ReaderViewModel, SettingsViewModel, …
+   UI ── three sheets (Home, Reader, Settings) + ink-bleed overlays
+         (notification prompt, Root Word Viewer, Timings Lab)
 ```
 
 ## Principles
@@ -55,6 +57,7 @@ Sources (all fetched over HTTPS, cached in `tools/.cache/`):
 | `@kmaslesa/holy-quran-word-by-word-full-data` (npm) | Per-word English gloss + transliteration (Quran.com data) | Only per-word English dataset on an open registry |
 | `cpfair/quran-align` release zip | Word-level timestamps per reciter, CC-BY 4.0 | The canonical open word-alignment dataset, matched to everyayah.com audio |
 | quran.com `qdc` audio API | **Repeat-aware** word timestamps for reciters in `QDC_REPEAT_RECITERS` | quran-align is one-pass and cannot encode a repeated phrase; quran.com's segments backtrack when the reciter repeats. Same everyayah audio. See [REPEAT_HIGHLIGHTING.md](REPEAT_HIGHLIGHTING.md) |
+| Quranic Arabic Corpus (QAC) v0.4 | Per-word root, lemma, POS, morphology; root concordance | Standard open Quranic morphology / root dictionary. Powers the [Root Word Viewer](ROOT_VIEWER.md) |
 
 The **canonical word segmentation** is the space-split of the Uthmani text.
 The other two sources are mapped onto it by position:
@@ -88,6 +91,9 @@ ayahs    (surah_id, ayah_number, text_uthmani, translation_en)
 words    (surah_id, ayah_number, position, arabic, translation_en, transliteration)
 reciters (id, slug, name, style, has_timings)
 timings  (reciter_id, surah_id, ayah_number, segments)   -- segments = "[[pos,startMs,endMs],…]"
+-- Root Word Viewer (planned; see ROOT_VIEWER.md):
+-- word_morphology (surah_id, ayah_number, position, root, lemma, pos, features)
+-- roots / root_occurrences  -- denormalised concordance for counts + jump list
 ```
 
 Timing segments are stored as one compact JSON array per (reciter, ayah)
@@ -196,7 +202,12 @@ horizontal page turn — draggable, fling-able, with page-turn audio
   bottom. All scrolling and verse-position logic routes through the focus
   engine (`reader/focus/`, see below).
 - `settings/SettingsScreen` — reciter, reading mode, text size, display
-  toggles, theme, attributions.
+  toggles, theme, attributions; developer mode unlocks the Timings Lab.
+
+Ink-bleed overlays (not paper-stack pages) sit above the stack via
+`InkRevealOverlay`: the notification-permission prompt, the
+[Root Word Viewer](ROOT_VIEWER.md) (default word long-press), and the
+[Timings Lab](TIMINGS_LAB.md) (developer mode only).
 
 ViewModels get their dependencies from `QuranApp` (Application) through
 `AppViewModelFactory`. Settings changes propagate reactively: e.g.

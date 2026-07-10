@@ -6,9 +6,13 @@ come from open datasets that are imperfect: individual ayahs can be audibly
 off, repeats are only ear-verified for two reciters (see
 [REPEAT_HIGHLIGHTING.md](REPEAT_HIGHLIGHTING.md)), and there was no way to
 ship a fix without regenerating the whole DB. The Lab closes that loop:
-notice a mistimed word while reading → long-press it → fix it in seconds →
-the reader is corrected immediately → submit the correction upstream when
-convenient.
+notice a mistimed word while reading → open the Lab (developer mode) →
+fix it in seconds → the reader is corrected immediately → submit the
+correction upstream when convenient.
+
+> **Entry is developer-only.** Default readers long-press a word to open the
+> [Root Word Viewer](ROOT_VIEWER.md), not the Lab. See *Where it lives*
+> below.
 
 ## The one design rule
 
@@ -99,17 +103,21 @@ by opening a hole back to the exact page it came from. Its palette is always
 **Royal Green** (and **Nightfall** under the Royal Green theme itself, so the
 two never coincide) with the dark accent set — that contrast is what makes the
 bloom read, since the surface would otherwise share the reader's own colours.
-Entry and exit never route through Settings.
+The Lab is reachable **only while developer mode is enabled** (persisted
+Settings unlock — repeated taps on the logo). When developer mode is off,
+word long-press opens the [Root Word Viewer](ROOT_VIEWER.md) instead and
+no Settings path exposes the Lab.
 
-* **From the reader** (primary): long-press any word in any reading mode —
-  no confirmation, the hold is the intent and a haptic is the answer. The Lab
-  blooms in on that exact (surah, ayah) with **the pressed word already
+* **From the reader** (developer mode on): long-press any word → an
+  ink-bleed chooser offers *Root word* or *Timings Lab*. Choosing the Lab
+  blooms it in on that exact (surah, ayah) with **the pressed word already
   selected and auditioning**, so the fix loop starts without another tap.
   Back (or the ▾ chevron) closes it back onto the same reader page, which
   already reflects the correction — the reader re-pulls fused timings the
   moment the override store changes.
-* **From Settings**: long-press the logo (developer unlock) → *Timings Lab*
-  rises over Settings on the last-read ayah.
+* **From Settings** (developer mode on): long-press the logo, or a
+  developer-section line → *Timings Lab* rises over Settings on the
+  last-read ayah.
 * The Lab edits the reciter currently selected in Settings and uses the
   shared `PlayerController`/`PlaybackService` (one-item playlist, ayah loop
   on by default in Listen mode), so caching, audio focus and speed behave
