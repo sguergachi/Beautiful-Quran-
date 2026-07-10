@@ -10,6 +10,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -630,17 +632,8 @@ fun ReaderScreen(
         },
         bottomBar = {
             Column {
-                // In-plane status: errors stay textual; returning to the
-                // active ayah is a textless ornamented control; a concordance
-                // jump leaves a "Back to …" pill in the same slot.
-                val showRootReturn =
-                    playerState.error == null && rootReturnTarget != null
-                val showReturnToAyah =
-                    playerState.error == null &&
-                        !showRootReturn &&
-                        !followEnabled &&
-                        recitingActive &&
-                        activeAyahPlacement.value.isAway
+                // Errors stay a quiet line on the sheet above the player.
+                // Return-to-ayah / Back-to float above the bar (see content).
                 AnimatedVisibility(
                     visible = playerState.error != null,
                     enter = fadeIn(),
@@ -655,40 +648,6 @@ fun ReaderScreen(
                             .fillMaxWidth()
                             .padding(vertical = 6.dp),
                     )
-                }
-                AnimatedVisibility(
-                    visible = showRootReturn,
-                    enter = fadeIn(tween(220)),
-                    exit = fadeOut(tween(220)),
-                ) {
-                    val target = rootReturnTarget
-                    if (target != null) {
-                        BackToOriginPill(
-                            label = target.label,
-                            onClick = onRootReturn,
-                            onDismiss = onDismissRootReturn,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 28.dp, vertical = 4.dp),
-                        )
-                    }
-                }
-                AnimatedVisibility(
-                    visible = showReturnToAyah,
-                    enter = fadeIn(tween(220)),
-                    exit = fadeOut(tween(220)),
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp, bottom = 6.dp),
-                    ) {
-                        IslamicReturnToAyahButton(
-                            pointUp = activeAyahPlacement.value.pointUp,
-                            onClick = { followEnabled = true },
-                        )
-                    }
                 }
                 PlayerBar(
                     state = playerState,
@@ -939,6 +898,64 @@ fun ReaderScreen(
                     .padding(top = padding.calculateTopPadding())
                     .zIndex(1f),
             )
+
+            // Floating return controls — sit above the player bar, not inside
+            // it. They float up into place (slide + fade) and stay there until
+            // dismissed. Back-to (concordance) takes the slot when present;
+            // otherwise the ornamented return-to-ayah can appear.
+            val showRootReturn =
+                playerState.error == null && rootReturnTarget != null
+            val showReturnToAyah =
+                playerState.error == null &&
+                    !showRootReturn &&
+                    !followEnabled &&
+                    recitingActive &&
+                    activeAyahPlacement.value.isAway
+            Box(
+                contentAlignment = Alignment.BottomCenter,
+                modifier = Modifier
+                    .matchParentSize()
+                    .zIndex(1.2f),
+            ) {
+                AnimatedVisibility(
+                    visible = showRootReturn,
+                    enter = fadeIn(tween(280)) + slideInVertically(
+                        animationSpec = tween(320),
+                        initialOffsetY = { it },
+                    ),
+                    exit = fadeOut(tween(220)) + slideOutVertically(
+                        animationSpec = tween(260),
+                        targetOffsetY = { it / 2 },
+                    ),
+                ) {
+                    val target = rootReturnTarget
+                    if (target != null) {
+                        BackToOriginPill(
+                            label = target.label,
+                            onClick = onRootReturn,
+                            onDismiss = onDismissRootReturn,
+                            modifier = Modifier.padding(horizontal = 28.dp, vertical = 10.dp),
+                        )
+                    }
+                }
+                AnimatedVisibility(
+                    visible = showReturnToAyah,
+                    enter = fadeIn(tween(280)) + slideInVertically(
+                        animationSpec = tween(320),
+                        initialOffsetY = { it },
+                    ),
+                    exit = fadeOut(tween(220)) + slideOutVertically(
+                        animationSpec = tween(260),
+                        targetOffsetY = { it / 2 },
+                    ),
+                ) {
+                    IslamicReturnToAyahButton(
+                        pointUp = activeAyahPlacement.value.pointUp,
+                        onClick = { followEnabled = true },
+                        modifier = Modifier.padding(bottom = 10.dp),
+                    )
+                }
+            }
         }
     }
 

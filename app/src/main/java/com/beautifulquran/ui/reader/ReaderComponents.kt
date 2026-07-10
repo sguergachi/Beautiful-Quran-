@@ -1104,9 +1104,10 @@ fun PageBreak(page: Int, useArabicIndicDigits: Boolean = true) {
 }
 
 /**
- * In-plane "Back to …" control for a Root Viewer concordance jump — sits in
- * the same bottom-bar slot as the return-to-ayah ornament. Soft ink wash, no
- * elevation; left arrow + chapter:ayah label. See docs/ROOT_VIEWER.md.
+ * Floating "Back to …" control for a Root Viewer concordance jump — overlays
+ * the reading column just above the player bar (same slot as the return-to-ayah
+ * ornament), floats up on reveal, and is not part of the bar itself. Soft ink
+ * wash, no elevation. See docs/ROOT_VIEWER.md.
  */
 @Composable
 fun BackToOriginPill(
@@ -1124,9 +1125,9 @@ fun BackToOriginPill(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .clip(RoundedCornerShape(percent = 50))
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.92f))
                 .quietClickable(onClick = onClick)
-                .padding(start = 12.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+                .padding(start = 14.dp, end = 18.dp, top = 10.dp, bottom = 10.dp),
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
@@ -1137,7 +1138,7 @@ fun BackToOriginPill(
             Text(
                 text = "Back to $label",
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1145,9 +1146,9 @@ fun BackToOriginPill(
         Icon(
             imageVector = Icons.Rounded.Close,
             contentDescription = "Dismiss",
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
             modifier = Modifier
-                .padding(start = 4.dp)
+                .padding(start = 2.dp)
                 .quietClickable(onClick = onDismiss)
                 .padding(8.dp),
         )
