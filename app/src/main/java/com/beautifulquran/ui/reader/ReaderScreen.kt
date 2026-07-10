@@ -889,9 +889,9 @@ fun ReaderScreen(
 
             // The bookmark strip is the selector's mirror twin on the opposite
             // edge, sharing the selector's chrome rules (hidden while reciting).
-            // Each ribbon is glued to its verse's block, so the strip shares the
-            // LazyColumn's coordinate origin: no top padding, and its canvas y
-            // matches the list's item layout offsets directly.
+            // Each ribbon is glued to its verse's block. The strip fills the
+            // parent Box (no top padding); BookmarkRibbonStrip maps LazyList
+            // item offsets through beforeContentPadding onto that canvas.
             val bookmarkSide = if (selectorSide == AyahSelectorSide.RIGHT) {
                 AyahSelectorSide.LEFT
             } else {

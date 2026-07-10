@@ -43,8 +43,10 @@ import kotlinx.coroutines.launch
  *
  * Verse geometry is taken from the reader's focus lookups and live LazyList
  * layout — the same source the FocusEngine uses — so a ribbon spans the whole
- * block (Arabic + gloss + translation) exactly, and everything is drawn in one
- * draw-phase Canvas.
+ * block (Arabic + gloss + translation) exactly. LazyList offsets are shifted
+ * by beforeContentPadding onto the strip's canvas (a sibling overlay whose
+ * y=0 is the parent Box top), so each nub sits at the block's top corner.
+ * Everything is drawn in one draw-phase Canvas.
  */
 
 private val STRIP_WIDTH = 56.dp
@@ -57,8 +59,8 @@ private const val NOTCH_DP = 6f         // depth of the swallowtail cut at the t
 private const val SWAY_AMPLITUDE_DP = 5f // how far the free tail flutters as it settles
 private const val TOP_FADE_DP = 32f     // matches the reader's top verticalFadingEdge
 private const val BOTTOM_FADE_DP = 64f   // matches the reader's bottom verticalFadingEdge
-private const val NUB_ALPHA = 0.5f       // an idle verse's "tap to bookmark" nub
-private const val NUB_FOCUSED_ALPHA = 0.82f // the nub on the verse being read, brighter
+private const val NUB_ALPHA = 0.22f      // retracted nub — a quiet hint, not a mark
+private const val NUB_FOCUSED_ALPHA = 0.42f // reading-position nub, still soft vs. a saved ribbon
 private const val SOLID_ALPHA = 0.92f    // a saved verse's full ribbon
 
 /** Gravity-ish drop: eases in slowly, accelerates, then eases out as the ribbon
@@ -253,16 +255,26 @@ internal fun BookmarkRibbonStrip(
     }
 }
 
-/** The on-screen ayah blocks and the canvas y-range each occupies. Read from
- * the live [LazyListState] every frame so ribbons track scrolling exactly. The
- * strip shares the LazyColumn's coordinate origin (no top padding), so item
- * layout offsets are canvas y-coordinates as-is; item→ayah comes from the
- * reader's focus lookups. */
+/**
+ * The on-screen ayah blocks and the canvas y-range each occupies. Read from
+ * the live [LazyListState] every frame so ribbons track scrolling exactly.
+ *
+ * LazyList reports [LazyListItemInfo.offset] in a space where 0 is the first
+ * content pixel *after* [LazyListLayoutInfo.beforeContentPadding], while the
+ * strip is a sibling overlay whose y=0 is the top of the shared parent Box.
+ * Adding that padding maps each item's top to the strip's canvas so a nub
+ * sits at the **top corner** of its verse block, not mid-block.
+ *
+ * Item→ayah comes from the reader's focus lookups.
+ */
 private fun visibleVerseBounds(
     listState: LazyListState,
     ayahNumberByItemIndex: Map<Int, Int>,
-): List<VerseBounds> =
-    listState.layoutInfo.visibleItemsInfo.mapNotNull { info ->
+): List<VerseBounds> {
+    val pad = listState.layoutInfo.beforeContentPadding.toFloat()
+    return listState.layoutInfo.visibleItemsInfo.mapNotNull { info ->
         val ayah = ayahNumberByItemIndex[info.index] ?: return@mapNotNull null
-        VerseBounds(ayah, info.offset.toFloat(), (info.offset + info.size).toFloat())
+        val top = info.offset.toFloat() + pad
+        VerseBounds(ayah, top, top + info.size.toFloat())
     }
+}
