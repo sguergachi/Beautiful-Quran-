@@ -3,6 +3,7 @@ import {
   useRef,
   type CSSProperties,
   type MouseEvent,
+  type MutableRefObject,
   type PointerEvent,
 } from 'react'
 import type { ActiveWord, Word } from '../data/models'
@@ -18,6 +19,8 @@ interface Props {
   showTransliteration: boolean
   englishMode?: boolean
   speed: number
+  /** Optional external ref so the ayah can keep the active word in view. */
+  rootRef?: MutableRefObject<HTMLElement | null>
   onPlay: () => void
   onHold: () => void
   onContextMenu?: (e: MouseEvent) => void
@@ -47,12 +50,14 @@ export function WordUnit({
   showTransliteration,
   englishMode = false,
   speed,
+  rootRef: externalRootRef,
   onPlay,
   onHold,
   onContextMenu,
 }: Props) {
   const ink = InkEngine.word(word.position, activeWord, isActiveAyah, dimmed)
-  const rootRef = useRef<HTMLSpanElement>(null)
+  const localRootRef = useRef<HTMLSpanElement>(null)
+  const rootRef = externalRootRef ?? localRootRef
   const overlayRef = useRef<HTMLSpanElement>(null)
   const prevState = useRef(ink.state)
   /** Captured at Active entry — stable for the whole time the word is lit. */
@@ -232,7 +237,10 @@ export function WordUnit({
 
   return (
     <span
-      ref={rootRef}
+      ref={(node) => {
+        localRootRef.current = node
+        if (externalRootRef) externalRootRef.current = node
+      }}
       className="word-unit word-ink"
       data-state={ink.state}
       style={style}

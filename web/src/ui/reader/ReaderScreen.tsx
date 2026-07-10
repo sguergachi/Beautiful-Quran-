@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { AyahBlock } from '../../render/AyahBlock'
 import { BasmalahCalligraphy } from '../../render/BasmalahCalligraphy'
 import { prefaceState, InkState } from '../../engine'
-import { FocusEngine, isAway, type TargetGeometry } from '../../engine/focus'
+import { isAway } from '../../engine/focus'
 import { surahOpensWithBasmalahPreface } from '../../engine/basmalah'
 import {
   appStore,
@@ -19,11 +19,15 @@ import {
   IconRepeat,
   IconRepeatOne,
 } from '../icons/PlaybackIcons'
+import { ReaderFocusController } from './ReaderFocusController'
 
 /** Matches `.ayah-rail .track` inset — keep marker + hit mapping in sync. */
 const RAIL_TRACK_TOP = 0.08
 const RAIL_TRACK_BOTTOM = 0.12
 const RAIL_TRACK_SPAN = 1 - RAIL_TRACK_TOP - RAIL_TRACK_BOTTOM
+
+/** Android `recitingActive` debounce — hold recess across brief pause blips. */
+const RECITING_RELEASE_MS = 350
 
 function ayahFromRailY(clientY: number, railTop: number, railHeight: number, count: number): number {
   if (count <= 1) return 1
@@ -62,12 +66,13 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const state = useAppState()
   const content = state.content
   const scrollRef = useRef<HTMLDivElement>(null)
+  const focusRef = useRef(new ReaderFocusController())
   const [focusedAyah, setFocusedAyah] = useState(1)
   const [showReturn, setShowReturn] = useState(false)
-  const userScrolling = useRef(false)
-  const scrollIdle = useRef<number | null>(null)
-  const lastFollowAyah = useRef<number | null>(null)
-  const focusedAyahRef = useRef(1)
+  const [recitingActive, setRecitingActive] = useState(false)
+  const [activeExceedsViewport, setActiveExceedsViewport] = useState(false)
+  const followWasEnabled = useRef(true)
+  const programmaticScroll = useRef(false)
   const railDragging = useRef(false)
 
   const side = state.settings.ayahSelectorSide
@@ -76,114 +81,141 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const isTop = content != null && stackLayer === READER_LAYER
   const peeking = content != null && stackLayer > READER_LAYER
   const active = isTop || peeking
+  const playingNow =
+    state.player.isPlaying &&
+    state.player.nowPlaying?.surahId === content?.surah.id
+
+  // Debounced recess flag — matches Android `recitingActive`.
+  useEffect(() => {
+    if (playingNow) {
+      setRecitingActive(true)
+      return
+    }
+    const t = window.setTimeout(() => setRecitingActive(false), RECITING_RELEASE_MS)
+    return () => clearTimeout(t)
+  }, [playingNow])
 
   useEffect(() => {
-    focusedAyahRef.current = focusedAyah
-  }, [focusedAyah])
+    const el = scrollRef.current
+    const count = content?.surah.ayahCount ?? 1
+    focusRef.current.bind(el, count, 0)
+  }, [content?.surah.id, content?.surah.ayahCount, isTop])
 
+  // Initial settle on the saved ayah (no animation).
   useEffect(() => {
     if (!content || !isTop) return
-    const el = scrollRef.current
-    if (!el) return
-    const target = el.querySelector(`#ayah-${state.settings.lastAyah || 1}`)
-    if (target) {
-      const top = (target as HTMLElement).offsetTop - el.clientHeight * 0.1
-      el.scrollTo({ top: Math.max(0, top), behavior: 'instant' as ScrollBehavior })
-    }
+    const ayah = state.settings.lastAyah || 1
+    void focusRef.current.focus(ayah, { animate: false, preRoll: false }).then(() => {
+      setFocusedAyah(focusRef.current.focusedAyah())
+    })
+    // Only on surah open / becoming top sheet.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content?.surah.id, isTop])
 
+  // Scroll readout + return-to-verse placement.
   useEffect(() => {
     const el = scrollRef.current
     if (!el || !content || !isTop) return
+    const focus = focusRef.current
 
     const update = () => {
-      const viewport = el.clientHeight
-      const line = FocusEngine.readingLinePx(viewport, 0)
-      const blocks = Array.from(el.querySelectorAll<HTMLElement>('.ayah-block'))
-      let best = focusedAyahRef.current
-      let bestDist = Infinity
-      for (const block of blocks) {
-        const rect = block.getBoundingClientRect()
-        const parentRect = el.getBoundingClientRect()
-        const topPx = rect.top - parentRect.top
-        const dist = Math.abs(topPx - line)
-        if (dist < bestDist) {
-          bestDist = dist
-          best = Number(block.dataset.ayah)
-        }
-      }
-      if (best !== focusedAyahRef.current) {
-        focusedAyahRef.current = best
-        setFocusedAyah(best)
-      }
+      const next = focus.focusedAyah()
+      setFocusedAyah((prev) => (prev === next ? prev : next))
+      setActiveExceedsViewport(focus.exceedsViewport(state.activeAyah))
 
-      const playing = state.activeAyah
-      if (playing != null) {
-        const targetEl = el.querySelector<HTMLElement>(`#ayah-${playing}`)
-        if (targetEl) {
-          const rect = targetEl.getBoundingClientRect()
-          const parentRect = el.getBoundingClientRect()
-          const geom: TargetGeometry = {
-            topPx: Math.round(rect.top - parentRect.top),
-            heightPx: Math.round(rect.height),
-            isLaidOut: true,
-            isAboveWhenOffscreen: false,
-          }
-          const place = FocusEngine.placement(geom, viewport, 0)
-          setShowReturn(isAway(place) && userScrolling.current)
-        }
+      if (state.activeAyah != null && !state.followEnabled) {
+        setShowReturn(isAway(focus.placementOf(state.activeAyah)))
       } else {
         setShowReturn(false)
       }
     }
 
     const onScroll = () => {
-      // Rail-driven jumps also fire scroll — still treat as user intent so
-      // follow mode does not yank the page back to the playing ayah.
-      userScrolling.current = true
-      appStore.setFollowEnabled(false)
-      if (scrollIdle.current) clearTimeout(scrollIdle.current)
-      scrollIdle.current = window.setTimeout(() => {
-        userScrolling.current = false
-      }, 1200)
+      if (programmaticScroll.current) {
+        update()
+        return
+      }
+      // Hand scroll pauses lyric follow — focus engine yields the page.
+      focus.cancel()
+      if (state.followEnabled) appStore.setFollowEnabled(false)
+      followWasEnabled.current = false
       update()
     }
 
     el.addEventListener('scroll', onScroll, { passive: true })
     update()
     return () => el.removeEventListener('scroll', onScroll)
-  }, [content?.surah.id, state.activeAyah, isTop])
+  }, [content?.surah.id, state.activeAyah, state.followEnabled, isTop])
+
+  // Lyric-style auto-scroll: keep the active ayah on its adaptive anchor.
+  useEffect(() => {
+    if (!isTop || !content) return
+    const ayah = state.activeAyah
+    if (ayah == null || !state.followEnabled) {
+      if (!state.followEnabled) followWasEnabled.current = false
+      return
+    }
+    const justEnabled = !followWasEnabled.current
+    followWasEnabled.current = true
+    programmaticScroll.current = true
+    void focusRef.current
+      .focus(ayah, { animate: true, preRoll: justEnabled })
+      .finally(() => {
+        programmaticScroll.current = false
+        setShowReturn(false)
+        setFocusedAyah(focusRef.current.focusedAyah())
+        setActiveExceedsViewport(focusRef.current.exceedsViewport(ayah))
+      })
+  }, [state.activeAyah, state.followEnabled, isTop, content?.surah.id])
+
+  // Display reflow (font / mode / gloss) — re-home the pinned verse.
+  const layoutReady = useRef(false)
+  useEffect(() => {
+    if (!isTop || !content) return
+    if (!layoutReady.current) {
+      layoutReady.current = true
+      return
+    }
+    const pin =
+      state.followEnabled && state.activeAyah != null
+        ? state.activeAyah
+        : focusedAyah
+    programmaticScroll.current = true
+    void focusRef.current.focus(pin, { animate: true, preRoll: false }).finally(() => {
+      programmaticScroll.current = false
+    })
+    // Intentionally keyed on layout-affecting settings only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    state.settings.readingMode,
+    state.settings.showWordGloss,
+    state.settings.showTransliteration,
+    state.settings.showTranslation,
+    state.settings.fontScale,
+  ])
 
   useEffect(() => {
-    if (!state.followEnabled || !state.activeAyah || !scrollRef.current || !isTop) return
-    if (lastFollowAyah.current === state.activeAyah) return
-    lastFollowAyah.current = state.activeAyah
-    const el = scrollRef.current
-    const target = el.querySelector<HTMLElement>(`#ayah-${state.activeAyah}`)
-    if (!target) return
-    const viewport = el.clientHeight
-    const anchor = FocusEngine.anchorOffsetPx(viewport, 0, target.offsetHeight)
-    const top = target.offsetTop - anchor
-    el.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
-    setShowReturn(false)
-  }, [state.activeAyah, state.followEnabled, isTop])
+    layoutReady.current = false
+  }, [content?.surah.id])
 
   const jumpToAyah = (ayah: number, behavior: ScrollBehavior = 'smooth') => {
-    const el = scrollRef.current
-    if (!el || !content) return
+    if (!content) return
     const count = content.surah.ayahCount
     const targetAyah = Math.min(count, Math.max(1, Math.round(ayah)))
-    const target = el.querySelector<HTMLElement>(`#ayah-${targetAyah}`)
-    if (!target) return
-
-    userScrolling.current = true
-    appStore.setFollowEnabled(false)
-    lastFollowAyah.current = null
-    focusedAyahRef.current = targetAyah
+    const playingThisSurah =
+      state.player.nowPlaying?.surahId === content.surah.id
+    appStore.setFollowEnabled(playingThisSurah)
+    followWasEnabled.current = playingThisSurah
     setFocusedAyah(targetAyah)
-
-    const anchor = FocusEngine.anchorOffsetPx(el.clientHeight, 0, target.offsetHeight)
-    el.scrollTo({ top: Math.max(0, target.offsetTop - anchor), behavior })
+    programmaticScroll.current = true
+    void focusRef.current
+      .focus(targetAyah, {
+        animate: behavior !== 'auto' && behavior !== 'instant',
+        preRoll: true,
+      })
+      .finally(() => {
+        programmaticScroll.current = false
+      })
   }
 
   if (!content) {
@@ -199,12 +231,17 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     )
   }
 
-  const dimmedGlobal = state.player.isPlaying || state.player.nowPlaying != null
+  // Recess non-active ayahs only while audio is actually playing. At rest
+  // (paused / stopped / loaded-but-idle) every ayah is Plain — full opacity.
+  const dimmedGlobal = recitingActive
   const preface = prefaceState(state.activeBasmalah, dimmedGlobal && !state.activeBasmalah)
   const prefaceOpacity = preface === InkState.Upcoming ? 0.22 : 1
   const showBasmalah = surahOpensWithBasmalahPreface(content.surah.id)
   const ayahCount = content.surah.ayahCount
-  const markerPct = markerTopPct(focusedAyah, ayahCount)
+  // Rail tracks the recitation only while playing; otherwise the reading line.
+  const railAyah =
+    recitingActive && state.activeAyah != null ? state.activeAyah : focusedAyah
+  const markerPct = markerTopPct(railAyah, ayahCount)
 
   const scrubRail = (clientY: number, rail: HTMLElement, behavior: ScrollBehavior) => {
     const rect = rail.getBoundingClientRect()
@@ -247,7 +284,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       role="slider"
       aria-valuemin={1}
       aria-valuemax={ayahCount}
-      aria-valuenow={focusedAyah}
+      aria-valuenow={railAyah}
       aria-label="Ayah position"
       aria-disabled={receded}
     >
@@ -257,6 +294,8 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   )
 
   const repeatMode = state.player.repeatMode
+  const keepWordInView =
+    state.followEnabled && recitingActive && activeExceedsViewport
 
   return (
     <div
@@ -314,16 +353,23 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
               {content.ayahs.map((ayah) => {
                 const isActive = state.activeAyah === ayah.number
                 const dimmed = dimmedGlobal && !isActive
+                // Karaoke ink only while audio is moving. At rest every ayah is
+                // Plain (full opacity) — including the verse that was playing.
+                const inkActive = recitingActive && isActive
                 const aw =
-                  state.activeWord?.ayah === ayah.number ? state.activeWord : null
+                  inkActive && state.activeWord?.ayah === ayah.number
+                    ? state.activeWord
+                    : null
                 return (
                   <AyahBlock
                     key={ayah.number}
                     ayah={ayah}
                     activeWord={aw}
-                    isActiveAyah={isActive}
+                    isActiveAyah={inkActive}
                     dimmed={dimmed}
                     focused={focusedAyah === ayah.number}
+                    keepActiveWordInView={keepWordInView && isActive}
+                    onKeepWordInView={(wordEl) => focusRef.current.keepWordInView(wordEl)}
                     readingMode={state.settings.readingMode}
                     showWordGloss={state.settings.showWordGloss}
                     showTransliteration={state.settings.showTransliteration}
@@ -350,9 +396,8 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
               type="button"
               className="return-ayah"
               onClick={() => {
+                followWasEnabled.current = false
                 appStore.setFollowEnabled(true)
-                lastFollowAyah.current = null
-                jumpToAyah(state.activeAyah!)
                 setShowReturn(false)
               }}
             >
@@ -384,7 +429,13 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
               type="button"
               className="play"
               aria-label={state.player.isPlaying ? 'Pause' : 'Play'}
-              onClick={() => void appStore.playPause()}
+              onClick={() => {
+                if (!state.player.isPlaying) {
+                  followWasEnabled.current = false
+                  appStore.setFollowEnabled(true)
+                }
+                void appStore.playPause()
+              }}
             >
               {state.player.isPlaying ? <IconPause /> : <IconPlay />}
             </button>
