@@ -551,19 +551,18 @@ private class WordInkPalette(
         .compositeOver(paper)
 
     /**
-     * Base span colour. First-pass active is [Color.Transparent] so the
-     * shaped-ayah bloom can paint the same glyphs without double-inking;
-     * upcoming stays faint; recited and repeat-chain words stay full ink
-     * under the orange bloom.
+     * Base span colour. First-pass active is full ink — [shapedWordBloom]
+     * covers it with paper and pulls the cover back along the wash (same
+     * curve as [letterFadeIn]). Upcoming stays faint; repeat-chain words
+     * stay full ink under the orange SrcIn tint.
      */
     fun colorFor(state: WordVisualState, repeat: Boolean): Color = when {
         repeat -> fullInk
-        state == WordVisualState.Active -> Color.Transparent
         state == WordVisualState.Upcoming -> fadedInk
         else -> fullInk
     }
 
-    val fullInkColor: Color get() = fullInk
+    val paperColor: Color get() = paper
     val repeatInkColor: Color get() = repeatInk
 }
 
@@ -661,10 +660,11 @@ private fun ResponsiveHafsAyah(
     var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     val hitSlopPx = with(LocalDensity.current) { 8.dp.toPx() }
 
-    // Static colours only. First-pass active is transparent in the base span
-    // so shapedWordBloom can paint the same glyphs; upcoming is faint; recited
-    // and repeat-chain words are full ink. Bloom progress is read only in the
-    // draw phase — never while building the annotated string.
+    // Static colours only. First-pass active is full ink in the base span —
+    // shapedWordBloom covers it with paper and reveals along the wash.
+    // Upcoming is faint; recited and repeat-chain words are full ink. Bloom
+    // progress is read only in the draw phase — never while building the
+    // annotated string.
     val rendered = remember(ayah, states, repeats, palette, ayahMarkInk, fontSize) {
         val ranges = ArrayList<IntRange>(ayah.words.size)
         val text = buildAnnotatedString {
@@ -703,23 +703,24 @@ private fun ResponsiveHafsAyah(
             .shapedWordBloom(
                 blooms = {
                     val blooms = ArrayList<ShapedWordBloom>(repeats.size + 1)
-                    // First-pass ink reveal: re-paint the shaped ayah glyphs for
-                    // the active word and wash them with the same letterFadeIn
-                    // curve as gloss mode. Skipped while repeating — orange
-                    // carries the motion, same as WordUnit.
+                    // First-pass ink reveal: paper cover over the shaped full-ink
+                    // glyphs, pulled back on the letterFadeIn curve. Skipped
+                    // while repeating — orange carries the motion, same as
+                    // WordUnit.
                     if (activeIndex >= 0 && !activeIsRepeat) {
                         val range = rendered.wordRanges.getOrNull(activeIndex)
                         if (range != null) {
                             blooms += ShapedWordBloom.InkReveal(
                                 range = range,
                                 progress = sweeps[activeIndex].value,
-                                color = palette.fullInkColor,
+                                paper = palette.paperColor,
                                 restingAlpha = WordVisualState.Upcoming.inkAlpha(),
                             )
                         }
                     }
-                    // Orange directional bloom for every word still in (or
-                    // dissolving out of) the repeat chain.
+                    // Orange directional bloom: SrcIn-tint the shaped glyphs,
+                    // then DstIn-wash — same motion as gloss mode's orange
+                    // overlay, without re-shaping or painting neighbour rects.
                     repeatWashes.forEachIndexed { index, wash ->
                         if (wash.alpha.value <= 0f) return@forEachIndexed
                         val range = rendered.wordRanges.getOrNull(index)

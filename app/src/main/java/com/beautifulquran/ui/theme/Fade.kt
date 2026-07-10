@@ -99,34 +99,41 @@ fun Modifier.letterFadeIn(
 /**
  * One word-local bloom inside a larger shaped [Text] (Arabic-only / no-gloss).
  *
- * Must operate on the ayah's already-shaped [TextLayoutResult]: a separate
- * per-word [Text] re-shapes the isolated string and breaks Uthmanic Hafs
- * joining/ligatures, so the overlay never matches the base glyphs and the
- * fade reads as a hard colour pop. [shapedWordBloom] re-paints the same
- * layout via [drawText], clipped to [TextLayoutResult.getPathForRange], then
- * applies the same [letterFadeIn] DstIn wash — correct harfs, directional
- * bloom, no neighbour rect bleed.
+ * Constraints that ruled out earlier approaches:
+ * - Per-glyph [SpanStyle]s flip Uthmanic Hafs joining (#133).
+ * - A separate overlay [Text] of one word re-shapes in isolation (no fade).
+ * - [drawText] with a [Color] argument does **not** override existing
+ *   [SpanStyle] colours — painting over a transparent active span stays
+ *   invisible until the word becomes recited (the bug this API fixes).
+ * - Inflated paper/orange rects bleed onto neighbours.
+ *
+ * So every bloom operates on the ayah's already-shaped [TextLayoutResult],
+ * clipped to [TextLayoutResult.getPathForRange]:
+ * - [InkReveal]: base word is full ink; paper coverage of `1 − glyphAlpha`
+ *   yields the same upcoming→full curve as [letterFadeIn].
+ * - [ColorReveal]: re-draw the shaped glyphs, [BlendMode.SrcIn]-tint them
+ *   orange, then apply the [letterFadeIn] DstIn wash.
  */
 sealed class ShapedWordBloom {
     abstract val range: IntRange
     abstract val progress: Float
-    abstract val color: Color
     abstract val restingAlpha: Float
 
-    /** First-pass ink: full-ink glyphs wash from [restingAlpha] → 1. */
+    /** First-pass ink: paper cover over full-ink glyphs, wash from
+     * [restingAlpha] → 1 (same curve as [letterFadeIn]). */
     data class InkReveal(
         override val range: IntRange,
         override val progress: Float,
-        override val color: Color,
+        val paper: Color,
         override val restingAlpha: Float,
     ) : ShapedWordBloom()
 
-    /** Repeat (orange): [color] washes from [restingAlpha] → 1, then dissolves
-     * via [layerAlpha] when the word leaves the repeat chain. */
+    /** Repeat (orange): shaped glyphs tinted to [color], wash from
+     * [restingAlpha] → 1, then dissolve via [layerAlpha]. */
     data class ColorReveal(
         override val range: IntRange,
         override val progress: Float,
-        override val color: Color,
+        val color: Color,
         override val restingAlpha: Float = 0f,
         val layerAlpha: Float = 1f,
     ) : ShapedWordBloom()
@@ -149,11 +156,6 @@ fun Modifier.shapedWordBloom(
         blooms().forEach { bloom ->
             val range = bloom.range
             if (range.isEmpty()) return@forEach
-            val layerAlpha = when (bloom) {
-                is ShapedWordBloom.InkReveal -> 1f
-                is ShapedWordBloom.ColorReveal -> bloom.layerAlpha
-            }
-            if (layerAlpha <= 0f) return@forEach
             val length = textLayout.layoutInput.text.length
             if (length == 0) return@forEach
             val start = range.first.coerceIn(0, length)
@@ -164,58 +166,99 @@ fun Modifier.shapedWordBloom(
             if (bounds.isEmpty || bounds.width <= 0f) return@forEach
 
             val p = bloom.progress.coerceIn(0f, 1f)
-            val washColors = stops.map { t ->
-                val s = inkSmootherstep(t)
-                val a = bloom.restingAlpha +
-                    (1f - bloom.restingAlpha) * (if (rtl) s else 1f - s)
-                Color.White.copy(alpha = a)
-            }
+            val w = bounds.width
+            val edge = (w * InkWashFeather).coerceAtLeast(1f)
+            val head = p * (w + edge)
 
-            drawIntoCanvas { canvas ->
-                canvas.saveLayer(
-                    Rect(
-                        bounds.left - bleed,
-                        bounds.top - bleed,
-                        bounds.right + bleed,
-                        bounds.bottom + bleed,
-                    ),
-                    Paint(),
-                )
-            }
-            // Same shaped glyphs as the base ayah — clip keeps the wash local
-            // to this word's selection path so neighbours stay untouched.
-            clipPath(path) {
-                drawText(
-                    textLayoutResult = textLayout,
-                    color = bloom.color,
-                    alpha = layerAlpha,
-                )
-            }
-            if (p < 1f) {
-                val w = bounds.width
-                val edge = (w * InkWashFeather).coerceAtLeast(1f)
-                val head = p * (w + edge)
-                val brush = if (rtl) {
-                    Brush.horizontalGradient(
-                        colors = washColors,
-                        startX = bounds.left + (w - head),
-                        endX = bounds.left + (w - head) + edge,
-                    )
-                } else {
-                    Brush.horizontalGradient(
-                        colors = washColors,
-                        startX = bounds.left + head - edge,
-                        endX = bounds.left + head,
-                    )
+            when (bloom) {
+                is ShapedWordBloom.InkReveal -> {
+                    // Full ink is already on the page; pull paper back along the
+                    // wash so glyphs breathe in. Clip to the word path — no
+                    // inflated rects, so neighbours stay untouched.
+                    if (p >= 1f) return@forEach
+                    val paperColors = stops.map { t ->
+                        val s = inkSmootherstep(t)
+                        val glyphAlpha = bloom.restingAlpha +
+                            (1f - bloom.restingAlpha) * (if (rtl) s else 1f - s)
+                        bloom.paper.copy(alpha = (1f - glyphAlpha).coerceIn(0f, 1f))
+                    }
+                    val brush = if (rtl) {
+                        Brush.horizontalGradient(
+                            colors = paperColors,
+                            startX = bounds.left + (w - head),
+                            endX = bounds.left + (w - head) + edge,
+                        )
+                    } else {
+                        Brush.horizontalGradient(
+                            colors = paperColors,
+                            startX = bounds.left + head - edge,
+                            endX = bounds.left + head,
+                        )
+                    }
+                    clipPath(path) {
+                        drawRect(
+                            brush = brush,
+                            topLeft = Offset(bounds.left, bounds.top),
+                            size = Size(bounds.width, bounds.height),
+                        )
+                    }
                 }
-                drawRect(
-                    brush = brush,
-                    topLeft = Offset(bounds.left - bleed, bounds.top - bleed),
-                    size = Size(bounds.width + bleed * 2f, bounds.height + bleed * 2f),
-                    blendMode = BlendMode.DstIn,
-                )
+                is ShapedWordBloom.ColorReveal -> {
+                    if (bloom.layerAlpha <= 0f) return@forEach
+                    // Re-draw the same shaped glyphs, tint them orange with
+                    // SrcIn (keeps harf shapes), then DstIn-wash like letterFadeIn.
+                    val washColors = stops.map { t ->
+                        val s = inkSmootherstep(t)
+                        val a = bloom.restingAlpha +
+                            (1f - bloom.restingAlpha) * (if (rtl) s else 1f - s)
+                        Color.White.copy(alpha = a)
+                    }
+                    drawIntoCanvas { canvas ->
+                        canvas.saveLayer(
+                            Rect(
+                                bounds.left - bleed,
+                                bounds.top - bleed,
+                                bounds.right + bleed,
+                                bounds.bottom + bleed,
+                            ),
+                            Paint(),
+                        )
+                    }
+                    clipPath(path) {
+                        drawText(textLayoutResult = textLayout)
+                        drawRect(
+                            color = bloom.color.copy(
+                                alpha = bloom.layerAlpha.coerceIn(0f, 1f),
+                            ),
+                            topLeft = Offset(bounds.left, bounds.top),
+                            size = Size(bounds.width, bounds.height),
+                            blendMode = BlendMode.SrcIn,
+                        )
+                    }
+                    if (p < 1f) {
+                        val brush = if (rtl) {
+                            Brush.horizontalGradient(
+                                colors = washColors,
+                                startX = bounds.left + (w - head),
+                                endX = bounds.left + (w - head) + edge,
+                            )
+                        } else {
+                            Brush.horizontalGradient(
+                                colors = washColors,
+                                startX = bounds.left + head - edge,
+                                endX = bounds.left + head,
+                            )
+                        }
+                        drawRect(
+                            brush = brush,
+                            topLeft = Offset(bounds.left - bleed, bounds.top - bleed),
+                            size = Size(bounds.width + bleed * 2f, bounds.height + bleed * 2f),
+                            blendMode = BlendMode.DstIn,
+                        )
+                    }
+                    drawIntoCanvas { canvas -> canvas.restore() }
+                }
             }
-            drawIntoCanvas { canvas -> canvas.restore() }
         }
     }
 }
