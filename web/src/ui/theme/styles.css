@@ -651,17 +651,27 @@ select {
   font-size: 0.92rem;
 }
 
-.basmalah {
-  font-family: var(--font-arabic);
-  font-size: calc(1.5rem * var(--font-scale, 1));
-  direction: rtl;
-  margin: 1.15rem 0 0;
-  transition: opacity 450ms ease;
+.basmalah,
+.basmalah-calligraphy {
+  display: block;
+  width: min(100%, 28rem);
+  margin: 1.25rem auto 0;
+  padding: 0.35rem 0.75rem 0;
+  border: none;
+  background: none;
+  color: var(--ink);
   cursor: pointer;
-  display: inline-block;
+  transition: opacity 450ms ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.basmalah:hover {
+.basmalah-calligraphy svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.basmalah-calligraphy:hover {
   opacity: 0.75 !important;
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { AyahBlock } from '../../render/AyahBlock'
-import { BASMALAH_UTHMANI, prefaceState, InkState } from '../../engine'
+import { BasmalahCalligraphy } from '../../render/BasmalahCalligraphy'
+import { prefaceState, InkState } from '../../engine'
 import { FocusEngine, isAway, type TargetGeometry } from '../../engine/focus'
 import { surahOpensWithBasmalahPreface } from '../../engine/basmalah'
 import {
@@ -301,13 +302,12 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                   {content.surah.revelationPlace}
                 </p>
                 {showBasmalah ? (
-                  <p
+                  <BasmalahCalligraphy
                     className="basmalah"
+                    data-state={preface}
                     style={{ opacity: prefaceOpacity }}
                     onClick={() => void appStore.playAyah(1, false)}
-                  >
-                    {BASMALAH_UTHMANI}
-                  </p>
+                  />
                 ) : null}
               </header>
 
