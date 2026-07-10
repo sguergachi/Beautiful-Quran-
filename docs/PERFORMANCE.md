@@ -32,11 +32,12 @@ parameter).
 
 The no-gloss Arabic path (`ResponsiveHafsAyah`) cannot put `letterFadeIn` on
 the whole ayah. It keeps the shaped ayah as static full-ink spans and applies
-`shapedWordBloom` in the draw phase: upcoming words get an animated paper
-cover (so ayah activation does not flash), first-pass pulls that cover back
-on the ink-wash curve, and repeat SrcIn-tints the same shaped glyphs orange
-then DstIn-washes. Progress is read only at draw time, so the sweep never
-reshapes the ayah or paints onto neighbouring words.
+`shapedWordBloom` in the draw phase: upcoming words get a full-strength paper
+cover from the first Upcoming frame (so ayah activation never flashes
+full-ink unread), first-pass pulls that cover back on the ink-wash curve, and
+repeat SrcIn-tints the same shaped glyphs orange then DstIn-washes. Progress
+is read only at draw time, so the sweep never reshapes the ayah or paints
+onto neighbouring words.
 
 ### 2. Recomposition confined to one ayah
 
