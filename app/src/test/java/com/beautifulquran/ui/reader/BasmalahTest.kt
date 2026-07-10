@@ -29,6 +29,7 @@ class BasmalahTest {
     @Test
     fun `basmalah text matches Al-Fatihah ayah 1`() {
         // Four Uthmani words, same surface form as 1:1 in quran.db.
+        // Used as the accessibility label on the calligraphic render.
         assertEquals(4, BASMALAH_UTHMANI.split(' ').size)
         assertTrue(BASMALAH_UTHMANI.startsWith("بِسۡمِ"))
         assertTrue(BASMALAH_UTHMANI.endsWith("ٱلرَّحِيمِ"))
