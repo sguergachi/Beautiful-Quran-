@@ -213,8 +213,10 @@ Three sheets, hand-rolled paper stack (no router chrome):
    return-to-ayah ornament; bookmark ribbon.
 3. **Settings** — reciter, reading mode, text size, display toggles, theme.
    Opens as a third sheet **over** the reader when a surah is open
-   (`stackLayer` 0→1→2), so Chapters and Reader peek on the left. Tap the
-   left edge of a peeking sheet to peel back. Escape peels one sheet.
+   (`stackLayer` 0→1→2). All three sheets share one centered axis: the top
+   sheet insets equally L/R so content stays centered, and under-sheets keep
+   a smaller left inset so their edges peek. Tap a peek (or Escape) to peel
+   back.
 
 Hard rules from `DESIGN.md` apply unchanged: no dialogs, cards, ripples,
 elevation, borders; hierarchy via spacing / size / ink alpha; ink-bleed

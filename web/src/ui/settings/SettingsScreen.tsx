@@ -14,8 +14,8 @@ export function SettingsScreen({
   const state = useAppState()
   const s = state.settings
   const layer = settingsLayerFor(hasReader)
+  const isTop = stackLayer === layer
   const depth = Math.max(0, stackLayer - layer)
-  const active = state.sheet === 'settings'
 
   return (
     <div
@@ -23,7 +23,7 @@ export function SettingsScreen({
       data-name="settings"
       data-layer={layer}
       data-depth={depth}
-      data-active={active}
+      data-active={isTop}
     >
       <div className="settings">
         <button type="button" className="back" onClick={() => appStore.goBack()}>
