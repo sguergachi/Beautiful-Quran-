@@ -162,4 +162,7 @@ class HomeViewModel(
         }
         player.setRepeatMode(next)
     }
+
+    /** Dismisses the cover float and ends the playback session. */
+    fun dismissFloatingPlayback() = player.stop()
 }
