@@ -923,7 +923,8 @@ fun AyahBlock(
  * star-and-cross weave, crowned by a gilded eight-fold rosette whose sheen
  * shifts with the page ([sheen] is read at draw time only). Surahs that open
  * with the basmalah (every chapter except Al-Fatihah and At-Tawbah) carry it
- * as a centered line of ink beneath the title — not numbered, not an ayah.
+ * as traditional Naskh manuscript calligraphy beneath the title — not
+ * numbered, not an ayah.
  */
 @Composable
 fun SurahHeader(
@@ -983,16 +984,7 @@ fun SurahHeader(
         )
         if (showBasmalah) {
             Spacer(Modifier.height(28.dp))
-            Text(
-                text = BASMALAH_UTHMANI,
-                style = ArabicWordStyle.copy(
-                    fontSize = 26.sp,
-                    textAlign = TextAlign.Center,
-                ),
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            BasmalahCalligraphy()
         }
     }
 }

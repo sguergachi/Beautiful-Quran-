@@ -170,9 +170,11 @@ image, so it is crisp at any density and nearly free to render.
 - **The weave.** Behind each surah opening, a star-and-cross tessellation at
   ~4 % ink, embossed, dissolving into the page at its edges.
 - **Basmalah.** Every surah except Al-Fatihah (where it *is* ayah 1) and
-  At-Tawbah (which has none) opens with the basmalah as a quiet centered
-  line of Arabic beneath the chapter title — ink on the page, not a
-  numbered ayah and not ornament.
+  At-Tawbah (which has none) opens with the basmalah as traditional Naskh
+  manuscript calligraphy beneath the chapter title — ink on the page, not a
+  numbered ayah and not ornament. The VectorDrawable
+  (`basmalah_naskh`) is adapted from Wikimedia Commons File:Basmala.svg
+  (Baba66, CC BY-SA 3.0) and tinted to the current surface ink.
 - **Restraint rule:** ornament appears in exactly three places — the surah
   header (rosette + weave), ayah number marks, and the home title mark.
   Nothing else on the sheet is decorated.
