@@ -731,6 +731,8 @@ select {
 }
 
 .word-ink {
+  /* Soft-dim when leaving a verse / becoming Upcoming. Active snaps — the
+     letter wash carries the reveal (Android animatedInkAlpha snap-on-Active). */
   transition: opacity 450ms ease;
   position: relative;
 }
@@ -740,9 +742,14 @@ select {
 }
 
 .word-ink[data-state='Plain'],
-.word-ink[data-state='Recited'],
+.word-ink[data-state='Recited'] {
+  opacity: 1;
+}
+
 .word-ink[data-state='Active'] {
   opacity: 1;
+  /* Snap to full base ink; wash mask reveals from the Upcoming floor. */
+  transition: none;
 }
 
 .word-stack {
@@ -769,7 +776,9 @@ select {
 }
 
 .hafs-word.hafs-active {
-  transition: opacity 140ms ease;
+  /* Snap like gloss Active — no mid-fade flicker on word hand-off. */
+  transition: none;
+  opacity: 1;
 }
 
 .ayah-translation {
