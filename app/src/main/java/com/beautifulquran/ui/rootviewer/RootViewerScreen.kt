@@ -14,10 +14,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,9 +36,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -50,8 +57,9 @@ import com.beautifulquran.ui.theme.verticalFadingEdges
  * See docs/ROOT_VIEWER.md — paper rules still apply: no cards, borders, or ripples.
  *
  * Chrome mirrors the reader: once the in-page word header scrolls off, the
- * same name reappears centred in the top bar. A single Close on the right
- * dismisses the bleed (system back does the same).
+ * same name reappears centred in the top bar (with a speaker to hear the
+ * word). A single Close on the right dismisses the bleed (system back does
+ * the same).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,7 +87,11 @@ fun RootViewerScreen(
                         exit = fadeOut(tween(350)),
                     ) {
                         if (word != null) {
-                            CollapsedWordTitle(word = word)
+                            CollapsedWordTitle(
+                                word = word,
+                                isPlaying = ui.isPlayingWord,
+                                onPlay = viewModel::playCurrentWord,
+                            )
                         }
                     }
                 },
@@ -143,7 +155,11 @@ fun RootViewerScreen(
                 ) {
                     item(key = "word-header") {
                         if (word != null) {
-                            WordHeader(word = word)
+                            WordHeader(
+                                word = word,
+                                isPlaying = ui.isPlayingWord,
+                                onPlay = viewModel::playCurrentWord,
+                            )
                         }
                     }
 
@@ -249,18 +265,29 @@ fun RootViewerScreen(
     }
 }
 
-/** In-page opening: the large word the hold landed on. */
+/** In-page opening: the large word the hold landed on, with a speaker to hear it. */
 @Composable
-private fun WordHeader(word: Word) {
-    Text(
-        text = word.arabic,
-        fontFamily = HafsFontFamily,
-        fontSize = 36.sp,
-        lineHeight = 52.sp,
-        textAlign = TextAlign.Center,
-        color = MaterialTheme.colorScheme.onSurface,
+private fun WordHeader(
+    word: Word,
+    isPlaying: Boolean,
+    onPlay: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
         modifier = Modifier.fillMaxWidth(),
-    )
+    ) {
+        Text(
+            text = word.arabic,
+            fontFamily = HafsFontFamily,
+            fontSize = 36.sp,
+            lineHeight = 52.sp,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.width(10.dp))
+        WordSpeakerButton(isPlaying = isPlaying, onPlay = onPlay, size = 22.dp)
+    }
     if (word.translation.isNotBlank()) {
         Spacer(Modifier.height(6.dp))
         Text(
@@ -285,16 +312,24 @@ private fun WordHeader(word: Word) {
 
 /** Compact name that settles into the top bar once [WordHeader] scrolls away. */
 @Composable
-private fun CollapsedWordTitle(word: Word) {
+private fun CollapsedWordTitle(
+    word: Word,
+    isPlaying: Boolean,
+    onPlay: () -> Unit,
+) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = word.arabic,
-            fontFamily = HafsFontFamily,
-            fontSize = 20.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = word.arabic,
+                fontFamily = HafsFontFamily,
+                fontSize = 20.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.width(8.dp))
+            WordSpeakerButton(isPlaying = isPlaying, onPlay = onPlay, size = 18.dp)
+        }
         if (word.translation.isNotBlank()) {
             Text(
                 text = word.translation,
@@ -305,6 +340,25 @@ private fun CollapsedWordTitle(word: Word) {
             )
         }
     }
+}
+
+/** Quiet speaker next to the word — plays with the settings-selected reciter. */
+@Composable
+private fun WordSpeakerButton(
+    isPlaying: Boolean,
+    onPlay: () -> Unit,
+    size: Dp,
+) {
+    val alpha = if (isPlaying) 0.9f else 0.45f
+    Icon(
+        imageVector = Icons.AutoMirrored.Rounded.VolumeUp,
+        contentDescription = "Play word",
+        tint = MaterialTheme.colorScheme.primary.copy(alpha = alpha),
+        modifier = Modifier
+            .size(size)
+            .quietClickable(onClick = onPlay)
+            .semantics { role = Role.Button },
+    )
 }
 
 @Composable
