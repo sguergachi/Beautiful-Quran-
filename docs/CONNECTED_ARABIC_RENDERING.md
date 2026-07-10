@@ -45,15 +45,16 @@ onto neighbouring words:
   "font flip" fixed in #133). It also cannot apply `letterFadeIn` to the whole
   ayah — that would wash every word. A separate overlay `Text` of one word is
   also wrong: the isolated string re-shapes and no longer matches the ayah's
-  Hafs glyphs, so the fade reads as a hard colour pop.
-- Instead the base ayah keeps one contiguous colour span per word. The first-pass
-  active word's base span is transparent; `shapedWordBloom` re-paints the **same
-  already-shaped** `TextLayoutResult` via `drawText`, clipped to
-  `getPathForRange` for that word, then applies the same DstIn wash as
-  `letterFadeIn`. Correct harfs, directional bloom, no neighbour rect bleed.
-- Repeat (orange) uses the same shaped-path bloom: orange `drawText` over the
-  full-ink base, wash from resting 0, dissolving `layerAlpha` — matching gloss
-  mode's orange overlay. No solid orange rectangles.
+  Hafs glyphs. And `drawText(color=…)` does **not** override existing span
+  colours — so painting over a transparent active span stays invisible.
+- Instead the base ayah keeps one contiguous colour span per word. First-pass
+  active is full ink; `shapedWordBloom` covers that word's
+  `getPathForRange` with paper and pulls the cover back on the `letterFadeIn`
+  curve (CoverWithPaper). Correct harfs, directional bloom, no neighbour rect
+  bleed.
+- Repeat (orange) re-draws the same shaped glyphs, `SrcIn`-tints them orange,
+  then applies the DstIn wash from resting 0 with dissolving `layerAlpha` —
+  matching gloss mode's orange overlay without solid orange rectangles.
 
 ## What The Sources Say
 
