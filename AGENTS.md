@@ -25,7 +25,7 @@ tools/build_db.py       Data pipeline that generates quran.db (build-time, not a
 tools/timing_overrides/ Committed timing-correction patches applied by build_db.py
 scripts/                Linux emulator setup / run helpers
 docs/                   Architecture, design language, performance, timings docs
-.github/workflows/build.yml   CI: tests → assembleRelease → publish APK
+.github/workflows/build.yml   CI: tests on all branches; assembleRelease + publish APK on master only
 ```
 
 ## Build, test, run
@@ -44,8 +44,9 @@ Requires **JDK 17**. No Android device/emulator is needed for tests.
   `tools/.cache/` and regenerates the asset).
 - To run the app in an emulator on Linux: `scripts/setup_android_emulator.sh`
   once, then `scripts/run_android_app.sh` (see README.md).
-- CI runs on every push: verifies the DB asset exists, runs unit tests, builds
-  the release APK, and publishes it to the rolling `latest` GitHub release.
+- CI runs on every push: verifies the DB asset exists and runs unit tests.
+  On `master` only, it also builds the release APK and publishes it to the
+  rolling `latest` GitHub release.
 
 ## Invariants — do not break these
 
