@@ -6,7 +6,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,12 +21,11 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -43,7 +41,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
@@ -53,6 +50,10 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -1104,53 +1105,60 @@ fun PageBreak(page: Int, useArabicIndicDigits: Boolean = true) {
 }
 
 /**
- * Floating "Back to …" control for a Root Viewer concordance jump — overlays
- * the reading column just above the player bar (same slot as the return-to-ayah
- * ornament), floats up on reveal, and is not part of the bar itself. Soft ink
- * wash, no elevation. See docs/ROOT_VIEWER.md.
+ * Quiet floating return after a Root Viewer concordance jump — a single ink
+ * line on the page (arrow + chapter · ayah), not a chip and not a dismissible
+ * badge. Floats above the player in the same slot as the return-to-ayah
+ * ornament; tap returns, scroll arms the 30s fade. See docs/ROOT_VIEWER.md
+ * and docs/DESIGN.md (hierarchy from ink strength, nothing floating as chrome).
  */
 @Composable
 fun BackToOriginPill(
-    label: String,
+    target: RootReturnTarget,
     onClick: () -> Unit,
-    onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
-        modifier = modifier,
+        modifier = modifier
+            .quietClickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .semantics {
+                contentDescription = target.label
+                role = Role.Button
+            },
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .clip(RoundedCornerShape(percent = 50))
-                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.92f))
-                .quietClickable(onClick = onClick)
-                .padding(start = 14.dp, end = 18.dp, top = 10.dp, bottom = 10.dp),
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                modifier = Modifier.padding(end = 8.dp),
-            )
-            Text(
-                text = "Back to $label",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
         Icon(
-            imageVector = Icons.Rounded.Close,
-            contentDescription = "Dismiss",
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-            modifier = Modifier
-                .padding(start = 2.dp)
-                .quietClickable(onClick = onDismiss)
-                .padding(8.dp),
+            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = "Back to",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = target.chapterLabel,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 180.dp),
+        )
+        Text(
+            text = "  ·  ",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f),
+        )
+        Text(
+            text = target.ayahLabel,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+            maxLines = 1,
         )
     }
 }
