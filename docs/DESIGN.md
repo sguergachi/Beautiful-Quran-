@@ -188,9 +188,46 @@ image, so it is crisp at any density and nearly free to render.
   another ayah is recited; Plain at rest. Starting playback from ayah 1 (or
   tapping the calligraphy) prepends Al-Fatihah 1:1 audio before the first ayah;
   word taps skip the lead-in.
-- **Restraint rule:** ornament appears in exactly three places — the surah
-  header (rosette + weave), ayah number marks, and the home title mark.
-  Nothing else on the sheet is decorated.
+- **Restraint rule:** ornament appears in exactly three places on the open
+  book — the surah header (rosette + weave), ayah number marks, and the home
+  title mark. The one place allowed to be lavish is the closed book: the
+  [entrance cover](#the-entrance) is bound leather, and binding is where a
+  mushaf has always carried its gold. Nothing else on the sheet is decorated.
+
+## The entrance
+
+The paper metaphor begins before the first sheet: a cold start opens on the
+**closed mushaf** (`ui/entrance/EntranceCover`), and chapter selection is
+what the reader finds when its cover turns. The ceremony has three moments:
+
+1. **Arrival.** The board fades in from the system splash: deep-green
+   leather (fixed across themes — a bound book keeps its own boards, colors
+   in `Theme.kt`'s `Cover*` values), tooled with the star-and-cross weave at
+   whisper ink, framed in a doubled gilt rule with a khatam star pressed
+   into each corner (`MushafCoverFrame`), carrying the gilded khatam
+   medallion (`GildedMedallion`) with the title **القرآن الكريم** beneath it
+   in the Hafs hand, leafed in gold and written in with the letter wash.
+2. **The isti'adha.** أعوذ بالله من الشيطان الرجيم is recited once — streamed
+   from the chosen reciter's everyayah pack (`audhubillah.mp3`, an optional
+   special; falls back to the first bundled pack) by `IstiadhaPlayer`, a bare
+   `MediaPlayer` with transient audio focus, never a playback session or a
+   notification. The du'a's words ink themselves onto the cover with the same
+   letter wash the reader uses, following the reciter's live position.
+   Offline, or when the pack lacks the file, the words still write themselves
+   at a reciter's pace, silently. If a recitation session is already live
+   (activity recreated over playback), the du'a stays silent rather than
+   reciting over the reciter.
+3. **The opening.** The board swings open on its **right** hinge — an Arabic
+   book — slower and heavier than a page (1150 ms vs 460 ms), with the flip
+   stems pitched slightly down (`PageTurnSounds.playCoverOpen`), revealing
+   the chapter list beneath.
+
+A tap anywhere (or back) opens the cover at once; the ceremony never holds a
+reader hostage, and it plays only once per session (`rememberSaveable`), so
+rotations and process restores land straight on the sheets. The hinge turn is
+the motion-rule counterpart of the bookmark ribbon: the cover is the only
+other physical *object* in the app, and its one rotation is the page-turn
+gesture the stack already speaks, at board weight.
 
 ## Motion
 

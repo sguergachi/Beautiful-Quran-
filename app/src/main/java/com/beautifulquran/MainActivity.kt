@@ -56,6 +56,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.AppViewModelFactory
 import com.beautifulquran.ui.PageTurnSounds
+import com.beautifulquran.ui.entrance.EntranceCover
+import com.beautifulquran.ui.entrance.EntranceViewModel
 import com.beautifulquran.ui.home.FloatingPlaybackCoverVisibleMaxPage
 import com.beautifulquran.ui.home.FloatingPlaybackListClearance
 import com.beautifulquran.ui.home.HomeScreen
@@ -105,10 +107,17 @@ class MainActivity : ComponentActivity() {
             val systemDark = isSystemInDarkTheme()
             val usesNightfall = settings.themeMode == ThemeMode.DARK ||
                 (settings.themeMode == ThemeMode.SYSTEM && systemDark)
+            // The entrance ceremony plays once per cold start; saveable so a
+            // rotation or process-restore never replays it mid-session.
+            var entranceDone by rememberSaveable { mutableStateOf(false) }
 
             SideEffect {
-                val statusBarStyle = if (usesNightfall) {
-                    SystemBarStyle.dark(NIGHTFALL_STATUS_BAR)
+                val statusBarStyle = if (usesNightfall || !entranceDone) {
+                    // The entrance cover is deep-green leather in every theme,
+                    // so its status icons are always light.
+                    SystemBarStyle.dark(
+                        if (usesNightfall) NIGHTFALL_STATUS_BAR else Color.TRANSPARENT,
+                    )
                 } else {
                     SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) {
                         settings.themeMode == ThemeMode.ROYAL_GREEN
@@ -125,6 +134,8 @@ class MainActivity : ComponentActivity() {
                 PaperStackApp(
                     themeMode = settings.themeMode,
                     developerModeEnabled = settings.developerModeEnabled,
+                    entranceVisible = !entranceDone,
+                    onEntranceFinished = { entranceDone = true },
                 )
             }
         }
@@ -149,6 +160,8 @@ private val StackMotionEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
 private fun PaperStackApp(
     themeMode: ThemeMode,
     developerModeEnabled: Boolean,
+    entranceVisible: Boolean,
+    onEntranceFinished: () -> Unit,
 ) {
     val homeViewModel: HomeViewModel = viewModel(factory = AppViewModelFactory)
     val readerViewModel: ReaderViewModel = viewModel(factory = AppViewModelFactory)
@@ -343,7 +356,7 @@ private fun PaperStackApp(
                 maxLayer = {
                     if (selectedSurahId == 0 && stackPosition.value <= COVER_LAYER + 0.01f) COVER_LAYER else settingsLayer
                 },
-                gesturesBlocked = { ayahSelectorExpanded || overlayBlocking },
+                gesturesBlocked = { ayahSelectorExpanded || overlayBlocking || entranceVisible },
                 onDragStart = {
                     dragStartPosition = stackPosition.value
                 },
@@ -536,6 +549,19 @@ private fun PaperStackApp(
                     }
                 }
             }
+        }
+
+        // The entrance ceremony — the closed mushaf over everything. It is
+        // not a sheet in the stack: it is the board the stack lives behind,
+        // and it leaves composition for good once it has swung open.
+        if (entranceVisible) {
+            val entranceViewModel: EntranceViewModel = viewModel(factory = AppViewModelFactory)
+            EntranceCover(
+                viewModel = entranceViewModel,
+                onOpenBegan = { pageTurnSounds.playCoverOpen() },
+                onFinished = onEntranceFinished,
+                modifier = Modifier.zIndex(6f),
+            )
         }
     }
 }

@@ -49,6 +49,15 @@ data class Reciter(
      * calligraphy ink wash share one source of truth.
      */
     fun basmalahAudioUrl(): String = audioUrl(surah = 1, ayah = 1)
+
+    /**
+     * Isti'adha audio (أعوذ بالله من الشيطان الرجيم) for the entrance cover.
+     * `audhubillah.mp3` is one of the optional specials in an everyayah pack
+     * (alongside `bismillah.mp3`), so it is not guaranteed for every reciter —
+     * callers must degrade gracefully when it is missing (the entrance falls
+     * back to another pack, then to a silent ink wash).
+     */
+    fun istiadhaAudioUrl(): String = "https://everyayah.com/data/$slug/audhubillah.mp3"
 }
 
 /** One highlighted span: word [position] is active from [startMs] until [endMs]. */
