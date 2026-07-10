@@ -142,6 +142,10 @@ private fun Rect.expandToInclude(other: Rect): Rect =
  * Returns the ink alpha as [State] so callers can defer the read to the draw
  * phase (inside a graphicsLayer block): the fade animates every frame without
  * recomposing or re-laying-out a single word.
+ *
+ * Upcoming (including recessed non-active ayahs during playback) uses a short
+ * tween so leaving a verse soft-dims; handoff onto a verse that was already
+ * Upcoming does not flash full ink.
  */
 @Composable
 private fun animatedInkAlpha(state: WordVisualState): State<Float> =
@@ -862,27 +866,15 @@ fun AyahBlock(
 ) {
     fun hits(word: Word) =
         searchQuery != null && word.translation.contains(searchQuery, ignoreCase = true)
-    // Non-active ayahs recede softly while another is being recited.
-    // State is read inside graphicsLayer so the dim animates draw-phase-only.
-    // Fade out slowly when the selector blooms; snap back quickly when it
-    // clears so a hand-initiated jump's decelerating scroll is visible.
-    //
-    // Arabic-only (no gloss) dims via the same path-clipped paper covers as
-    // Upcoming words, not via this block alpha — otherwise undimming
-    // 0.32→1 over 120ms brightens the whole verse on ayah handoff. Gloss /
-    // English still use the block recede (DESIGN.md: 32 %).
-    val arabicOnlyDim = readingMode != ReadingMode.ENGLISH_ONLY && !showGloss
+    // Non-active ayahs recede while another is being recited. Dim is applied
+    // at the word level (Upcoming ink / paper cover) in every mode so ayah
+    // handoff does not brighten the verse — block alpha stays at 1 except
+    // when the selector obscures the page. Soft tween when receding; snap
+    // when becoming the lyric line.
     val blockAlpha = animateFloatAsState(
-        targetValue = when {
-            obscuredBySelector -> 0.07f
-            dimmed && !arabicOnlyDim -> 0.32f
-            else -> 1f
-        },
-        // Snap when becoming the active lyric line so Arabic-only (and gloss)
-        // never ramp through a brighter intermediate. Soft tween when receding.
+        targetValue = if (obscuredBySelector) 0.07f else 1f,
         animationSpec = when {
             obscuredBySelector -> tween(600)
-            dimmed -> tween(120)
             else -> snap()
         },
         label = "ayahAlpha",
@@ -904,8 +896,11 @@ fun AyahBlock(
         ?.let { (it.durationMs / playbackSpeed).toInt() }
         ?.coerceIn(MIN_SWEEP_MS, MAX_SWEEP_MS)
 
+    // While another ayah is playing, every word sits at Upcoming ink so the
+    // verse is already faint before handoff (gloss / English animatedInkAlpha,
+    // Arabic-only paper cover). Idle (not reciting) stays Plain at full ink.
     fun stateFor(word: Word): WordVisualState = when {
-        !isActiveAyah -> WordVisualState.Plain
+        !isActiveAyah -> if (dimmed) WordVisualState.Upcoming else WordVisualState.Plain
         activeWordPosition == null -> WordVisualState.Upcoming
         word.position == activeWordPosition -> WordVisualState.Active
         word.position < activeWordPosition -> WordVisualState.Recited
@@ -958,7 +953,16 @@ fun AyahBlock(
                         )
                     }
                     Box(
-                        modifier = Modifier.padding(horizontal = 6.dp),
+                        modifier = Modifier
+                            .padding(horizontal = 6.dp)
+                            .graphicsLayer {
+                                // Match word-level recess (block alpha stays 1).
+                                alpha = if (dimmed) {
+                                    WordVisualState.Upcoming.inkAlpha()
+                                } else {
+                                    1f
+                                }
+                            },
                         contentAlignment = Alignment.Center,
                     ) {
                         AyahNumberMark(
@@ -992,7 +996,17 @@ fun AyahBlock(
                                 onLongClick = onWordLongClick?.let { handler -> { handler(word) } },
                             )
                         }
-                        ArabicAyahNumberUnit(ayah.number, fontScale)
+                        Box(
+                            modifier = Modifier.graphicsLayer {
+                                alpha = if (dimmed) {
+                                    WordVisualState.Upcoming.inkAlpha()
+                                } else {
+                                    1f
+                                }
+                            },
+                        ) {
+                            ArabicAyahNumberUnit(ayah.number, fontScale)
+                        }
                     }
                 }
             } else {
@@ -1014,9 +1028,10 @@ fun AyahBlock(
             }
             if (showTranslation && readingMode == ReadingMode.ARABIC_ENGLISH) {
                 Spacer(Modifier.height(12.dp))
-                // Arabic-only keeps blockAlpha at 1 while dimmed (paper covers
-                // handle the Arabic); the translation still needs to recede.
-                val translationAlpha = if (arabicOnlyDim && dimmed) 0.66f * 0.32f else 0.66f
+                // Block alpha stays 1 while recessed (word-level dim); the
+                // translation still needs to recede with the verse.
+                val translationAlpha =
+                    if (dimmed) 0.66f * WordVisualState.Upcoming.inkAlpha() else 0.66f
                 Text(
                     text = highlightMatches(
                         text = ayah.translation,
