@@ -979,23 +979,28 @@ fun AyahBlock(
         }
 
         if (bookmarkSide != null && onToggleBookmark != null) {
-            VerseBookmarkRibbon(
-                bookmarked = bookmarked,
-                focused = bookmarkFocused,
-                side = bookmarkSide,
-                chromeAlpha = bookmarkChromeAlpha,
-                interactive = bookmarkInteractive,
-                onToggle = onToggleBookmark,
-                modifier = Modifier
-                    .align(
-                        if (bookmarkSide == AyahSelectorSide.RIGHT) {
-                            AbsoluteAlignment.CenterRight
-                        } else {
-                            AbsoluteAlignment.CenterLeft
-                        },
-                    )
-                    .fillMaxHeight(),
-            )
+            // matchParentSize (not fillMaxHeight): the ayah Box is wrap-content,
+            // so fillMaxHeight would measure to 0 and the ribbon would vanish.
+            // This sizes to the Column after layout, keeping the ribbon in-block.
+            Box(Modifier.matchParentSize()) {
+                VerseBookmarkRibbon(
+                    bookmarked = bookmarked,
+                    focused = bookmarkFocused,
+                    side = bookmarkSide,
+                    chromeAlpha = bookmarkChromeAlpha,
+                    interactive = bookmarkInteractive,
+                    onToggle = onToggleBookmark,
+                    modifier = Modifier
+                        .align(
+                            if (bookmarkSide == AyahSelectorSide.RIGHT) {
+                                AbsoluteAlignment.TopRight
+                            } else {
+                                AbsoluteAlignment.TopLeft
+                            },
+                        )
+                        .fillMaxHeight(),
+                )
+            }
         }
     }
 }
