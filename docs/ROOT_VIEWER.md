@@ -45,9 +45,10 @@ On the pressed word at `(surahId, ayah, wordPosition)`:
 1. **This word** — the Uthmani Arabic the reader already knows, plus the
    bundled gloss and transliteration (same data as the word-by-word row).
    A quiet **speaker** beside the Arabic (in the in-page header and again
-   in the collapsing top-bar title) plays that word with the currently
-   selected reciter, using word timings when available and pausing at the
-   word's end so it is a pronunciation cue rather than starting the ayah.
+   in the collapsing top-bar title) plays **only that word** with the
+   currently selected reciter: it seeks to the word's timing mark and
+   pauses at the word's end. Without a usable timing segment the speaker
+   does nothing (it never starts the rest of the ayah).
 2. **Root** — the radical letters (e.g. ك ت ب), shown large, with a short
    sense heading for that root in Quranic usage.
 3. **This form** — part of speech and a plain-English morphology line
@@ -188,7 +189,7 @@ summary + occurrences). No network. HighlightEngine is untouched.
 | Gesture | Result |
 |---|---|
 | Long-press a word in the reader | Root Word Viewer blooms in on that word |
-| Tap the speaker next to the word | Plays that word with the selected reciter |
+| Tap the speaker next to the word | Plays **only** that word (timing clip); no-op without timings |
 | Back / close control on the viewer | Hole opens; return to the same reader page |
 | Tap a concordance hit | Viewer closes; reader jumps to that ayah / chapter |
 
