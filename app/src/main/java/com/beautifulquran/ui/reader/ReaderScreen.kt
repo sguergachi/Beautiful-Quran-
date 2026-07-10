@@ -121,6 +121,11 @@ fun ReaderScreen(
      *  MainActivity may intercept this into a chooser that can also open the
      *  Timings Lab. See docs/ROOT_VIEWER.md. */
     onOpenRootViewer: (surahId: Int, ayah: Int, wordPosition: Int) -> Unit = { _, _, _ -> },
+    /** Origin verse after a concordance jump — shown as "Back to …" in the
+     *  return-to-ayah slot until tapped or dismissed. */
+    rootReturnTarget: RootReturnTarget? = null,
+    onRootReturn: () -> Unit = {},
+    onDismissRootReturn: () -> Unit = {},
     /** True while an ink-bleed overlay (Root Viewer / Timings Lab / chooser)
      *  is riding over this reader, so the status bar stays visible under its
      *  header. */
@@ -586,9 +591,13 @@ fun ReaderScreen(
         bottomBar = {
             Column {
                 // In-plane status: errors stay textual; returning to the
-                // active ayah is a textless ornamented control.
+                // active ayah is a textless ornamented control; a concordance
+                // jump leaves a "Back to …" pill in the same slot.
+                val showRootReturn =
+                    playerState.error == null && rootReturnTarget != null
                 val showReturnToAyah =
                     playerState.error == null &&
+                        !showRootReturn &&
                         !followEnabled &&
                         recitingActive &&
                         activeAyahPlacement.value.isAway
@@ -606,6 +615,23 @@ fun ReaderScreen(
                             .fillMaxWidth()
                             .padding(vertical = 6.dp),
                     )
+                }
+                AnimatedVisibility(
+                    visible = showRootReturn,
+                    enter = fadeIn(tween(220)),
+                    exit = fadeOut(tween(220)),
+                ) {
+                    val target = rootReturnTarget
+                    if (target != null) {
+                        BackToOriginPill(
+                            label = target.label,
+                            onClick = onRootReturn,
+                            onDismiss = onDismissRootReturn,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 28.dp, vertical = 4.dp),
+                        )
+                    }
                 }
                 AnimatedVisibility(
                     visible = showReturnToAyah,

@@ -87,8 +87,13 @@ Jump behaviour:
 - **Other surah** — close the overlay, open that chapter at the target
   ayah (same "open surah at ayah" path Home already uses), so the reader
   never nests a second bleed or a modal route.
-- Back from a jumped-to chapter behaves as a normal paper-stack back; we
-  do not try to reopen the lexicon automatically.
+- **Way back** — after a jump to a different ayah (same or other chapter),
+  the reader shows an in-plane **"Back to …"** pill in the return-to-ayah
+  slot (above the player bar): left arrow + chapter name and `surah:ayah`
+  of the verse the hold started on. Tapping it returns there; a quiet
+  dismiss clears the pill without navigating. The ornamented return-to-ayah
+  control yields to this pill while it is visible.
+- Closing the reader sheet (paper-stack back) does not reopen the lexicon.
 
 Occurrence list ordering: Quranic order (surah, then ayah, then word
 position). Counts and lists are precomputed at DB build time where
