@@ -92,6 +92,7 @@ lyrics treatment, never a background block:
 | **Active (being recited)** | letters ink in one by one (below) |
 | Recited | settles to 80 % over 450 ms |
 | Non-active ayahs during playback | word-level Upcoming ink in every mode (already faint before handoff; no block-alpha brightening) |
+| Ayah number mark (`﴿N﴾`) | Upcoming ink while the verse is recessed; fades to full over 450 ms when that verse is in focus (gloss, English, and Arabic-only) |
 
 The active word doesn't switch on — it is *written*: a soft alpha band
 sweeps across the glyphs (right-to-left for Arabic, left-to-right for the
