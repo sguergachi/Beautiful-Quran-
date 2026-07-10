@@ -31,10 +31,11 @@ chrome (`chromeAlpha: () -> Float` — a deferred read, not a Float
 parameter).
 
 The no-gloss Arabic path (`ResponsiveHafsAyah`) cannot put `letterFadeIn` on
-the whole ayah. It keeps the shaped ayah as static colour spans and places a
-word-local overlay `Text` on the active (or repeating) word's layout box,
-running the same `letterFadeIn` mask gloss mode uses. The mask is scoped to
-that overlay's draw scope, so it never paints onto neighbouring words.
+the whole ayah. It keeps the shaped ayah as static colour spans and applies
+`shapedWordBloom` in the draw phase: re-paint the same `TextLayoutResult` for
+the active (or repeating) word via `drawText` + `getPathForRange` clip, then
+the same DstIn wash gloss mode uses. Progress is read only at draw time, so
+the sweep never reshapes the ayah or paints onto neighbouring words.
 
 ### 2. Recomposition confined to one ayah
 

@@ -9,7 +9,10 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -93,10 +96,134 @@ fun Modifier.letterFadeIn(
     }
 }
 
+/**
+ * One word-local bloom inside a larger shaped [Text] (Arabic-only / no-gloss).
+ *
+ * Must operate on the ayah's already-shaped [TextLayoutResult]: a separate
+ * per-word [Text] re-shapes the isolated string and breaks Uthmanic Hafs
+ * joining/ligatures, so the overlay never matches the base glyphs and the
+ * fade reads as a hard colour pop. [shapedWordBloom] re-paints the same
+ * layout via [drawText], clipped to [TextLayoutResult.getPathForRange], then
+ * applies the same [letterFadeIn] DstIn wash — correct harfs, directional
+ * bloom, no neighbour rect bleed.
+ */
+sealed class ShapedWordBloom {
+    abstract val range: IntRange
+    abstract val progress: Float
+    abstract val color: Color
+    abstract val restingAlpha: Float
+
+    /** First-pass ink: full-ink glyphs wash from [restingAlpha] → 1. */
+    data class InkReveal(
+        override val range: IntRange,
+        override val progress: Float,
+        override val color: Color,
+        override val restingAlpha: Float,
+    ) : ShapedWordBloom()
+
+    /** Repeat (orange): [color] washes from [restingAlpha] → 1, then dissolves
+     * via [layerAlpha] when the word leaves the repeat chain. */
+    data class ColorReveal(
+        override val range: IntRange,
+        override val progress: Float,
+        override val color: Color,
+        override val restingAlpha: Float = 0f,
+        val layerAlpha: Float = 1f,
+    ) : ShapedWordBloom()
+}
+
+/**
+ * Draw-phase blooms for word(s) inside a shaped ayah [Text]. Layers are read
+ * only at draw time so the sweep never recomposes or reshapes the ayah.
+ */
+fun Modifier.shapedWordBloom(
+    blooms: () -> List<ShapedWordBloom>,
+    layout: () -> TextLayoutResult?,
+    rtl: Boolean,
+): Modifier {
+    val stops = FloatArray(InkProfileStops) { i -> i / (InkProfileStops - 1f) }
+    return drawWithContent {
+        drawContent()
+        val textLayout = layout() ?: return@drawWithContent
+        val bleed = FadeLayerBleed.toPx()
+        blooms().forEach { bloom ->
+            val range = bloom.range
+            if (range.isEmpty()) return@forEach
+            val layerAlpha = when (bloom) {
+                is ShapedWordBloom.InkReveal -> 1f
+                is ShapedWordBloom.ColorReveal -> bloom.layerAlpha
+            }
+            if (layerAlpha <= 0f) return@forEach
+            val length = textLayout.layoutInput.text.length
+            if (length == 0) return@forEach
+            val start = range.first.coerceIn(0, length)
+            val endExclusive = (range.last + 1).coerceIn(start, length)
+            if (endExclusive <= start) return@forEach
+            val path = textLayout.getPathForRange(start, endExclusive)
+            val bounds = path.getBounds()
+            if (bounds.isEmpty || bounds.width <= 0f) return@forEach
+
+            val p = bloom.progress.coerceIn(0f, 1f)
+            val washColors = stops.map { t ->
+                val s = inkSmootherstep(t)
+                val a = bloom.restingAlpha +
+                    (1f - bloom.restingAlpha) * (if (rtl) s else 1f - s)
+                Color.White.copy(alpha = a)
+            }
+
+            drawIntoCanvas { canvas ->
+                canvas.saveLayer(
+                    Rect(
+                        bounds.left - bleed,
+                        bounds.top - bleed,
+                        bounds.right + bleed,
+                        bounds.bottom + bleed,
+                    ),
+                    Paint(),
+                )
+            }
+            // Same shaped glyphs as the base ayah — clip keeps the wash local
+            // to this word's selection path so neighbours stay untouched.
+            clipPath(path) {
+                drawText(
+                    textLayoutResult = textLayout,
+                    color = bloom.color,
+                    alpha = layerAlpha,
+                )
+            }
+            if (p < 1f) {
+                val w = bounds.width
+                val edge = (w * InkWashFeather).coerceAtLeast(1f)
+                val head = p * (w + edge)
+                val brush = if (rtl) {
+                    Brush.horizontalGradient(
+                        colors = washColors,
+                        startX = bounds.left + (w - head),
+                        endX = bounds.left + (w - head) + edge,
+                    )
+                } else {
+                    Brush.horizontalGradient(
+                        colors = washColors,
+                        startX = bounds.left + head - edge,
+                        endX = bounds.left + head,
+                    )
+                }
+                drawRect(
+                    brush = brush,
+                    topLeft = Offset(bounds.left - bleed, bounds.top - bleed),
+                    size = Size(bounds.width + bleed * 2f, bounds.height + bleed * 2f),
+                    blendMode = BlendMode.DstIn,
+                )
+            }
+            drawIntoCanvas { canvas -> canvas.restore() }
+        }
+    }
+}
+
 private const val InkProfileStops = 9
 /** Extra room around this word's measured box so Hafs marks/overhangs aren't
- * clipped by the offscreen [letterFadeIn] mask. Local to the word's draw
- * scope — does not paint onto neighbours. */
+ * clipped by the offscreen [letterFadeIn] / [shapedWordBloom] mask. Local to
+ * the word's draw scope — does not paint onto neighbours. */
 private val FadeLayerBleed = 14.dp
 
 // The ink wash feathers over 1.6× the word's own width, so the reveal reads as a
