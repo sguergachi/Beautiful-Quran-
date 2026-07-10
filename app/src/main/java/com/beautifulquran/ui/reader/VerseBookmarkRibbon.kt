@@ -7,9 +7,9 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
@@ -20,14 +20,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.ui.theme.LocalQuranAccents
@@ -35,38 +35,38 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.PI
-import kotlin.math.cos
 import kotlin.math.sin
 
 /*
  * A verse's own bookmark ribbon — ink that belongs to the ayah block, not a
  * floating overlay. Lives in the block's outer margin (opposite the ayah
- * selector): a soft retracted nub at the top corner, or the full ruby strip
- * running the block's height when saved. Tap the margin to mark / unmark.
+ * selector). Idle: just the swallowtail tip of the ribbon, soft and quiet.
+ * Saved: the full ruby strip down the block. Tap the margin to mark / unmark.
  *
- * Unfurl is a small physics play: gravity drop, a rolling curl at the tip,
- * a traveling cloth wave, a soft overshoot, then a settling flutter. Retract
- * gathers the curl and rolls the strip back into the nub.
+ * Unfurl is a gravity drop with a traveling cloth wave, a soft overshoot, and
+ * a settling flutter. Retract gathers the strip back into the tip.
  */
 
-private val STRIP_WIDTH = 36.dp
-private val HIT_WIDTH = 36.dp
+/** Wide enough to sit in the ayah block's 28.dp outer margin and stay tappable. */
+private val STRIP_WIDTH = 44.dp
 
-private const val EDGE_INSET_DP = 6f    // from the block's outer edge
+private const val EDGE_INSET_DP = 8f    // from the block's outer edge
 private const val RIBBON_WIDTH_DP = 11f
-private const val NUB_LENGTH_DP = 16f
+private const val NUB_LENGTH_DP = 14f   // just the swallowtail tip peeking out
 private const val NOTCH_DP = 5.5f
 private const val WAVE_AMP_DP = 4.5f    // cloth sway while unfurling
 private const val SETTLE_AMP_DP = 3.2f  // final flutter amplitude
 private const val OVERSHOOT = 0.06f     // tip past the block bottom, then spring back
-private const val NUB_ALPHA = 0.38f
-private const val NUB_FOCUSED_ALPHA = 0.62f
+/** Retracted tip — a quiet hint, not a mark. */
+private const val NUB_ALPHA = 0.22f
+/** Reading-position tip, still soft vs. a saved ribbon. */
+private const val NUB_FOCUSED_ALPHA = 0.38f
 private const val SOLID_ALPHA = 0.92f
 
 /** Gravity spill: slow peel, then accelerates, eases as length runs out. */
 private val UnfurlEasing = CubicBezierEasing(0.45f, 0.02f, 0.22f, 1f)
 
-/** Gathering roll-up: starts quick, then softens into the nub. */
+/** Gathering roll-up: starts quick, then softens into the tip. */
 private val RetractEasing = CubicBezierEasing(0.55f, 0.05f, 0.35f, 1f)
 
 /**
@@ -89,26 +89,22 @@ internal fun VerseBookmarkRibbon(
     val view = LocalView.current
     val scope = rememberCoroutineScope()
 
-    // 0 = fully retracted nub, 1 = full ribbon. Driven by mark/unmark.
+    // 0 = retracted tip, 1 = full ribbon. Driven by mark/unmark.
     val unfurl = remember { Animatable(if (bookmarked) 1f else 0f) }
-    // Tip curl radius factor (1 at start of unfurl / end of retract, 0 when flat).
-    val curl = remember { Animatable(if (bookmarked) 0f else 1f) }
     // Cloth wave / settle flutter (signed; springs to 0).
     val sway = remember { Animatable(0f) }
     var animating by remember { mutableStateOf(false) }
     var job by remember { mutableStateOf<Job?>(null) }
 
-    // External bookmark changes (e.g. another device sync later) snap without
-    // animation — only the tap path below runs the whimsical unfurl.
+    // External bookmark changes snap without animation — only the tap path
+    // below runs the unfurl.
     LaunchedEffect(bookmarked) {
         if (animating) return@LaunchedEffect
         if (bookmarked && unfurl.value < 0.999f) {
             unfurl.snapTo(1f)
-            curl.snapTo(0f)
             sway.snapTo(0f)
         } else if (!bookmarked && unfurl.value > 0.001f) {
             unfurl.snapTo(0f)
-            curl.snapTo(1f)
             sway.snapTo(0f)
         }
     }
@@ -118,20 +114,14 @@ internal fun VerseBookmarkRibbon(
         animating = true
         job = scope.launch {
             sway.snapTo(0f)
-            curl.snapTo(1f)
             unfurl.snapTo(0f)
             val durationMs = (280f + blockHeightPx * 0.55f).coerceIn(420f, 1400f).toInt()
-            // Drop + curl shrink run together; sway is a traveling wave keyed
-            // off unfurl progress (drawn from unfurl.value each frame).
             launch {
                 unfurl.animateTo(1f + OVERSHOOT, tween(durationMs, easing = UnfurlEasing))
                 unfurl.animateTo(
                     1f,
                     spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow),
                 )
-            }
-            launch {
-                curl.animateTo(0f, tween((durationMs * 0.92f).toInt(), easing = UnfurlEasing))
             }
             // One soft flutter after the tip lands — underdamped, then still.
             delay((durationMs * 0.78f).toLong())
@@ -152,10 +142,6 @@ internal fun VerseBookmarkRibbon(
             launch {
                 unfurl.animateTo(0f, tween(durationMs, easing = RetractEasing))
             }
-            launch {
-                curl.snapTo(0.15f)
-                curl.animateTo(1f, tween(durationMs, easing = RetractEasing))
-            }
             sway.snapTo(0.35f)
             sway.animateTo(0f, spring(dampingRatio = 0.55f, stiffness = 280f))
             animating = false
@@ -164,11 +150,37 @@ internal fun VerseBookmarkRibbon(
 
     val latestOnToggle by rememberUpdatedState(onToggle)
     val latestChrome by rememberUpdatedState(chromeAlpha)
+    val interaction = remember { MutableInteractionSource() }
+    var stripSize by remember { mutableStateOf(IntSize.Zero) }
+
+    // Tap target is the whole strip: clickable is more reliable than a nested
+    // empty pointerInput Box, and the strip already sits in the ayah block's
+    // outer margin opposite the selector.
+    val tapModifier = if (interactive) {
+        Modifier.clickable(
+            interactionSource = interaction,
+            indication = null,
+            role = Role.Button,
+            onClick = {
+                if (latestChrome() < 0.1f) return@clickable
+                job?.cancel()
+                animating = true
+                val nowMarked = latestOnToggle()
+                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                val h = stripSize.height.toFloat().coerceAtLeast(1f)
+                if (nowMarked) playUnfurl(h) else playRetract(h)
+            },
+        )
+    } else {
+        Modifier
+    }
 
     Box(
         modifier = modifier
             .width(STRIP_WIDTH)
-            .graphicsLayer { alpha = chromeAlpha() },
+            .onSizeChanged { stripSize = it }
+            .graphicsLayer { alpha = chromeAlpha() }
+            .then(tapModifier),
     ) {
         Canvas(Modifier.fillMaxSize()) {
             val h = size.height
@@ -191,7 +203,6 @@ internal fun VerseBookmarkRibbon(
             val tipY = if (progress <= 0.001f) {
                 nubLen
             } else {
-                // Nub is the rolled head; the free length grows from there.
                 val travel = (h - nubLen).coerceAtLeast(1f)
                 (nubLen + travel * progress).coerceAtMost(h * 1.08f)
             }
@@ -203,8 +214,7 @@ internal fun VerseBookmarkRibbon(
                 else -> NUB_ALPHA
             }
 
-            // Cloth wave: a traveling sine while unfurling, then the settle
-            // flutter keyed off [sway] once the tip has landed.
+            // Cloth wave while unfurling; settle flutter once the tip lands.
             val wavePhase = progress * PI.toFloat() * 2.4f
             val liveWave = if (animating && progress in 0.05f..0.98f) {
                 (1f - progress) * 0.85f + 0.15f
@@ -215,7 +225,6 @@ internal fun VerseBookmarkRibbon(
 
             fun lateral(y: Float): Float {
                 val t = (y / h.coerceAtLeast(1f)).coerceIn(0f, 1f)
-                // Wave grows toward the free tip so the pin stays put.
                 val tipWeight = t * t
                 val cloth = sin(wavePhase - t * PI.toFloat() * 3.2f) * waveAmp * liveWave * tipWeight
                 val flutter = sin(t * PI.toFloat() * 2.5f + settle * 1.2f) *
@@ -223,29 +232,27 @@ internal fun VerseBookmarkRibbon(
                 return cloth + flutter
             }
 
+            // Always a swallowtail tip — idle "nub" is just that tip, short and
+            // faded; a saved mark is the same shape grown to the block bottom.
             val path = Path().apply {
                 val top = 0f
                 val bot = tipY.coerceAtLeast(nubLen * 0.6f)
-                val steps = ((bot - top) / 3f).toInt().coerceIn(8, 64)
+                val span = (bot - top).coerceAtLeast(1f)
+                val notchDepth = minOf(notch, span * 0.45f)
+                val steps = (span / 3f).toInt().coerceIn(6, 64)
                 moveTo(ax(outer + lateral(top)), top)
                 for (i in 1..steps) {
-                    val y = top + (bot - top) * (i / steps.toFloat())
+                    val y = top + span * (i / steps.toFloat())
                     lineTo(ax(inner + lateral(y)), y)
                 }
-                val complete = progress >= 0.98f && curl.value < 0.08f
-                if (complete) {
-                    val notchDepth = minOf(notch, (bot - top) * 0.45f)
-                    lineTo(ax(center + lateral(bot - notchDepth)), bot - notchDepth)
-                }
+                lineTo(ax(center + lateral(bot - notchDepth)), bot - notchDepth)
                 for (i in steps downTo 0) {
-                    val y = top + (bot - top) * (i / steps.toFloat())
+                    val y = top + span * (i / steps.toFloat())
                     lineTo(ax(outer + lateral(y)), y)
                 }
                 close()
             }
 
-            // Soft vertical ink — denser at the head, a touch lighter at the tip
-            // so the strip reads as cloth, not a flat bar.
             val fill = Brush.verticalGradient(
                 0f to ruby,
                 0.55f to ruby,
@@ -254,65 +261,6 @@ internal fun VerseBookmarkRibbon(
                 endY = tipY.coerceAtLeast(1f),
             )
             drawPath(path, fill, alpha = alpha)
-
-            // Leading curl — the rolled end spilling open (or gathering on retract).
-            val curlAmt = curl.value.coerceIn(0f, 1f)
-            if (curlAmt > 0.04f && tipY > nubLen * 0.5f) {
-                val r = ribbonW * (0.35f + 0.55f * curlAmt)
-                val cx = ax(center + lateral(tipY) * 0.4f)
-                val cy = tipY
-                // Outer coil
-                drawCircle(
-                    color = ruby,
-                    radius = r,
-                    center = Offset(cx, cy),
-                    alpha = alpha * (0.55f + 0.35f * curlAmt),
-                )
-                // Inner highlight — a lighter ring so the roll reads as volume.
-                drawCircle(
-                    color = ruby.copy(alpha = 0.35f),
-                    radius = r * 0.55f,
-                    center = Offset(cx - r * 0.12f * if (mirrored) -1f else 1f, cy - r * 0.1f),
-                    alpha = alpha,
-                )
-                // Tiny end-of-roll speck
-                val speck = r * 0.22f
-                val angle = (1f - curlAmt) * PI.toFloat() * 1.6f
-                drawCircle(
-                    color = ruby,
-                    radius = speck,
-                    center = Offset(
-                        cx + cos(angle) * r * 0.65f * if (mirrored) -1f else 1f,
-                        cy + sin(angle) * r * 0.35f,
-                    ),
-                    alpha = alpha * curlAmt,
-                )
-            }
-        }
-
-        if (interactive) {
-            Box(
-                Modifier
-                    .align(
-                        if (mirrored) AbsoluteAlignment.CenterRight
-                        else AbsoluteAlignment.CenterLeft,
-                    )
-                    .fillMaxHeight()
-                    .width(HIT_WIDTH)
-                    .pointerInput(Unit) {
-                        detectTapGestures {
-                            if (latestChrome() < 0.1f) return@detectTapGestures
-                            // Claim the animation *before* toggling so the
-                            // bookmarked LaunchedEffect does not snap past us.
-                            job?.cancel()
-                            animating = true
-                            val nowMarked = latestOnToggle()
-                            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                            val h = size.height.toFloat()
-                            if (nowMarked) playUnfurl(h) else playRetract(h)
-                        }
-                    },
-            )
         }
     }
 }
