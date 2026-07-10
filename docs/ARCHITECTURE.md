@@ -138,8 +138,10 @@ per-item derivedStateOf in the reader list  ──►  one ayah recomposes
 
 See [HIGHLIGHT_ENGINE.md](HIGHLIGHT_ENGINE.md) for the engine's model, the
 binary search, and the repeat / high-water logic in full. See
-[INK_ENGINE.md](INK_ENGINE.md) for the proposed thin visual-policy layer that
-would sit between highlight timing and mode-specific text rendering.
+[INK_ENGINE.md](INK_ENGINE.md) for `InkEngine`, the thin visual-policy layer
+that sits between highlight timing and mode-specific text rendering (word ink
+states, repeat wash membership, sweep clamps, and all the feel tuning), and
+for the developer-mode Ink Lab that tunes it live.
 
 ## The focus engine
 

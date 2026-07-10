@@ -1,7 +1,13 @@
-# InkEngine design proposal
+# InkEngine
 
-A proposal for unifying the reader's word-by-word visual effect without turning
-it into a custom text renderer.
+The design (and now implementation) that unifies the reader's word-by-word
+visual effect without turning it into a custom text renderer.
+
+**Status: implemented.** The policy layer lives in
+`app/src/main/java/com/beautifulquran/ui/reader/InkEngine.kt`; see
+"As implemented" at the end of this document for what shipped and how the
+developer-mode Ink Lab exposes the tuning live. The sections between here and
+there are the original proposal, kept as the design record.
 
 ## Goal
 
@@ -123,8 +129,11 @@ Owns visual word policy:
 - secondary gloss/transliteration fade policy
 - ayah mark fade policy, if useful
 
-It may expose small Compose animation helpers if that reduces reader code, but
-it should not become a rendering framework.
+It also firmly owns the *motion policy* — the tween-versus-snap rules, the
+start-revealed flicker rule, repeat wash timing, feather width — because that
+is where the highlight's feel actually lives. It may expose small Compose
+animation helpers if that reduces reader code, but it should not become a
+rendering framework.
 
 ### Renderers
 
@@ -344,3 +353,43 @@ Before implementation, reviewers should answer:
    is a concrete need?
 
 If the answer to any of these is no, reduce the scope.
+
+## As implemented
+
+`ui/reader/InkEngine.kt` is a single object, per Option 2, with one amendment
+to the proposed shape: the review found that the four-state derivation is the
+easy part — the highlight's *feel* lives in the motion policy (450 ms
+tween-vs-snap rules, the start-revealed flicker rule, repeat wash timing, the
+1.6× feather), which was still scattered across five `remember*` helpers. So
+InkEngine owns that too, as data rather than as animation code:
+
+- **Pure policy** (JVM-tested in `InkEngineTest`):
+  `wordState(position, activeWord, isActiveAyah, dimmed)` (including the
+  high-water rule), `inRepeatChain(position, activeWord)`, the bundled
+  `word(...) → InkEngine.Word(state, repeat)`, `sweepMs(activeWord, speed)`
+  with the min/max clamps, and `startRevealed(previous, current)` — the rule
+  that only a Recited→Active transition skips the reveal sweep.
+- **`InkEngine.Tuning`**: every feel knob in one data class — upcoming alpha,
+  ink/mark fade durations, recess, sweep clamps, repeat sweep and fade-out,
+  wash feather, and the sweep easing control points. `InkEngine.tuning` is
+  snapshot-backed (`mutableStateOf`), so release builds read constants while
+  the Ink Lab can retune a live session.
+- **Renderers consume `InkEngine.Word`.** `AyahBlock` derives each ayah's ink
+  list once and passes it into all three branches (`WordUnit`,
+  `EnglishWordUnit`, `ResponsiveHafsAyah`); none of them re-derive highlight
+  semantics. The Compose animation helpers stayed in ReaderComponents.kt but
+  read every duration/alpha/easing from `InkEngine.tuning` — no literal
+  tuning values remain in the renderers.
+- **Draw primitives stayed in `ui/theme/Fade.kt`** per Step 3; the feather
+  became a parameter (`letterFadeIn`/`shapedWordBloom` take `feather`) so the
+  theme layer stays independent of the reader package.
+
+### Ink Lab
+
+Settings → Developer (triple-tap the logo) → **Ink Lab overlay** floats a
+collapsible slider panel over the reader (`ui/reader/InkLabPanel.kt`), bound
+directly to `InkEngine.tuning`: upcoming ink, fade timings, sweep clamps,
+repeat timings, wash feather. Edits are session-only and never persisted —
+shipped behavior cannot drift; **Log values** dumps the current `Tuning` to
+Logcat (tag `InkLab`) so a tuned feel can be transcribed into the defaults in
+InkEngine.kt.

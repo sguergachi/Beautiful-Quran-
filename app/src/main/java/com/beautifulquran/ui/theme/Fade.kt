@@ -38,6 +38,8 @@ fun Modifier.letterFadeIn(
     progress: () -> Float,
     rtl: Boolean,
     restingAlpha: Float = 0.35f,
+    /** Feather width relative to the word; see [InkWashFeather]. */
+    feather: Float = InkWashFeather,
 ): Modifier {
     // Alpha profile across the feathered edge, sampled into gradient stops.
     // The seam-free smootherstep shape lives in [inkSmootherstep].
@@ -72,7 +74,7 @@ fun Modifier.letterFadeIn(
             // gentle directional lead in the reading direction. The wash
             // travels one edge-width past the end so the final letter
             // finishes exactly at p = 1.
-            val edge = (w * InkWashFeather).coerceAtLeast(1f)
+            val edge = (w * feather).coerceAtLeast(1f)
             val head = p * (w + edge)
             val brush = if (rtl) {
                 Brush.horizontalGradient(
@@ -160,6 +162,8 @@ fun Modifier.shapedWordBloom(
     blooms: () -> List<ShapedWordBloom>,
     layout: () -> TextLayoutResult?,
     rtl: Boolean,
+    /** Feather width relative to the word; see [InkWashFeather]. */
+    feather: Float = InkWashFeather,
 ): Modifier {
     val stops = FloatArray(InkProfileStops) { i -> i / (InkProfileStops - 1f) }
     return drawWithContent {
@@ -207,7 +211,7 @@ fun Modifier.shapedWordBloom(
                     val p = bloom.progress.coerceIn(0f, 1f)
                     if (p >= 1f) return@forEach
                     val w = bounds.width
-                    val edge = (w * InkWashFeather).coerceAtLeast(1f)
+                    val edge = (w * feather).coerceAtLeast(1f)
                     val head = p * (w + edge)
                     val paperColors = stops.map { t ->
                         val s = inkSmootherstep(t)
@@ -248,7 +252,7 @@ fun Modifier.shapedWordBloom(
                     // SrcIn (keeps harf shapes), then DstIn-wash like letterFadeIn.
                     val p = bloom.progress.coerceIn(0f, 1f)
                     val w = bounds.width
-                    val edge = (w * InkWashFeather).coerceAtLeast(1f)
+                    val edge = (w * feather).coerceAtLeast(1f)
                     val head = p * (w + edge)
                     val washColors = stops.map { t ->
                         val s = inkSmootherstep(t)
