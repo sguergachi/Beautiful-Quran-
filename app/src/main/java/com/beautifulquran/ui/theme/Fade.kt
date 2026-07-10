@@ -278,6 +278,10 @@ fun Modifier.inkBloomOverlay(
  * Softly dissolves the content at its top and bottom edges, so scrolling
  * feels like ink fading off a single sheet of paper.
  *
+ * [topInset] / [bottomInset] paint opaque paper bands outside the soft
+ * gradients — used to lift a fade above chrome that sits on the same sheet
+ * (status bar on the reader, floating playback on the cover).
+ *
  * Implementation note: because every sheet sits on a solid paper color, the
  * fade is drawn as a cheap gradient overlay of that color on top of the
  * content. This costs one rect per edge in the draw phase — no offscreen
@@ -289,6 +293,9 @@ fun Modifier.verticalFadingEdges(
     top: Dp = 28.dp,
     bottom: Dp = 56.dp,
     topInset: Dp = 0.dp,
+    /** Opaque paper band under the bottom fade — lifts the soft edge above a
+     *  bottom chrome strip (e.g. the cover sheet's floating playback bar). */
+    bottomInset: Dp = 0.dp,
 ): Modifier = drawWithContent {
     drawContent()
     val topInsetPx = topInset.toPx()
@@ -311,15 +318,24 @@ fun Modifier.verticalFadingEdges(
             size = Size(size.width, topPx),
         )
     }
+    val bottomInsetPx = bottomInset.toPx()
+    if (bottomInsetPx > 0f) {
+        drawRect(
+            color = color,
+            topLeft = Offset(0f, size.height - bottomInsetPx),
+            size = Size(size.width, bottomInsetPx),
+        )
+    }
     val bottomPx = bottom.toPx()
     if (bottomPx > 0f) {
+        val fadeBottom = size.height - bottomInsetPx
         drawRect(
             brush = Brush.verticalGradient(
                 colors = listOf(color.copy(alpha = 0f), color),
-                startY = size.height - bottomPx,
-                endY = size.height,
+                startY = fadeBottom - bottomPx,
+                endY = fadeBottom,
             ),
-            topLeft = Offset(0f, size.height - bottomPx),
+            topLeft = Offset(0f, fadeBottom - bottomPx),
             size = Size(size.width, bottomPx),
         )
     }

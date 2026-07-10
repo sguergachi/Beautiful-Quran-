@@ -99,13 +99,15 @@ fun HomeScreen(
         nowPlayingPresent = floatingPlayback != null,
         coverSheetVisible = coverSheetVisible,
     )
-    // Keep list clearance whenever a session is loaded so enter/exit slides
-    // don't shove the last rows under the bar mid-animation.
-    val listBottomPadding = if (floatingPlayback != null) {
-        FloatingPlaybackListClearance
-    } else {
-        48.dp
-    }
+    // Soft dissolve height at the list edge — stays a short ink fade, never
+    // stretched across the player clearance.
+    val listFadeBottom = 48.dp
+    // Measured height of the floating transport; falls back to the clearance
+    // estimate until the first layout pass. Used as bottomInset so the soft
+    // fade sits on the paper just above the bar, matching the reader.
+    var floatingPlaybackHeight by remember { mutableStateOf(FloatingPlaybackListClearance) }
+    val listBottomInset = if (floatingPlayback != null) floatingPlaybackHeight else 0.dp
+    val listBottomPadding = listFadeBottom + listBottomInset
 
     // Focus + geometry that anchor the fading dials pane just under the search
     // field, floating over the surah list.
@@ -191,7 +193,10 @@ fun HomeScreen(
                     .verticalFadingEdges(
                         color = MaterialTheme.colorScheme.background,
                         top = 24.dp,
-                        bottom = listBottomPadding,
+                        bottom = listFadeBottom,
+                        // Opaque band over the float's footprint so the soft
+                        // edge dissolves just above the player, not through it.
+                        bottomInset = listBottomInset,
                     ),
                 contentPadding = PaddingValues(bottom = listBottomPadding),
             ) {
@@ -353,7 +358,12 @@ fun HomeScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .widthIn(max = 640.dp)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .onGloballyPositioned { coords ->
+                        floatingPlaybackHeight = with(density) {
+                            coords.size.height.toDp()
+                        }
+                    },
             )
         }
     }

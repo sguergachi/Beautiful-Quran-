@@ -207,8 +207,10 @@ image, so it is crisp at any density and nearly free to render.
   enter/exit is also tied to the paper-stack page turn: returning to chapter
   selection plays the entrance; leaving for the reader plays the exit. A
   quiet Close in the corner dismisses the session (stops playback) so the
-  bar exits the same way. Opening the reader replaces it with the embedded
-  `PlayerBar`.
+  bar exits the same way. The list's soft bottom dissolve sits **just above
+  the float** (`verticalFadingEdges` `bottomInset`), not stretched through
+  it — same paper edge as the reader above its embedded `PlayerBar`.
+  Opening the reader replaces the float with that bar.
 
 ## Bookmark ribbon
 
