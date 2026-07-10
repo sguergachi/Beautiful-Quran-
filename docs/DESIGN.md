@@ -91,7 +91,7 @@ lyrics treatment, never a background block:
 | Upcoming (in the active ayah) | 30 % |
 | **Active (being recited)** | letters ink in one by one (below) |
 | Recited | settles to 80 % over 450 ms |
-| Non-active ayahs during playback | whole block recedes to 32 % |
+| Non-active ayahs during playback | whole block recedes to 32 % (gloss / English); Arabic-only uses the same upcoming paper cover on every word instead, so ayah handoff does not brighten the verse |
 
 The active word doesn't switch on — it is *written*: a soft alpha band
 sweeps across the glyphs (right-to-left for Arabic, left-to-right for the
