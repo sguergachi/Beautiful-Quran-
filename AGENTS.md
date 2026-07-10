@@ -17,6 +17,7 @@ app/                    The entire Android app (single Gradle module)
     data/               SQLite wrapper, repositories, models (no Room)
     domain/             HighlightEngine — the pure word-sync engine
     playback/           Media3: PlaybackService, PlayerController, prefetch
+    ui/entrance/        Cold-start ceremony: the closed mushaf cover + isti'adha
     ui/home|reader|settings|theme/   Compose screens + design system
     timingslab/         In-app editor for word-timing corrections
   src/test/             JVM unit tests (JUnit 4)

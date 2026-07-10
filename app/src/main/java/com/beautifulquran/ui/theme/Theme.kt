@@ -237,6 +237,17 @@ fun contrastingOverlayColorScheme(themeMode: ThemeMode): ColorScheme = when (the
  * accents are tuned for a light page and wash out on this green/night surface. */
 val TimingsLabAccents: QuranAccents = DarkAccents
 
+/** The entrance cover is always deep-green leather regardless of theme, so
+ * its gilding always uses the dark set (same reasoning as [TimingsLabAccents]). */
+val CoverAccents: QuranAccents = DarkAccents
+
+/** The entrance cover's leather — fixed, not themed: a bound mushaf keeps its
+ * own boards whatever paper the reader prefers inside. Center/edge stops of
+ * the leather's radial shading, and the parchment its title is inked in. */
+val CoverLeatherCenter = Color(0xFF0A382E)
+val CoverLeatherEdge = Color(0xFF031C15)
+val CoverParchment = Parchment
+
 @Composable
 fun BeautifulQuranTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,

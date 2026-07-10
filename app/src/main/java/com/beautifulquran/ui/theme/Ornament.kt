@@ -161,6 +161,129 @@ fun GildedRosette(
 }
 
 /**
+ * The centrepiece of the entrance cover: a [GildedRosette] grown into a full
+ * mushaf medallion — the eight-fold star wrapped in two hairline rings with a
+ * pearl at each of the sixteen ring stations, embossed into the leather and
+ * faced in shifting gold. Same khatam vocabulary, ceremonial scale.
+ */
+@Composable
+fun GildedMedallion(
+    size: Dp,
+    brightGold: Color,
+    deepGold: Color,
+    embossDark: Color,
+    embossLight: Color,
+    sheen: State<Float>,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier.then(Modifier.size(size))) {
+        val s = min(this.size.width, this.size.height)
+        val c = s / 2f
+        val center = Offset(c, c)
+        val line = Stroke(width = s * 0.010f)
+        val hairline = Stroke(width = s * 0.005f)
+
+        val outerRing = s * 0.485f
+        val innerRing = s * 0.36f
+        val khatam = Path().apply { addKhatam(c, c, s * 0.335f) }
+        val octagram = Path().apply { addOctagram(c, c, s * 0.24f) }
+
+        // Relief first, face last — the same press-into-paper order as the
+        // rosette, ring by ring from the outside in.
+        embossed(khatam, line, embossDark, embossLight)
+        embossed(octagram, line, embossDark, embossLight)
+
+        val gold = goldBrush(brightGold, deepGold, sheen.value.coerceIn(0f, 1f))
+        drawCircle(gold, radius = outerRing, center = center, style = hairline)
+        drawCircle(gold, radius = innerRing, center = center, style = hairline)
+        drawPath(khatam, gold, style = line)
+        drawPath(octagram, gold, style = line)
+
+        // Sixteen pearls stationed between the rings; a seed at the heart.
+        for (k in 0 until 16) {
+            val ang = Math.toRadians(k * 22.5).toFloat()
+            drawCircle(
+                brush = gold,
+                radius = if (k % 2 == 0) s * 0.016f else s * 0.009f,
+                center = Offset(
+                    c + (outerRing + innerRing) / 2f * kotlin.math.cos(ang),
+                    c + (outerRing + innerRing) / 2f * kotlin.math.sin(ang),
+                ),
+            )
+        }
+        drawCircle(gold, radius = s * 0.028f, center = center)
+        drawCircle(gold, radius = s * 0.07f, center = center, style = hairline)
+    }
+}
+
+/**
+ * The tooled border of the entrance cover: a doubled gilt rule following the
+ * sheet's edge with a small khatam star pressed into each corner — the frame
+ * a hand-bound mushaf carries on its leather. Fills whatever it is given;
+ * meant to sit full-bleed on the cover.
+ */
+@Composable
+fun MushafCoverFrame(
+    brightGold: Color,
+    deepGold: Color,
+    embossDark: Color,
+    embossLight: Color,
+    sheen: State<Float>,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier) {
+        val outerInset = 16.dp.toPx()
+        val innerInset = 26.dp.toPx()
+        val corner = 10.dp.toPx()
+        val rule = Stroke(width = 2.dp.toPx())
+        val hairline = Stroke(width = 1.dp.toPx())
+
+        val outer = Path().apply {
+            addRoundRect(
+                RoundRect(
+                    left = outerInset,
+                    top = outerInset,
+                    right = size.width - outerInset,
+                    bottom = size.height - outerInset,
+                    cornerRadius = CornerRadius(corner, corner),
+                ),
+            )
+        }
+        val inner = Path().apply {
+            addRoundRect(
+                RoundRect(
+                    left = innerInset,
+                    top = innerInset,
+                    right = size.width - innerInset,
+                    bottom = size.height - innerInset,
+                    cornerRadius = CornerRadius(corner * 0.6f, corner * 0.6f),
+                ),
+            )
+        }
+        // Corner stars sit on the inner rule's corners, one khatam each.
+        val starR = 11.dp.toPx()
+        val corners = listOf(
+            Offset(innerInset, innerInset),
+            Offset(size.width - innerInset, innerInset),
+            Offset(innerInset, size.height - innerInset),
+            Offset(size.width - innerInset, size.height - innerInset),
+        )
+        val stars = Path().apply {
+            corners.forEach { addKhatam(it.x, it.y, starR) }
+        }
+
+        embossed(outer, rule, embossDark, embossLight)
+        embossed(stars, hairline, embossDark, embossLight)
+
+        val gold = goldBrush(brightGold, deepGold, sheen.value.coerceIn(0f, 1f))
+        drawPath(outer, gold, style = rule)
+        drawPath(inner, gold, style = hairline)
+        drawPath(stars, gold, style = hairline)
+        corners.forEach { drawCircle(gold, radius = 2.dp.toPx(), center = it) }
+    }
+}
+
+/**
  * A small horizontal flourish for flanking a title: a gilded khatam star at
  * the inner end with a hairline rule tapering away from it, embossed like the
  * rosette. [mirrored] flips it for the far side of the title.
