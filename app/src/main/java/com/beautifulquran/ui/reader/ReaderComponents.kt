@@ -1048,7 +1048,8 @@ fun AyahBlock(
  * shifts with the page ([sheen] is read at draw time only). Surahs that open
  * with the basmalah (every chapter except Al-Fatihah and At-Tawbah) carry it
  * as traditional Naskh manuscript calligraphy beneath the title — not
- * numbered, not an ayah.
+ * numbered, not an ayah. The glyph follows [InkEngine] ink (Active during the
+ * basmalah lead-in, Upcoming while another ayah plays) and is tappable.
  */
 @Composable
 fun SurahHeader(
@@ -1059,6 +1060,9 @@ fun SurahHeader(
     revelationPlace: String,
     ayahCount: Int,
     sheen: State<Float>,
+    basmalahActive: Boolean = false,
+    basmalahDimmed: Boolean = false,
+    onBasmalahClick: (() -> Unit)? = null,
 ) {
     val accents = LocalQuranAccents.current
     val weaveFade = MaterialTheme.colorScheme.background
@@ -1108,7 +1112,11 @@ fun SurahHeader(
         )
         if (showBasmalah) {
             Spacer(Modifier.height(28.dp))
-            BasmalahCalligraphy()
+            BasmalahCalligraphy(
+                active = basmalahActive,
+                dimmed = basmalahDimmed,
+                onClick = onBasmalahClick,
+            )
         }
     }
 }
