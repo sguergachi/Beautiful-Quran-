@@ -25,7 +25,9 @@ tools/build_db.py       Data pipeline that generates quran.db (build-time, not a
 tools/timing_overrides/ Committed timing-correction patches applied by build_db.py
 scripts/                Linux emulator setup / run helpers
 docs/                   Architecture, design language, performance, timings docs
+web/                    Browser port (Vite + React): Focus / Highlight / Ink + paper reader
 .github/workflows/build.yml   CI: tests on all branches; assembleRelease + publish APK on master only
+.github/workflows/web.yml     CI: Vitest + web production build when web/ changes
 ```
 
 ## Build, test, run
@@ -102,6 +104,7 @@ Requires **JDK 21**. No Android device/emulator is needed for tests.
 | `docs/TIMINGS_LAB.md` | The in-app timing editor and its patch workflow (developer mode) |
 | `tools/timing_overrides/README.md` | Committed timing-correction patch format |
 | `PLAN.md` | Historical product/engineering plan — context, not current spec |
+| `docs/WEB.md` | Web port plan — Focus / Highlight / Ink engines + paper reader in the browser |
 
 ## Working style
 
