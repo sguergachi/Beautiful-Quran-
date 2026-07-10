@@ -7,14 +7,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -61,7 +56,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.AppViewModelFactory
 import com.beautifulquran.ui.PageTurnSounds
-import com.beautifulquran.ui.home.FloatingPlaybackBottomInset
 import com.beautifulquran.ui.home.FloatingPlaybackListClearance
 import com.beautifulquran.ui.home.HomeScreen
 import com.beautifulquran.ui.home.HomeViewModel
@@ -77,6 +71,7 @@ import com.beautifulquran.ui.settings.SettingsViewModel
 import com.beautifulquran.timingslab.TimingsLabScreen
 import com.beautifulquran.timingslab.TimingsLabViewModel
 import com.beautifulquran.ui.theme.BeautifulQuranTheme
+import com.beautifulquran.ui.theme.FloatingPaperControl
 import com.beautifulquran.ui.theme.InkRevealOverlay
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.TimingsLabAccents
@@ -435,21 +430,13 @@ private fun PaperStackApp(
 
         // Concordance "Back to …" — opaque floating capsule above the paper
         // stack so it survives closing the reader / returning to chapter
-        // selection. Sits under ink-bleed overlays; clears 30s after the
-        // first hand scroll or page turn (see LaunchedEffects above). On the
-        // cover it clears the floating playback transport; on the reader it
-        // clears the embedded player bar.
+        // selection. Same FloatingPaperControl host (enter/exit + bottom
+        // inset) as the return-to-ayah roundel. On the cover it clears the
+        // floating playback transport; on the reader it clears the embedded
+        // player bar.
         val abovePlayer = page in 0.5f..1.5f && selectedSurahId != 0
-        AnimatedVisibility(
+        FloatingPaperControl(
             visible = rootReturnVisible,
-            enter = fadeIn(tween(280)) + slideInVertically(
-                animationSpec = tween(320),
-                initialOffsetY = { it / 3 },
-            ),
-            exit = fadeOut(tween(220)) + slideOutVertically(
-                animationSpec = tween(260),
-                targetOffsetY = { it / 3 },
-            ),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
@@ -467,10 +454,7 @@ private fun PaperStackApp(
                 BackToOriginPill(
                     target = target,
                     onClick = ::returnFromConcordanceJump,
-                    modifier = Modifier.padding(
-                        horizontal = 28.dp,
-                        vertical = FloatingPlaybackBottomInset,
-                    ),
+                    modifier = Modifier.padding(horizontal = 28.dp),
                 )
             }
         }

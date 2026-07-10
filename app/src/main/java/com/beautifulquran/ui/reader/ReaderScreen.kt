@@ -10,8 +10,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -89,8 +87,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ReadingMode
-import com.beautifulquran.ui.home.FloatingPlaybackBottomInset
 import com.beautifulquran.ui.reader.focus.rememberReaderFocusController
+import com.beautifulquran.ui.theme.FloatingPaperControl
 import com.beautifulquran.ui.theme.IslamicReturnToAyahButton
 import com.beautifulquran.ui.theme.absorbPointerEvents
 import com.beautifulquran.ui.theme.contrastingOverlayColorScheme
@@ -866,9 +864,9 @@ fun ReaderScreen(
                     .zIndex(1f),
             )
 
-            // Ornamented return-to-ayah — floats above the player bar. Yields
-            // while MainActivity's concordance "Back to" line is showing so
-            // the two never compete for the same slot.
+            // Ornamented return-to-ayah — floats above the player bar via the
+            // shared FloatingPaperControl host. Yields while MainActivity's
+            // concordance Back-to capsule is showing so the two never compete.
             val showReturnToAyah =
                 playerState.error == null &&
                     !rootReturnVisible &&
@@ -881,22 +879,10 @@ fun ReaderScreen(
                     .matchParentSize()
                     .zIndex(1.2f),
             ) {
-                AnimatedVisibility(
-                    visible = showReturnToAyah,
-                    enter = fadeIn(tween(280)) + slideInVertically(
-                        animationSpec = tween(320),
-                        initialOffsetY = { it },
-                    ),
-                    exit = fadeOut(tween(220)) + slideOutVertically(
-                        animationSpec = tween(260),
-                        targetOffsetY = { it / 2 },
-                    ),
-                ) {
+                FloatingPaperControl(visible = showReturnToAyah) {
                     IslamicReturnToAyahButton(
                         pointUp = activeAyahPlacement.value.pointUp,
                         onClick = { followEnabled = true },
-                        // Same bottom inset as home's FloatingPlaybackControl.
-                        modifier = Modifier.padding(bottom = FloatingPlaybackBottomInset),
                     )
                 }
             }

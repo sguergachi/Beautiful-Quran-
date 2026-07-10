@@ -98,15 +98,16 @@ Jump behaviour:
   chapter-list floating transport on the cover). It is the stadium twin of
   the return-to-ayah roundel: paper fill, embossed gilt rim, and the same
   drawn reed-pen arrow (pointing back), with chapter name · `surah:ayah`
-  as quiet ink inside. Hosted in `MainActivity`, not inside the reader
-  sheet, so closing the reader or returning to chapter selection leaves it
-  in view. The whole capsule is one tap target (returns there); there is no
-  separate dismiss control — the first hand scroll, drag, or paper-stack
-  page turn after the jump settles arms a **30-second** countdown that then
-  clears it (the programmatic settle itself does not start the timer). The
-  ornamented return-to-ayah control yields to this capsule while it is
-  visible. Ink-bleed overlays (Root Viewer / Lab / chooser) temporarily
-  cover it.
+  as quiet ink inside. Both ornaments share `FloatingPaperControl` for
+  entrance / exit (full-height slide + fade) and bottom inset. Hosted in
+  `MainActivity`, not inside the reader sheet, so closing the reader or
+  returning to chapter selection leaves it in view. The whole capsule is
+  one tap target (returns there); there is no separate dismiss control —
+  the first hand scroll, drag, or paper-stack page turn after the jump
+  settles arms a **30-second** countdown that then clears it (the
+  programmatic settle itself does not start the timer). The ornamented
+  return-to-ayah control yields to this capsule while it is visible.
+  Ink-bleed overlays (Root Viewer / Lab / chooser) temporarily cover it.
 - Closing the reader sheet (paper-stack back) does not reopen the lexicon.
 
 Occurrence list ordering: Quranic order (surah, then ayah, then word
