@@ -202,21 +202,28 @@ go*; the strip answers *what did I mark*. It lives flush along the screen edge
 takes the other edge), and it obeys the same chrome rules: it fades with the
 rest of the chrome and vanishes entirely while reciting.
 
-- **A saved verse is a short ruby ribbon** hanging at that ayah's proportional
-  height in the surah — the same position mapping the selector's glow uses.
-  Several marks read as ribbons down the page's edge.
-- **Marking is where you are.** A faint ruby *phantom* ribbon tracks the verse
-  you are reading; a tap on the strip drops (or lifts) a ribbon there — no
-  aiming. Tapping an existing ribbon elsewhere jumps to it.
-- **The unroll.** On mark, the ribbon *unrolls downward* from the verse,
-  decelerating into its resting length — no overshoot, no bounce. As it lands,
-  the free tail gives a single small flutter and stills, like real ribbon. That
-  minor settle is the only motion on the strip that isn't pure fade or slide.
+- **A saved verse is a ruby ribbon glued to that verse.** It spans the full
+  height of the verse's block on the page and **scrolls with it** — the ribbon
+  is stuck to the ayah, not floating on a separate scale. Each ribbon dissolves
+  into the page at the top and bottom fade bands, exactly as the verse text
+  does, so it never cuts off hard at the edge.
+- **Marking is where you tap.** A tap on the strip alongside a verse marks (or
+  unmarks) *that* verse; a faint ruby *phantom* ribbon runs the full block of
+  the verse you are reading as the discoverable hint. No aiming at a scale —
+  you mark the verse you can see.
+- **The unroll.** On mark, the ribbon *unrolls down the length of the block*
+  from top to tail — a gravity-like drop (slow start, accelerating, easing out
+  as it runs out of length), with a small rolled curl leading the tip. No
+  overshoot, no bounce; taller verses take proportionally longer so the speed
+  reads the same. As it lands, the free tail gives a single small flutter and
+  stills, like real ribbon — the only strip motion that isn't pure fade or
+  slide.
 
 Implementation: `ui/reader/BookmarkRibbonStrip.kt`, a single draw-phase Canvas
-mirroring `AyahSelectorRail`'s performance discipline. Bookmarks persist in
-their own SharedPreferences store (`data/BookmarkRepository.kt`), never in the
-read-only `quran.db`.
+that reads the reader's live `LazyListState` layout each frame to anchor every
+ribbon to its verse block. It mirrors `AyahSelectorRail`'s performance
+discipline. Bookmarks persist in their own SharedPreferences store
+(`data/BookmarkRepository.kt`), never in the read-only `quran.db`.
 
 ## Reading modes
 
