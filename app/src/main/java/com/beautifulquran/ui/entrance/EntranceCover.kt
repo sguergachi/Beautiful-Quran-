@@ -96,10 +96,10 @@ private const val SILENT_WASH_MS = 3_800
 private const val SILENT_HOLD_MS = 600L
 
 /** The cover's hinge open. Deliberately slower than a page turn (460 ms):
- * a bound board is heavier than a sheet. Negative so the free edge swings
- * toward the right — an Arabic book hinged on its right edge. */
+ * a bound board is heavier than a sheet. Pivot on the left; positive
+ * rotationY swings the free edge right→left into the left side. */
 private const val OPEN_MS = 1_150
-private const val OPEN_DEGREES = -88f
+private const val OPEN_DEGREES = 88f
 
 /** Same decelerating settle as the paper stack's page turns. */
 private val CoverOpenEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
@@ -109,9 +109,9 @@ private val CoverOpenEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
  * tooled with the star-and-cross weave, framed and cornered in gilt, carrying
  * the gilded khatam medallion and the title in the Hafs hand. The isti'adha
  * is recited once — its words ink themselves onto the cover in step with the
- * reciter's voice — and then the board swings open on its right hinge (an
- * Arabic book) onto chapter selection. A tap anywhere, or back, opens it at
- * once; offline the du'a still writes itself, silently.
+ * reciter's voice — and then the board swings open on its left hinge (free
+ * edge right→left into the left side) onto chapter selection. A tap anywhere,
+ * or back, opens it at once; offline the du'a still writes itself, silently.
  *
  * Sits over the whole paper stack and leaves composition via [onFinished].
  * The status bar is hidden for the ceremony so the leather board reads as a
@@ -232,8 +232,8 @@ fun EntranceCover(
                 .fillMaxSize()
                 .graphicsLayer {
                     val t = turn.value
-                    // Right-edge hinge: an Arabic mushaf opens from the right.
-                    transformOrigin = TransformOrigin(1f, 0.5f)
+                    // Left-edge hinge: free edge swings right→left into the left side.
+                    transformOrigin = TransformOrigin(0f, 0.5f)
                     cameraDistance = 42f * density
                     rotationY = OPEN_DEGREES * t
                     // Edge-on the board is invisible anyway; the fade keeps its
