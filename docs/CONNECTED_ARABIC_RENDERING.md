@@ -51,9 +51,9 @@ onto neighbouring words:
   active is full ink; `shapedWordBloom` covers that word's
   `getPathForRange` with paper and pulls the cover back on the `letterFadeIn`
   curve (CoverWithPaper). Correct harfs, directional bloom, no neighbour rect
-  bleed. Upcoming dim is also draw-phase paper cover, animated over 450ms when
-  the ayah becomes active — baking it into span colours flashed the whole
-  verse on ayah change.
+  bleed. Upcoming dim is also draw-phase paper cover at full strength from the
+  first Upcoming frame — never animate it up from 0 (that briefly showed the
+  whole unread ayah at full ink when playback landed on it).
 - Repeat (orange) re-draws the same shaped glyphs, `SrcIn`-tints them orange,
   then applies the DstIn wash from resting 0 with dissolving `layerAlpha` —
   matching gloss mode's orange overlay without solid orange rectangles.

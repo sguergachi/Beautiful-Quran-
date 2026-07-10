@@ -633,16 +633,9 @@ private fun ResponsiveHafsAyah(
     val repeatWashes = rememberRepeatWashes(states, repeats, activeSweepMs)
     val activeIndex = states.indexOf(WordVisualState.Active)
     val activeIsRepeat = activeIndex >= 0 && repeats.getOrElse(activeIndex) { false }
-    // Soften Plain→Upcoming when this ayah becomes the lyric line — same
-    // 450ms as gloss mode's animatedInkAlpha, so the verse does not flash
-    // faint in one frame.
-    val lyricActive = states.any { it != WordVisualState.Plain }
-    val verseDim = animateFloatAsState(
-        targetValue = if (lyricActive) 1f else 0f,
-        animationSpec = tween(450),
-        label = "verseDim",
-    )
-    val upcomingCover = (1f - WordVisualState.Upcoming.inkAlpha())
+    // Full upcoming paper cover whenever a word is Upcoming — never animate
+    // 0→1 on ayah activation (that briefly showed unread words at full ink).
+    val upcomingCover = 1f - WordVisualState.Upcoming.inkAlpha()
     val style = ArabicWordStyle.merge(
         TextStyle(
             fontFamily = HafsFontFamily,
@@ -692,22 +685,19 @@ private fun ResponsiveHafsAyah(
             .widthIn(max = 560.dp)
             .shapedWordBloom(
                 blooms = {
-                    val dim = verseDim.value
                     val blooms = ArrayList<ShapedWordBloom>(states.size + 1)
-                    // Upcoming dim: paper cover animated by verseDim so ayah
-                    // activation matches gloss mode's soft ink tween.
-                    if (dim > 0f) {
-                        val cover = (upcomingCover * dim).coerceIn(0f, 1f)
-                        states.forEachIndexed { index, state ->
-                            if (state != WordVisualState.Upcoming) return@forEachIndexed
-                            val range = rendered.wordRanges.getOrNull(index)
-                                ?: return@forEachIndexed
-                            blooms += ShapedWordBloom.UpcomingDim(
-                                range = range,
-                                paper = palette.paperColor,
-                                coverAlpha = cover,
-                            )
-                        }
+                    // Upcoming dim: full paper cover from the first frame the
+                    // word is Upcoming, so the ayah never flashes full-ink
+                    // unread when playback lands on it.
+                    states.forEachIndexed { index, state ->
+                        if (state != WordVisualState.Upcoming) return@forEachIndexed
+                        val range = rendered.wordRanges.getOrNull(index)
+                            ?: return@forEachIndexed
+                        blooms += ShapedWordBloom.UpcomingDim(
+                            range = range,
+                            paper = palette.paperColor,
+                            coverAlpha = upcomingCover,
+                        )
                     }
                     // First-pass ink reveal: paper cover over the shaped full-ink
                     // glyphs, pulled back on the letterFadeIn curve. Skipped

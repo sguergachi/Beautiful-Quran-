@@ -106,9 +106,9 @@ fun Modifier.letterFadeIn(
  *   [SpanStyle] colours — painting over a transparent active span stays
  *   invisible until the word becomes recited.
  * - Inflated paper/orange rects bleed onto neighbours.
- * - Baking "upcoming" into span colours flashes the whole ayah when it
- *   becomes active (Plain→Upcoming with no tween). Upcoming dim lives in
- *   the draw phase instead, animated like gloss mode's ink alpha.
+ * - Baking "upcoming" into span colours, or animating upcoming dim from 0,
+ *   flashes the whole ayah full-ink when playback lands on it. Upcoming dim
+ *   is a full-strength draw-phase cover from the first Upcoming frame.
  *
  * So every bloom operates on the ayah's already-shaped [TextLayoutResult],
  * clipped to [TextLayoutResult.getPathForRange]:
@@ -120,9 +120,9 @@ fun Modifier.letterFadeIn(
 sealed class ShapedWordBloom {
     abstract val range: IntRange
 
-    /** Upcoming words: paper cover over full-ink glyphs. [coverAlpha] is
-     * animated 0→`(1 − resting)` when the ayah becomes active so the verse
-     * does not flash faint in one frame. */
+    /** Upcoming words: full-strength paper cover over full-ink glyphs from
+     * the first frame the word is Upcoming — never animate up from 0 (that
+     * briefly showed the whole unread ayah at full ink). */
     data class UpcomingDim(
         override val range: IntRange,
         val paper: Color,
