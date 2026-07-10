@@ -18,9 +18,17 @@ Quick essentials (details and rationale in AGENTS.md):
 
 When creating pull requests:
 - Create the PR and push your changes
-- Do not check if the PR is already merged or monitor PR status
+- Do not monitor PR status, CI, or reviews after opening it
 - Do not follow up on CI failures, review comments, or merge conflicts
 - Do not worry about PR issues or whether it's mergeable
 - Let the user review and check the PR status themselves
 
 Just make the PR and move on.
+
+**Before starting follow-up work, check whether the current PR is already
+merged** (e.g. `mcp__github__pull_request_read` with method `get`, or `gh pr
+view`). A merged PR is finished — never push follow-up commits onto its branch
+expecting them to reappear in it, and never reuse it. If it is merged, restart
+the branch from the latest default branch (keep the same branch name),
+re-apply the outstanding work, and open a **new** PR. If it is still open,
+continue on the same branch/PR.

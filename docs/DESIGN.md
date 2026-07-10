@@ -212,28 +212,31 @@ go*; the strip answers *what did I mark*. It lives flush along the screen edge
 takes the other edge), and it obeys the same chrome rules: it fades with the
 rest of the chrome and vanishes entirely while reciting.
 
-- **A saved verse is a ruby ribbon glued to that verse.** It spans the full
-  height of the verse's block on the page and **scrolls with it** — the ribbon
-  is stuck to the ayah, not floating on a separate scale. Each ribbon dissolves
-  into the page at the top and bottom fade bands, exactly as the verse text
-  does, so it never cuts off hard at the edge.
-- **Marking is where you tap.** A tap on the strip alongside a verse marks (or
-  unmarks) *that* verse; a faint ruby *phantom* ribbon runs the full block of
-  the verse you are reading as the discoverable hint. No aiming at a scale —
-  you mark the verse you can see.
-- **The unroll.** On mark, the ribbon *unrolls down the length of the block*
-  from top to tail — a gravity-like drop (slow start, accelerating, easing out
-  as it runs out of length), with a small rolled curl leading the tip. No
+- **Every verse carries a nub; a saved verse carries the whole ribbon.** An
+  idle verse shows only a small ruby **nub** at the top corner of its block —
+  the rolled-up head of a ribbon, and the tap target. Bookmark it and the
+  ribbon runs the **entire vertical length** of the verse's block (Arabic,
+  gloss, and translation together). Either way the mark is *glued to the verse*
+  and scrolls with it, dissolving into the page at the same top/bottom fade
+  bands as the text.
+- **Marking is where you tap.** A tap alongside a verse marks (or unmarks)
+  *that* verse — the nub on the verse you are reading burns a little brighter
+  so the affordance finds your eye. No aiming at a separate scale.
+- **The unroll.** On mark, the ribbon *unrolls out of the nub, down the length
+  of the block* — a gravity-like drop (slow start, accelerating, easing out as
+  it runs out of length), with a small rolled curl leading the tip. No
   overshoot, no bounce; taller verses take proportionally longer so the speed
   reads the same. As it lands, the free tail gives a single small flutter and
   stills, like real ribbon — the only strip motion that isn't pure fade or
-  slide.
+  slide. Unmarking rolls it back to the nub.
 
-Implementation: `ui/reader/BookmarkRibbonStrip.kt`, a single draw-phase Canvas
-that reads the reader's live `LazyListState` layout each frame to anchor every
-ribbon to its verse block. It mirrors `AyahSelectorRail`'s performance
-discipline. Bookmarks persist in their own SharedPreferences store
-(`data/BookmarkRepository.kt`), never in the read-only `quran.db`.
+Implementation: `ui/reader/BookmarkRibbonStrip.kt`, a single draw-phase Canvas.
+Verse blocks come from the reader's focus lookups (`ayahNumberByItemIndex`) and
+live `LazyListState` layout — the same geometry the `FocusEngine` reads — so a
+ribbon spans the whole block exactly and tracks scrolling. It mirrors
+`AyahSelectorRail`'s performance discipline. Bookmarks persist in their own
+SharedPreferences store (`data/BookmarkRepository.kt`), never in the read-only
+`quran.db`.
 
 ## Reading modes
 
