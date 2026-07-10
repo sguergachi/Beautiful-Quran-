@@ -575,17 +575,21 @@ select {
 }
 
 .ayah-rail {
-  width: 2.5rem;
+  width: 2.75rem;
   flex-shrink: 0;
   position: relative;
+  z-index: 6;
   transition: opacity 900ms ease;
-  cursor: pointer;
+  cursor: ns-resize;
   touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .ayah-rail[data-receded='true'] {
   opacity: 0.08;
   pointer-events: none;
+  cursor: default;
 }
 
 .ayah-rail .track {
@@ -596,6 +600,7 @@ select {
   width: 1px;
   background: color-mix(in srgb, var(--gold) 28%, transparent);
   transform: translateX(-50%);
+  pointer-events: none;
 }
 
 .ayah-rail .marker {
@@ -609,6 +614,7 @@ select {
   transition: top 140ms linear;
   opacity: 0.9;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--paper) 80%, transparent);
+  pointer-events: none;
 }
 
 .surah-header {

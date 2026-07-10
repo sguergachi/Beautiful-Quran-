@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { AyahBlock } from '../../render/AyahBlock'
 import { BASMALAH_UTHMANI, prefaceState, InkState } from '../../engine'
 import { FocusEngine, isAway, type TargetGeometry } from '../../engine/focus'
@@ -18,6 +18,25 @@ import {
   IconRepeat,
   IconRepeatOne,
 } from '../icons/PlaybackIcons'
+
+/** Matches `.ayah-rail .track` inset — keep marker + hit mapping in sync. */
+const RAIL_TRACK_TOP = 0.08
+const RAIL_TRACK_BOTTOM = 0.12
+const RAIL_TRACK_SPAN = 1 - RAIL_TRACK_TOP - RAIL_TRACK_BOTTOM
+
+function ayahFromRailY(clientY: number, railTop: number, railHeight: number, count: number): number {
+  if (count <= 1) return 1
+  const y = (clientY - railTop) / Math.max(1, railHeight)
+  const t = (y - RAIL_TRACK_TOP) / RAIL_TRACK_SPAN
+  const clamped = Math.min(1, Math.max(0, t))
+  return Math.min(count, Math.max(1, Math.round(clamped * (count - 1)) + 1))
+}
+
+function markerTopPct(ayah: number, count: number): number {
+  if (count <= 1) return (RAIL_TRACK_TOP + RAIL_TRACK_SPAN / 2) * 100
+  const t = (ayah - 1) / (count - 1)
+  return (RAIL_TRACK_TOP + t * RAIL_TRACK_SPAN) * 100
+}
 
 function Rosette() {
   return (
@@ -47,6 +66,8 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const userScrolling = useRef(false)
   const scrollIdle = useRef<number | null>(null)
   const lastFollowAyah = useRef<number | null>(null)
+  const focusedAyahRef = useRef(1)
+  const railDragging = useRef(false)
 
   const side = state.settings.ayahSelectorSide
   const receded = state.chromeReceded
@@ -54,6 +75,10 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const isTop = content != null && stackLayer === READER_LAYER
   const peeking = content != null && stackLayer > READER_LAYER
   const active = isTop || peeking
+
+  useEffect(() => {
+    focusedAyahRef.current = focusedAyah
+  }, [focusedAyah])
 
   useEffect(() => {
     if (!content || !isTop) return
@@ -74,7 +99,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       const viewport = el.clientHeight
       const line = FocusEngine.readingLinePx(viewport, 0)
       const blocks = Array.from(el.querySelectorAll<HTMLElement>('.ayah-block'))
-      let best = focusedAyah
+      let best = focusedAyahRef.current
       let bestDist = Infinity
       for (const block of blocks) {
         const rect = block.getBoundingClientRect()
@@ -86,7 +111,10 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
           best = Number(block.dataset.ayah)
         }
       }
-      setFocusedAyah(best)
+      if (best !== focusedAyahRef.current) {
+        focusedAyahRef.current = best
+        setFocusedAyah(best)
+      }
 
       const playing = state.activeAyah
       if (playing != null) {
@@ -109,6 +137,8 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     }
 
     const onScroll = () => {
+      // Rail-driven jumps also fire scroll — still treat as user intent so
+      // follow mode does not yank the page back to the playing ayah.
       userScrolling.current = true
       appStore.setFollowEnabled(false)
       if (scrollIdle.current) clearTimeout(scrollIdle.current)
@@ -121,7 +151,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     el.addEventListener('scroll', onScroll, { passive: true })
     update()
     return () => el.removeEventListener('scroll', onScroll)
-  }, [content?.surah.id, state.activeAyah, focusedAyah, isTop])
+  }, [content?.surah.id, state.activeAyah, isTop])
 
   useEffect(() => {
     if (!state.followEnabled || !state.activeAyah || !scrollRef.current || !isTop) return
@@ -137,13 +167,22 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     setShowReturn(false)
   }, [state.activeAyah, state.followEnabled, isTop])
 
-  const jumpToAyah = (ayah: number) => {
+  const jumpToAyah = (ayah: number, behavior: ScrollBehavior = 'smooth') => {
     const el = scrollRef.current
-    const target = el?.querySelector<HTMLElement>(`#ayah-${ayah}`)
-    if (!el || !target) return
+    if (!el || !content) return
+    const count = content.surah.ayahCount
+    const targetAyah = Math.min(count, Math.max(1, Math.round(ayah)))
+    const target = el.querySelector<HTMLElement>(`#ayah-${targetAyah}`)
+    if (!target) return
+
+    userScrolling.current = true
+    appStore.setFollowEnabled(false)
+    lastFollowAyah.current = null
+    focusedAyahRef.current = targetAyah
+    setFocusedAyah(targetAyah)
+
     const anchor = FocusEngine.anchorOffsetPx(el.clientHeight, 0, target.offsetHeight)
-    el.scrollTo({ top: Math.max(0, target.offsetTop - anchor), behavior: 'smooth' })
-    setFocusedAyah(ayah)
+    el.scrollTo({ top: Math.max(0, target.offsetTop - anchor), behavior })
   }
 
   if (!content) {
@@ -163,30 +202,53 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const preface = prefaceState(state.activeBasmalah, dimmedGlobal && !state.activeBasmalah)
   const prefaceOpacity = preface === InkState.Upcoming ? 0.22 : 1
   const showBasmalah = surahOpensWithBasmalahPreface(content.surah.id)
-  const markerPct =
-    ((focusedAyah - 1) / Math.max(1, content.surah.ayahCount - 1)) * 84 + 8
+  const ayahCount = content.surah.ayahCount
+  const markerPct = markerTopPct(focusedAyah, ayahCount)
 
-  const onRailClick = (e: MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const y = (e.clientY - rect.top) / rect.height
-    const ayah = Math.min(
-      content.surah.ayahCount,
-      Math.max(1, Math.round(y * content.surah.ayahCount)),
-    )
-    jumpToAyah(ayah)
+  const scrubRail = (clientY: number, rail: HTMLElement, behavior: ScrollBehavior) => {
+    const rect = rail.getBoundingClientRect()
+    const ayah = ayahFromRailY(clientY, rect.top, rect.height, ayahCount)
+    jumpToAyah(ayah, behavior)
+  }
+
+  const onRailPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (receded) return
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    e.preventDefault()
+    railDragging.current = true
+    e.currentTarget.setPointerCapture(e.pointerId)
+    scrubRail(e.clientY, e.currentTarget, 'auto')
+  }
+
+  const onRailPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    if (!railDragging.current) return
+    scrubRail(e.clientY, e.currentTarget, 'auto')
+  }
+
+  const onRailPointerUp = (e: PointerEvent<HTMLDivElement>) => {
+    if (!railDragging.current) return
+    railDragging.current = false
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+    scrubRail(e.clientY, e.currentTarget, 'smooth')
   }
 
   const rail = (
     <div
       className="ayah-rail"
       data-receded={receded}
-      onClick={onRailClick}
+      onPointerDown={onRailPointerDown}
+      onPointerMove={onRailPointerMove}
+      onPointerUp={onRailPointerUp}
+      onPointerCancel={onRailPointerUp}
       title="Jump to ayah"
       role="slider"
       aria-valuemin={1}
-      aria-valuemax={content.surah.ayahCount}
+      aria-valuemax={ayahCount}
       aria-valuenow={focusedAyah}
       aria-label="Ayah position"
+      aria-disabled={receded}
     >
       <div className="track" />
       <div className="marker" style={{ top: `${markerPct}%` }} />
