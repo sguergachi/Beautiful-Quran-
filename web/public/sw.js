@@ -10,7 +10,7 @@
  * other cache name and reloads open clients so a poisoned index.html
  * (pointing at deleted hashed assets) cannot leave a blank page.
  */
-const CACHE = 'beautiful-quran-web-v4'
+const CACHE = 'beautiful-quran-web-v5'
 const BASE = self.registration.scope
 
 function isNavigationRequest(req, url) {
