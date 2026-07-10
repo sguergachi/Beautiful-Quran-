@@ -221,6 +221,10 @@ fun GildedMedallion(
  * sheet's edge with a small khatam star pressed into each corner — the frame
  * a hand-bound mushaf carries on its leather. Fills whatever it is given;
  * meant to sit full-bleed on the cover.
+ *
+ * [geometry] is the concentric inset/radius set derived from the display's
+ * corner radii ([com.beautifulquran.ui.entrance.coverFrameGeometry]) so the
+ * gilt rule shares the phone's silhouette rather than a fixed square frame.
  */
 @Composable
 fun MushafCoverFrame(
@@ -229,34 +233,46 @@ fun MushafCoverFrame(
     embossDark: Color,
     embossLight: Color,
     sheen: State<Float>,
+    geometry: com.beautifulquran.ui.entrance.CoverFrameGeometry,
     modifier: Modifier = Modifier,
 ) {
     Canvas(modifier) {
-        val outerInset = 16.dp.toPx()
-        val innerInset = 26.dp.toPx()
-        val corner = 10.dp.toPx()
+        val outerInset = geometry.outerInsetPx
+        val innerInset = geometry.innerInsetPx
         val rule = Stroke(width = 2.dp.toPx())
         val hairline = Stroke(width = 1.dp.toPx())
 
+        val oc = geometry.outerCorners
+        val ic = geometry.innerCorners
         val outer = Path().apply {
             addRoundRect(
                 RoundRect(
-                    left = outerInset,
-                    top = outerInset,
-                    right = size.width - outerInset,
-                    bottom = size.height - outerInset,
-                    cornerRadius = CornerRadius(corner, corner),
+                    rect = Rect(
+                        left = outerInset,
+                        top = outerInset,
+                        right = size.width - outerInset,
+                        bottom = size.height - outerInset,
+                    ),
+                    topLeft = CornerRadius(oc.topLeft, oc.topLeft),
+                    topRight = CornerRadius(oc.topRight, oc.topRight),
+                    bottomRight = CornerRadius(oc.bottomRight, oc.bottomRight),
+                    bottomLeft = CornerRadius(oc.bottomLeft, oc.bottomLeft),
                 ),
             )
         }
         val inner = Path().apply {
             addRoundRect(
                 RoundRect(
-                    left = innerInset,
-                    top = innerInset,
-                    right = size.width - innerInset,
-                    bottom = size.height - innerInset,
-                    cornerRadius = CornerRadius(corner * 0.6f, corner * 0.6f),
+                    rect = Rect(
+                        left = innerInset,
+                        top = innerInset,
+                        right = size.width - innerInset,
+                        bottom = size.height - innerInset,
+                    ),
+                    topLeft = CornerRadius(ic.topLeft, ic.topLeft),
+                    topRight = CornerRadius(ic.topRight, ic.topRight),
+                    bottomRight = CornerRadius(ic.bottomRight, ic.bottomRight),
+                    bottomLeft = CornerRadius(ic.bottomLeft, ic.bottomLeft),
                 ),
             )
         }

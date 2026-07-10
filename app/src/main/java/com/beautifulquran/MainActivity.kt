@@ -57,7 +57,6 @@ import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.AppViewModelFactory
 import com.beautifulquran.ui.PageTurnSounds
 import com.beautifulquran.ui.entrance.EntranceCover
-import com.beautifulquran.ui.entrance.EntranceViewModel
 import com.beautifulquran.ui.home.FloatingPlaybackCoverVisibleMaxPage
 import com.beautifulquran.ui.home.FloatingPlaybackListClearance
 import com.beautifulquran.ui.home.HomeScreen
@@ -556,9 +555,7 @@ private fun PaperStackApp(
         // not a sheet in the stack: it is the board the stack lives behind,
         // and it leaves composition for good once it has swung open.
         if (entranceVisible) {
-            val entranceViewModel: EntranceViewModel = viewModel(factory = AppViewModelFactory)
             EntranceCover(
-                viewModel = entranceViewModel,
                 onOpenBegan = { pageTurnSounds.playCoverOpen() },
                 onFinished = onEntranceFinished,
                 modifier = Modifier.zIndex(6f),
