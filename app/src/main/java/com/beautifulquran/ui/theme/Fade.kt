@@ -103,12 +103,88 @@ internal const val InkWashFeather = 1.6f
 /**
  * smootherstep (6t⁵−15t⁴+10t³): zero first *and* second derivative at both ends,
  * so ink blooms in with a soft toe and settles with a soft shoulder — no seam
- * where the wash meets the resting or the fully inked letters. The easing shape
- * behind the per-letter [letterFadeIn] gradient wash.
+ * where the wash meets the resting or the fully inked letters. The one easing
+ * shape behind both [letterFadeIn] and [inkBloomOverlay].
  */
 internal fun inkSmootherstep(t: Float): Float {
     val c = t.coerceIn(0f, 1f)
     return c * c * c * (c * (c * 6f - 15f) + 10f)
+}
+
+private const val InkWashSpan = 1f + InkWashFeather
+
+/**
+ * The ink-wash alpha for a glyph at reading-direction fraction [pos] (0 at the
+ * first-revealed letter, 1 at the last) while the word's wash is at [progress].
+ *
+ * Same bloom [letterFadeIn] paints as a moving gradient mask, sampled per
+ * character. Kept for tests and for any caller that needs the curve as a
+ * scalar rather than a draw-phase brush.
+ */
+fun inkWashAlpha(pos: Float, progress: Float, restingAlpha: Float): Float {
+    val t = (InkWashSpan * progress - pos) / InkWashFeather
+    return restingAlpha + (1f - restingAlpha) * inkSmootherstep(t)
+}
+
+/**
+ * Directional ink bloom for a word that lives inside a larger shaped [Text]
+ * (the responsive / no-gloss Arabic ayah). [letterFadeIn] cannot be applied to
+ * the whole ayah — it would wash every word — and per-glyph [SpanStyle]s split
+ * Uthmanic Hafs shaping (font flip). Instead: draw the ayah with the active
+ * word already at full ink, then cover each of that word's line boxes with a
+ * paper gradient whose alpha is `1 - glyphAlpha`. SrcOver yields the same
+ * lerp(paper, ink, glyphAlpha) as a masked full-ink glyph, and the wash is
+ * read only at draw time so the sweep never recomposes or reshapes the ayah.
+ *
+ * [boxes] returns the active word's per-line bounds in the text's local
+ * coordinates; empty / progress ≥ 1 skips the overlay.
+ */
+fun Modifier.inkBloomOverlay(
+    progress: () -> Float,
+    boxes: () -> List<Rect>,
+    paper: Color,
+    rtl: Boolean,
+    restingAlpha: Float = 0.35f,
+): Modifier {
+    val stops = FloatArray(InkProfileStops) { i -> i / (InkProfileStops - 1f) }
+    // Paper coverage that leaves glyphAlpha visible underneath (SrcOver).
+    val overlayColors = stops.map { t ->
+        val s = inkSmootherstep(t)
+        val glyphAlpha = restingAlpha + (1f - restingAlpha) * (if (rtl) s else 1f - s)
+        paper.copy(alpha = (1f - glyphAlpha).coerceIn(0f, 1f))
+    }
+    return drawWithContent {
+        drawContent()
+        val p = progress().coerceIn(0f, 1f)
+        if (p >= 1f) return@drawWithContent
+        val wordBoxes = boxes()
+        if (wordBoxes.isEmpty()) return@drawWithContent
+        val bleed = FadeLayerBleed.toPx()
+        wordBoxes.forEach { box ->
+            val w = box.width
+            if (w <= 0f) return@forEach
+            val edge = (w * InkWashFeather).coerceAtLeast(1f)
+            val head = p * (w + edge)
+            val brush = if (rtl) {
+                Brush.horizontalGradient(
+                    colors = overlayColors,
+                    startX = box.left + (w - head),
+                    endX = box.left + (w - head) + edge,
+                )
+            } else {
+                Brush.horizontalGradient(
+                    colors = overlayColors,
+                    startX = box.left + head - edge,
+                    endX = box.left + head,
+                )
+            }
+            drawRect(
+                brush = brush,
+                topLeft = Offset(box.left - bleed, box.top - bleed),
+                size = Size(box.width + bleed * 2f, box.height + bleed * 2f),
+            )
+        }
+    }
 }
 
 /**

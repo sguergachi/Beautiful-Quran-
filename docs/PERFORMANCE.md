@@ -30,6 +30,12 @@ property, which is close to free. The same pattern applies to the player-bar
 chrome (`chromeAlpha: () -> Float` — a deferred read, not a Float
 parameter).
 
+The no-gloss Arabic path (`ResponsiveHafsAyah`) cannot put `letterFadeIn` on
+the whole ayah, and cannot split the active word into per-glyph colour spans
+(that breaks Hafs joining). It draws the active word at full ink, then applies
+`inkBloomOverlay` — a paper gradient clipped to that word's layout boxes —
+so the directional bloom still lives entirely in the draw phase.
+
 ### 2. Recomposition confined to one ayah
 
 The active word is exposed as an un-delegated `State` at screen level and

@@ -84,6 +84,7 @@ import com.beautifulquran.ui.theme.HafsFontFamily
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.TranslationFontFamily
 import com.beautifulquran.ui.theme.gilded
+import com.beautifulquran.ui.theme.inkBloomOverlay
 import com.beautifulquran.ui.theme.letterFadeIn
 import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.starAndCrossWeave
@@ -548,24 +549,26 @@ private class WordInkPalette(
         .copy(alpha = WordVisualState.Upcoming.inkAlpha())
         .compositeOver(paper)
 
-    fun colorFor(state: WordVisualState, repeat: Boolean, sweep: Float): Color = when {
+    fun colorFor(state: WordVisualState, repeat: Boolean): Color = when {
         repeat -> repeatInk
-        state == WordVisualState.Active -> fullInk
-            .copy(alpha = wordFadeAlpha(sweep))
-            .compositeOver(paper)
         state == WordVisualState.Upcoming -> fadedInk
         else -> fullInk
     }
 }
 
 @Composable
-private fun rememberWordInkPalette() = WordInkPalette(
-    fullInk = MaterialTheme.colorScheme.onBackground,
-    paper = MaterialTheme.colorScheme.background,
-    repeatInk = LocalQuranAccents.current.repeatInk,
-)
+private fun rememberWordInkPalette(): WordInkPalette {
+    val fullInk = MaterialTheme.colorScheme.onBackground
+    val paper = MaterialTheme.colorScheme.background
+    val repeatInk = LocalQuranAccents.current.repeatInk
+    return remember(fullInk, paper, repeatInk) {
+        WordInkPalette(fullInk = fullInk, paper = paper, repeatInk = repeatInk)
+    }
+}
 
-/** One letter sweep per word, running only for the active one. */
+/** One letter sweep per word, running only for the active one. The returned
+ * [State]s must be read in the draw phase only — never while building the
+ * annotated string — so the sweep does not reshape the ayah every frame. */
 @Composable
 private fun rememberLetterSweeps(
     states: List<WordVisualState>,
@@ -576,6 +579,25 @@ private fun rememberLetterSweeps(
         sweepMs = activeSweepMs.takeIf { state == WordVisualState.Active },
         startRevealed = rememberStartRevealed(state),
     )
+}
+
+private fun TextLayoutResult.wordBoxes(range: IntRange): List<Rect> {
+    if (range.isEmpty()) return emptyList()
+    val length = layoutInput.text.length
+    if (length == 0) return emptyList()
+    val first = range.first.coerceIn(0, length - 1)
+    val last = range.last.coerceIn(0, length - 1)
+    if (last < first) return emptyList()
+    val startLine = getLineForOffset(first)
+    val endLine = getLineForOffset(last)
+    return (startLine..endLine).map { line ->
+        val lineStart = maxOf(first, getLineStart(line))
+        val lineEndExclusive = minOf(last + 1, getLineEnd(line, visibleEnd = true))
+        val lineEnd = (lineEndExclusive - 1).coerceAtLeast(lineStart)
+        (lineStart..lineEnd)
+            .map { offset -> getBoundingBox(offset) }
+            .reduce { acc, rect -> acc.expandToInclude(rect) }
+    }
 }
 
 /**
@@ -616,8 +638,13 @@ private fun ResponsiveHafsAyah(
     onWordLongClick: ((Word) -> Unit)? = null,
 ) {
     val palette = rememberWordInkPalette()
+    val paper = MaterialTheme.colorScheme.background
     val ayahMarkInk = LocalQuranAccents.current.gold
     val sweeps = rememberLetterSweeps(states, activeSweepMs)
+    val activeIndex = states.indexOf(WordVisualState.Active)
+    val activeIsRepeat = activeIndex >= 0 && repeats.getOrElse(activeIndex) { false }
+    // First-pass ink reveal only: repeat (orange) stays a whole-word colour.
+    val bloomSweep = activeIndex.takeIf { it >= 0 && !activeIsRepeat }?.let { sweeps[it] }
     val style = ArabicWordStyle.merge(
         TextStyle(
             fontFamily = HafsFontFamily,
@@ -629,51 +656,67 @@ private fun ResponsiveHafsAyah(
     var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     val hitSlopPx = with(LocalDensity.current) { 8.dp.toPx() }
 
-    val wordRanges = mutableListOf<IntRange>()
-    val annotatedText = buildAnnotatedString {
-        ayah.words.forEachIndexed { index, word ->
-            val state = states.getOrElse(index) { WordVisualState.Plain }
-            val repeat = repeats.getOrElse(index) { false }
-            val start = length
-            // The whole ayah is a single shaped Text run, so each word must be
-            // one contiguous colour span: the Uthmanic Hafs script is cursive and
-            // leans on the font's contextual joining and ligature substitution.
-            // Splitting the active word into a colour span per glyph broke it into
-            // separate shaping runs, so its letters lost their connected forms and
-            // fell back to isolated shaping — a visible font flip as the word lit
-            // up and faded. The active word therefore blooms as one uniform wash
-            // (colorFor drives its alpha off the same sweep) rather than
-            // letter-by-letter.
-            withStyle(SpanStyle(color = palette.colorFor(state, repeat, sweeps[index].value))) {
-                append(word.arabic)
+    // Static colours only: the active word is full ink (or orange if repeating).
+    // The directional bloom is a draw-phase paper overlay — reading the sweep
+    // here would recompose and reshape the whole ayah every frame.
+    val rendered = remember(ayah, states, repeats, palette, ayahMarkInk, fontSize) {
+        val ranges = ArrayList<IntRange>(ayah.words.size)
+        val text = buildAnnotatedString {
+            ayah.words.forEachIndexed { index, word ->
+                val state = states.getOrElse(index) { WordVisualState.Plain }
+                val repeat = repeats.getOrElse(index) { false }
+                val start = length
+                // One contiguous colour span per word keeps Uthmanic Hafs
+                // joining/ligatures intact. Per-glyph spans split shaping runs
+                // and caused a visible font flip (#133).
+                withStyle(SpanStyle(color = palette.colorFor(state, repeat))) {
+                    append(word.arabic)
+                }
+                ranges += start until length
+                append(" ")
             }
-            wordRanges += start until length
-            append(" ")
+            withStyle(
+                SpanStyle(
+                    color = ayahMarkInk,
+                    fontSize = fontSize * AYAH_MARK_SIZE_RATIO,
+                ),
+            ) {
+                append("﴿")
+                append(ayah.number.toArabicIndic())
+                append("﴾")
+            }
         }
-        withStyle(
-            SpanStyle(
-                color = ayahMarkInk,
-                fontSize = fontSize * AYAH_MARK_SIZE_RATIO,
-            ),
-        ) {
-            append("﴿")
-            append(ayah.number.toArabicIndic())
-            append("﴾")
-        }
+        RenderedLineText(text = text, wordRanges = ranges)
     }
+    val activeRange = activeIndex.takeIf { it >= 0 }?.let { rendered.wordRanges.getOrNull(it) }
     Text(
-        text = annotatedText,
+        text = rendered.text,
         style = style,
         modifier = Modifier
             .fillMaxWidth()
             .widthIn(max = 560.dp)
+            .then(
+                if (bloomSweep != null && activeRange != null) {
+                    Modifier.inkBloomOverlay(
+                        progress = { bloomSweep.value },
+                        boxes = {
+                            layoutResult?.wordBoxes(activeRange).orEmpty()
+                        },
+                        paper = paper,
+                        rtl = true,
+                        restingAlpha = WordVisualState.Upcoming.inkAlpha(),
+                    )
+                } else {
+                    Modifier
+                },
+            )
             .then(
                 if (onWordClick == null) {
                     Modifier.quietClickable(onClick = onAyahClick)
                 } else {
                     Modifier.wordTapTarget(
                         words = ayah.words,
-                        ranges = wordRanges,
+                        ranges = rendered.wordRanges,
                         layoutResult = layoutResult,
                         hitSlopPx = hitSlopPx,
                         onWordClick = onWordClick,
