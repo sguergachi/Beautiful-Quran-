@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -51,7 +50,8 @@ import com.beautifulquran.ui.theme.verticalFadingEdges
  * See docs/ROOT_VIEWER.md — paper rules still apply: no cards, borders, or ripples.
  *
  * Chrome mirrors the reader: once the in-page word header scrolls off, the
- * same name reappears centred in the top bar; Close sits on the right.
+ * same name reappears centred in the top bar. A single Close on the right
+ * dismisses the bleed (system back does the same).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,15 +81,6 @@ fun RootViewerScreen(
                         if (word != null) {
                             CollapsedWordTitle(word = word)
                         }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.Rounded.KeyboardArrowDown,
-                            contentDescription = "Close",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                        )
                     }
                 },
                 actions = {
