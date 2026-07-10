@@ -43,7 +43,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -536,32 +535,17 @@ fun EnglishWordUnit(
 }
 
 /**
- * Ink colors for the inline (single annotated string) ayah renderers, plus
- * the one rule for choosing a word's color from its highlight state. Colors
- * are pre-composited over the paper because spans cannot carry a separate
- * draw-phase alpha.
+ * Ink colours for the Arabic-only shaped ayah. Base spans stay full ink —
+ * upcoming dim, first-pass bloom, and orange repeat are all draw-phase
+ * overlays so word/ayah transitions never reshape the run or flash span
+ * colours.
  */
 private class WordInkPalette(
     private val fullInk: Color,
     private val paper: Color,
     private val repeatInk: Color,
 ) {
-    private val fadedInk = fullInk
-        .copy(alpha = WordVisualState.Upcoming.inkAlpha())
-        .compositeOver(paper)
-
-    /**
-     * Base span colour. First-pass active is full ink — [shapedWordBloom]
-     * covers it with paper and pulls the cover back along the wash (same
-     * curve as [letterFadeIn]). Upcoming stays faint; repeat-chain words
-     * stay full ink under the orange SrcIn tint.
-     */
-    fun colorFor(state: WordVisualState, repeat: Boolean): Color = when {
-        repeat -> fullInk
-        state == WordVisualState.Upcoming -> fadedInk
-        else -> fullInk
-    }
-
+    val fullInkColor: Color get() = fullInk
     val paperColor: Color get() = paper
     val repeatInkColor: Color get() = repeatInk
 }
@@ -649,6 +633,16 @@ private fun ResponsiveHafsAyah(
     val repeatWashes = rememberRepeatWashes(states, repeats, activeSweepMs)
     val activeIndex = states.indexOf(WordVisualState.Active)
     val activeIsRepeat = activeIndex >= 0 && repeats.getOrElse(activeIndex) { false }
+    // Soften Plain→Upcoming when this ayah becomes the lyric line — same
+    // 450ms as gloss mode's animatedInkAlpha, so the verse does not flash
+    // faint in one frame.
+    val lyricActive = states.any { it != WordVisualState.Plain }
+    val verseDim = animateFloatAsState(
+        targetValue = if (lyricActive) 1f else 0f,
+        animationSpec = tween(450),
+        label = "verseDim",
+    )
+    val upcomingCover = (1f - WordVisualState.Upcoming.inkAlpha())
     val style = ArabicWordStyle.merge(
         TextStyle(
             fontFamily = HafsFontFamily,
@@ -660,22 +654,18 @@ private fun ResponsiveHafsAyah(
     var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     val hitSlopPx = with(LocalDensity.current) { 8.dp.toPx() }
 
-    // Static colours only. First-pass active is full ink in the base span —
-    // shapedWordBloom covers it with paper and reveals along the wash.
-    // Upcoming is faint; recited and repeat-chain words are full ink. Bloom
-    // progress is read only in the draw phase — never while building the
-    // annotated string.
-    val rendered = remember(ayah, states, repeats, palette, ayahMarkInk, fontSize) {
+    // Full-ink spans only — never bake upcoming/active into the annotated
+    // string. Dim, bloom, and orange are draw-phase overlays, so word and
+    // ayah boundaries do not reshape or flash the run.
+    val rendered = remember(ayah, palette.fullInkColor, ayahMarkInk, fontSize) {
         val ranges = ArrayList<IntRange>(ayah.words.size)
         val text = buildAnnotatedString {
-            ayah.words.forEachIndexed { index, word ->
-                val state = states.getOrElse(index) { WordVisualState.Plain }
-                val repeat = repeats.getOrElse(index) { false }
+            ayah.words.forEach { word ->
                 val start = length
                 // One contiguous colour span per word keeps Uthmanic Hafs
                 // joining/ligatures intact. Per-glyph spans split shaping runs
                 // and caused a visible font flip (#133).
-                withStyle(SpanStyle(color = palette.colorFor(state, repeat))) {
+                withStyle(SpanStyle(color = palette.fullInkColor)) {
                     append(word.arabic)
                 }
                 ranges += start until length
@@ -702,7 +692,23 @@ private fun ResponsiveHafsAyah(
             .widthIn(max = 560.dp)
             .shapedWordBloom(
                 blooms = {
-                    val blooms = ArrayList<ShapedWordBloom>(repeats.size + 1)
+                    val dim = verseDim.value
+                    val blooms = ArrayList<ShapedWordBloom>(states.size + 1)
+                    // Upcoming dim: paper cover animated by verseDim so ayah
+                    // activation matches gloss mode's soft ink tween.
+                    if (dim > 0f) {
+                        val cover = (upcomingCover * dim).coerceIn(0f, 1f)
+                        states.forEachIndexed { index, state ->
+                            if (state != WordVisualState.Upcoming) return@forEachIndexed
+                            val range = rendered.wordRanges.getOrNull(index)
+                                ?: return@forEachIndexed
+                            blooms += ShapedWordBloom.UpcomingDim(
+                                range = range,
+                                paper = palette.paperColor,
+                                coverAlpha = cover,
+                            )
+                        }
+                    }
                     // First-pass ink reveal: paper cover over the shaped full-ink
                     // glyphs, pulled back on the letterFadeIn curve. Skipped
                     // while repeating — orange carries the motion, same as
