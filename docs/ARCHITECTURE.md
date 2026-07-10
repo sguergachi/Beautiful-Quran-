@@ -137,7 +137,9 @@ per-item derivedStateOf in the reader list  ──►  one ayah recomposes
   ~150 ms window that reads as "in sync" to a human.
 
 See [HIGHLIGHT_ENGINE.md](HIGHLIGHT_ENGINE.md) for the engine's model, the
-binary search, and the repeat / high-water logic in full.
+binary search, and the repeat / high-water logic in full. See
+[INK_ENGINE.md](INK_ENGINE.md) for the proposed thin visual-policy layer that
+would sit between highlight timing and mode-specific text rendering.
 
 ## The focus engine
 

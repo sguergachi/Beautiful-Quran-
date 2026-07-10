@@ -1,0 +1,346 @@
+# InkEngine design proposal
+
+A proposal for unifying the reader's word-by-word visual effect without turning
+it into a custom text renderer.
+
+## Goal
+
+Make the highlight look easy to polish across Arabic, English, and Arabic-only
+Hafs modes while keeping the codebase thin.
+
+The desired composition is:
+
+```text
+Focus engine      -> which ayah has the reader's attention
+HighlightEngine   -> which word the reciter is on
+InkEngine         -> how each word's ink should behave
+Renderers         -> how each mode draws text safely
+```
+
+Each layer should return simple data to the next layer. None of the engines
+should own more than one job.
+
+## Current tension
+
+The current system has the right major pieces:
+
+- `FocusEngine` owns verse placement and scroll focus.
+- `HighlightEngine` owns audio timing, active word lookup, repeat detection,
+  and high-water state.
+- Reader composables draw Arabic, English, and Arabic-only text.
+
+The problem is that renderers also know too much about visual highlight policy:
+upcoming alpha, active/recited state, repeat-chain participation, sweep timing,
+secondary-line fade, and ayah mark fade are related decisions but are spread
+through the reader UI.
+
+That makes the effect harder to tune. A small polish change can require hunting
+through multiple rendering paths.
+
+## Proposed answer
+
+Add one small reader-ui layer:
+
+```text
+app/src/main/java/com/beautifulquran/ui/reader/InkEngine.kt
+```
+
+`InkEngine` should be the single place that converts focus + highlight timing
+into per-word visual behavior.
+
+It should answer:
+
+> Given this word, the active word, and whether this ayah is focused, how should
+> the word's ink behave?
+
+A deliberately small shape:
+
+```kotlin
+object InkEngine {
+    enum class State {
+        Plain,
+        Upcoming,
+        Active,
+        Recited,
+    }
+
+    data class Word(
+        val state: State,
+        val repeat: Boolean,
+    )
+
+    fun word(
+        position: Int,
+        activeWord: ActiveWord?,
+        isActiveAyah: Boolean,
+        dimmed: Boolean,
+    ): Word
+
+    fun sweepMs(
+        activeWord: ActiveWord?,
+        playbackSpeed: Float,
+    ): Int?
+}
+```
+
+The exact names can change during implementation, but the shape should stay
+small: one object, one word state, one word result, a few helper functions.
+
+## Composition
+
+### Focus engine
+
+Owns ayah-level attention:
+
+- focused ayah
+- dimmed ayah
+- programmatic scroll/follow behavior
+- verse geometry and placement
+
+It should not know about word alpha, repeat wash, or text masks.
+
+### HighlightEngine
+
+Owns recitation timing:
+
+- active word lookup
+- active segment duration
+- repeat-aware backtracking
+- high-water position
+- repeat start
+
+It should stay pure and renderer-agnostic. No Compose, no colors, no alpha, no
+masking.
+
+### InkEngine
+
+Owns visual word policy:
+
+- plain/upcoming/active/recited state
+- whether the word participates in repeat wash
+- sweep duration clamps
+- shared alpha constants
+- secondary gloss/transliteration fade policy
+- ayah mark fade policy, if useful
+
+It may expose small Compose animation helpers if that reduces reader code, but
+it should not become a rendering framework.
+
+### Renderers
+
+Own actual text drawing:
+
+- Arabic gloss renderer can use layered word `Text`.
+- English renderer can use layered word or phrase `Text`.
+- Arabic-only Hafs renderer should keep the shaped full-ayah text path and draw
+  overlays/masks against that layout.
+
+Renderers should consume `InkEngine.Word`; they should not re-derive highlight
+semantics themselves.
+
+## Options considered
+
+### Option 1: Do nothing
+
+Keep the current renderer-local logic.
+
+**Pros**
+
+- No immediate code churn.
+- Existing behavior remains untouched.
+
+**Cons**
+
+- Polish knobs stay scattered.
+- Arabic, English, and Hafs modes can drift over time.
+- Reader composables keep mixing layout with highlight policy.
+
+This is acceptable short-term, but it does not solve the tuning problem.
+
+### Option 2: Thin InkEngine policy layer
+
+Add `InkEngine` as a small state/policy layer between `HighlightEngine` and the
+renderers.
+
+**Pros**
+
+- One place to tune the highlight feel.
+- Keeps `HighlightEngine` pure.
+- Keeps Arabic-only rendering specialized and safe.
+- Low conceptual cost: `FocusEngine`, `HighlightEngine`, `InkEngine` each answer
+  one question.
+- Can be implemented with little code movement and little/no visual change.
+
+**Cons**
+
+- Adds one more named layer.
+- Requires touching all reader rendering branches to pass `InkEngine.Word`.
+
+This is the recommended approach.
+
+### Option 3: Full InkEngine renderer
+
+Move all animation, masking, wash drawing, and mode-specific text rendering into
+one large InkEngine.
+
+**Pros**
+
+- Everything visually related appears to live in one place.
+- The name sounds complete.
+
+**Cons**
+
+- Likely becomes a dense mixed-responsibility file.
+- Risks hiding important Arabic-only shaping constraints.
+- Encourages generic renderer abstractions that add code without improving the
+  product.
+- Pulls the project toward a custom text engine rabbit hole.
+
+This is not recommended.
+
+### Option 4: Generic renderer interface
+
+Introduce something like `HighlightRenderer` / `InkRenderer` with separate
+implementations for Arabic, English, and Hafs.
+
+**Pros**
+
+- Looks tidy from far away.
+- Mode-specific renderers get explicit names.
+
+**Cons**
+
+- Adds indirection and more files.
+- Does not remove the hard part: Arabic-only must draw against shaped ayah text.
+- Makes simple Compose code feel framework-like.
+
+This is not recommended unless the renderers grow much larger than they are
+today.
+
+## Recommended architecture
+
+```text
+FocusEngine
+    pure / controller-backed scroll focus
+    outputs ayah attention
+
+HighlightEngine
+    pure timing engine
+    outputs ActiveWord timing facts
+
+InkEngine
+    reader-ui policy layer
+    outputs InkEngine.Word for each word
+
+ReaderComponents
+    mode-specific layout and text drawing
+    consumes InkEngine.Word
+
+Fade.kt
+    low-level draw modifiers and wash/mask primitives
+```
+
+`Fade.kt` should generally keep the draw primitives (`letterFadeIn`, shaped
+bloom/mask drawing). `InkEngine` should decide what should happen; draw
+modifiers should decide how to draw it.
+
+## Implementation plan
+
+### Step 1: Extract word ink state
+
+Create `InkEngine.kt` and move the renderer-local word state logic into it.
+
+Expected behavior: no visual change.
+
+Tasks:
+
+- Add `InkEngine.State`.
+- Add `InkEngine.Word`.
+- Add `InkEngine.word(...)`.
+- Move active/upcoming/recited/repeat-chain derivation out of `AyahBlock`.
+- Compute each ayah's word ink list once.
+- Pass `InkEngine.Word` into Arabic, English, and Arabic-only branches.
+
+### Step 2: Centralize tuning constants
+
+Move shared visual constants and small policy functions under `InkEngine`.
+
+Expected behavior: no intentional visual change.
+
+Candidates:
+
+- upcoming alpha
+- full ink alpha
+- min/max sweep duration
+- repeat wash duration
+- default repeat sweep duration
+- secondary text fade
+- ayah mark fade duration
+
+Keep constants private unless another file genuinely needs them.
+
+### Step 3: Keep drawing primitives where they belong
+
+Leave low-level drawing in `Fade.kt` unless moving a helper clearly makes the
+code shorter and easier to read.
+
+Avoid moving all Canvas/mask code into `InkEngine.kt` just because it is
+visually related.
+
+### Step 4: Optional tests
+
+Add JVM tests for `InkEngine.word(...)` if the extracted logic is non-trivial.
+
+Useful cases:
+
+- inactive ayah words are plain or upcoming according to current behavior
+- active word is active
+- previous words are recited
+- future words are upcoming
+- repeat chain marks the correct words as `repeat = true`
+- high-water keeps already-recited words lit during repeat
+
+Do not UI-test animation unless a specific regression requires it.
+
+## Non-goals
+
+InkEngine should not:
+
+- replace `HighlightEngine`
+- know about SQLite or timing data loading
+- own scroll/focus behavior
+- own Arabic shaping
+- own `FlowRow` or `LazyColumn` layout
+- become a custom glyph/text engine
+- introduce renderer interfaces by default
+- create a broad animation DSL
+
+If implementation starts needing many files, interfaces, or renderer classes,
+that is a signal to stop and simplify.
+
+## Design principle
+
+Unify the rule, not the renderer.
+
+Arabic, English, and Arabic-only should share the same ink decision:
+
+```text
+Upcoming / Active / Recited / Repeat
+```
+
+But they do not need to share the same drawing mechanism. Arabic-only text has
+real shaping constraints, and preserving that quality matters more than making
+the code look uniformly abstract.
+
+## Review questions
+
+Before implementation, reviewers should answer:
+
+1. Is `InkEngine` small enough to justify the new layer?
+2. Does the proposal keep `HighlightEngine` pure?
+3. Does Arabic-only keep its shaped text path?
+4. Are polish knobs easier to find after this change?
+5. Are we avoiding renderer interfaces and custom text-engine work until there
+   is a concrete need?
+
+If the answer to any of these is no, reduce the scope.
