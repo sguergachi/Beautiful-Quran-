@@ -58,6 +58,7 @@ import com.beautifulquran.BuildConfig
 import com.beautifulquran.R
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ReadingMode
+import com.beautifulquran.data.Settings
 import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.PageTurnSounds
 import com.beautifulquran.ui.theme.quietClickable
@@ -258,6 +259,7 @@ fun SettingsScreen(
                     Spacer(Modifier.height(48.dp))
                     DeveloperSection(
                         viewModel = viewModel,
+                        settings = settings,
                         onOpenTimingsLab = onOpenTimingsLab,
                     )
                 }
@@ -280,6 +282,7 @@ fun SettingsScreen(
 @Composable
 private fun DeveloperSection(
     viewModel: SettingsViewModel,
+    settings: Settings,
     onOpenTimingsLab: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -311,6 +314,19 @@ private fun DeveloperSection(
     Text(
         text = "Edit word-level timing marks for the current reciter. " +
             "Also opens from a word long-press while developer mode is on.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+    )
+
+    Spacer(Modifier.height(20.dp))
+    SettingToggle(
+        label = "Ink Lab overlay",
+        checked = settings.inkLabEnabled,
+        onChange = { on -> viewModel.settings.update { it.copy(inkLabEnabled = on) } },
+    )
+    Text(
+        text = "Live sliders over the reader's highlight tuning — fade timings, " +
+            "upcoming ink, sweep feel. Edits last for this session only.",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
     )

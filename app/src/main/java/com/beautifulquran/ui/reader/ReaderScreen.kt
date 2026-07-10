@@ -915,6 +915,18 @@ fun ReaderScreen(
                     )
                 }
             }
+
+            // Developer-mode Ink Lab: live sliders bound to InkEngine.tuning,
+            // floated over the page so the highlight feel can be tuned while
+            // a recitation plays behind it. See docs/INK_ENGINE.md.
+            if (settings.developerModeEnabled && settings.inkLabEnabled) {
+                InkLabPanel(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 10.dp, bottom = 10.dp)
+                        .zIndex(1.4f),
+                )
+            }
         }
     }
 

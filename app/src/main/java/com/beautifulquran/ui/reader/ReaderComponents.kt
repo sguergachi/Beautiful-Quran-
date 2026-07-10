@@ -1,7 +1,6 @@
 package com.beautifulquran.ui.reader
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -90,26 +89,12 @@ import com.beautifulquran.ui.theme.shapedWordBloom
 import com.beautifulquran.ui.theme.starAndCrossWeave
 import com.beautifulquran.ui.theme.verticalFadingEdges
 
-enum class WordVisualState { Plain, Upcoming, Active, Recited }
-
 private fun Int.toArabicIndic(): String =
     toString().map { '٠' + (it - '0') }.joinToString("")
 
-/**
- * Apple-Music-lyrics treatment: the letters themselves carry the highlight.
- * Upcoming words rest faint on the page; the word being recited breathes in
- * to full ink; words already recited hold that full strength.
- */
-private fun WordVisualState.inkAlpha(): Float = when (this) {
-    WordVisualState.Plain -> 1f
-    WordVisualState.Upcoming -> 0.22f
-    WordVisualState.Active -> 1f
-    WordVisualState.Recited -> 1f
-}
-
 private fun wordFadeAlpha(progress: Float): Float {
-    val resting = WordVisualState.Upcoming.inkAlpha()
-    return resting + (WordVisualState.Active.inkAlpha() - resting) * progress.coerceIn(0f, 1f)
+    val resting = InkEngine.State.Upcoming.inkAlpha()
+    return resting + (InkEngine.State.Active.inkAlpha() - resting) * progress.coerceIn(0f, 1f)
 }
 
 private data class RenderedLineText(
@@ -126,8 +111,8 @@ private data class RenderedLineText(
 @Composable
 private fun rememberAyahMarkAlpha(focused: Boolean): State<Float> =
     animateFloatAsState(
-        targetValue = if (focused) 1f else WordVisualState.Upcoming.inkAlpha(),
-        animationSpec = tween(450),
+        targetValue = if (focused) 1f else InkEngine.State.Upcoming.inkAlpha(),
+        animationSpec = tween(InkEngine.tuning.ayahMarkFadeMs),
         label = "ayahMarkAlpha",
     )
 
@@ -162,7 +147,7 @@ private fun Rect.expandToInclude(other: Rect): Rect =
  * Upcoming does not flash full ink.
  */
 @Composable
-private fun animatedInkAlpha(state: WordVisualState): State<Float> =
+private fun animatedInkAlpha(state: InkEngine.State): State<Float> =
     animateFloatAsState(
         targetValue = state.inkAlpha(),
         // The active word's base ink is carried by the letter sweep, not this
@@ -170,12 +155,14 @@ private fun animatedInkAlpha(state: WordVisualState): State<Float> =
         // than the tween (short words at speed) is already at full ink the
         // instant it flips to Recited, instead of dipping to a stale mid-fade
         // value and animating back up (a visible flicker on hand-off).
-        animationSpec = if (state == WordVisualState.Active) snap<Float>() else tween(450),
+        animationSpec = if (state == InkEngine.State.Active) {
+            snap<Float>()
+        } else {
+            tween(InkEngine.tuning.inkFadeMs)
+        },
         label = "inkAlpha",
     )
 
-const val MIN_SWEEP_MS = 140
-const val MAX_SWEEP_MS = 8_000
 private const val ARABIC_ONLY_HAFS_FONT_MULTIPLIER = 1.0f
 
 // The inline ayah end-marker (﴿N﴾) is set smaller than the Quranic words it
@@ -183,20 +170,6 @@ private const val ARABIC_ONLY_HAFS_FONT_MULTIPLIER = 1.0f
 // modes (20sp against the 30sp word body). Without this the marker inherits the
 // full word size and reads as oversized in the Arabic-only view.
 private const val AYAH_MARK_SIZE_RATIO = 20f / 30f
-
-/**
- * The wash moves at an unhurried, deliberate pace: essentially a steady
- * glide, softened only at the very ends so it never snaps into or out of
- * motion. All the slowness lives in the width of the ink feather (see
- * [com.beautifulquran.ui.theme.letterFadeIn]); the curve still lands on 1 at
- * exactly the word's duration, so the reveal stays locked to the recitation.
- */
-private val InkSweepEasing = CubicBezierEasing(0.3f, 0.24f, 0.7f, 0.78f)
-
-// The repeat tint uses the same word-paced sweep as the initial ink reveal,
-// then dissolves back to normal ink slowly once the repeated phrase releases.
-private const val DEFAULT_REPEAT_SWEEP_MS = 450
-private const val REPEAT_FADE_OUT_MS = 900
 
 private data class RepeatWash(
     val progress: State<Float>,
@@ -212,16 +185,22 @@ private fun rememberRepeatWash(repeat: Boolean, sweepMs: Int?): RepeatWash {
     // active word, so their sweepMs becomes null; that must not restart the
     // wash and briefly clear the held orange.
     LaunchedEffect(repeat) {
+        // The repeat tint uses the same word-paced sweep as the initial ink
+        // reveal, then dissolves back to normal ink slowly once the repeated
+        // phrase releases.
         if (repeat) {
             alpha.snapTo(1f)
             progress.snapTo(0f)
             progress.animateTo(
                 1f,
-                tween(sweepMs ?: DEFAULT_REPEAT_SWEEP_MS, easing = InkSweepEasing),
+                tween(sweepMs ?: InkEngine.tuning.repeatSweepMs, easing = InkEngine.sweepEasing),
             )
         } else {
             progress.snapTo(1f)
-            alpha.animateTo(0f, tween(REPEAT_FADE_OUT_MS, easing = InkSweepEasing))
+            alpha.animateTo(
+                0f,
+                tween(InkEngine.tuning.repeatFadeOutMs, easing = InkEngine.sweepEasing),
+            )
         }
     }
     return RepeatWash(progress = progress.asState(), alpha = alpha.asState())
@@ -236,6 +215,7 @@ private fun Modifier.repeatInkLayer(
             progress = { wash.progress.value },
             rtl = rtl,
             restingAlpha = 0f,
+            feather = InkEngine.tuning.washFeather,
         )
 
 /**
@@ -264,7 +244,7 @@ private fun rememberLetterSweep(
         val ms = sweepMs
         if (active && ms != null && !startRevealed) {
             sweep.snapTo(0f)
-            sweep.animateTo(1f, tween(ms, easing = InkSweepEasing))
+            sweep.animateTo(1f, tween(ms, easing = InkEngine.sweepEasing))
         } else {
             sweep.snapTo(1f)
         }
@@ -273,29 +253,18 @@ private fun rememberLetterSweep(
 }
 
 /**
- * Whether a word lighting up should start its letter sweep already revealed —
- * true only for a word that enters [WordVisualState.Active] straight from
- * [WordVisualState.Recited]: a word already recited this pass that lights up
- * again after a backward seek or a repeat, where re-running the reveal would
- * flash it full → faint → sweep for no reason.
- *
- * A word entering from [WordVisualState.Plain] must NOT be held revealed: that
- * is the word the listener starts playback from (tap-to-play, or play-from-here
- * on a resting ayah). Since active and recited words both sit at full ink, the
- * reveal sweep is the *only* thing that marks a word as the one being recited —
- * skipping it left the starting word indistinguishable from its resting state,
- * so the highlight appeared to never land on the word playback began from.
- *
- * The decision is captured the moment the word activates so it stays stable for
- * the whole time it is lit, and it is recomputed fresh on the next activation.
+ * Compose wrapper over [InkEngine.startRevealed] (the rule and its rationale
+ * live there): tracks the word's previous state and captures the decision the
+ * moment the word activates, so it stays stable for the whole time the word
+ * is lit and is recomputed fresh on the next activation.
  */
 @Composable
-private fun rememberStartRevealed(state: WordVisualState): Boolean {
-    val active = state == WordVisualState.Active
+private fun rememberStartRevealed(state: InkEngine.State): Boolean {
+    val active = state == InkEngine.State.Active
     val previousState = remember { mutableStateOf(state) }
-    val enteredFromRecited = active && previousState.value == WordVisualState.Recited
+    val startRevealed = InkEngine.startRevealed(previous = previousState.value, current = state)
     SideEffect { previousState.value = state }
-    return remember(active) { enteredFromRecited }
+    return remember(active) { startRevealed }
 }
 
 /** Comfortable reading band the active word is kept inside while follow mode
@@ -323,7 +292,8 @@ private class WordHighlight(
         isActive -> Modifier.letterFadeIn(
             progress = { sweep.value },
             rtl = rtl,
-            restingAlpha = WordVisualState.Upcoming.inkAlpha(),
+            restingAlpha = InkEngine.State.Upcoming.inkAlpha(),
+            feather = InkEngine.tuning.washFeather,
         )
         else -> Modifier.graphicsLayer { alpha = lyricInk.value }
     }
@@ -339,21 +309,20 @@ private class WordHighlight(
 
 @Composable
 private fun rememberWordHighlight(
-    state: WordVisualState,
-    repeat: Boolean,
+    ink: InkEngine.Word,
     sweepMs: Int?,
 ): WordHighlight {
-    val isActive = state == WordVisualState.Active
+    val isActive = ink.state == InkEngine.State.Active
     return WordHighlight(
         isActive = isActive,
-        repeat = repeat,
-        lyricInk = animatedInkAlpha(state),
+        repeat = ink.repeat,
+        lyricInk = animatedInkAlpha(ink.state),
         sweep = rememberLetterSweep(
             active = isActive,
             sweepMs = sweepMs,
-            startRevealed = rememberStartRevealed(state),
+            startRevealed = rememberStartRevealed(ink.state),
         ),
-        repeatWash = rememberRepeatWash(repeat, sweepMs.takeIf { isActive }),
+        repeatWash = rememberRepeatWash(ink.repeat, sweepMs.takeIf { isActive }),
     )
 }
 
@@ -434,8 +403,7 @@ private fun HighlightLayeredText(
 @Composable
 fun WordUnit(
     word: Word,
-    state: WordVisualState,
-    repeat: Boolean,
+    ink: InkEngine.Word,
     fontScale: Float,
     sweepMs: Int?,
     showGloss: Boolean,
@@ -445,7 +413,7 @@ fun WordUnit(
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)? = null,
 ) {
-    val highlight = rememberWordHighlight(state, repeat, sweepMs)
+    val highlight = rememberWordHighlight(ink, sweepMs)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -496,15 +464,14 @@ fun WordUnit(
 @Composable
 fun ConnectedArabicWordUnit(
     word: Word,
-    state: WordVisualState,
-    repeat: Boolean,
+    ink: InkEngine.Word,
     fontScale: Float,
     sweepMs: Int?,
     keepInView: Boolean,
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)? = null,
 ) {
-    val highlight = rememberWordHighlight(state, repeat, sweepMs)
+    val highlight = rememberWordHighlight(ink, sweepMs)
     HighlightLayeredText(
         text = word.arabic,
         highlight = highlight,
@@ -521,8 +488,7 @@ fun ConnectedArabicWordUnit(
 @Composable
 fun EnglishWordUnit(
     word: Word,
-    state: WordVisualState,
-    repeat: Boolean,
+    ink: InkEngine.Word,
     fontScale: Float,
     sweepMs: Int?,
     searchHit: Boolean,
@@ -530,7 +496,7 @@ fun EnglishWordUnit(
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)? = null,
 ) {
-    val highlight = rememberWordHighlight(state, repeat, sweepMs)
+    val highlight = rememberWordHighlight(ink, sweepMs)
     HighlightLayeredText(
         text = word.translation,
         highlight = highlight,
@@ -583,28 +549,26 @@ private fun rememberWordInkPalette(): WordInkPalette {
  * annotated string — so the sweep does not reshape the ayah every frame. */
 @Composable
 private fun rememberLetterSweeps(
-    states: List<WordVisualState>,
+    inks: List<InkEngine.Word>,
     activeSweepMs: Int?,
-): List<State<Float>> = states.map { state ->
+): List<State<Float>> = inks.map { ink ->
+    val active = ink.state == InkEngine.State.Active
     rememberLetterSweep(
-        active = state == WordVisualState.Active,
-        sweepMs = activeSweepMs.takeIf { state == WordVisualState.Active },
-        startRevealed = rememberStartRevealed(state),
+        active = active,
+        sweepMs = activeSweepMs.takeIf { active },
+        startRevealed = rememberStartRevealed(ink.state),
     )
 }
 
 /** Orange wash per word in the repeat chain — same timing as gloss mode. */
 @Composable
 private fun rememberRepeatWashes(
-    states: List<WordVisualState>,
-    repeats: List<Boolean>,
+    inks: List<InkEngine.Word>,
     activeSweepMs: Int?,
-): List<RepeatWash> = repeats.mapIndexed { index, repeat ->
+): List<RepeatWash> = inks.map { ink ->
     rememberRepeatWash(
-        repeat = repeat,
-        sweepMs = activeSweepMs.takeIf {
-            states.getOrElse(index) { WordVisualState.Plain } == WordVisualState.Active
-        },
+        repeat = ink.repeat,
+        sweepMs = activeSweepMs.takeIf { ink.state == InkEngine.State.Active },
     )
 }
 
@@ -637,8 +601,7 @@ private fun Modifier.wordTapTarget(
 @Composable
 private fun ResponsiveHafsAyah(
     ayah: Ayah,
-    states: List<WordVisualState>,
-    repeats: List<Boolean>,
+    inks: List<InkEngine.Word>,
     /** True while another ayah is the lyric line — cover every word with the
      * same upcoming paper so unread ink does not change when this ayah
      * becomes active. */
@@ -653,11 +616,11 @@ private fun ResponsiveHafsAyah(
 ) {
     val palette = rememberWordInkPalette()
     val ayahMarkInk = LocalQuranAccents.current.gold
-    val sweeps = rememberLetterSweeps(states, activeSweepMs)
-    val repeatWashes = rememberRepeatWashes(states, repeats, activeSweepMs)
-    val activeIndex = states.indexOf(WordVisualState.Active)
-    val activeIsRepeat = activeIndex >= 0 && repeats.getOrElse(activeIndex) { false }
-    val upcomingCover = 1f - WordVisualState.Upcoming.inkAlpha()
+    val sweeps = rememberLetterSweeps(inks, activeSweepMs)
+    val repeatWashes = rememberRepeatWashes(inks, activeSweepMs)
+    val activeIndex = inks.indexOfFirst { it.state == InkEngine.State.Active }
+    val activeIsRepeat = activeIndex >= 0 && inks[activeIndex].repeat
+    val upcomingCover = 1f - InkEngine.State.Upcoming.inkAlpha()
     // While recessed, the same upcoming paper cover sits on every word.
     // Soften ON when leaving the lyric line; snap OFF when landing so unread
     // ink is already at full cover in the same frame Upcoming covers apply.
@@ -719,14 +682,14 @@ private fun ResponsiveHafsAyah(
             .shapedWordBloom(
                 blooms = {
                     val recess = recessCover.value
-                    val blooms = ArrayList<ShapedWordBloom>(states.size + 2)
+                    val blooms = ArrayList<ShapedWordBloom>(inks.size + 2)
                     // Faint cover while recessed (all words) or Upcoming while
                     // active. Same cover strength — ayah handoff does not
                     // change unread ink; only the active word starts its bloom.
-                    states.forEachIndexed { index, state ->
+                    inks.forEachIndexed { index, ink ->
                         val coverAlpha = when {
                             recess > 0f -> recess
-                            state == WordVisualState.Upcoming -> upcomingCover
+                            ink.state == InkEngine.State.Upcoming -> upcomingCover
                             else -> 0f
                         }
                         if (coverAlpha <= 0f) return@forEachIndexed
@@ -760,7 +723,7 @@ private fun ResponsiveHafsAyah(
                                 range = range,
                                 progress = sweeps[activeIndex].value,
                                 paper = palette.paperColor,
-                                restingAlpha = WordVisualState.Upcoming.inkAlpha(),
+                                restingAlpha = InkEngine.State.Upcoming.inkAlpha(),
                             )
                         }
                     }
@@ -785,6 +748,7 @@ private fun ResponsiveHafsAyah(
                 },
                 layout = { layoutResult },
                 rtl = true,
+                feather = InkEngine.tuning.washFeather,
             )
             .then(
                 if (onWordClick == null) {
@@ -909,43 +873,21 @@ fun AyahBlock(
         label = "ayahAlpha",
     )
 
-    val activeWordPosition = activeWord?.wordPosition
-    // Furthest word reached in this ayah. During a repeat the active word jumps
-    // backward, but everything up to the high-water mark was already recited, so
-    // it must hold full ink rather than dimming back to "upcoming".
-    val highWater = activeWord?.highWater ?: 0
-    // True while the reciter is re-reciting an earlier word.
-    val isRepeatActive = activeWord?.isRepeat == true
-    // First word of the active repeat chain. Every word from here through the
-    // word now being re-recited holds the orange fade until the chain completes.
-    val repeatStart = activeWord?.repeatStart ?: 0
     // The letter fade paces itself to how long the reciter dwells on the
     // word, corrected for the chosen playback speed.
-    val sweepMs = activeWord
-        ?.let { (it.durationMs / playbackSpeed).toInt() }
-        ?.coerceIn(MIN_SWEEP_MS, MAX_SWEEP_MS)
+    val sweepMs = InkEngine.sweepMs(activeWord, playbackSpeed)
 
-    // While another ayah is playing, every word sits at Upcoming ink so the
-    // verse is already faint before handoff (gloss / English animatedInkAlpha,
-    // Arabic-only paper cover). Idle (not reciting) stays Plain at full ink.
-    fun stateFor(word: Word): WordVisualState = when {
-        !isActiveAyah -> if (dimmed) WordVisualState.Upcoming else WordVisualState.Plain
-        activeWordPosition == null -> WordVisualState.Upcoming
-        word.position == activeWordPosition -> WordVisualState.Active
-        word.position < activeWordPosition -> WordVisualState.Recited
-        word.position <= highWater -> WordVisualState.Recited
-        else -> WordVisualState.Upcoming
+    // Each word's ink behaviour, derived once for the whole ayah. All the
+    // policy (upcoming/active/recited/high-water, repeat chain) lives in
+    // InkEngine; the render branches below only draw what it decided.
+    val inks = ayah.words.map { word ->
+        InkEngine.word(
+            position = word.position,
+            activeWord = activeWord,
+            isActiveAyah = isActiveAyah,
+            dimmed = dimmed,
+        )
     }
-
-    // A word wears the orange fade while it belongs to the active repeat chain:
-    // from the word the reciter jumped back to (repeatStart) through the word
-    // now being re-recited (activeWordPosition). The whole section holds orange
-    // together and only releases once the chain completes and the recitation
-    // moves on to new, unread words.
-    fun inRepeatChain(word: Word): Boolean =
-        isRepeatActive &&
-            activeWordPosition != null &&
-            word.position in repeatStart..activeWordPosition
 
     // Shared across gloss, English, and Arabic-only: mark sits at upcoming
     // ink while recessed, then fades up to full when this verse is in focus.
@@ -971,16 +913,16 @@ fun AyahBlock(
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    ayah.words.forEach { word ->
-                        val wordState = stateFor(word)
+                    ayah.words.forEachIndexed { index, word ->
+                        val ink = inks[index]
+                        val isActiveWord = ink.state == InkEngine.State.Active
                         EnglishWordUnit(
                             word = word,
-                            state = wordState,
-                            repeat = inRepeatChain(word),
+                            ink = ink,
                             fontScale = fontScale,
-                            sweepMs = sweepMs.takeIf { wordState == WordVisualState.Active },
+                            sweepMs = sweepMs.takeIf { isActiveWord },
                             searchHit = hits(word),
-                            keepInView = keepActiveWordInView && wordState == WordVisualState.Active,
+                            keepInView = keepActiveWordInView && isActiveWord,
                             onClick = onWordClick?.let { handler -> { handler(word) } },
                             onLongClick = onWordLongClick?.let { handler -> { handler(word) } },
                         )
@@ -1006,18 +948,18 @@ fun AyahBlock(
                         horizontalArrangement = Arrangement.spacedBy(2.dp),
                         verticalArrangement = Arrangement.spacedBy(if (showGloss) 12.dp else 4.dp),
                     ) {
-                        ayah.words.forEach { word ->
-                            val wordState = stateFor(word)
+                        ayah.words.forEachIndexed { index, word ->
+                            val ink = inks[index]
+                            val isActiveWord = ink.state == InkEngine.State.Active
                             WordUnit(
                                 word = word,
-                                state = wordState,
-                                repeat = inRepeatChain(word),
+                                ink = ink,
                                 fontScale = fontScale,
-                                sweepMs = sweepMs.takeIf { wordState == WordVisualState.Active },
+                                sweepMs = sweepMs.takeIf { isActiveWord },
                                 showGloss = showGloss,
                                 showTransliteration = showTransliteration,
                                 searchHit = hits(word),
-                                keepInView = keepActiveWordInView && wordState == WordVisualState.Active,
+                                keepInView = keepActiveWordInView && isActiveWord,
                                 onClick = onWordClick?.let { handler -> { handler(word) } },
                                 onLongClick = onWordLongClick?.let { handler -> { handler(word) } },
                             )
@@ -1033,8 +975,7 @@ fun AyahBlock(
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     ResponsiveHafsAyah(
                         ayah = ayah,
-                        states = ayah.words.map(::stateFor),
-                        repeats = ayah.words.map(::inRepeatChain),
+                        inks = inks,
                         // Same faint cover while another ayah is playing, so
                         // landing on this verse does not change unread ink.
                         dimmed = dimmed,
@@ -1052,7 +993,7 @@ fun AyahBlock(
                 // Block alpha stays 1 while recessed (word-level dim); the
                 // translation still needs to recede with the verse.
                 val translationAlpha =
-                    if (dimmed) 0.66f * WordVisualState.Upcoming.inkAlpha() else 0.66f
+                    if (dimmed) 0.66f * InkEngine.State.Upcoming.inkAlpha() else 0.66f
                 Text(
                     text = highlightMatches(
                         text = ayah.translation,

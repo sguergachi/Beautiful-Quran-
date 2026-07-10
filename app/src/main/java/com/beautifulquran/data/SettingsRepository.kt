@@ -29,6 +29,11 @@ data class Settings(
      *  repeatedly tapping the Settings logo; persisted so the reader can
      *  honour it. See docs/ROOT_VIEWER.md and docs/TIMINGS_LAB.md. */
     val developerModeEnabled: Boolean = false,
+    /** Shows the Ink Lab overlay on the reader — live sliders over the
+     *  highlight tuning (see docs/INK_ENGINE.md). Only honoured while
+     *  [developerModeEnabled] is on; the tuning edits themselves are
+     *  session-only and never persisted. */
+    val inkLabEnabled: Boolean = false,
 )
 
 /** Maps a persisted ordinal back to an enum entry, falling back to [default]
@@ -60,6 +65,7 @@ class SettingsRepository(context: Context) {
         lastSurah = prefs.getInt("lastSurah", 0),
         lastAyah = prefs.getInt("lastAyah", 1),
         developerModeEnabled = prefs.getBoolean("developerModeEnabled", false),
+        inkLabEnabled = prefs.getBoolean("inkLabEnabled", false),
     )
 
     fun update(transform: (Settings) -> Settings) {
@@ -77,6 +83,7 @@ class SettingsRepository(context: Context) {
             putInt("lastSurah", next.lastSurah)
             putInt("lastAyah", next.lastAyah)
             putBoolean("developerModeEnabled", next.developerModeEnabled)
+            putBoolean("inkLabEnabled", next.inkLabEnabled)
         }
     }
 }

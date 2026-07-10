@@ -1,0 +1,167 @@
+package com.beautifulquran.ui.reader
+
+import com.beautifulquran.ui.reader.InkEngine.State
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class InkEngineTest {
+
+    private fun active(
+        wordPosition: Int,
+        durationMs: Long = 600,
+        isRepeat: Boolean = false,
+        highWater: Int = wordPosition,
+        repeatStart: Int = wordPosition,
+    ) = ActiveWord(
+        ayah = 1,
+        wordPosition = wordPosition,
+        durationMs = durationMs,
+        isRepeat = isRepeat,
+        highWater = highWater,
+        repeatStart = repeatStart,
+    )
+
+    private fun states(count: Int, activeWord: ActiveWord?): List<State> =
+        (1..count).map {
+            InkEngine.wordState(it, activeWord, isActiveAyah = true, dimmed = false)
+        }
+
+    // --- wordState ---
+
+    @Test
+    fun `idle ayah words are plain, recessed ayah words are upcoming`() {
+        assertEquals(
+            State.Plain,
+            InkEngine.wordState(1, activeWord = null, isActiveAyah = false, dimmed = false),
+        )
+        assertEquals(
+            State.Upcoming,
+            InkEngine.wordState(1, activeWord = null, isActiveAyah = false, dimmed = true),
+        )
+    }
+
+    @Test
+    fun `active ayah with no lit word rests every word at upcoming`() {
+        // E.g. during the basmalah lead before the first word's segment.
+        assertEquals(
+            List(4) { State.Upcoming },
+            states(4, activeWord = null),
+        )
+    }
+
+    @Test
+    fun `words split around the active word`() {
+        assertEquals(
+            listOf(State.Recited, State.Recited, State.Active, State.Upcoming),
+            states(4, active(wordPosition = 3)),
+        )
+    }
+
+    @Test
+    fun `high-water keeps already-recited words lit during a repeat`() {
+        // Reciter reached word 4, then jumped back to word 2: words 3 and 4
+        // were already recited this pass, so they hold full ink.
+        assertEquals(
+            listOf(State.Recited, State.Active, State.Recited, State.Recited, State.Upcoming),
+            states(5, active(wordPosition = 2, isRepeat = true, highWater = 4, repeatStart = 2)),
+        )
+    }
+
+    // --- inRepeatChain ---
+
+    @Test
+    fun `no chain while not repeating`() {
+        assertFalse(InkEngine.inRepeatChain(2, active(wordPosition = 3)))
+        assertFalse(InkEngine.inRepeatChain(2, activeWord = null))
+    }
+
+    @Test
+    fun `chain spans repeat start through the re-recited word`() {
+        val repeating = active(wordPosition = 3, isRepeat = true, highWater = 4, repeatStart = 2)
+        assertFalse(InkEngine.inRepeatChain(1, repeating))
+        assertTrue(InkEngine.inRepeatChain(2, repeating))
+        assertTrue(InkEngine.inRepeatChain(3, repeating))
+        assertFalse(InkEngine.inRepeatChain(4, repeating))
+    }
+
+    @Test
+    fun `chain releases once playback advances past the high water`() {
+        // Chain complete: the reciter moved on to new words, isRepeat is false.
+        val moved = active(wordPosition = 5, highWater = 5)
+        for (position in 1..5) {
+            assertFalse(InkEngine.inRepeatChain(position, moved))
+        }
+    }
+
+    // --- word ---
+
+    @Test
+    fun `word bundles state and repeat membership`() {
+        val repeating = active(wordPosition = 2, isRepeat = true, highWater = 4, repeatStart = 2)
+        val word = InkEngine.word(2, repeating, isActiveAyah = true, dimmed = false)
+        assertEquals(State.Active, word.state)
+        assertTrue(word.repeat)
+    }
+
+    @Test
+    fun `inactive ayah words never wear the repeat wash`() {
+        val repeating = active(wordPosition = 2, isRepeat = true, highWater = 4, repeatStart = 2)
+        val word = InkEngine.word(2, repeating, isActiveAyah = false, dimmed = true)
+        assertEquals(State.Upcoming, word.state)
+        assertFalse(word.repeat)
+    }
+
+    // --- sweepMs ---
+
+    @Test
+    fun `sweep follows the word duration corrected for speed`() {
+        assertEquals(600, InkEngine.sweepMs(active(1, durationMs = 600), playbackSpeed = 1f))
+        assertEquals(300, InkEngine.sweepMs(active(1, durationMs = 600), playbackSpeed = 2f))
+        assertEquals(1200, InkEngine.sweepMs(active(1, durationMs = 600), playbackSpeed = 0.5f))
+    }
+
+    @Test
+    fun `sweep clamps to the tuned floor and ceiling`() {
+        val tuning = InkEngine.tuning
+        assertEquals(
+            tuning.minSweepMs,
+            InkEngine.sweepMs(active(1, durationMs = 10), playbackSpeed = 1f),
+        )
+        assertEquals(
+            tuning.maxSweepMs,
+            InkEngine.sweepMs(active(1, durationMs = 60_000), playbackSpeed = 1f),
+        )
+    }
+
+    @Test
+    fun `no active word means no sweep`() {
+        assertNull(InkEngine.sweepMs(activeWord = null, playbackSpeed = 1f))
+    }
+
+    // --- startRevealed ---
+
+    @Test
+    fun `only a recited word lighting up again starts revealed`() {
+        assertTrue(InkEngine.startRevealed(previous = State.Recited, current = State.Active))
+        // The word playback starts from must run its reveal sweep — it is the
+        // only cue marking it as the word being recited.
+        assertFalse(InkEngine.startRevealed(previous = State.Plain, current = State.Active))
+        assertFalse(InkEngine.startRevealed(previous = State.Upcoming, current = State.Active))
+        // Not lighting up at all.
+        assertFalse(InkEngine.startRevealed(previous = State.Recited, current = State.Recited))
+        assertFalse(InkEngine.startRevealed(previous = State.Active, current = State.Recited))
+    }
+
+    // --- inkAlpha ---
+
+    @Test
+    fun `only upcoming ink is faint`() {
+        assertEquals(InkEngine.tuning.upcomingAlpha, State.Upcoming.inkAlpha(), 0f)
+        assertEquals(1f, State.Plain.inkAlpha(), 0f)
+        assertEquals(1f, State.Active.inkAlpha(), 0f)
+        assertEquals(1f, State.Recited.inkAlpha(), 0f)
+    }
+}
