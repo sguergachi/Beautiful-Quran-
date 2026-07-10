@@ -20,6 +20,28 @@
     <title>Beautiful Quran</title>
     <script>
       document.documentElement.classList.add('js')
+      // If a stale service-worker shell left us with an empty root (cached
+      // index pointing at deleted hashed assets), wipe the worker + caches
+      // and reload once so the network-first shell can take over.
+      window.addEventListener('load', () => {
+        window.setTimeout(() => {
+          const root = document.getElementById('root')
+          if (!root || root.childElementCount > 0) return
+          if (!('serviceWorker' in navigator)) return
+          const flag = 'bq-sw-heal'
+          if (sessionStorage.getItem(flag)) return
+          sessionStorage.setItem(flag, '1')
+          void (async () => {
+            const regs = await navigator.serviceWorker.getRegistrations()
+            await Promise.all(regs.map((r) => r.unregister()))
+            if (window.caches) {
+              const keys = await caches.keys()
+              await Promise.all(keys.map((k) => caches.delete(k)))
+            }
+            location.reload()
+          })()
+        }, 3500)
+      })
     </script>
   </head>
   <body>
