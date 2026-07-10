@@ -1,8 +1,8 @@
 /* Ink bloom on arrival — word-by-word Fade.kt breath (ink-fade.js).
  *
  * Each line is split into .ink-word spans. As blocks enter the viewport,
- * words ink from upcoming → full on inkSmootherstep, staggered 50 ms —
- * karaoke cadence matching the reader, accelerated (not audio-timed).
+ * words ink from upcoming → full on inkSmootherstep at a calm reading pace
+ * (~300 ms between words, ~200 WPM) — karaoke cadence, not a 50 ms flash.
  *
  * Per-word opacity only. No paragraph-level fade, no mask-image, no Canvas.
  * That is the path that works on Chrome + Firefox for Android.
@@ -21,10 +21,10 @@
     '.attribution p', '.sheet > .footer-links', '.sheet > .back-link'
   ].join(',');
 
-  /** Stagger between successive words — karaoke beat. */
-  var WORD_STAGGER_MS = 50;
-  /** Accelerated wash duration per word (visible breath, not audio dwell). */
-  var WASH_MS = 280;
+  /** Stagger between successive words — ~200 WPM reading pace (~300 ms/word). */
+  var WORD_STAGGER_MS = 300;
+  /** Per-word ink breath; longer than the stagger so blooms overlap gently. */
+  var WASH_MS = 450;
 
   var blocks = Array.prototype.slice.call(document.querySelectorAll(BLOCK_SELECTOR));
   if (!blocks.length) return;
@@ -128,7 +128,7 @@
     return;
   }
 
-  // Global word clock so cascading lines keep a steady 50 ms karaoke beat.
+  // Global word clock so cascading lines keep a steady reading-pace karaoke beat.
   var nextWordAt = 0;
 
   var observer = new IntersectionObserver(function (entries, obs) {

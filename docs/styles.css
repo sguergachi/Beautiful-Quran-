@@ -99,7 +99,7 @@ img {
 /* Ink bloom on arrival.
  *
  * Word-by-word Fade.kt breath (ink-fade.js): each `.ink-word` parks at upcoming
- * ink and blossoms to full on inkSmootherstep, staggered 50 ms. Opacity only —
+ * ink and blossoms to full on inkSmootherstep at reading pace (~300 ms/word).
  * no translate, mask, or paragraph fade (those failed on Android browsers).
  *
  * Until JS wraps words, blocks rest at the upcoming floor. After wrap, JS owns
