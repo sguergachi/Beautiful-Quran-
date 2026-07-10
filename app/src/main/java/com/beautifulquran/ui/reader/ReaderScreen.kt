@@ -682,6 +682,17 @@ fun ReaderScreen(
                 .fillMaxSize()
                 .graphicsLayer { alpha = readerContentAlpha.value },
         ) {
+            val selectorSide = settings.ayahSelectorSide
+            // Bookmark ribbon lives inside each verse block, on the edge opposite
+            // the ayah selector — same chrome rules (hidden while reciting).
+            val bookmarkSide = if (selectorSide == AyahSelectorSide.RIGHT) {
+                AyahSelectorSide.LEFT
+            } else {
+                AyahSelectorSide.RIGHT
+            }
+            val bookmarkChromeAlpha: () -> Float = {
+                if (recitingActive) 0f else chromeAlpha.value
+            }
             LazyColumn(
                 state = listState,
                 contentPadding = PaddingValues(top = padding.calculateTopPadding()),
@@ -748,6 +759,11 @@ fun ReaderScreen(
                                     activeWordState.value?.takeIf { it.ayah == ayah.number }
                                 }
                             }
+                            // Per-verse derived read so scrolling only recomposes
+                            // the two ayahs whose focus bit flips, not every block.
+                            val bookmarkFocused by remember(ayah.number) {
+                                derivedStateOf { scrolledAyah.value == ayah.number }
+                            }
                             AyahBlock(
                                 ayah = ayah,
                                 readingMode = settings.readingMode,
@@ -777,6 +793,12 @@ fun ReaderScreen(
                                     recitingActive &&
                                     isActive &&
                                     activeVerseExceedsViewport.value,
+                                bookmarkSide = bookmarkSide,
+                                bookmarked = ayah.number in bookmarkedAyahs,
+                                bookmarkFocused = bookmarkFocused,
+                                bookmarkChromeAlpha = bookmarkChromeAlpha,
+                                bookmarkInteractive = !recitingActive,
+                                onToggleBookmark = { viewModel.toggleBookmark(ayah.number) },
                                 onWordClick = { word ->
                                     val segment = viewModel.segmentsFor(ayah.number)
                                         ?.firstOrNull { it.position == word.position }
@@ -822,7 +844,6 @@ fun ReaderScreen(
                         .absorbPointerEvents { ayahSelectorDismissRequests += 1 },
                 )
             }
-            val selectorSide = settings.ayahSelectorSide
             val latestActiveAyahForRail by rememberUpdatedState(activeAyah)
             // The rail follows the recitation only while it is actively playing.
             // A paused surah keeps a (frozen) active ayah, so following it would
@@ -886,37 +907,6 @@ fun ReaderScreen(
                     )
                 }
             }
-
-            // The bookmark strip is the selector's mirror twin on the opposite
-            // edge, sharing the selector's chrome rules (hidden while reciting).
-            // Each ribbon is glued to its verse's block. The strip fills the
-            // parent Box (no top padding); BookmarkRibbonStrip maps LazyList
-            // item offsets through beforeContentPadding onto that canvas.
-            val bookmarkSide = if (selectorSide == AyahSelectorSide.RIGHT) {
-                AyahSelectorSide.LEFT
-            } else {
-                AyahSelectorSide.RIGHT
-            }
-            BookmarkRibbonStrip(
-                listState = listState,
-                ayahNumberByItemIndex = ayahNumberByItemIndex,
-                bookmarkedAyahs = bookmarkedAyahs,
-                focusedAyah = scrolledAyah,
-                side = bookmarkSide,
-                chromeAlpha = { if (recitingActive) 0f else chromeAlpha.value },
-                interactive = !recitingActive,
-                onToggleBookmark = { viewModel.toggleBookmark(it) },
-                modifier = Modifier
-                    .align(
-                        if (bookmarkSide == AyahSelectorSide.RIGHT) {
-                            AbsoluteAlignment.CenterRight
-                        } else {
-                            AbsoluteAlignment.CenterLeft
-                        },
-                    )
-                    .fillMaxHeight()
-                    .zIndex(1f),
-            )
         }
     }
 

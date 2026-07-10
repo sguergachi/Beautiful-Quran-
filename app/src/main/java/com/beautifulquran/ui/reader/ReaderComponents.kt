@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.requiredHeight
@@ -36,6 +37,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -70,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.beautifulquran.QuranApp
+import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.data.model.Ayah
 import com.beautifulquran.data.model.Word
@@ -803,6 +806,14 @@ fun AyahBlock(
     showTranslation: Boolean,
     searchQuery: String? = null,
     keepActiveWordInView: Boolean = false,
+    /** Bookmark ribbon lives in this block's outer margin (opposite the
+     * ayah selector). Null hides the ribbon entirely. */
+    bookmarkSide: AyahSelectorSide? = null,
+    bookmarked: Boolean = false,
+    bookmarkFocused: Boolean = false,
+    bookmarkChromeAlpha: () -> Float = { 1f },
+    bookmarkInteractive: Boolean = true,
+    onToggleBookmark: (() -> Boolean)? = null,
     onWordClick: ((Word) -> Unit)?,
     onWordLongClick: ((Word) -> Unit)? = null,
     onAyahClick: () -> Unit,
@@ -858,105 +869,134 @@ fun AyahBlock(
             activeWordPosition != null &&
             word.position in repeatStart..activeWordPosition
 
-    Column(
+    // The ribbon is part of the verse block itself — same Box, same height —
+    // so it never "follows" from a floating overlay. Text keeps the existing
+    // horizontal inset; the ribbon sits in the outer margin opposite the
+    // ayah selector.
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer { alpha = blockAlpha.value }
-            .padding(horizontal = 28.dp, vertical = 14.dp),
+            .graphicsLayer { alpha = blockAlpha.value },
     ) {
-        if (readingMode == ReadingMode.ENGLISH_ONLY) {
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                ayah.words.forEach { word ->
-                    val wordState = stateFor(word)
-                    EnglishWordUnit(
-                        word = word,
-                        state = wordState,
-                        repeat = inRepeatChain(word),
-                        fontScale = fontScale,
-                        sweepMs = sweepMs.takeIf { wordState == WordVisualState.Active },
-                        searchHit = hits(word),
-                        keepInView = keepActiveWordInView && wordState == WordVisualState.Active,
-                        onClick = onWordClick?.let { handler -> { handler(word) } },
-                        onLongClick = onWordLongClick?.let { handler -> { handler(word) } },
-                    )
-                }
-                Box(
-                    modifier = Modifier.padding(horizontal = 6.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    AyahNumberMark(
-                        number = ayah.number,
-                        fontScale = fontScale * 0.8f,
-                        verticalNudge = 4.dp * fontScale,
-                        useArabicIndicDigits = false,
-                    )
-                }
-            }
-        } else if (showGloss) {
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 28.dp, vertical = 14.dp),
+        ) {
+            if (readingMode == ReadingMode.ENGLISH_ONLY) {
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    verticalArrangement = Arrangement.spacedBy(if (showGloss) 12.dp else 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     ayah.words.forEach { word ->
                         val wordState = stateFor(word)
-                        WordUnit(
+                        EnglishWordUnit(
                             word = word,
                             state = wordState,
                             repeat = inRepeatChain(word),
                             fontScale = fontScale,
                             sweepMs = sweepMs.takeIf { wordState == WordVisualState.Active },
-                            showGloss = showGloss,
-                            showTransliteration = showTransliteration,
                             searchHit = hits(word),
                             keepInView = keepActiveWordInView && wordState == WordVisualState.Active,
                             onClick = onWordClick?.let { handler -> { handler(word) } },
                             onLongClick = onWordLongClick?.let { handler -> { handler(word) } },
                         )
                     }
-                    ArabicAyahNumberUnit(ayah.number, fontScale)
+                    Box(
+                        modifier = Modifier.padding(horizontal = 6.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AyahNumberMark(
+                            number = ayah.number,
+                            fontScale = fontScale * 0.8f,
+                            verticalNudge = 4.dp * fontScale,
+                            useArabicIndicDigits = false,
+                        )
+                    }
+                }
+            } else if (showGloss) {
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (showGloss) 12.dp else 4.dp),
+                    ) {
+                        ayah.words.forEach { word ->
+                            val wordState = stateFor(word)
+                            WordUnit(
+                                word = word,
+                                state = wordState,
+                                repeat = inRepeatChain(word),
+                                fontScale = fontScale,
+                                sweepMs = sweepMs.takeIf { wordState == WordVisualState.Active },
+                                showGloss = showGloss,
+                                showTransliteration = showTransliteration,
+                                searchHit = hits(word),
+                                keepInView = keepActiveWordInView && wordState == WordVisualState.Active,
+                                onClick = onWordClick?.let { handler -> { handler(word) } },
+                                onLongClick = onWordLongClick?.let { handler -> { handler(word) } },
+                            )
+                        }
+                        ArabicAyahNumberUnit(ayah.number, fontScale)
+                    }
+                }
+            } else {
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                    ResponsiveHafsAyah(
+                        ayah = ayah,
+                        states = ayah.words.map(::stateFor),
+                        repeats = ayah.words.map(::inRepeatChain),
+                        fontSize = ArabicWordStyle.fontSize * fontScale * ARABIC_ONLY_HAFS_FONT_MULTIPLIER,
+                        activeSweepMs = sweepMs,
+                        onAyahClick = onAyahClick,
+                        onWordClick = onWordClick?.let { handler -> { word -> handler(word) } },
+                        onWordLongClick = onWordLongClick?.let { handler -> { word -> handler(word) } },
+                    )
                 }
             }
-        } else {
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                ResponsiveHafsAyah(
-                    ayah = ayah,
-                    states = ayah.words.map(::stateFor),
-                    repeats = ayah.words.map(::inRepeatChain),
-                    fontSize = ArabicWordStyle.fontSize * fontScale * ARABIC_ONLY_HAFS_FONT_MULTIPLIER,
-                    activeSweepMs = sweepMs,
-                    onAyahClick = onAyahClick,
-                    onWordClick = onWordClick?.let { handler -> { word -> handler(word) } },
-                    onWordLongClick = onWordLongClick?.let { handler -> { word -> handler(word) } },
+            if (showTranslation && readingMode == ReadingMode.ARABIC_ENGLISH) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = highlightMatches(
+                        text = ayah.translation,
+                        query = searchQuery,
+                        mark = LocalQuranAccents.current.gold.copy(alpha = 0.28f),
+                    ),
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontFamily = TranslationFontFamily,
+                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * (0.9f + 0.1f * fontScale),
+                        lineHeight = 26.sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .quietClickable(onClick = onAyahClick),
                 )
             }
+            // Whitespace is the divider.
+            Spacer(Modifier.height(if (readingMode == ReadingMode.ENGLISH_ONLY) 18.dp else 26.dp))
         }
-        if (showTranslation && readingMode == ReadingMode.ARABIC_ENGLISH) {
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = highlightMatches(
-                    text = ayah.translation,
-                    query = searchQuery,
-                    mark = LocalQuranAccents.current.gold.copy(alpha = 0.28f),
-                ),
-                style = MaterialTheme.typography.bodyLarge.copy(
-                    fontFamily = TranslationFontFamily,
-                    fontSize = MaterialTheme.typography.bodyLarge.fontSize * (0.9f + 0.1f * fontScale),
-                    lineHeight = 26.sp,
-                ),
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
+
+        if (bookmarkSide != null && onToggleBookmark != null) {
+            VerseBookmarkRibbon(
+                bookmarked = bookmarked,
+                focused = bookmarkFocused,
+                side = bookmarkSide,
+                chromeAlpha = bookmarkChromeAlpha,
+                interactive = bookmarkInteractive,
+                onToggle = onToggleBookmark,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .quietClickable(onClick = onAyahClick),
+                    .align(
+                        if (bookmarkSide == AyahSelectorSide.RIGHT) {
+                            AbsoluteAlignment.CenterRight
+                        } else {
+                            AbsoluteAlignment.CenterLeft
+                        },
+                    )
+                    .fillMaxHeight(),
             )
         }
-        // Whitespace is the divider.
-        Spacer(Modifier.height(if (readingMode == ReadingMode.ENGLISH_ONLY) 18.dp else 26.dp))
     }
 }
 

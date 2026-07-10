@@ -49,7 +49,8 @@ data class QuranAccents(
     /** Warm ink for words the reciter is repeating — a second, orange fade that
      * dissolves back to normal ink once the recitation moves past the repeat. */
     val repeatInk: Color,
-    /** Ruby ribbon of a saved verse — the bookmark strip's ink. Deliberately a
+    /** Ruby ribbon of a saved verse — the bookmark's ink, drawn inside each
+     * ayah block. Deliberately a
      * third hue, distinct from [gold] (selection/ornament) and [repeatInk]
      * (recitation), so "my marks" never reads as navigation or playback. */
     val bookmarkRibbon: Color,

@@ -70,11 +70,11 @@ class ReaderViewModel(
     private var surahId: Int = 0
 
     /** Drives [bookmarkedAyahs]: the surah currently loaded into the reader, so
-     * the bookmark strip only ever renders marks for the verses on screen. */
+     * each verse ribbon only ever renders marks for the verses on screen. */
     private val loadedSurah = MutableStateFlow(0)
 
-    /** The ayah numbers bookmarked *in the loaded surah*. The strip reads this;
-     * it recomposes only when a mark is added or removed. */
+    /** The ayah numbers bookmarked *in the loaded surah*. Each verse ribbon
+     * reads this; it recomposes only when a mark is added or removed. */
     val bookmarkedAyahs: StateFlow<Set<Int>> =
         combine(bookmarks.bookmarks, loadedSurah) { all, surah ->
             all.filter { it.surahId == surah }.map { it.ayah }.toSet()
@@ -244,8 +244,8 @@ class ReaderViewModel(
     fun segmentsFor(ayah: Int): List<Segment>? = timings[ayah]
 
     /** Marks or unmarks [ayah] in the loaded surah. Returns `true` when the
-     * verse is now bookmarked, so the strip runs the unroll animation only on an
-     * add (never on a remove). */
+     * verse is now bookmarked, so the ribbon runs the unfurl animation only on
+     * an add (never on a remove). */
     fun toggleBookmark(ayah: Int): Boolean {
         val surah = surahId.takeIf { it != 0 } ?: return false
         return bookmarks.toggle(surah, ayah)
