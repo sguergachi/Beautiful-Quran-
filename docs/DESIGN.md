@@ -214,11 +214,14 @@ has two moments:
    silhouette — the cover reads as cut for that screen, not a fixed square
    border floating inside it.
 2. **The opening.** After a brief hold on the settled cover, the board
-   swings open on its **left** hinge — free edge traveling right→left into
-   the left side of the screen — slower and heavier than a page (1150 ms vs
-   460 ms), with the flip stems pitched slightly down
+   swings open on its **left** hinge — the free edge lifts **toward the
+   reader** (opens "up", not down into the page) and travels right→left
+   into the left side of the screen — slower and heavier than a page
+   (1150 ms vs 460 ms), with the flip stems pitched slightly down
    (`PageTurnSounds.playCoverOpen`), revealing the chapter list beneath.
-   (`rotationY` positive, origin at the left edge).
+   (`rotationY` negative, origin at the left edge). On web the cover is sized
+   to the paper-sheet column (not the full viewport), with ornaments kept at
+   their natural aspect ratio.
 
 (The web entrance still includes a third moment — the isti'adha recited
 once from the chosen reciter's everyayah pack — before the cover opens;

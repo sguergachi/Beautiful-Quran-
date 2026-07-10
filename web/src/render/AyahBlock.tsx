@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react'
+import { memo, useEffect, useMemo, useRef } from 'react'
 import type { ActiveWord, Ayah } from '../data/models'
 import type { ReadingMode } from '../data/settings'
 import { InkEngine } from '../engine/ink'
@@ -15,6 +15,9 @@ interface Props {
   isActiveAyah: boolean
   dimmed: boolean
   focused: boolean
+  /** Tall-verse secondary constraint — keep the active word in the reading band. */
+  keepActiveWordInView?: boolean
+  onKeepWordInView?: (wordEl: HTMLElement) => void
   readingMode: ReadingMode
   showWordGloss: boolean
   showTransliteration: boolean
@@ -36,6 +39,8 @@ function AyahBlockInner({
   isActiveAyah,
   dimmed,
   focused,
+  keepActiveWordInView = false,
+  onKeepWordInView,
   readingMode,
   showWordGloss,
   showTransliteration,
@@ -52,8 +57,18 @@ function AyahBlockInner({
 }: Props) {
   const englishOnly = readingMode === 'english_only'
   const arabicOnly = readingMode === 'arabic_only'
-  const markOpacity = focused ? 1 : 0.22
+  // Ayah mark: full ink when not recessed (Android `focused = !dimmed`).
+  // At rest every verse is undimmed → full opacity; during playback only the
+  // active verse's mark blooms to full.
+  const markOpacity = dimmed ? 0.22 : 1
   const words = useMemo(() => ayah.words, [ayah.words])
+  const activeWordRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    if (!keepActiveWordInView || !onKeepWordInView) return
+    const el = activeWordRef.current
+    if (el) onKeepWordInView(el)
+  }, [keepActiveWordInView, onKeepWordInView, activeWord?.wordPosition])
 
   return (
     <article
@@ -77,11 +92,13 @@ function AyahBlockInner({
           {words.map((w) => {
             const ink = InkEngine.word(w.position, activeWord, isActiveAyah, dimmed)
             const opacity = InkEngine.inkAlpha(ink.state)
+            const isLit = ink.state === 'Active'
             return (
               <span
                 key={w.position}
+                ref={isLit ? (node) => { activeWordRef.current = node } : undefined}
                 className={`hafs-word${ink.repeat ? ' word-repeat' : ''}${
-                  ink.state === 'Active' ? ' hafs-active' : ''
+                  isLit ? ' hafs-active' : ''
                 }`}
                 style={{
                   opacity,
@@ -114,6 +131,11 @@ function AyahBlockInner({
               showTransliteration={showTransliteration}
               englishMode={englishOnly}
               speed={speed}
+              rootRef={
+                isActiveAyah && activeWord?.wordPosition === w.position
+                  ? activeWordRef
+                  : undefined
+              }
               onPlay={() => onPlayAyah(ayah.number, true)}
               onHold={() =>
                 onHoldWord(ayah.number, w.position, w.arabic, w.translation)

@@ -108,8 +108,11 @@ Port exactly:
 - `readoutPosition` + all geometry types (`TargetGeometry`, `JumpPlan`, …)
 
 Acceptance: every case in `FocusEngineTest` ports. DOM controller is
-separate (`ReaderFocusController` equivalent using `scrollTop` /
-`getBoundingClientRect` / rAF).
+separate (`web/src/ui/reader/ReaderFocusController.ts` — sole writer to the
+reader `scrollTop`, using `getBoundingClientRect` + rAF `homeScrollStep`).
+Recitation-follow, selector jumps, return-to-ayah, and tall-verse word
+keep-in-view all go through it. Non-active ayahs recess only while audio is
+actually playing (`recitingActive`); at rest every ayah is Plain (full opacity).
 
 ### 5.3 `InkEngine` (pure policy)
 
@@ -257,8 +260,9 @@ sans.
 - Chrome recede while playing.
 
 ### Phase 3 — Focus + paper stack polish
-- Port `ReaderFocusController` behavior (doorstep + `homeScrollStep`).
-- Recitation-follow, selector rail, return-to-ayah.
+- ✅ `ReaderFocusController` (doorstep + `homeScrollStep`, recitation-follow,
+  selector rail, return-to-ayah, tall-verse word keep-in-view).
+- ✅ Recess/dim only while playing; full Plain ink when paused or idle.
 - Sheet transitions + page-turn feel (audio optional).
 - Bookmarks ribbon; settings persistence; continue listening.
 

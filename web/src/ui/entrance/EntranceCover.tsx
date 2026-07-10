@@ -64,8 +64,8 @@ function applyWash(
   el.style.opacity = '1'
 }
 
-/** Eight-fold khatam + octagram medallion — ceremonial scale. */
-function GildedMedallion({ size }: { size: number }) {
+/** Eight-fold khatam + octagram medallion — ceremonial scale, 1:1. */
+function GildedMedallion() {
   const c = 100
   const a = 33.5 * 0.7071
   const khatam = [
@@ -95,8 +95,6 @@ function GildedMedallion({ size }: { size: number }) {
   return (
     <svg
       className="entrance-medallion"
-      width={size}
-      height={size}
       viewBox="0 0 200 200"
       aria-hidden="true"
     >
@@ -121,57 +119,34 @@ function GildedMedallion({ size }: { size: number }) {
   )
 }
 
+function CornerKhatam({ className }: { className: string }) {
+  const c = 11
+  const s = 8
+  const a = s * 0.7071
+  return (
+    <svg className={className} width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+      <g fill="none" stroke="#d9b44a" strokeWidth="1.1">
+        <path
+          d={`M ${c - a} ${c - a} L ${c + a} ${c - a} L ${c + a} ${c + a} L ${c - a} ${c + a} Z
+              M ${c} ${c - s} L ${c + s} ${c} L ${c} ${c + s} L ${c - s} ${c} Z`}
+        />
+      </g>
+      <circle cx={c} cy={c} r="1.4" fill="#edd188" />
+    </svg>
+  )
+}
+
+/** Doubled gilt rule + corner stars — CSS rules so stars are never squeezed. */
 function MushafCoverFrame() {
   return (
-    <svg className="entrance-frame" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-      <defs>
-        <linearGradient id="entrance-frame-gold" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#edd188" />
-          <stop offset="100%" stopColor="#9a7b2a" />
-        </linearGradient>
-      </defs>
-      <rect
-        x="3.2"
-        y="3.2"
-        width="93.6"
-        height="93.6"
-        rx="1.4"
-        fill="none"
-        stroke="url(#entrance-frame-gold)"
-        strokeWidth="0.45"
-        vectorEffect="non-scaling-stroke"
-      />
-      <rect
-        x="5.2"
-        y="5.2"
-        width="89.6"
-        height="89.6"
-        rx="0.9"
-        fill="none"
-        stroke="url(#entrance-frame-gold)"
-        strokeWidth="0.25"
-        vectorEffect="non-scaling-stroke"
-        opacity="0.85"
-      />
-      {[
-        [5.2, 5.2],
-        [94.8, 5.2],
-        [5.2, 94.8],
-        [94.8, 94.8],
-      ].map(([x, y], i) => {
-        const s = 2.2
-        const a = s * 0.7071
-        return (
-          <g key={i} fill="none" stroke="url(#entrance-frame-gold)" strokeWidth="0.3">
-            <path
-              d={`M ${x! - a} ${y! - a} L ${x! + a} ${y! - a} L ${x! + a} ${y! + a} L ${x! - a} ${y! + a} Z
-                  M ${x} ${y! - s} L ${x! + s} ${y} L ${x} ${y! + s} L ${x! - s} ${y} Z`}
-            />
-            <circle cx={x} cy={y} r="0.35" fill="url(#entrance-frame-gold)" stroke="none" />
-          </g>
-        )
-      })}
-    </svg>
+    <div className="entrance-frame" aria-hidden="true">
+      <div className="entrance-frame-outer" />
+      <div className="entrance-frame-inner" />
+      <CornerKhatam className="entrance-corner entrance-corner--tl" />
+      <CornerKhatam className="entrance-corner entrance-corner--tr" />
+      <CornerKhatam className="entrance-corner entrance-corner--bl" />
+      <CornerKhatam className="entrance-corner entrance-corner--br" />
+    </div>
   )
 }
 
@@ -340,10 +315,6 @@ export function EntranceCover({
     // One-shot: live reciter/playback values are read through refs.
   }, [])
 
-  const medallionSize = Math.min(240, Math.round(
-    typeof window !== 'undefined' ? window.innerWidth * 0.52 : 200,
-  ))
-
   return (
     <div className="entrance" role="dialog" aria-modal="true" aria-label="The Noble Quran">
       <button
@@ -359,7 +330,7 @@ export function EntranceCover({
         <MushafCoverFrame />
         <div className="entrance-content">
           <div className="entrance-top-space" />
-          <GildedMedallion size={medallionSize} />
+          <GildedMedallion />
           <p ref={titleArRef} className="entrance-title-ar" lang="ar" dir="rtl">
             القرآن الكريم
           </p>
