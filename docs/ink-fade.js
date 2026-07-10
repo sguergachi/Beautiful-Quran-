@@ -7,7 +7,7 @@
  *
  *   alpha(p) = resting + (1 − resting) × inkSmootherstep(p)
  *
- * Words are staggered 50 ms (reveal.js), so the page writes karaoke-style.
+ * Words are staggered at reading pace in reveal.js (~300 ms), karaoke-style.
  *
  * Why opacity, not mask-image / background-clip:text:
  * Android Chrome + Firefox both failed the earlier mask/clip ports and fell
