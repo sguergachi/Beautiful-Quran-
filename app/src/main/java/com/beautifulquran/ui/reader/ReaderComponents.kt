@@ -921,7 +921,9 @@ fun AyahBlock(
 /**
  * Surah opening: quiet centered typography over a whisper-faint embossed
  * star-and-cross weave, crowned by a gilded eight-fold rosette whose sheen
- * shifts with the page ([sheen] is read at draw time only).
+ * shifts with the page ([sheen] is read at draw time only). Surahs that open
+ * with the basmalah (every chapter except Al-Fatihah and At-Tawbah) carry it
+ * as a centered line of ink beneath the title — not numbered, not an ayah.
  */
 @Composable
 fun SurahHeader(
@@ -935,6 +937,7 @@ fun SurahHeader(
 ) {
     val accents = LocalQuranAccents.current
     val weaveFade = MaterialTheme.colorScheme.background
+    val showBasmalah = surahOpensWithBasmalahPreface(chapterNumber)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -944,7 +947,12 @@ fun SurahHeader(
                 embossLight = accents.embossLight.copy(alpha = 0.05f),
             )
             .verticalFadingEdges(color = weaveFade, top = 12.dp, bottom = 36.dp)
-            .padding(top = 36.dp, bottom = 30.dp, start = 24.dp, end = 24.dp),
+            .padding(
+                top = 36.dp,
+                bottom = if (showBasmalah) 22.dp else 30.dp,
+                start = 24.dp,
+                end = 24.dp,
+            ),
     ) {
         GildedRosette(
             size = 44.dp,
@@ -973,6 +981,19 @@ fun SurahHeader(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
         )
+        if (showBasmalah) {
+            Spacer(Modifier.height(28.dp))
+            Text(
+                text = BASMALAH_UTHMANI,
+                style = ArabicWordStyle.copy(
+                    fontSize = 26.sp,
+                    textAlign = TextAlign.Center,
+                ),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 
