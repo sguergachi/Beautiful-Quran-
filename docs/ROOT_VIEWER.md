@@ -91,8 +91,11 @@ Jump behaviour:
   the reader shows an in-plane **"Back to …"** pill in the return-to-ayah
   slot (above the player bar): left arrow + chapter name and `surah:ayah`
   of the verse the hold started on. Tapping it returns there; a quiet
-  dismiss clears the pill without navigating. The ornamented return-to-ayah
-  control yields to this pill while it is visible.
+  dismiss clears the pill without navigating. The first hand scroll or
+  drag after the jump settles arms a **30-second** countdown that then
+  clears the pill (the programmatic settle itself does not start the
+  timer). The ornamented return-to-ayah control yields to this pill while
+  it is visible.
 - Closing the reader sheet (paper-stack back) does not reopen the lexicon.
 
 Occurrence list ordering: Quranic order (surah, then ayah, then word
