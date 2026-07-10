@@ -6,6 +6,8 @@ Sources (all fetched over HTTPS, cached in tools/.cache):
                         + surah metadata.  https://github.com/risan/quran-json
   * @kmaslesa/holy-quran-word-by-word-full-data (npm)
                       — per-word English gloss + transliteration (quran.com data).
+  * Quranic Arabic Corpus morphology 0.4
+                      — per-word root / lemma / POS (mirrored for unattended fetch).
   * cpfair/quran-align release zip
                       — word-level timing segments for everyayah.com recitations
                         (CC-BY 4.0).  Skipped with --skip-timings (e.g. in a
@@ -44,6 +46,12 @@ WBW_TGZ = (
 ALIGN_ZIP = (
     "https://github.com/cpfair/quran-align/releases/download"
     "/release-2016-11-24/quran-align-data-2016-11-24.zip"
+)
+# Official QAC morphology 0.4, mirrored for unattended fetch (email gate on
+# corpus.quran.com/download). Verbatim copy — do not alter the source file.
+QAC_MORPHOLOGY_URL = (
+    "https://raw.githubusercontent.com/cltk/arabic_morphology_quranic-corpus"
+    "/master/quranic-corpus-morphology-0.4.txt"
 )
 MUSHAF_LAYOUT_PAGE_URL = (
     "https://raw.githubusercontent.com/zonetecde/mushaf-layout"
@@ -639,7 +647,200 @@ CREATE TABLE timings (
   segments TEXT NOT NULL,
   PRIMARY KEY (reciter_id, surah_id, ayah_number)
 );
+CREATE TABLE word_morphology (
+  surah_id INTEGER NOT NULL,
+  ayah_number INTEGER NOT NULL,
+  position INTEGER NOT NULL,
+  root TEXT NOT NULL,
+  lemma TEXT NOT NULL,
+  pos TEXT NOT NULL,
+  features TEXT NOT NULL,
+  PRIMARY KEY (surah_id, ayah_number, position)
+);
+CREATE TABLE roots (
+  root TEXT PRIMARY KEY,
+  occurrence_count INTEGER NOT NULL
+);
+CREATE TABLE root_occurrences (
+  root TEXT NOT NULL,
+  surah_id INTEGER NOT NULL,
+  ayah_number INTEGER NOT NULL,
+  position INTEGER NOT NULL,
+  PRIMARY KEY (root, surah_id, ayah_number, position)
+);
 """
+
+
+# Buckwalter extended → Arabic (letters used in QAC ROOT:/LEM: values).
+_BW_TO_AR = {
+    "'": "ء",
+    "|": "آ",
+    ">": "أ",
+    "&": "ؤ",
+    "<": "إ",
+    "}": "ئ",
+    "A": "ا",
+    "b": "ب",
+    "t": "ت",
+    "v": "ث",
+    "j": "ج",
+    "H": "ح",
+    "x": "خ",
+    "d": "د",
+    "*": "ذ",
+    "r": "ر",
+    "z": "ز",
+    "s": "س",
+    "$": "ش",
+    "S": "ص",
+    "D": "ض",
+    "T": "ط",
+    "Z": "ظ",
+    "E": "ع",
+    "g": "غ",
+    "f": "ف",
+    "q": "ق",
+    "k": "ك",
+    "l": "ل",
+    "m": "م",
+    "n": "ن",
+    "h": "ه",
+    "w": "و",
+    "y": "ي",
+    "Y": "ى",
+    "p": "ة",
+    "{": "ٱ",
+    "`": "ٰ",
+    "^": "ٓ",
+    "@": "ۥ",
+    "#": "ۦ",
+    ":": "ۜ",
+    '"': "۟",
+    "[": "ۢ",
+    ";": "ۣ",
+    ",": "ۥ",
+    ".": "ۥ",
+    "!": "ۥ",
+    "-": "-",
+    "_": "ـ",
+    "~": "ّ",
+    "o": "ْ",
+    "a": "َ",
+    "u": "ُ",
+    "i": "ِ",
+    "F": "ً",
+    "N": "ٌ",
+    "K": "ٍ",
+}
+
+
+def buckwalter_to_arabic(text: str) -> str:
+    """Decode a Buckwalter (extended) string to Arabic letters."""
+    return "".join(_BW_TO_AR.get(ch, ch) for ch in text)
+
+
+def _feature_map(features: str) -> dict[str, str]:
+    out = {}
+    for part in features.split("|"):
+        if ":" in part:
+            k, _, v = part.partition(":")
+            out[k] = v
+        elif part:
+            out[part] = ""
+    return out
+
+
+def load_qac_morphology(path: Path, word_counts: dict) -> tuple[list, list, list]:
+    """Collapse QAC sub-word segments onto our space-split word positions.
+
+    Returns (word_morphology_rows, roots_rows, root_occurrence_rows).
+    Positions that exist in our canon but not in QAC (the known 10 count
+    mismatches) are simply omitted — the viewer handles a missing row.
+    """
+    # (s,a,w) -> list of (seg, tag, features)
+    by_word: dict[tuple[int, int, int], list] = {}
+    with path.open(encoding="utf-8", newline="") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or line.startswith("LOCATION"):
+                continue
+            parts = line.split("\t")
+            if len(parts) < 4:
+                continue
+            loc, _form, tag, features = parts[0], parts[1], parts[2], parts[3]
+            m = re.match(r"\((\d+):(\d+):(\d+):(\d+)\)", loc)
+            if not m:
+                continue
+            s, a, w, seg = (int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4)))
+            by_word.setdefault((s, a, w), []).append((seg, tag, features))
+
+    morph_rows = []
+    occ_rows = []
+    root_counts: dict[str, int] = {}
+    for (s, a), n in word_counts.items():
+        for pos in range(1, n + 1):
+            segs = by_word.get((s, a, pos))
+            if not segs:
+                # QAC short on this ayah (known count mismatches) — omit the row.
+                continue
+            segs = sorted(segs, key=lambda x: x[0])
+            # Prefer the STEM segment for root/lemma/POS; else first with ROOT.
+            stem = next((x for x in segs if x[2].startswith("STEM") or "POS:" in x[2]), None)
+            if stem is None:
+                stem = next((x for x in segs if "ROOT:" in x[2]), segs[0])
+            _seg, tag, features = stem
+            fmap = _feature_map(features)
+            root_bw = fmap.get("ROOT", "")
+            lemma_bw = fmap.get("LEM", "")
+            pos_tag = fmap.get("POS", tag)
+            root_ar = buckwalter_to_arabic(root_bw) if root_bw else ""
+            lemma_ar = buckwalter_to_arabic(lemma_bw) if lemma_bw else ""
+            # Keep a compact leftover feature string (drop keys we already lifted).
+            leftover = "|".join(
+                p for p in features.split("|")
+                if p and not p.startswith("POS:") and not p.startswith("LEM:")
+                and not p.startswith("ROOT:") and p != "STEM"
+            )
+            morph_rows.append((s, a, pos, root_ar, lemma_ar, pos_tag, leftover))
+            if root_ar:
+                root_counts[root_ar] = root_counts.get(root_ar, 0) + 1
+                occ_rows.append((root_ar, s, a, pos))
+
+    # Ayahs where QAC word max != ours (same family of mismatches as WBW).
+    qac_max = {}
+    for (s, a, w) in by_word:
+        qac_max[(s, a)] = max(qac_max.get((s, a), 0), w)
+    mismatch_ayahs = [
+        (s, a, word_counts[(s, a)], qac_max[(s, a)])
+        for (s, a) in word_counts
+        if (s, a) in qac_max and word_counts[(s, a)] != qac_max[(s, a)]
+    ]
+    roots_rows = [(r, c) for r, c in sorted(root_counts.items())]
+    print(
+        f"  morphology rows: {len(morph_rows)}; roots: {len(roots_rows)}; "
+        f"occurrences: {len(occ_rows)}; word-count mismatches (clamped): {len(mismatch_ayahs)}"
+    )
+    for s, a, ours, qac in mismatch_ayahs:
+        print(f"    surah {s} ayah {a}: text={ours} qac={qac}")
+    return morph_rows, roots_rows, occ_rows
+
+
+def write_morphology(db: sqlite3.Connection, morph_rows, roots_rows, occ_rows):
+    db.executemany(
+        "INSERT INTO word_morphology VALUES (?,?,?,?,?,?,?)",
+        morph_rows,
+    )
+    db.executemany("INSERT INTO roots VALUES (?,?)", roots_rows)
+    db.executemany(
+        "INSERT INTO root_occurrences VALUES (?,?,?,?)",
+        occ_rows,
+    )
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_morph_ayah ON word_morphology(surah_id, ayah_number)"
+    )
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_root_occ ON root_occurrences(root)"
+    )
 
 
 def main():
@@ -647,20 +848,20 @@ def main():
     ap.add_argument("--skip-timings", action="store_true")
     args = ap.parse_args()
 
-    print("[1/5] fetching text + metadata (quran-json)")
+    print("[1/6] fetching text + metadata (quran-json)")
     qj = fetch(QURAN_JSON_TGZ, "quran-json.tgz")
     surahs, ayahs = load_text_and_meta(qj)
     assert len(surahs) == 114 and len(ayahs) == 6236, "unexpected corpus shape"
 
-    print("[2/5] fetching word-by-word gloss")
+    print("[2/6] fetching word-by-word gloss")
     wbw_tgz = fetch(WBW_TGZ, "wbw.tgz")
     wbw, page_of = load_wbw(wbw_tgz)
 
-    print("[3/5] fetching QCF V2 mushaf layout")
+    print("[3/6] fetching QCF V2 mushaf layout")
     qcf_v2 = load_qcf_v2_layout()
     print(f"  qcf v2 ayahs: {len(qcf_v2)}")
 
-    print("[4/5] building words table")
+    print("[4/6] building words table")
     words = []
     gloss_mismatch = []
     for (s, a), (text, _tr) in sorted(ayahs.items()):
@@ -687,13 +888,17 @@ def main():
     for s, a, pos, *_ in words:
         word_counts[(s, a)] = max(word_counts.get((s, a), 0), pos)
 
+    print("[4b/6] fetching Quranic Arabic Corpus morphology")
+    qac_path = fetch(QAC_MORPHOLOGY_URL, "quranic-corpus-morphology-0.4.txt")
+    morph_rows, roots_rows, occ_rows = load_qac_morphology(qac_path, word_counts)
+
     timing_rows = []
     reciter_rows = []
     if args.skip_timings:
-        print("[5/5] SKIPPING timings (--skip-timings)")
+        print("[5/6] SKIPPING timings (--skip-timings)")
         reciter_rows = [(r[0], r[1], r[2], r[3], 0) for r in RECITERS]
     else:
-        print("[5/5] fetching + normalizing word timings (quran-align)")
+        print("[5/6] fetching + normalizing word timings (quran-align)")
         zp = fetch(ALIGN_ZIP, "quran-align-data.zip")
         for rid, slug, name, style in RECITERS:
             qdc_id = QDC_REPEAT_RECITERS.get(rid)
@@ -753,13 +958,14 @@ def main():
     db.executemany("INSERT INTO words VALUES (?,?,?,?,?,?,?,?,?,?)", words)
     db.executemany("INSERT INTO reciters VALUES (?,?,?,?,?)", reciter_rows)
     db.executemany("INSERT INTO timings VALUES (?,?,?,?)", timing_rows)
+    write_morphology(db, morph_rows, roots_rows, occ_rows)
     db.execute("CREATE INDEX idx_words_ayah ON words(surah_id, ayah_number)")
     db.execute("CREATE INDEX idx_timings ON timings(reciter_id, surah_id)")
     db.commit()
     db.execute("VACUUM")
     db.close()
     size_mb = OUT.stat().st_size / 1e6
-    print(f"OK -> {OUT} ({size_mb:.1f} MB, {len(timing_rows)} timing rows)")
+    print(f"OK -> {OUT} ({size_mb:.1f} MB, {len(timing_rows)} timing rows, {len(morph_rows)} morph rows)")
 
 
 if __name__ == "__main__":

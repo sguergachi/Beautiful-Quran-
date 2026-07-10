@@ -6,6 +6,7 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import com.beautifulquran.QuranApp
 import com.beautifulquran.ui.home.HomeViewModel
 import com.beautifulquran.ui.reader.ReaderViewModel
+import com.beautifulquran.ui.rootviewer.RootViewerViewModel
 import com.beautifulquran.ui.settings.SettingsViewModel
 import com.beautifulquran.timingslab.TimingsLabViewModel
 
@@ -24,6 +25,8 @@ object AppViewModelFactory : ViewModelProvider.Factory {
                 SettingsViewModel(app.repository, app.settings) as T
             modelClass.isAssignableFrom(TimingsLabViewModel::class.java) ->
                 TimingsLabViewModel(app.repository, app.settings, app.player, app.timingOverrides) as T
+            modelClass.isAssignableFrom(RootViewerViewModel::class.java) ->
+                RootViewerViewModel(app.repository) as T
             else -> throw IllegalArgumentException("Unknown ViewModel: $modelClass")
         }
     }

@@ -54,3 +54,30 @@ data class SurahContent(
     val surah: Surah,
     val ayahs: List<Ayah>,
 )
+
+/** Morphology for one reader word, from the Quranic Arabic Corpus. */
+data class WordMorphology(
+    val surahId: Int,
+    val ayahNumber: Int,
+    val position: Int,
+    val root: String,
+    val lemma: String,
+    val pos: String,
+    val features: String,
+)
+
+/** One hit in a root concordance, joined with the word's surface form. */
+data class RootOccurrence(
+    val surahId: Int,
+    val ayahNumber: Int,
+    val position: Int,
+    val arabic: String,
+    val translation: String,
+    val surahNameTransliteration: String,
+)
+
+data class RootSummary(
+    val root: String,
+    val occurrenceCount: Int,
+    val occurrences: List<RootOccurrence>,
+)

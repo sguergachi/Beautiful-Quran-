@@ -91,10 +91,14 @@ ayahs    (surah_id, ayah_number, text_uthmani, translation_en)
 words    (surah_id, ayah_number, position, arabic, translation_en, transliteration)
 reciters (id, slug, name, style, has_timings)
 timings  (reciter_id, surah_id, ayah_number, segments)   -- segments = "[[pos,startMs,endMs],…]"
--- Root Word Viewer (planned; see ROOT_VIEWER.md):
--- word_morphology (surah_id, ayah_number, position, root, lemma, pos, features)
--- roots / root_occurrences  -- denormalised concordance for counts + jump list
+word_morphology (surah_id, ayah_number, position, root, lemma, pos, features)
+roots (root, occurrence_count)
+root_occurrences (root, surah_id, ayah_number, position)
 ```
+
+Morphology tables power the [Root Word Viewer](ROOT_VIEWER.md) (Quranic Arabic
+Corpus). Concordance counts and jump lists come from `roots` /
+`root_occurrences`.
 
 Timing segments are stored as one compact JSON array per (reciter, ayah)
 rather than one row per word: ~37 k rows instead of ~465 k, smaller file,

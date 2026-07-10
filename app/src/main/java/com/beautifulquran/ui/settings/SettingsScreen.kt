@@ -69,6 +69,8 @@ Quran text (Uthmani script) and Saheeh International translation via the quran-j
 
 Word-by-word translation and transliteration from the Quran.com dataset.
 
+Root, lemma, and morphological annotation from the Quranic Arabic Corpus (corpus.quran.com), © Kais Dukes.
+
 Word-level audio timing data © the quran-align project contributors, CC-BY 4.0.
 
 Recitation audio streamed from everyayah.com. All rights to the recitations belong to the respective reciters.
@@ -90,7 +92,6 @@ fun SettingsScreen(
     val reciters by viewModel.reciters.collectAsStateWithLifecycle()
 
     var developerTapCount by remember { mutableStateOf(0) }
-    var developerModeEnabled by remember { mutableStateOf(false) }
 
     if (developerTapCount > 0) {
         LaunchedEffect(developerTapCount) {
@@ -134,11 +135,15 @@ fun SettingsScreen(
                     onLogoClick = {
                         developerTapCount++
                         if (developerTapCount >= 3) {
-                            developerModeEnabled = !developerModeEnabled
+                            viewModel.settings.update {
+                                it.copy(developerModeEnabled = !it.developerModeEnabled)
+                            }
                             developerTapCount = 0
                         }
                     },
-                    onLogoLongClick = onOpenTimingsLab,
+                    onLogoLongClick = {
+                        if (settings.developerModeEnabled) onOpenTimingsLab()
+                    },
                 )
 
                 Spacer(Modifier.height(32.dp))
@@ -249,10 +254,11 @@ fun SettingsScreen(
                     )
                 }
 
-                if (developerModeEnabled) {
+                if (settings.developerModeEnabled) {
                     Spacer(Modifier.height(48.dp))
                     DeveloperSection(
                         viewModel = viewModel,
+                        onOpenTimingsLab = onOpenTimingsLab,
                     )
                 }
 
@@ -274,6 +280,7 @@ fun SettingsScreen(
 @Composable
 private fun DeveloperSection(
     viewModel: SettingsViewModel,
+    onOpenTimingsLab: () -> Unit,
 ) {
     val context = LocalContext.current
     // Created on first audition tap: a SoundPool with nine loaded samples is
@@ -288,6 +295,23 @@ private fun DeveloperSection(
     Text(
         text = "Tools for testing work in progress.",
         style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+    )
+
+    Spacer(Modifier.height(20.dp))
+    Text(
+        text = "Timings Lab",
+        style = MaterialTheme.typography.bodyLarge,
+        modifier = Modifier
+            .fillMaxWidth()
+            .quietClickable(onClick = onOpenTimingsLab)
+            .padding(vertical = 8.dp),
+        color = MaterialTheme.colorScheme.primary,
+    )
+    Text(
+        text = "Edit word-level timing marks for the current reciter. " +
+            "Also opens from a word long-press while developer mode is on.",
+        style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
     )
 
