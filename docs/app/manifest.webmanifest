@@ -1,0 +1,12 @@
+{
+  "name": "Beautiful Quran",
+  "short_name": "Beautiful Quran",
+  "description": "A calm, paper-simple Quran reader with lyric-style word highlighting.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FAF3E8",
+  "theme_color": "#FAF3E8",
+  "lang": "en",
+  "dir": "auto"
+}

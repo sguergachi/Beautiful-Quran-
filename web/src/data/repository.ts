@@ -15,7 +15,7 @@ let surahsCache: Surah[] | null = null
 let recitersCache: Reciter[] | null = null
 
 export async function ensureReady(): Promise<void> {
-  await openDatabase('/quran.db')
+  await openDatabase()
 }
 
 export function surahs(): Surah[] {

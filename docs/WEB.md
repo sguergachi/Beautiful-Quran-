@@ -5,11 +5,13 @@ engines (Focus, Highlight, Ink), the same paper metaphor, and the same
 performance bar as the Android app. This document is the working spec for
 implementation; it does not change Android behavior.
 
-**Status: implemented (v1).** The `web/` package ships the three pure engines
-with Vitest parity, WASM SQLite over the committed `quran.db`, paper-stack UI
-(Home / Reader / Settings), directional ink wash, focus follow, bookmarks,
-root viewer, and a basic PWA shell. See `web/README.md` for run instructions.
-The sections below remain the design record and quality bar.
+**Status: implemented (v1) + hosted.** The `web/` package ships the three pure
+engines with Vitest parity, WASM SQLite over the committed `quran.db`,
+paper-stack UI (Home / Reader / Settings), directional ink wash, focus follow,
+bookmarks, root viewer, and a PWA shell. Production build is published to
+GitHub Pages at [`/app/`](https://sguergachi.github.io/Beautiful-Quran-/app/)
+(from `docs/app`). See `web/README.md` for run instructions. The sections
+below remain the design record and quality bar.
 
 ---
 

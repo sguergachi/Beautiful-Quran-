@@ -124,6 +124,10 @@ export function AyahBlock({
               onHold={() =>
                 onHoldWord(ayah.number, w.position, w.arabic, w.translation)
               }
+              onContextMenu={(e) => {
+                e.preventDefault()
+                onHoldWord(ayah.number, w.position, w.arabic, w.translation)
+              }}
             />
           ))}
           <span className="ayah-mark" style={{ opacity: markOpacity }}>

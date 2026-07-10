@@ -34,11 +34,30 @@ export function App() {
     }
   }, [state.settings.themeMode])
 
+  // Browser back: settings → reader/home, reader → home
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (state.rootViewer) {
+        appStore.closeRootViewer()
+        return
+      }
+      if (state.sheet === 'settings') {
+        appStore.setSheet(state.content ? 'reader' : 'home')
+        return
+      }
+      if (state.sheet === 'reader') appStore.setSheet('home')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [state.sheet, state.content, state.rootViewer])
+
   if (!state.ready && !state.error) {
     return (
       <div className="boot">
         <h1>Beautiful Quran</h1>
         <p>Opening the book…</p>
+        <div className="pulse" aria-hidden="true" />
       </div>
     )
   }
@@ -52,9 +71,11 @@ export function App() {
     )
   }
 
+  const covered = state.sheet !== 'home'
+
   return (
     <div className="app-shell">
-      <HomeScreen />
+      <HomeScreen covered={covered} />
       <ReaderScreen />
       <SettingsScreen />
       <RootViewer />
