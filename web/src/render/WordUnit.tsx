@@ -1,4 +1,10 @@
-import { useEffect, useRef, type CSSProperties, type MouseEvent, type PointerEvent } from 'react'
+import {
+  useLayoutEffect,
+  useRef,
+  type CSSProperties,
+  type MouseEvent,
+  type PointerEvent,
+} from 'react'
 import type { ActiveWord, Word } from '../data/models'
 import { InkEngine, InkState, getTuning, startRevealed, sweepMs } from '../engine/ink'
 import { cubicBezierEase, washMaskImage } from '../engine/fade'
@@ -49,6 +55,8 @@ export function WordUnit({
   const rootRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
   const prevState = useRef(ink.state)
+  /** Captured at Active entry — stable for the whole time the word is lit. */
+  const revealedOnEntry = useRef(false)
   const prevRepeat = useRef(ink.repeat)
   const holdTimer = useRef<number | null>(null)
   const startXY = useRef<{ x: number; y: number } | null>(null)
@@ -62,96 +70,132 @@ export function WordUnit({
     }
   }
 
-  // Directional ink wash on Active entry (smootherstep mask).
-  useEffect(() => {
+  /*
+   * Directional ink wash on Active entry.
+   * useLayoutEffect so the progress-0 mask lands before paint — otherwise the
+   * word flashes full ink for a frame (CSS Active opacity) then snaps faint
+   * when the mask arrives. Matches Android: snap base alpha to 1, let the
+   * letter sweep carry the reveal from the Upcoming floor.
+   */
+  useLayoutEffect(() => {
     const el = rootRef.current
     if (!el) return
     const prev = prevState.current
+    const enteredActive = ink.state === InkState.Active && prev !== InkState.Active
+    if (enteredActive) {
+      revealedOnEntry.current = startRevealed(prev, ink.state)
+    } else if (ink.state !== InkState.Active) {
+      revealedOnEntry.current = false
+    }
     prevState.current = ink.state
+
     const rtl = !englishMode
-    const resting = tuning.upcomingAlpha
+    const t = getTuning()
+    const resting = t.upcomingAlpha
 
     if (ink.state !== InkState.Active) {
       applyMask(el, 'none')
       return
     }
 
-    if (startRevealed(prev, ink.state)) {
+    if (revealedOnEntry.current) {
       applyMask(el, 'none')
       return
     }
 
-    const duration = sweepMs(activeWord, speed) ?? tuning.repeatSweepMs
-    let raf = 0
-    const start = performance.now()
-    applyMask(el, washMaskImage(0, resting, rtl, tuning.washFeather))
+    // Still Active from a prior entry whose rAF is running — do not restart
+    // (restarting mid-word is itself a flicker).
+    if (!enteredActive) return
 
+    const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
+    const start = performance.now()
+    // Progress 0 mask = Upcoming floor across the glyph. Applied before paint.
+    applyMask(el, washMaskImage(0, resting, rtl, t.washFeather))
+
+    let raf = 0
+    let cancelled = false
     const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / duration)
+      if (cancelled) return
+      const p = Math.min(1, (now - start) / duration)
       const eased = cubicBezierEase(
-        t,
-        tuning.sweepEaseX1,
-        tuning.sweepEaseY1,
-        tuning.sweepEaseX2,
-        tuning.sweepEaseY2,
+        p,
+        t.sweepEaseX1,
+        t.sweepEaseY1,
+        t.sweepEaseX2,
+        t.sweepEaseY2,
       )
-      applyMask(el, washMaskImage(eased, resting, rtl, tuning.washFeather))
-      if (t < 1) raf = requestAnimationFrame(tick)
+      applyMask(el, washMaskImage(eased, resting, rtl, t.washFeather))
+      if (p < 1) raf = requestAnimationFrame(tick)
       else applyMask(el, 'none')
     }
     raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [ink.state, activeWord?.wordPosition, activeWord?.durationMs, speed, tuning, englishMode])
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(raf)
+    }
+    // speed/duration captured at Active entry only — mid-word setting changes
+    // must not cancel and restart the sweep (that is itself a flicker).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ink.state, activeWord, englishMode])
 
   // Orange repeat overlay: wash in on chain entry, dissolve on release.
-  useEffect(() => {
+  useLayoutEffect(() => {
     const overlay = overlayRef.current
     if (!overlay) return
     const was = prevRepeat.current
+    const enteredRepeat = ink.repeat && !was
+    const leftRepeat = !ink.repeat && was
     prevRepeat.current = ink.repeat
     const rtl = !englishMode
+    const t = getTuning()
 
     let raf = 0
-    if (ink.repeat && !was) {
-      const duration = sweepMs(activeWord, speed) ?? tuning.repeatSweepMs
+    let cancelled = false
+    if (enteredRepeat) {
+      const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
       const start = performance.now()
       overlay.style.opacity = '1'
-      applyMask(overlay, washMaskImage(0, 0, rtl, tuning.washFeather))
+      applyMask(overlay, washMaskImage(0, 0, rtl, t.washFeather))
       const tick = (now: number) => {
-        const t = Math.min(1, (now - start) / duration)
+        if (cancelled) return
+        const p = Math.min(1, (now - start) / duration)
         const eased = cubicBezierEase(
-          t,
-          tuning.sweepEaseX1,
-          tuning.sweepEaseY1,
-          tuning.sweepEaseX2,
-          tuning.sweepEaseY2,
+          p,
+          t.sweepEaseX1,
+          t.sweepEaseY1,
+          t.sweepEaseX2,
+          t.sweepEaseY2,
         )
-        applyMask(overlay, washMaskImage(eased, 0, rtl, tuning.washFeather))
-        if (t < 1) raf = requestAnimationFrame(tick)
+        applyMask(overlay, washMaskImage(eased, 0, rtl, t.washFeather))
+        if (p < 1) raf = requestAnimationFrame(tick)
         else applyMask(overlay, 'none')
       }
       raf = requestAnimationFrame(tick)
-    } else if (!ink.repeat && was) {
-      // Dissolve orange over repeatFadeOutMs — base ink stays.
-      const duration = tuning.repeatFadeOutMs
+    } else if (leftRepeat) {
+      const duration = t.repeatFadeOutMs
       const start = performance.now()
       applyMask(overlay, 'none')
       const tick = (now: number) => {
-        const t = Math.min(1, (now - start) / duration)
-        overlay.style.opacity = String(1 - t)
-        if (t < 1) raf = requestAnimationFrame(tick)
+        if (cancelled) return
+        const p = Math.min(1, (now - start) / duration)
+        overlay.style.opacity = String(1 - p)
+        if (p < 1) raf = requestAnimationFrame(tick)
         else overlay.style.opacity = '0'
       }
       raf = requestAnimationFrame(tick)
     } else if (ink.repeat) {
+      // Still in chain from a prior entry — hold orange, do not restart wash.
       overlay.style.opacity = '1'
-      applyMask(overlay, 'none')
     } else {
       overlay.style.opacity = '0'
       applyMask(overlay, 'none')
     }
-    return () => cancelAnimationFrame(raf)
-  }, [ink.repeat, activeWord?.wordPosition, activeWord?.durationMs, speed, tuning, englishMode])
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(raf)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ink.repeat, activeWord, englishMode])
 
   const rtl = !englishMode
   const style: CSSProperties = {

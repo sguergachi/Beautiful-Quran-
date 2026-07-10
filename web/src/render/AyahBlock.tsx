@@ -20,6 +20,8 @@ interface Props {
   showTranslation: boolean
   bookmarked: boolean
   bookmarkSide: 'left' | 'right'
+  /** False while reciting — ribbons stay off the page (Android bookmarkChromeAlpha). */
+  bookmarkVisible?: boolean
   speed: number
   fontScale: number
   onPlayAyah: (ayah: number, fromWord?: boolean) => void
@@ -39,6 +41,7 @@ function AyahBlockInner({
   showTranslation,
   bookmarked,
   bookmarkSide,
+  bookmarkVisible = true,
   speed,
   fontScale,
   onPlayAyah,
@@ -63,8 +66,14 @@ function AyahBlockInner({
         className="bookmark-tip"
         data-side={bookmarkSide}
         data-on={bookmarked}
+        data-receded={!bookmarkVisible}
+        tabIndex={bookmarkVisible ? 0 : -1}
+        aria-hidden={!bookmarkVisible}
         aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark verse'}
-        onClick={() => onToggleBookmark(ayah.number)}
+        onClick={() => {
+          if (!bookmarkVisible) return
+          onToggleBookmark(ayah.number)
+        }}
       />
 
       {arabicOnly ? (

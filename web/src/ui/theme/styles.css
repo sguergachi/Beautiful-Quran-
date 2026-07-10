@@ -145,20 +145,31 @@ select {
     color-mix(in srgb, var(--ink) 6%, var(--paper)) 0%,
     var(--paper) 12%
   );
+  --peek-step: clamp(22px, 5.5vw, 36px);
+  /* Half of the desktop sheet cap (56rem) — used to center the column. */
+  --sheet-half: 28rem;
 }
 
 .sheet {
   position: absolute;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  /* Full-bleed on small screens; desktop media query recenters to 56rem. */
+  left: 0;
+  right: 0;
   display: flex;
   flex-direction: column;
   background: var(--paper);
   transition:
+    left 420ms cubic-bezier(0.24, 0.02, 0.12, 1),
+    right 420ms cubic-bezier(0.24, 0.02, 0.12, 1),
     transform 420ms cubic-bezier(0.24, 0.02, 0.12, 1),
     opacity 380ms ease,
     box-shadow 420ms ease;
-  will-change: transform, opacity;
-  transform-origin: left center;
+  will-change: transform, opacity, left, right;
+  transform-origin: center center;
+  transform: translateX(0) scale(1);
+  opacity: 1;
 }
 
 .sheet[data-name='home'] {
@@ -178,42 +189,65 @@ select {
   pointer-events: none;
 }
 
-/* Top sheet — full page; nudge right when something peeks beneath */
+/*
+ * Centered paper deck — Home, Reader, and Settings share one axis.
+ * The top sheet insets equally on both sides (content stays centered);
+ * under-sheets keep a smaller left inset so their edge peeks out.
+ *
+ *   stack 0: Home full
+ *   stack 1: Home left=0 · Reader inset 1 step L/R
+ *   stack 2: Home left=0 · Reader left=1 step · Settings inset 2 steps L/R
+ */
 .sheet[data-depth='0'][data-active='true'] {
+  left: 0;
+  right: 0;
   transform: translateX(0) scale(1);
   opacity: 1;
   pointer-events: auto;
   box-shadow: none;
 }
 
-/* Yield a left gutter so pages beneath read as a stack of sheets. */
 .app-shell[data-stack='1'] .sheet[data-depth='0'][data-active='true'] {
-  transform: translateX(clamp(26px, 6.5vw, 44px)) scale(1);
+  left: var(--peek-step);
+  right: var(--peek-step);
   box-shadow: -12px 0 32px color-mix(in srgb, var(--ink) 14%, transparent);
 }
 
 .app-shell[data-stack='2'] .sheet[data-depth='0'][data-active='true'] {
-  transform: translateX(clamp(44px, 11vw, 72px)) scale(1);
+  left: calc(var(--peek-step) * 2);
+  right: calc(var(--peek-step) * 2);
   box-shadow: -12px 0 32px color-mix(in srgb, var(--ink) 14%, transparent);
 }
 
-/* Reader peek under Settings — middle strip of the gutter */
-.sheet[data-depth='1'] {
-  transform: translateX(clamp(18px, 4.5vw, 30px)) scale(0.988);
+.app-shell[data-stack='1'] .sheet[data-depth='1'] {
+  left: 0;
+  right: var(--peek-step);
+  transform: translateX(0) scale(1);
   opacity: 0.82;
   pointer-events: none;
 }
 
-/* Chapters peek under Reader (and under Settings) — far-left strip */
-.sheet[data-depth='2'] {
-  transform: translateX(0) scale(0.975);
+.app-shell[data-stack='2'] .sheet[data-depth='1'] {
+  left: var(--peek-step);
+  right: calc(var(--peek-step) * 2);
+  transform: translateX(0) scale(1);
+  opacity: 0.82;
+  pointer-events: none;
+}
+
+.app-shell[data-stack='2'] .sheet[data-depth='2'] {
+  left: 0;
+  right: calc(var(--peek-step) * 2);
+  transform: translateX(0) scale(1);
   opacity: 0.58;
   pointer-events: none;
 }
 
-/* Sheets above the current stack — parked off to the right */
+/* Sheets above the current stack — park off to the right */
 .sheet[data-name='reader'][data-active='false']:not([data-depth='1']):not([data-depth='2']),
 .sheet[data-name='settings'][data-active='false'] {
+  left: 0;
+  right: 0;
   transform: translateX(14%) scale(1);
   opacity: 0;
   pointer-events: none;
@@ -226,7 +260,7 @@ select {
   top: 0;
   bottom: 0;
   left: 0;
-  width: clamp(22px, 5.5vw, 36px);
+  width: var(--peek-step);
   z-index: 30;
   pointer-events: auto;
   cursor: w-resize;
@@ -235,9 +269,8 @@ select {
   padding: 0;
 }
 
-/* Reader peek under Settings gets a slightly wider strip */
 .sheet[data-name='reader'] > .sheet-edge-back {
-  width: clamp(28px, 7vw, 48px);
+  width: var(--peek-step);
 }
 
 .sheet-edge-back:focus-visible {
@@ -272,6 +305,11 @@ select {
   position: relative;
   flex: 1;
   min-height: 0;
+  /* Clip the scrollport to this box — without it, .scroll grows with content
+     and overflow:auto never engages (mouse wheel does nothing). */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .edge-fade::before,
@@ -296,6 +334,8 @@ select {
 }
 
 .scroll {
+  flex: 1;
+  min-height: 0;
   height: 100%;
   overflow: auto;
   overscroll-behavior: contain;
@@ -527,21 +567,29 @@ select {
 .reader-main {
   flex: 1;
   min-width: 0;
+  /* Shrink below content height so .scroll can overflow and take the wheel. */
+  min-height: 0;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .ayah-rail {
-  width: 2.5rem;
+  width: 2.75rem;
   flex-shrink: 0;
   position: relative;
+  z-index: 6;
   transition: opacity 900ms ease;
-  cursor: pointer;
+  cursor: ns-resize;
   touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .ayah-rail[data-receded='true'] {
   opacity: 0.08;
   pointer-events: none;
+  cursor: default;
 }
 
 .ayah-rail .track {
@@ -552,6 +600,7 @@ select {
   width: 1px;
   background: color-mix(in srgb, var(--gold) 28%, transparent);
   transform: translateX(-50%);
+  pointer-events: none;
 }
 
 .ayah-rail .marker {
@@ -565,6 +614,7 @@ select {
   transition: top 140ms linear;
   opacity: 0.9;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--paper) 80%, transparent);
+  pointer-events: none;
 }
 
 .surah-header {
@@ -601,17 +651,27 @@ select {
   font-size: 0.92rem;
 }
 
-.basmalah {
-  font-family: var(--font-arabic);
-  font-size: calc(1.5rem * var(--font-scale, 1));
-  direction: rtl;
-  margin: 1.15rem 0 0;
-  transition: opacity 450ms ease;
+.basmalah,
+.basmalah-calligraphy {
+  display: block;
+  width: min(100%, 28rem);
+  margin: 1.25rem auto 0;
+  padding: 0.35rem 0.75rem 0;
+  border: none;
+  background: none;
+  color: var(--ink);
   cursor: pointer;
-  display: inline-block;
+  transition: opacity 450ms ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.basmalah:hover {
+.basmalah-calligraphy svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.basmalah-calligraphy:hover {
   opacity: 0.75 !important;
 }
 
@@ -687,6 +747,8 @@ select {
 }
 
 .word-ink {
+  /* Soft-dim when leaving a verse / becoming Upcoming. Active snaps — the
+     letter wash carries the reveal (Android animatedInkAlpha snap-on-Active). */
   transition: opacity 450ms ease;
   position: relative;
 }
@@ -696,9 +758,14 @@ select {
 }
 
 .word-ink[data-state='Plain'],
-.word-ink[data-state='Recited'],
+.word-ink[data-state='Recited'] {
+  opacity: 1;
+}
+
 .word-ink[data-state='Active'] {
   opacity: 1;
+  /* Snap to full base ink; wash mask reveals from the Upcoming floor. */
+  transition: none;
 }
 
 .word-stack {
@@ -725,7 +792,9 @@ select {
 }
 
 .hafs-word.hafs-active {
-  transition: opacity 140ms ease;
+  /* Snap like gloss Active — no mid-fade flicker on word hand-off. */
+  transition: none;
+  opacity: 1;
 }
 
 .ayah-translation {
@@ -876,8 +945,15 @@ select {
   touch-action: manipulation;
 }
 
+/* Hidden while reciting — zero chrome on the verse (Android bookmarkChromeAlpha). */
+.bookmark-tip[data-receded='true'] {
+  opacity: 0;
+  pointer-events: none;
+  cursor: default;
+}
+
 @media (hover: hover) {
-  .bookmark-tip:hover {
+  .bookmark-tip:hover:not([data-receded='true']) {
     opacity: 0.75;
   }
 }
@@ -896,6 +972,10 @@ select {
   width: 0.7rem;
   opacity: 1;
   background: var(--bookmark);
+}
+
+.bookmark-tip[data-on='true'][data-receded='true'] {
+  opacity: 0;
 }
 
 /* —— Settings —— */
@@ -1426,13 +1506,9 @@ select {
 
   /* Keep inactive sheets fully off-screen on small phones so they don't
      peek under the active sheet during the slide. */
-  .sheet[data-active='false']:not([data-name='home']) {
+  .sheet[data-name='reader'][data-active='false']:not([data-depth='1']):not([data-depth='2']),
+  .sheet[data-name='settings'][data-active='false'] {
     transform: translateX(100%);
-  }
-
-  .sheet[data-name='home'][data-covered='true'] {
-    transform: translateX(-8%);
-    opacity: 0.4;
   }
 }
 
@@ -1440,26 +1516,62 @@ select {
   .app-shell {
     /* Soft page margins on wide screens — still one sheet, not a card */
     background: color-mix(in srgb, var(--paper) 92%, var(--ink));
+    --peek-step: clamp(28px, 3.5vw, 44px);
   }
 
-  .sheet {
-    width: min(100%, 56rem);
-    left: 50%;
-    right: auto;
-    transform: translateX(-50%);
+  /*
+   * Center a 56rem column via left/right (no translateX(-50%)), so stack
+   * peek insets compose on the same axis for all three sheets.
+   */
+  .sheet,
+  .sheet[data-depth='0'][data-active='true'] {
+    left: max(0px, calc(50% - var(--sheet-half)));
+    right: max(0px, calc(50% - var(--sheet-half)));
     box-shadow: none;
   }
 
-  .sheet[data-active='true'] {
-    transform: translateX(-50%);
+  .app-shell[data-stack='1'] .sheet[data-depth='0'][data-active='true'] {
+    left: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
+    right: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
   }
 
-  .sheet[data-active='false']:not([data-name='home']) {
-    transform: translateX(calc(-50% + 14%));
+  .app-shell[data-stack='2'] .sheet[data-depth='0'][data-active='true'] {
+    left: max(
+      calc(var(--peek-step) * 2),
+      calc(50% - var(--sheet-half) + var(--peek-step) * 2)
+    );
+    right: max(
+      calc(var(--peek-step) * 2),
+      calc(50% - var(--sheet-half) + var(--peek-step) * 2)
+    );
   }
 
-  .sheet[data-name='home'][data-covered='true'] {
-    transform: translateX(calc(-50% - 4%));
+  .app-shell[data-stack='1'] .sheet[data-depth='1'] {
+    left: max(0px, calc(50% - var(--sheet-half)));
+    right: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
+  }
+
+  .app-shell[data-stack='2'] .sheet[data-depth='1'] {
+    left: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
+    right: max(
+      calc(var(--peek-step) * 2),
+      calc(50% - var(--sheet-half) + var(--peek-step) * 2)
+    );
+  }
+
+  .app-shell[data-stack='2'] .sheet[data-depth='2'] {
+    left: max(0px, calc(50% - var(--sheet-half)));
+    right: max(
+      calc(var(--peek-step) * 2),
+      calc(50% - var(--sheet-half) + var(--peek-step) * 2)
+    );
+  }
+
+  .sheet[data-name='reader'][data-active='false']:not([data-depth='1']):not([data-depth='2']),
+  .sheet[data-name='settings'][data-active='false'] {
+    left: max(0px, calc(50% - var(--sheet-half)));
+    right: max(0px, calc(50% - var(--sheet-half)));
+    transform: translateX(18%);
   }
 }
 
