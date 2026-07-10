@@ -198,18 +198,23 @@ object InkEngine {
     }
 
     /**
-     * How far the calligraphy ink wash has traveled (0..1) across the SVG,
-     * driven by the active basmalah word and its intra-word letter sweep.
-     * Consumed by [com.beautifulquran.ui.theme.letterFadeIn] on the
-     * VectorDrawable — the SVG render path for InkEngine.
+     * How far the calligraphy ink wash has traveled (0..1) across the SVG.
+     *
+     * Driven by the lead-in clip's playback clock — not equal word slices —
+     * so the feathered [letterFadeIn] edge reaches full ink before the audio
+     * ends. [letterFadeIn] only clears the resting floor at progress ≥ 1, and
+     * the wide wash feather leaves the trailing edge faint until then; settling
+     * at [PREFACE_WASH_SETTLE_FRACTION] of the clip gives that edge time to
+     * finish while the basmalah is still playing.
      */
-    fun prefaceWashProgress(
-        activeWord: ActiveWord?,
-        wordSweep: Float,
-        wordCount: Int = com.beautifulquran.domain.BASMALAH_WORD_COUNT,
-    ): Float {
-        if (activeWord == null) return 0f
-        val pos = activeWord.wordPosition.coerceIn(1, wordCount)
-        return ((pos - 1) + wordSweep.coerceIn(0f, 1f)) / wordCount.toFloat()
+    fun prefaceWashProgress(positionMs: Long, durationMs: Long): Float {
+        if (durationMs <= 0L) return 0f
+        if (positionMs <= 0L) return 0f
+        val settleAt = (durationMs * PREFACE_WASH_SETTLE_FRACTION).toLong().coerceAtLeast(1L)
+        if (positionMs >= settleAt) return 1f
+        return (positionMs.toFloat() / settleAt.toFloat()).coerceIn(0f, 1f)
     }
+
+    /** Fraction of the lead-in clip at which the SVG wash must be fully settled. */
+    const val PREFACE_WASH_SETTLE_FRACTION = 0.88f
 }
