@@ -932,9 +932,8 @@ fun ReaderScreen(
                     val target = rootReturnTarget
                     if (target != null) {
                         BackToOriginPill(
-                            label = target.label,
+                            target = target,
                             onClick = onRootReturn,
-                            onDismiss = onDismissRootReturn,
                             modifier = Modifier.padding(horizontal = 28.dp, vertical = 10.dp),
                         )
                     }

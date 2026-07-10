@@ -2,23 +2,30 @@ package com.beautifulquran.ui.reader
 
 /**
  * Origin verse captured when the reader jumps via a Root Viewer concordance
- * hit. Shown as an in-plane "Back to …" control in the return-to-ayah slot
- * until the reader taps it or dismisses it. See docs/ROOT_VIEWER.md.
+ * hit. Shown as a quiet floating ink line above the player until the reader
+ * taps it or it times out after the first hand scroll. See docs/ROOT_VIEWER.md.
  */
 data class RootReturnTarget(
     val surahId: Int,
     val ayah: Int,
     val surahNameTransliteration: String,
 ) {
-    /** e.g. "Al-Baqarah 2:3" */
+    /** Chapter name alone, for the ink line's primary mark. */
+    val chapterLabel: String
+        get() = surahNameTransliteration.ifBlank { surahId.toString() }
+
+    /** Compact ayah reference, e.g. "2:3". */
+    val ayahLabel: String
+        get() = "$surahId:$ayah"
+
+    /** Full spoken label for accessibility / content description. */
     val label: String
         get() = buildString {
+            append("Back to ")
             if (surahNameTransliteration.isNotBlank()) {
                 append(surahNameTransliteration)
                 append(' ')
             }
-            append(surahId)
-            append(':')
-            append(ayah)
+            append(ayahLabel)
         }
 }
