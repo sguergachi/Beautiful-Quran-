@@ -30,7 +30,8 @@ python3 tools/build_db.py     # builds app/src/main/assets/quran.db
 
 `tools/build_db.py` downloads the Quran text, word-by-word data, and word-level
 audio timings, validates them against each other, and packs them into a single
-SQLite asset. CI (GitHub Actions) does this on every push and publishes the APK.
+SQLite asset. CI (GitHub Actions) runs unit tests on every push; on `master`
+it also assembles the release APK and publishes it to the rolling latest release.
 
 ## Run in an Android emulator on Linux
 

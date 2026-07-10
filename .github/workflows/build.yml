@@ -31,10 +31,12 @@ jobs:
       - name: Unit tests
         run: ./gradlew --no-daemon testDebugUnitTest
 
-      # Restore the store keystore when the secret is configured; without it
-      # the build falls back to the debug keystore (see app/build.gradle.kts),
-      # so CI keeps producing installable APKs either way.
+      # APK assemble + rolling release are master-only. Feature-branch pushes
+      # still verify the DB asset and run unit tests so PRs stay gated, but they
+      # skip the slower release build and must not contend for the shared
+      # "latest" tag.
       - name: Restore release keystore (if configured)
+        if: github.ref == 'refs/heads/master'
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
         run: |
@@ -48,6 +50,7 @@ jobs:
       # Ship the R8-optimized release build: minified, resource-shrunk and
       # non-debuggable — this is what makes it feel native-fast on device.
       - name: Assemble APK
+        if: github.ref == 'refs/heads/master'
         env:
           RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
@@ -55,17 +58,15 @@ jobs:
         run: ./gradlew --no-daemon assembleRelease
 
       - name: Rename APK
+        if: github.ref == 'refs/heads/master'
         run: cp app/build/outputs/apk/release/app-release.apk BeautifulQuran.apk
 
       - uses: actions/upload-artifact@v4
+        if: github.ref == 'refs/heads/master'
         with:
           name: BeautifulQuran-apk
           path: BeautifulQuran.apk
 
-      # Only master owns the rolling "latest" release. Feature-branch builds still
-      # run tests + assembleRelease and upload the APK artifact; they must not
-      # contend for the shared tag (concurrent delete/create races fail CI with
-      # HTTP 422 "Release.tag_name already exists" even when tests passed).
       - name: Publish APK to "latest" release
         if: github.ref == 'refs/heads/master'
         env:
