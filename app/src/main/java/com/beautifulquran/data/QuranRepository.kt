@@ -3,10 +3,13 @@ package com.beautifulquran.data
 import android.database.Cursor
 import com.beautifulquran.data.model.Ayah
 import com.beautifulquran.data.model.Reciter
+import com.beautifulquran.data.model.RootOccurrence
+import com.beautifulquran.data.model.RootSummary
 import com.beautifulquran.data.model.Segment
 import com.beautifulquran.data.model.Surah
 import com.beautifulquran.data.model.SurahContent
 import com.beautifulquran.data.model.Word
+import com.beautifulquran.data.model.WordMorphology
 import com.beautifulquran.timingslab.OverrideKey
 import com.beautifulquran.timingslab.TimingOverrides
 import kotlinx.coroutines.Dispatchers
@@ -98,6 +101,89 @@ class QuranRepository(
             Ayah(surahId, n, c.getString(1), c.getString(2), c.getInt(3), words[n].orEmpty())
         }
         SurahContent(surah, ayahs)
+    }
+
+    /** Morphology for one reader word, or null when QAC had no row for that
+     *  position (the known word-count mismatch ayahs). */
+    suspend fun wordMorphology(surahId: Int, ayah: Int, position: Int): WordMorphology? =
+        withContext(Dispatchers.IO) {
+            database.db.rawQuery(
+                """
+                SELECT surah_id, ayah_number, position, root, lemma, pos, features
+                FROM word_morphology
+                WHERE surah_id = ? AND ayah_number = ? AND position = ?
+                """.trimIndent(),
+                arrayOf(surahId.toString(), ayah.toString(), position.toString()),
+            ).use { c ->
+                if (!c.moveToFirst()) return@withContext null
+                WordMorphology(
+                    surahId = c.getInt(0),
+                    ayahNumber = c.getInt(1),
+                    position = c.getInt(2),
+                    root = c.getString(3),
+                    lemma = c.getString(4),
+                    pos = c.getString(5),
+                    features = c.getString(6),
+                )
+            }
+        }
+
+    /** Surface form + gloss for one word — used when the Root Viewer opens
+     *  before the full surah content is needed. */
+    suspend fun wordAt(surahId: Int, ayah: Int, position: Int): Word? =
+        withContext(Dispatchers.IO) {
+            database.db.rawQuery(
+                """
+                SELECT position, arabic, translation_en, transliteration
+                FROM words
+                WHERE surah_id = ? AND ayah_number = ? AND position = ?
+                """.trimIndent(),
+                arrayOf(surahId.toString(), ayah.toString(), position.toString()),
+            ).use { c ->
+                if (!c.moveToFirst()) return@withContext null
+                Word(
+                    position = c.getInt(0),
+                    arabic = c.getString(1),
+                    translation = c.getString(2),
+                    transliteration = c.getString(3),
+                )
+            }
+        }
+
+    /** Root concordance: count + every occurrence in Quranic order, joined
+     *  with the word's Arabic/gloss and surah name for the jump list. */
+    suspend fun rootSummary(root: String): RootSummary? = withContext(Dispatchers.IO) {
+        if (root.isBlank()) return@withContext null
+        val count = database.db.rawQuery(
+            "SELECT occurrence_count FROM roots WHERE root = ?",
+            arrayOf(root),
+        ).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+        if (count == 0) return@withContext null
+        val occurrences = queryList(
+            """
+            SELECT o.surah_id, o.ayah_number, o.position,
+                   w.arabic, w.translation_en, s.name_transliteration
+            FROM root_occurrences o
+            JOIN words w
+              ON w.surah_id = o.surah_id
+             AND w.ayah_number = o.ayah_number
+             AND w.position = o.position
+            JOIN surahs s ON s.id = o.surah_id
+            WHERE o.root = ?
+            ORDER BY o.surah_id, o.ayah_number, o.position
+            """.trimIndent(),
+            arrayOf(root),
+        ) { c ->
+            RootOccurrence(
+                surahId = c.getInt(0),
+                ayahNumber = c.getInt(1),
+                position = c.getInt(2),
+                arabic = c.getString(3),
+                translation = c.getString(4),
+                surahNameTransliteration = c.getString(5),
+            )
+        }
+        RootSummary(root = root, occurrenceCount = count, occurrences = occurrences)
     }
 
     /** The bundled DB timings for a reciter+surah, with **no** Lab overrides

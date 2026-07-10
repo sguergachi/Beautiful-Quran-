@@ -117,12 +117,13 @@ fun ReaderScreen(
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onAyahSelectorExpandedChange: (Boolean) -> Unit = {},
-    /** Opens the Timings Lab in place, over this sheet. Press-and-hold on a
-     *  word routes here so the Lab rises already focused on that exact word. */
-    onEditTimings: (surahId: Int, ayah: Int, wordPosition: Int) -> Unit = { _, _, _ -> },
-    /** True while the Timings Lab sheet is riding over this reader: playback
-     *  then belongs to the Lab, so the reader must not enter immersive mode
-     *  and hide the status bar out from under the Lab's header. */
+    /** Opens the Root Word Viewer (default word long-press). In developer mode
+     *  MainActivity may intercept this into a chooser that can also open the
+     *  Timings Lab. See docs/ROOT_VIEWER.md. */
+    onOpenRootViewer: (surahId: Int, ayah: Int, wordPosition: Int) -> Unit = { _, _, _ -> },
+    /** True while an ink-bleed overlay (Root Viewer / Timings Lab / chooser)
+     *  is riding over this reader, so the status bar stays visible under its
+     *  header. */
     keepStatusBarVisible: Boolean = false,
 ) {
     LaunchedEffect(surahId) { viewModel.load(surahId) }
@@ -368,7 +369,7 @@ fun ReaderScreen(
         val content = uiState.content ?: return@LaunchedEffect
         if (!didInitialScroll) {
             didInitialScroll = true
-            if (startAyah != null && startAyah in 2..content.ayahs.size) {
+            if (startAyah != null && startAyah in 1..content.ayahs.size) {
                 focusController.focus(startAyah, animate = false)
             }
         }
@@ -804,12 +805,12 @@ fun ReaderScreen(
                                     }
                                 },
                                 onWordLongClick = { word ->
-                                    // Straight into the Lab, no confirmation:
-                                    // the hold is the intent, the haptic is
-                                    // the answer, and closing the Lab lands
-                                    // right back on this word.
+                                    // Hold opens the Root Word Viewer (or, in
+                                    // developer mode, a chooser that can also
+                                    // open the Timings Lab). MainActivity owns
+                                    // the branch — see docs/ROOT_VIEWER.md.
                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onEditTimings(ayah.surahId, ayah.number, word.position)
+                                    onOpenRootViewer(ayah.surahId, ayah.number, word.position)
                                 },
                             )
                         }

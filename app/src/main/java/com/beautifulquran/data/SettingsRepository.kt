@@ -25,6 +25,10 @@ data class Settings(
     val ayahSelectorSide: AyahSelectorSide = AyahSelectorSide.LEFT,
     val lastSurah: Int = 0,
     val lastAyah: Int = 1,
+    /** Unlocks the Timings Lab and the word-hold chooser. Toggled by
+     *  repeatedly tapping the Settings logo; persisted so the reader can
+     *  honour it. See docs/ROOT_VIEWER.md and docs/TIMINGS_LAB.md. */
+    val developerModeEnabled: Boolean = false,
 )
 
 /** Maps a persisted ordinal back to an enum entry, falling back to [default]
@@ -55,6 +59,7 @@ class SettingsRepository(context: Context) {
         ayahSelectorSide = prefs.enum("ayahSelectorSide", AyahSelectorSide.LEFT),
         lastSurah = prefs.getInt("lastSurah", 0),
         lastAyah = prefs.getInt("lastAyah", 1),
+        developerModeEnabled = prefs.getBoolean("developerModeEnabled", false),
     )
 
     fun update(transform: (Settings) -> Settings) {
@@ -71,6 +76,7 @@ class SettingsRepository(context: Context) {
             putInt("ayahSelectorSide", next.ayahSelectorSide.ordinal)
             putInt("lastSurah", next.lastSurah)
             putInt("lastAyah", next.lastAyah)
+            putBoolean("developerModeEnabled", next.developerModeEnabled)
         }
     }
 }

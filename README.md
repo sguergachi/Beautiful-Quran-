@@ -76,6 +76,7 @@ source scripts/android_env.sh
 |---|---|---|
 | Uthmani text + Saheeh Intl. translation | [quran-json](https://github.com/risan/quran-json) (Tanzil / Al Quran Cloud) | free with attribution |
 | Word-by-word gloss + transliteration | Quran.com dataset via npm | free with attribution |
+| Root / lemma / morphology | [Quranic Arabic Corpus](http://corpus.quran.com) v0.4 | free with attribution + link |
 | Word timing segments | [cpfair/quran-align](https://github.com/cpfair/quran-align) | CC-BY 4.0 |
 | Repeat-aware timing segments | [quran.com](https://quran.com) `qdc` audio API | free with attribution |
 | Recitation audio | [everyayah.com](https://everyayah.com) | free; rights remain with reciters |

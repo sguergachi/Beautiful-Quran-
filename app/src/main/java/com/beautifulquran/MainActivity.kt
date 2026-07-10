@@ -56,6 +56,9 @@ import com.beautifulquran.ui.home.HomeScreen
 import com.beautifulquran.ui.home.HomeViewModel
 import com.beautifulquran.ui.reader.ReaderScreen
 import com.beautifulquran.ui.reader.ReaderViewModel
+import com.beautifulquran.ui.rootviewer.RootViewerScreen
+import com.beautifulquran.ui.rootviewer.RootViewerViewModel
+import com.beautifulquran.ui.rootviewer.WordHoldChooser
 import com.beautifulquran.ui.settings.SettingsScreen
 import com.beautifulquran.ui.settings.SettingsViewModel
 import com.beautifulquran.timingslab.TimingsLabScreen
@@ -101,7 +104,10 @@ class MainActivity : ComponentActivity() {
                 // to collapse the top inset (pulling the verse up under the
                 // notch) and flashed back on every loop restart. The reader
                 // instead paints its own opaque bar over that strip.
-                PaperStackApp(themeMode = settings.themeMode)
+                PaperStackApp(
+                    themeMode = settings.themeMode,
+                    developerModeEnabled = settings.developerModeEnabled,
+                )
             }
         }
     }
@@ -122,11 +128,15 @@ private const val STACK_OFFSCREEN_OVERSCAN_DP = 24f
 private val StackMotionEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
 
 @Composable
-private fun PaperStackApp(themeMode: ThemeMode) {
+private fun PaperStackApp(
+    themeMode: ThemeMode,
+    developerModeEnabled: Boolean,
+) {
     val homeViewModel: HomeViewModel = viewModel(factory = AppViewModelFactory)
     val readerViewModel: ReaderViewModel = viewModel(factory = AppViewModelFactory)
     val settingsViewModel: SettingsViewModel = viewModel(factory = AppViewModelFactory)
     val timingsLabViewModel: TimingsLabViewModel = viewModel(factory = AppViewModelFactory)
+    val rootViewerViewModel: RootViewerViewModel = viewModel(factory = AppViewModelFactory)
 
     var selectedSurahId by rememberSaveable { mutableIntStateOf(0) }
     var selectedStartAyah by rememberSaveable { mutableIntStateOf(0) }
@@ -137,9 +147,18 @@ private fun PaperStackApp(themeMode: ThemeMode) {
      * back onto it, so a long-pressed word is fixed exactly where it was
      * noticed and back returns exactly there. */
     var labVisible by remember { mutableStateOf(false) }
+    /** Root Word Viewer — same ink-bleed overlay pattern as the Lab. */
+    var rootVisible by remember { mutableStateOf(false) }
+    /** Developer-mode chooser after a word hold (Root Viewer vs Timings Lab). */
+    var chooserVisible by remember { mutableStateOf(false) }
+    var pendingWord by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
+    /** Bumped on every concordance jump so the reader remounts even when the
+     * target surah/ayah pair is unchanged. */
+    var jumpEpoch by remember { mutableIntStateOf(0) }
     val stackPosition = remember { Animatable(settledLayer.toFloat()) }
     val scope = rememberCoroutineScope()
     val settingsLayer = if (selectedSurahId == 0) AYAH_LAYER else SETTINGS_LAYER
+    val overlayBlocking = labVisible || rootVisible || chooserVisible
 
     val context = LocalContext.current
     val pageTurnSounds = remember { PageTurnSounds(context) }
@@ -171,6 +190,9 @@ private fun PaperStackApp(themeMode: ThemeMode) {
     }
 
     fun openTimingsLab(surahId: Int? = null, ayah: Int? = null, wordPosition: Int? = null) {
+        if (!developerModeEnabled) return
+        chooserVisible = false
+        rootVisible = false
         if (surahId != null && ayah != null) {
             timingsLabViewModel.changeTarget(surahId, ayah, wordPosition)
         } else {
@@ -185,11 +207,49 @@ private fun PaperStackApp(themeMode: ThemeMode) {
         labVisible = false
     }
 
+    fun openRootViewer(surahId: Int, ayah: Int, wordPosition: Int) {
+        chooserVisible = false
+        labVisible = false
+        rootViewerViewModel.open(surahId, ayah, wordPosition)
+        rootVisible = true
+    }
+
+    fun closeRootViewer() {
+        if (!rootVisible) return
+        rootVisible = false
+        rootViewerViewModel.clear()
+    }
+
+    fun onWordLongPress(surahId: Int, ayah: Int, wordPosition: Int) {
+        if (developerModeEnabled) {
+            pendingWord = Triple(surahId, ayah, wordPosition)
+            chooserVisible = true
+        } else {
+            openRootViewer(surahId, ayah, wordPosition)
+        }
+    }
+
+    fun jumpFromConcordance(surahId: Int, ayah: Int) {
+        closeRootViewer()
+        if (surahId != selectedSurahId) {
+            readerViewModel.load(surahId)
+        }
+        selectedSurahId = surahId
+        selectedStartAyah = ayah
+        jumpEpoch++
+        animateTo(AYAH_LAYER)
+    }
+
     BackHandler(enabled = settledLayer > COVER_LAYER || stackPosition.value > COVER_LAYER + 0.01f) {
         animateTo((stackPosition.value.roundToInt() - 1).coerceAtLeast(COVER_LAYER))
     }
-    // Composed after the stack handler so, while the Lab sheet is up, back
-    // lowers it instead of turning the page beneath it.
+    // Composed after the stack handler so overlay backs dismiss the bleed
+    // instead of turning the page beneath it.
+    BackHandler(enabled = chooserVisible) {
+        chooserVisible = false
+        pendingWord = null
+    }
+    BackHandler(enabled = rootVisible) { closeRootViewer() }
     BackHandler(enabled = labVisible) { closeTimingsLab() }
 
     LaunchedEffect(selectedSurahId) {
@@ -209,7 +269,7 @@ private fun PaperStackApp(themeMode: ThemeMode) {
                 maxLayer = {
                     if (selectedSurahId == 0 && stackPosition.value <= COVER_LAYER + 0.01f) COVER_LAYER else settingsLayer
                 },
-                gesturesBlocked = { ayahSelectorExpanded || labVisible },
+                gesturesBlocked = { ayahSelectorExpanded || overlayBlocking },
                 onDragStart = {
                     dragStartPosition = stackPosition.value
                 },
@@ -260,7 +320,7 @@ private fun PaperStackApp(themeMode: ThemeMode) {
                 settingsLayer = settingsLayer,
                 modifier = Modifier.zIndex(1f),
             ) {
-                key(selectedSurahId, selectedStartAyah) {
+                key(selectedSurahId, selectedStartAyah, jumpEpoch) {
                     ReaderScreen(
                         surahId = selectedSurahId,
                         startAyah = selectedStartAyah.takeIf { it > 0 },
@@ -268,8 +328,8 @@ private fun PaperStackApp(themeMode: ThemeMode) {
                         onBack = { animateTo(COVER_LAYER) },
                         onOpenSettings = { animateTo(SETTINGS_LAYER) },
                         onAyahSelectorExpandedChange = { ayahSelectorExpanded = it },
-                        onEditTimings = { sid, a, word -> openTimingsLab(sid, a, word) },
-                        keepStatusBarVisible = labVisible,
+                        onOpenRootViewer = { sid, a, word -> onWordLongPress(sid, a, word) },
+                        keepStatusBarVisible = overlayBlocking,
                     )
                 }
             }
@@ -293,25 +353,70 @@ private fun PaperStackApp(themeMode: ThemeMode) {
             )
         }
 
-        // The Lab blooms in as a contrasting ink spot over the reader — the
-        // same ink-bleed language as the notification prompt — and closes by
-        // opening a hole back to the exact page it came from. The contrasting
-        // palette (a dark workbench on paper, and vice-versa) is what makes the
-        // bloom read against the reader, which shares the reader's own colours.
-        val labColors = contrastingOverlayColorScheme(themeMode)
+        // Ink-bleed overlays share one contrasting palette so the bloom reads
+        // against the reader (Royal Green, or Nightfall under Royal Green).
+        val overlayColors = contrastingOverlayColorScheme(themeMode)
+
         InkRevealOverlay(
-            visible = labVisible,
-            backgroundColor = labColors.background,
+            visible = chooserVisible,
+            backgroundColor = overlayColors.background,
             modifier = Modifier.zIndex(3f),
         ) {
-            // The workbench is always a dark contrasting surface, so it takes
-            // the dark accent set too — otherwise the reader's light-tuned gold
-            // washes out on the green/night background.
-            MaterialTheme(colorScheme = labColors, typography = MaterialTheme.typography) {
+            MaterialTheme(colorScheme = overlayColors, typography = MaterialTheme.typography) {
                 CompositionLocalProvider(LocalQuranAccents provides TimingsLabAccents) {
                     Box(Modifier.fillMaxSize()) {
-                        // Opaque workbench: touches on its quiet areas land here,
-                        // never on the reader resting beneath.
+                        Box(Modifier.matchParentSize().absorbPointerEvents())
+                        WordHoldChooser(
+                            onOpenRootViewer = {
+                                val target = pendingWord ?: return@WordHoldChooser
+                                pendingWord = null
+                                openRootViewer(target.first, target.second, target.third)
+                            },
+                            onOpenTimingsLab = {
+                                val target = pendingWord ?: return@WordHoldChooser
+                                pendingWord = null
+                                openTimingsLab(target.first, target.second, target.third)
+                            },
+                            onDismiss = {
+                                chooserVisible = false
+                                pendingWord = null
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        InkRevealOverlay(
+            visible = rootVisible,
+            backgroundColor = overlayColors.background,
+            modifier = Modifier.zIndex(4f),
+        ) {
+            MaterialTheme(colorScheme = overlayColors, typography = MaterialTheme.typography) {
+                CompositionLocalProvider(LocalQuranAccents provides TimingsLabAccents) {
+                    Box(Modifier.fillMaxSize()) {
+                        Box(Modifier.matchParentSize().absorbPointerEvents())
+                        RootViewerScreen(
+                            viewModel = rootViewerViewModel,
+                            onBack = ::closeRootViewer,
+                            onJumpToOccurrence = ::jumpFromConcordance,
+                        )
+                    }
+                }
+            }
+        }
+
+        // The Lab blooms in as a contrasting ink spot over the reader — the
+        // same ink-bleed language as the notification prompt — and closes by
+        // opening a hole back to the exact page it came from.
+        InkRevealOverlay(
+            visible = labVisible,
+            backgroundColor = overlayColors.background,
+            modifier = Modifier.zIndex(5f),
+        ) {
+            MaterialTheme(colorScheme = overlayColors, typography = MaterialTheme.typography) {
+                CompositionLocalProvider(LocalQuranAccents provides TimingsLabAccents) {
+                    Box(Modifier.fillMaxSize()) {
                         Box(Modifier.matchParentSize().absorbPointerEvents())
                         TimingsLabScreen(
                             viewModel = timingsLabViewModel,

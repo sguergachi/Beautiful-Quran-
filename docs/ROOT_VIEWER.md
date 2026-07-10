@@ -125,19 +125,17 @@ Morphology stays a **build-time** concern (architecture invariant #2).
 onto the app's canonical word segmentation (space-split Uthmani — same
 canon as WBW and timings), and writes derived tables into `quran.db`.
 
-Sketch (exact names may settle at implementation):
+Shipped schema (written by `tools/build_db.py`):
 
 ```sql
--- one row per reader word that has morphology
 word_morphology (
   surah_id, ayah_number, position,   -- joins words
-  root TEXT,                         -- e.g. "ktb" / Arabic radicals
+  root TEXT,                         -- Arabic radicals, e.g. كتب
   lemma TEXT,
   pos TEXT,
   features TEXT                      -- compact remaining tags
 )
 
--- optional denormalised concordance helpers
 roots (
   root TEXT PRIMARY KEY,
   occurrence_count INTEGER NOT NULL
