@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:pages": "tsc --noEmit && VITE_BASE=/Beautiful-Quran-/app/ vite build --outDir ../docs/app --emptyOutDir",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"

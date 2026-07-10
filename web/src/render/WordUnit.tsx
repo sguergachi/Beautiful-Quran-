@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties } from 'react'
+import { useEffect, useRef, type CSSProperties, type MouseEvent } from 'react'
 import type { ActiveWord, Word } from '../data/models'
 import { InkEngine, InkState, getTuning, startRevealed, sweepMs } from '../engine/ink'
 import { cubicBezierEase } from '../engine/fade'
@@ -14,6 +14,7 @@ interface Props {
   speed: number
   onPlay: () => void
   onHold: () => void
+  onContextMenu?: (e: MouseEvent) => void
 }
 
 export function WordUnit({
@@ -27,6 +28,7 @@ export function WordUnit({
   speed,
   onPlay,
   onHold,
+  onContextMenu,
 }: Props) {
   const ink = InkEngine.word(word.position, activeWord, isActiveAyah, dimmed)
   const rootRef = useRef<HTMLSpanElement>(null)
@@ -95,6 +97,7 @@ export function WordUnit({
       data-state={ink.state}
       style={style}
       onClick={onPlay}
+      onContextMenu={onContextMenu}
       onPointerDown={() => {
         holdTimer.current = window.setTimeout(() => onHold(), 420)
       }}

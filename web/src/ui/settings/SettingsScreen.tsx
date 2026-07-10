@@ -3,11 +3,16 @@ import { appStore, useAppState } from '../../store/appStore'
 export function SettingsScreen() {
   const state = useAppState()
   const s = state.settings
+  const active = state.sheet === 'settings'
 
   return (
-    <div className="sheet" data-active={state.sheet === 'settings'} data-side="right">
+    <div className="sheet" data-name="settings" data-active={active}>
       <div className="settings">
-        <button type="button" className="back" onClick={() => appStore.setSheet('home')}>
+        <button
+          type="button"
+          className="back"
+          onClick={() => appStore.setSheet(state.content ? 'reader' : 'home')}
+        >
           ← Back
         </button>
         <h1>Settings</h1>
@@ -165,9 +170,10 @@ export function SettingsScreen() {
 
         <section className="settings-section">
           <h2>About</h2>
-          <p className="muted" style={{ color: 'var(--ink-muted)', lineHeight: 1.5 }}>
+          <p className="muted" style={{ color: 'var(--ink-muted)', lineHeight: 1.55 }}>
             One sheet of paper. Calm and pure. Butter smooth. Text and timings
-            ship offline; only recitation audio streams. No accounts, no analytics.
+            ship with the page; only recitation audio streams. No accounts, no
+            analytics.
           </p>
         </section>
       </div>

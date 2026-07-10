@@ -2,6 +2,7 @@
  * WASM SQLite wrapper over the committed quran.db asset.
  */
 import initSqlJs, { type Database, type SqlJsStatic } from 'sql.js'
+import { assetUrl } from '../assetUrl'
 
 let SQL: SqlJsStatic | null = null
 let db: Database | null = null
@@ -10,13 +11,13 @@ let loadPromise: Promise<Database> | null = null
 async function loadSqlJs(): Promise<SqlJsStatic> {
   if (SQL) return SQL
   SQL = await initSqlJs({
-    locateFile: (file) => `/${file}`,
+    locateFile: (file) => assetUrl(file),
   })
   return SQL
 }
 
 /** Open (or return) the read-only Quran database. Cached after first load. */
-export async function openDatabase(dbUrl = '/quran.db'): Promise<Database> {
+export async function openDatabase(dbUrl = assetUrl('quran.db')): Promise<Database> {
   if (db) return db
   if (loadPromise) return loadPromise
   loadPromise = (async () => {

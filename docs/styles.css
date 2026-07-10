@@ -309,7 +309,14 @@ h2:first-of-type {
   align-items: center;
   flex-wrap: wrap;
   gap: 12px 18px;
-  margin: 28px 0 32px;
+  margin: 28px 0 12px;
+}
+
+.web-note {
+  color: var(--ink-muted);
+  font-size: 16px;
+  line-height: 24px;
+  margin: 0 0 28px;
 }
 
 .btn {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { AyahBlock } from '../../render/AyahBlock'
 import { BASMALAH_UTHMANI, prefaceState, InkState } from '../../engine'
 import { FocusEngine, isAway, type TargetGeometry } from '../../engine/focus'
@@ -36,9 +36,10 @@ export function ReaderScreen() {
 
   const side = state.settings.ayahSelectorSide
   const receded = state.chromeReceded
+  const active = state.sheet === 'reader'
 
   useEffect(() => {
-    if (!content) return
+    if (!content || !active) return
     const el = scrollRef.current
     if (!el) return
     const target = el.querySelector(`#ayah-${state.settings.lastAyah || 1}`)
@@ -46,12 +47,11 @@ export function ReaderScreen() {
       const top = (target as HTMLElement).offsetTop - el.clientHeight * 0.1
       el.scrollTo({ top: Math.max(0, top), behavior: 'instant' as ScrollBehavior })
     }
-  }, [content?.surah.id])
+  }, [content?.surah.id, active])
 
-  // Focus readout + return control
   useEffect(() => {
     const el = scrollRef.current
-    if (!el || !content) return
+    if (!el || !content || !active) return
 
     const update = () => {
       const viewport = el.clientHeight
@@ -104,11 +104,10 @@ export function ReaderScreen() {
     el.addEventListener('scroll', onScroll, { passive: true })
     update()
     return () => el.removeEventListener('scroll', onScroll)
-  }, [content?.surah.id, state.activeAyah, focusedAyah])
+  }, [content?.surah.id, state.activeAyah, focusedAyah, active])
 
-  // Recitation follow
   useEffect(() => {
-    if (!state.followEnabled || !state.activeAyah || !scrollRef.current) return
+    if (!state.followEnabled || !state.activeAyah || !scrollRef.current || !active) return
     if (lastFollowAyah.current === state.activeAyah) return
     lastFollowAyah.current = state.activeAyah
     const el = scrollRef.current
@@ -119,11 +118,20 @@ export function ReaderScreen() {
     const top = target.offsetTop - anchor
     el.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
     setShowReturn(false)
-  }, [state.activeAyah, state.followEnabled])
+  }, [state.activeAyah, state.followEnabled, active])
+
+  const jumpToAyah = (ayah: number) => {
+    const el = scrollRef.current
+    const target = el?.querySelector<HTMLElement>(`#ayah-${ayah}`)
+    if (!el || !target) return
+    const anchor = FocusEngine.anchorOffsetPx(el.clientHeight, 0, target.offsetHeight)
+    el.scrollTo({ top: Math.max(0, target.offsetTop - anchor), behavior: 'smooth' })
+    setFocusedAyah(ayah)
+  }
 
   if (!content) {
     return (
-      <div className="sheet" data-active={state.sheet === 'reader'}>
+      <div className="sheet" data-name="reader" data-active={active}>
         <div className="boot">
           <p>Open a chapter to begin.</p>
         </div>
@@ -135,20 +143,38 @@ export function ReaderScreen() {
   const preface = prefaceState(state.activeBasmalah, dimmedGlobal && !state.activeBasmalah)
   const prefaceOpacity = preface === InkState.Upcoming ? 0.22 : 1
   const showBasmalah = surahOpensWithBasmalahPreface(content.surah.id)
+  const markerPct =
+    ((focusedAyah - 1) / Math.max(1, content.surah.ayahCount - 1)) * 84 + 8
+
+  const onRailClick = (e: MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const y = (e.clientY - rect.top) / rect.height
+    const ayah = Math.min(
+      content.surah.ayahCount,
+      Math.max(1, Math.round(y * content.surah.ayahCount)),
+    )
+    jumpToAyah(ayah)
+  }
 
   const rail = (
-    <div className="ayah-rail" data-receded={receded}>
-      <div
-        className="marker"
-        style={{
-          top: `${((focusedAyah - 1) / Math.max(1, content.surah.ayahCount - 1)) * 100}%`,
-        }}
-      />
+    <div
+      className="ayah-rail"
+      data-receded={receded}
+      onClick={onRailClick}
+      title="Jump to ayah"
+      role="slider"
+      aria-valuemin={1}
+      aria-valuemax={content.surah.ayahCount}
+      aria-valuenow={focusedAyah}
+      aria-label="Ayah position"
+    >
+      <div className="track" />
+      <div className="marker" style={{ top: `${markerPct}%` }} />
     </div>
   )
 
   return (
-    <div className="sheet" data-active={state.sheet === 'reader'}>
+    <div className="sheet" data-name="reader" data-active={active}>
       <div className="reader-top" data-receded={receded}>
         <button type="button" className="back" onClick={() => appStore.setSheet('home')}>
           ← Chapters
@@ -221,12 +247,7 @@ export function ReaderScreen() {
               onClick={() => {
                 appStore.setFollowEnabled(true)
                 lastFollowAyah.current = null
-                const el = scrollRef.current
-                const target = el?.querySelector<HTMLElement>(`#ayah-${state.activeAyah}`)
-                if (el && target) {
-                  const anchor = FocusEngine.anchorOffsetPx(el.clientHeight, 0, target.offsetHeight)
-                  el.scrollTo({ top: Math.max(0, target.offsetTop - anchor), behavior: 'smooth' })
-                }
+                jumpToAyah(state.activeAyah!)
                 setShowReturn(false)
               }}
             >
@@ -239,7 +260,9 @@ export function ReaderScreen() {
               type="button"
               className="ctrl"
               data-receded={receded}
-              onClick={() => appStore.setRepeat(state.player.repeatMode === 'ayah' ? 'off' : 'ayah')}
+              onClick={() =>
+                appStore.setRepeat(state.player.repeatMode === 'ayah' ? 'off' : 'ayah')
+              }
             >
               {state.player.repeatMode === 'off' ? 'Repeat' : `Repeat · ${state.player.repeatMode}`}
             </button>
@@ -270,9 +293,7 @@ export function ReaderScreen() {
         {side === 'right' ? rail : null}
       </div>
 
-      {state.player.error ? (
-        <p className="muted-error">{state.player.error}</p>
-      ) : null}
+      {state.player.error ? <p className="muted-error">{state.player.error}</p> : null}
     </div>
   )
 }

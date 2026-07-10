@@ -4,6 +4,12 @@ Browser port of Beautiful Quran: the same Focus / Highlight / Ink engines,
 the same paper metaphor, and lyric-style word highlighting synced to
 recitation audio.
 
+## Live
+
+https://sguergachi.github.io/Beautiful-Quran-/app/
+
+Linked from the project homepage as **Open web reader**.
+
 ## Quick start
 
 ```bash
@@ -12,6 +18,7 @@ npm install
 npm run dev      # http://localhost:5173
 npm test         # engine unit tests (Vitest)
 npm run build    # static site → dist/
+npm run build:pages  # → ../docs/app for GitHub Pages
 ```
 
 Requires Node 20+. The committed `public/quran.db` (~27 MB) and fonts are
@@ -35,5 +42,6 @@ Engines are DOM-free and unit-tested against the Android JVM suites. See
 
 - First load downloads `quran.db`; a service worker caches the shell + DB.
 - Audio streams from everyayah.com and can be cached by the browser.
-- Hold a word to open the Root Word Viewer (ink bleed).
+- Click a word to play from there; right-click / long-press opens the Root Word Viewer.
 - Themes: Paper / Nightfall / Royal green (Settings).
+- Escape returns through Settings → Reader → Chapters.
