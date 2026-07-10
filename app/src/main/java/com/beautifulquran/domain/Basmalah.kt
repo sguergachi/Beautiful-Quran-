@@ -17,6 +17,12 @@ private const val SURAH_BASMALAH_IS_AYAH_ONE = 1
  */
 const val BASMALAH_PLAYLIST_AYAH = 0
 
+/** Word count of the basmalah (Al-Fatihah 1:1); drives the calligraphy wash. */
+const val BASMALAH_WORD_COUNT = 4
+
+/** Al-Fatihah — source of the lead-in audio clip and its word timings. */
+const val SURAH_FATIHA = 1
+
 /**
  * Whether a surah opens with a basmalah preface (visual + audio lead-in).
  * False for Al-Fatihah (already ayah 1) and At-Tawbah (none).
