@@ -177,6 +177,25 @@ class ReaderViewModel(
             surahOpensWithBasmalahPreface(np.surahId)
     }
 
+    /**
+     * Calligraphy wash 0..1 while the basmalah lead-in plays, paced by the
+     * clip's playback position so the SVG settles to full ink before audio
+     * ends (see [InkEngine.prefaceWashProgress]). Null when not on the lead-in.
+     */
+    val basmalahWashProgress: StateFlow<Float?> = pollingWhileLoaded(key = { it.ayah }) { ayah ->
+        if (ayah != BASMALAH_PLAYLIST_AYAH) return@pollingWhileLoaded null
+        val duration = player.durationMs
+        val timed = timings[BASMALAH_PLAYLIST_AYAH]
+        // Prefer the real media duration once known; until then fall back to
+        // the timing span so the wash still advances on the first ticks.
+        val endMs = when {
+            duration > 0L -> duration
+            timed != null -> timed.last().endMs
+            else -> 0L
+        }
+        InkEngine.prefaceWashProgress(player.positionMs, endMs)
+    }
+
     /** Advances the lit ayah to the next one during the final [FADE_LEAD_MS] of
      * the current ayah's audio, so its fade-in leads the audio boundary. Only
      * while playing (a paused position must not jump the highlight forward). */

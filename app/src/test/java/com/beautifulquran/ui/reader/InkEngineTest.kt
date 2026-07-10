@@ -52,28 +52,20 @@ class InkEngineTest {
     }
 
     @Test
-    fun `calligraphy wash advances across four basmalah words`() {
-        assertEquals(0f, InkEngine.prefaceWashProgress(activeWord = null, wordSweep = 0f))
-        assertEquals(
-            0.25f,
-            InkEngine.prefaceWashProgress(active(wordPosition = 1), wordSweep = 1f),
-            1e-4f,
-        )
+    fun `calligraphy wash follows the lead-in playback clock`() {
+        assertEquals(0f, InkEngine.prefaceWashProgress(positionMs = 0, durationMs = 5000), 1e-4f)
+        assertEquals(0f, InkEngine.prefaceWashProgress(positionMs = 100, durationMs = 0), 1e-4f)
+        val settleAt = (5000 * InkEngine.PREFACE_WASH_SETTLE_FRACTION).toLong()
         assertEquals(
             0.5f,
-            InkEngine.prefaceWashProgress(active(wordPosition = 2), wordSweep = 1f),
-            1e-4f,
+            InkEngine.prefaceWashProgress(positionMs = settleAt / 2, durationMs = 5000),
+            1e-3f,
         )
-        assertEquals(
-            0.625f,
-            InkEngine.prefaceWashProgress(active(wordPosition = 3), wordSweep = 0.5f),
-            1e-4f,
-        )
-        assertEquals(
-            1f,
-            InkEngine.prefaceWashProgress(active(wordPosition = 4), wordSweep = 1f),
-            1e-4f,
-        )
+        assertEquals(1f, InkEngine.prefaceWashProgress(positionMs = settleAt, durationMs = 5000), 1e-4f)
+        assertEquals(1f, InkEngine.prefaceWashProgress(positionMs = 5000, durationMs = 5000), 1e-4f)
+        // Settles before the clip ends so the feathered edge can finish.
+        assertEquals(1f, InkEngine.prefaceWashProgress(positionMs = settleAt + 1, durationMs = 5000), 1e-4f)
+        assertTrue(settleAt < 5000)
     }
 
     @Test

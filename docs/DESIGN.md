@@ -183,11 +183,11 @@ image, so it is crisp at any density and nearly free to render.
   numbered ayah and not ornament. The VectorDrawable
   (`basmalah_naskh`) is adapted from Wikimedia Commons File:Basmala.svg
   (Baba66, CC BY-SA 3.0). It is an InkEngine **calligraphy render path**: an
-  RTL `letterFadeIn` wash advances across the SVG in step with Al-Fatihah 1:1
-  word timings while that lead-in clip plays; Upcoming while another ayah is
-  recited; Plain at rest. Starting playback from ayah 1 (or tapping the
-  calligraphy) prepends Al-Fatihah 1:1 audio before the first ayah; word taps
-  skip the lead-in.
+  RTL `letterFadeIn` wash advances across the SVG on the lead-in clip's
+  playback clock and settles to full ink before the audio ends; Upcoming while
+  another ayah is recited; Plain at rest. Starting playback from ayah 1 (or
+  tapping the calligraphy) prepends Al-Fatihah 1:1 audio before the first ayah;
+  word taps skip the lead-in.
 - **Restraint rule:** ornament appears in exactly three places — the surah
   header (rosette + weave), ayah number marks, and the home title mark.
   Nothing else on the sheet is decorated.

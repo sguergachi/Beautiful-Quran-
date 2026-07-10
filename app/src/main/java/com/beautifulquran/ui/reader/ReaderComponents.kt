@@ -88,6 +88,7 @@ import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.shapedWordBloom
 import com.beautifulquran.ui.theme.starAndCrossWeave
 import com.beautifulquran.ui.theme.verticalFadingEdges
+import kotlinx.coroutines.flow.StateFlow
 
 private fun Int.toArabicIndic(): String =
     toString().map { '٠' + (it - '0') }.joinToString("")
@@ -1050,7 +1051,7 @@ fun AyahBlock(
  * as traditional Naskh manuscript calligraphy beneath the title — not
  * numbered, not an ayah. The glyph follows [InkEngine] ink (Active during the
  * basmalah lead-in, Upcoming while another ayah plays) and is tappable.
- * When [basmalahActiveWord] is set, the SVG wash advances word-by-word.
+ * When [basmalahWashProgress] is set, the SVG wash advances on the lead-in clock.
  */
 @Composable
 fun SurahHeader(
@@ -1063,8 +1064,7 @@ fun SurahHeader(
     sheen: State<Float>,
     basmalahActive: Boolean = false,
     basmalahDimmed: Boolean = false,
-    basmalahActiveWord: ActiveWord? = null,
-    playbackSpeed: Float = 1f,
+    basmalahWashProgress: StateFlow<Float?>? = null,
     onBasmalahClick: (() -> Unit)? = null,
 ) {
     val accents = LocalQuranAccents.current
@@ -1118,8 +1118,7 @@ fun SurahHeader(
             BasmalahCalligraphy(
                 active = basmalahActive,
                 dimmed = basmalahDimmed,
-                activeWord = basmalahActiveWord,
-                playbackSpeed = playbackSpeed,
+                washProgress = basmalahWashProgress,
                 onClick = onBasmalahClick,
             )
         }

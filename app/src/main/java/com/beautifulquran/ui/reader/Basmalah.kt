@@ -1,6 +1,5 @@
 package com.beautifulquran.ui.reader
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -9,24 +8,23 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.R
 import com.beautifulquran.domain.BASMALAH_UTHMANI as DomainBasmalahUthmani
 import com.beautifulquran.domain.SURAH_WITHOUT_BASMALAH as DomainSurahWithoutBasmalah
 import com.beautifulquran.domain.surahOpensWithBasmalahPreface as domainSurahOpensWithBasmalahPreface
 import com.beautifulquran.ui.theme.letterFadeIn
 import com.beautifulquran.ui.theme.quietClickable
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /** Re-export for reader UI and existing tests. */
 const val BASMALAH_UTHMANI = DomainBasmalahUthmani
@@ -44,9 +42,10 @@ fun surahOpensWithBasmalahPreface(surahId: Int): Boolean =
  * under every surah header except Al-Fatihah and At-Tawbah.
  *
  * While the lead-in clip plays, an RTL [letterFadeIn] wash advances across the
- * SVG in step with the Al-Fatihah 1:1 word timings (four words). While another
- * ayah is recited the glyph recesses to Upcoming ink; at rest it is Plain.
- * Tap ([onClick]) restarts playback from the basmalah clip, then ayah 1.
+ * SVG on the clip's playback clock ([washProgress] 0..1), settling to full ink
+ * before the audio ends. While another ayah is recited the glyph recesses to
+ * Upcoming ink; at rest it is Plain. Tap ([onClick]) restarts playback from
+ * the basmalah clip, then ayah 1.
  *
  * Artwork adapted from Wikimedia Commons File:Basmala.svg (Baba66, CC BY-SA 3.0).
  */
@@ -55,8 +54,8 @@ fun BasmalahCalligraphy(
     modifier: Modifier = Modifier,
     active: Boolean = false,
     dimmed: Boolean = false,
-    activeWord: ActiveWord? = null,
-    playbackSpeed: Float = 1f,
+    /** Lead-in wash 0..1 from [ReaderViewModel.basmalahWashProgress]. */
+    washProgress: StateFlow<Float?>? = null,
     onClick: (() -> Unit)? = null,
 ) {
     val inkState = InkEngine.prefaceState(isActive = active, dimmed = dimmed)
@@ -69,32 +68,8 @@ fun BasmalahCalligraphy(
         },
         label = "basmalahLyricInk",
     )
-
-    val sweepMs = InkEngine.sweepMs(activeWord, playbackSpeed)
-    val wordSweep = remember { Animatable(1f) }
-    val wordSweepState = wordSweep.asState()
-    LaunchedEffect(active, activeWord?.wordPosition, sweepMs) {
-        if (active && activeWord != null && sweepMs != null) {
-            wordSweep.snapTo(0f)
-            wordSweep.animateTo(1f, tween(sweepMs, easing = InkEngine.sweepEasing))
-        } else {
-            wordSweep.snapTo(1f)
-        }
-    }
-
-    // Hold the wash at its furthest point after the last word ends (engine
-    // returns null past last.endMs) so the glyph does not flash back to faint.
-    var heldWash by remember { mutableFloatStateOf(0f) }
-    val liveWash = activeWord?.let {
-        InkEngine.prefaceWashProgress(it, wordSweepState.value)
-    }
-    SideEffect {
-        if (!active) {
-            heldWash = 0f
-        } else if (liveWash != null && liveWash > heldWash) {
-            heldWash = liveWash
-        }
-    }
+    val idleWash = remember { MutableStateFlow<Float?>(null) }
+    val washState = (washProgress ?: idleWash).collectAsStateWithLifecycle()
 
     val ink = MaterialTheme.colorScheme.onSurface
     Image(
@@ -109,17 +84,7 @@ fun BasmalahCalligraphy(
             .then(
                 if (active) {
                     Modifier.letterFadeIn(
-                        progress = {
-                            when {
-                                activeWord != null ->
-                                    InkEngine.prefaceWashProgress(
-                                        activeWord,
-                                        wordSweepState.value,
-                                    )
-                                heldWash > 0f -> 1f
-                                else -> 0f
-                            }
-                        },
+                        progress = { washState.value?.coerceIn(0f, 1f) ?: 0f },
                         rtl = true,
                         restingAlpha = InkEngine.State.Upcoming.inkAlpha(),
                         feather = InkEngine.tuning.washFeather,
