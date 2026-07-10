@@ -198,13 +198,17 @@ sit on top of each other like pages of a book, and moving between them is a
 horizontal page turn — draggable, fling-able, with page-turn audio
 (`PageTurnSounds`) tracking the live sheet position:
 
-- `home/HomeScreen` — surah list with search and a continue-listening card.
+- `home/HomeScreen` — surah list with search, a continue-listening card, and
+  a floating playback control (paper-native transport) while a verse is
+  loaded in the session; the reader's embedded `PlayerBar` takes over once
+  that sheet is open.
 - `reader/ReaderScreen` — the follow-along view. Composed of
   `SurahHeader` + one `AyahBlock` per ayah in a `LazyColumn`;
   `AyahBlock` renders `WordUnit`s (Arabic mode, RTL flow) or
   `EnglishWordUnit`s (English mode, LTR flow); `PlayerBar` sits flat at the
-  bottom. All scrolling and verse-position logic routes through the focus
-  engine (`reader/focus/`, see below).
+  bottom. Floating Back-to / return-to-ayah lines share the cover float's
+  bottom inset. All scrolling and verse-position logic routes through the
+  focus engine (`reader/focus/`, see below).
 - `settings/SettingsScreen` — reciter, reading mode, text size, display
   toggles, theme, attributions; developer mode unlocks the Timings Lab.
 

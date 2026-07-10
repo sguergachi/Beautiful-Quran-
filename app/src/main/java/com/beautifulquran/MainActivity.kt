@@ -61,6 +61,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.AppViewModelFactory
 import com.beautifulquran.ui.PageTurnSounds
+import com.beautifulquran.ui.home.FloatingPlaybackBottomInset
+import com.beautifulquran.ui.home.FloatingPlaybackListClearance
 import com.beautifulquran.ui.home.HomeScreen
 import com.beautifulquran.ui.home.HomeViewModel
 import com.beautifulquran.ui.reader.BackToOriginPill
@@ -434,7 +436,9 @@ private fun PaperStackApp(
         // Concordance "Back to …" — hosted above the paper stack so it
         // survives closing the reader / returning to chapter selection.
         // Sits under ink-bleed overlays; clears 30s after the first hand
-        // scroll or page turn (see LaunchedEffects above).
+        // scroll or page turn (see LaunchedEffects above). On the cover it
+        // clears the floating playback transport; on the reader it clears
+        // the embedded player bar.
         val abovePlayer = page in 0.5f..1.5f && selectedSurahId != 0
         AnimatedVisibility(
             visible = rootReturnVisible,
@@ -449,7 +453,13 @@ private fun PaperStackApp(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = if (abovePlayer) 100.dp else 20.dp)
+                .padding(
+                    bottom = if (abovePlayer) {
+                        100.dp
+                    } else {
+                        FloatingPlaybackListClearance
+                    },
+                )
                 .zIndex(2.5f),
         ) {
             val target = rootReturnTarget
@@ -457,7 +467,10 @@ private fun PaperStackApp(
                 BackToOriginPill(
                     target = target,
                     onClick = ::returnFromConcordanceJump,
-                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 10.dp),
+                    modifier = Modifier.padding(
+                        horizontal = 28.dp,
+                        vertical = FloatingPlaybackBottomInset,
+                    ),
                 )
             }
         }
