@@ -113,8 +113,9 @@ class MainActivity : ComponentActivity() {
 
             SideEffect {
                 val statusBarStyle = if (usesNightfall || !entranceDone) {
-                    // The entrance cover is deep-green leather in every theme,
-                    // so its status icons are always light.
+                    // The entrance cover hides the status bar; while it is up
+                    // (and in nightfall) icons stay light for the brief frames
+                    // around show/hide.
                     SystemBarStyle.dark(
                         if (usesNightfall) NIGHTFALL_STATUS_BAR else Color.TRANSPARENT,
                     )
