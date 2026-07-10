@@ -14,15 +14,16 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.HorizontalDivider
@@ -32,45 +33,47 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import com.beautifulquran.QuranApp
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ReadingMode
@@ -85,8 +88,6 @@ import com.beautifulquran.ui.theme.IslamicBackToOriginCapsule
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.TranslationFontFamily
 import com.beautifulquran.ui.theme.gilded
-import com.beautifulquran.ui.theme.InkBloomLayer
-import com.beautifulquran.ui.theme.inkBloomOverlay
 import com.beautifulquran.ui.theme.letterFadeIn
 import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.starAndCrossWeave
@@ -545,30 +546,29 @@ fun EnglishWordUnit(
 private class WordInkPalette(
     private val fullInk: Color,
     private val paper: Color,
-    private val repeatInk: Color,
 ) {
     private val fadedInk = fullInk
         .copy(alpha = WordVisualState.Upcoming.inkAlpha())
         .compositeOver(paper)
 
-    /** Span colour only — orange repeat ink is painted as a draw-phase overlay
-     * so it can bloom directionally without splitting the shaped run. */
-    fun colorFor(state: WordVisualState): Color = when (state) {
-        WordVisualState.Upcoming -> fadedInk
+    /** Base span colour. Active (first pass) stays faint so a full-ink
+     * [letterFadeIn] overlay can bloom over it. Words in a repeat chain stay
+     * full ink under the orange overlay. */
+    fun colorFor(state: WordVisualState, repeat: Boolean): Color = when {
+        repeat -> fullInk
+        state == WordVisualState.Upcoming || state == WordVisualState.Active -> fadedInk
         else -> fullInk
     }
 
-    val paperColor: Color get() = paper
-    val repeatInkColor: Color get() = repeatInk
+    val fullInkColor: Color get() = fullInk
 }
 
 @Composable
 private fun rememberWordInkPalette(): WordInkPalette {
     val fullInk = MaterialTheme.colorScheme.onBackground
     val paper = MaterialTheme.colorScheme.background
-    val repeatInk = LocalQuranAccents.current.repeatInk
-    return remember(fullInk, paper, repeatInk) {
-        WordInkPalette(fullInk = fullInk, paper = paper, repeatInk = repeatInk)
+    return remember(fullInk, paper) {
+        WordInkPalette(fullInk = fullInk, paper = paper)
     }
 }
 
@@ -602,6 +602,10 @@ private fun rememberRepeatWashes(
     )
 }
 
+/**
+ * Union of per-line glyph boxes for [range], used to place a word-local bloom
+ * overlay exactly over that word in the shaped ayah.
+ */
 private fun TextLayoutResult.wordBoxes(range: IntRange): List<Rect> {
     if (range.isEmpty()) return emptyList()
     val length = layoutInput.text.length
@@ -647,6 +651,42 @@ private fun Modifier.wordTapTarget(
     )
 }
 
+/**
+ * One word-local bloom overlay: a [Text] of just that word, positioned over
+ * its box in the shaped ayah, with [letterFadeIn] (and optional orange tint).
+ * The mask lives in this word's draw scope — it cannot paint onto neighbours.
+ */
+@Composable
+private fun WordBloomOverlay(
+    text: String,
+    box: Rect,
+    style: TextStyle,
+    color: Color,
+    progress: () -> Float,
+    restingAlpha: Float,
+    layerAlpha: Float = 1f,
+) {
+    if (box.width <= 0f || box.height <= 0f || layerAlpha <= 0f) return
+    Text(
+        text = text,
+        style = style,
+        color = color,
+        softWrap = false,
+        maxLines = 1,
+        overflow = TextOverflow.Visible,
+        modifier = Modifier
+            .absoluteOffset {
+                IntOffset(box.left.roundToInt(), box.top.roundToInt())
+            }
+            .graphicsLayer { alpha = layerAlpha }
+            .letterFadeIn(
+                progress = progress,
+                rtl = true,
+                restingAlpha = restingAlpha,
+            ),
+    )
+}
+
 @Composable
 private fun ResponsiveHafsAyah(
     ayah: Ayah,
@@ -660,6 +700,7 @@ private fun ResponsiveHafsAyah(
 ) {
     val palette = rememberWordInkPalette()
     val ayahMarkInk = LocalQuranAccents.current.gold
+    val repeatInk = LocalQuranAccents.current.repeatInk
     val sweeps = rememberLetterSweeps(states, activeSweepMs)
     val repeatWashes = rememberRepeatWashes(states, repeats, activeSweepMs)
     val activeIndex = states.indexOf(WordVisualState.Active)
@@ -675,19 +716,20 @@ private fun ResponsiveHafsAyah(
     var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     val hitSlopPx = with(LocalDensity.current) { 8.dp.toPx() }
 
-    // Static colours only: upcoming is faint, everything else is full ink.
-    // First-pass bloom and orange repeat bloom are draw-phase overlays —
-    // reading those sweeps here would reshape the ayah every frame.
-    val rendered = remember(ayah, states, palette, ayahMarkInk, fontSize) {
+    // Static colours: upcoming + first-pass active stay faint; recited and
+    // repeat-chain words are full ink. Bloom overlays are separate positioned
+    // Texts — reading sweeps here would reshape the ayah every frame.
+    val rendered = remember(ayah, states, repeats, palette, ayahMarkInk, fontSize) {
         val ranges = ArrayList<IntRange>(ayah.words.size)
         val text = buildAnnotatedString {
             ayah.words.forEachIndexed { index, word ->
                 val state = states.getOrElse(index) { WordVisualState.Plain }
+                val repeat = repeats.getOrElse(index) { false }
                 val start = length
                 // One contiguous colour span per word keeps Uthmanic Hafs
                 // joining/ligatures intact. Per-glyph spans split shaping runs
                 // and caused a visible font flip (#133).
-                withStyle(SpanStyle(color = palette.colorFor(state))) {
+                withStyle(SpanStyle(color = palette.colorFor(state, repeat))) {
                     append(word.arabic)
                 }
                 ranges += start until length
@@ -706,64 +748,76 @@ private fun ResponsiveHafsAyah(
         }
         RenderedLineText(text = text, wordRanges = ranges)
     }
-    Text(
-        text = rendered.text,
-        style = style,
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .widthIn(max = 560.dp)
-            .inkBloomOverlay(
-                layers = {
-                    val layout = layoutResult
-                    val layers = ArrayList<InkBloomLayer>(repeats.size + 1)
-                    // First-pass ink reveal on the active word (gloss-mode
-                    // letterFadeIn equivalent). Skipped while repeating —
-                    // the orange overlay carries the motion, same as WordUnit.
-                    if (activeIndex >= 0 && !activeIsRepeat) {
-                        val range = rendered.wordRanges.getOrNull(activeIndex)
-                        if (range != null) {
-                            layers += InkBloomLayer.CoverWithPaper(
-                                progress = sweeps[activeIndex].value,
-                                boxes = layout?.wordBoxes(range).orEmpty(),
-                                paper = palette.paperColor,
-                                restingAlpha = WordVisualState.Upcoming.inkAlpha(),
-                            )
-                        }
-                    }
-                    // Orange directional bloom for every word still in (or
-                    // dissolving out of) the repeat chain.
-                    repeatWashes.forEachIndexed { index, wash ->
-                        if (wash.alpha.value <= 0f) return@forEachIndexed
-                        val range = rendered.wordRanges.getOrNull(index) ?: return@forEachIndexed
-                        layers += InkBloomLayer.RevealColor(
-                            progress = wash.progress.value,
-                            boxes = layout?.wordBoxes(range).orEmpty(),
-                            color = palette.repeatInkColor,
-                            restingAlpha = 0f,
-                            layerAlpha = wash.alpha.value,
+            .widthIn(max = 560.dp),
+    ) {
+        Text(
+            text = rendered.text,
+            style = style,
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (onWordClick == null) {
+                        Modifier.quietClickable(onClick = onAyahClick)
+                    } else {
+                        Modifier.wordTapTarget(
+                            words = ayah.words,
+                            ranges = rendered.wordRanges,
+                            layoutResult = layoutResult,
+                            hitSlopPx = hitSlopPx,
+                            onWordClick = onWordClick,
+                            onWordLongClick = onWordLongClick,
+                            onMiss = onAyahClick,
+                        )
+                    },
+                ),
+            onTextLayout = { layoutResult = it },
+        )
+        val layout = layoutResult
+        if (layout != null) {
+            // First-pass ink reveal: full-ink word Text with letterFadeIn from
+            // the upcoming floor, covering the faint base glyph — same model as
+            // WordUnit. Scoped to this word's draw scope so neighbours stay
+            // untouched (no ayah-wide rect bleed).
+            if (activeIndex >= 0 && !activeIsRepeat) {
+                val range = rendered.wordRanges.getOrNull(activeIndex)
+                val word = ayah.words.getOrNull(activeIndex)
+                if (range != null && word != null) {
+                    layout.wordBoxes(range).forEach { box ->
+                        WordBloomOverlay(
+                            text = word.arabic,
+                            box = box,
+                            style = style,
+                            color = palette.fullInkColor,
+                            progress = { sweeps[activeIndex].value },
+                            restingAlpha = WordVisualState.Upcoming.inkAlpha(),
                         )
                     }
-                    layers
-                },
-                rtl = true,
-            )
-            .then(
-                if (onWordClick == null) {
-                    Modifier.quietClickable(onClick = onAyahClick)
-                } else {
-                    Modifier.wordTapTarget(
-                        words = ayah.words,
-                        ranges = rendered.wordRanges,
-                        layoutResult = layoutResult,
-                        hitSlopPx = hitSlopPx,
-                        onWordClick = onWordClick,
-                        onWordLongClick = onWordLongClick,
-                        onMiss = onAyahClick,
+                }
+            }
+            // Orange directional bloom for every word still in (or dissolving
+            // out of) the repeat chain — same as gloss mode's orange Text +
+            // letterFadeIn overlay.
+            repeatWashes.forEachIndexed { index, wash ->
+                if (wash.alpha.value <= 0f) return@forEachIndexed
+                val range = rendered.wordRanges.getOrNull(index) ?: return@forEachIndexed
+                val word = ayah.words.getOrNull(index) ?: return@forEachIndexed
+                layout.wordBoxes(range).forEach { box ->
+                    WordBloomOverlay(
+                        text = word.arabic,
+                        box = box,
+                        style = style,
+                        color = repeatInk,
+                        progress = { wash.progress.value },
+                        restingAlpha = 0f,
+                        layerAlpha = wash.alpha.value,
                     )
-                },
-            ),
-        onTextLayout = { layoutResult = it },
-    )
+                }
+            }
+        }
+    }
 }
 
 /** Marks every occurrence of [query] in [text] with a soft gold wash. */

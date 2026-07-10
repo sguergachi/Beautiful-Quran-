@@ -34,31 +34,24 @@ The naive implementation conflicts with Arabic shaping:
 
 The shipping Arabic-only / no-gloss view (`ResponsiveHafsAyah`, the single-`Text`
 Hafs renderer) spreads the active word's reveal on the **same** ink-wash curve as
-the word-by-word modes, without splitting the shaped run:
+the word-by-word modes, without splitting the shaped run and without painting
+onto neighbouring words:
 
-- The ink-wash shape lives in one place — `inkSmootherstep` / `inkWashAlpha` in
-  `ui/theme/Fade.kt` (smootherstep feather, wash head travelling the word plus
-  1.6× its width). `letterFadeIn` paints it as a moving gradient mask for the
-  per-word composables (`WordUnit`, `EnglishWordUnit`).
+- The ink-wash shape lives in one place — `letterFadeIn` in `ui/theme/Fade.kt`
+  (smootherstep feather, wash head travelling the word plus 1.6× its width).
+  Gloss mode applies it directly on each `WordUnit`.
 - `ResponsiveHafsAyah` cannot use per-glyph `SpanStyle`s: Uthmanic Hafs joining
   and ligatures break when a word is split into separate colour runs (the
   "font flip" fixed in #133). It also cannot apply `letterFadeIn` to the whole
   ayah — that would wash every word.
-- Instead the active word is drawn at full ink as one contiguous span, and
-  `inkBloomOverlay` covers that word's layout boxes with a paper gradient whose
-  alpha is `1 − glyphAlpha`. SrcOver yields the same lerp(paper, ink, α) as a
-  masked full-ink glyph. The sweep is read only at draw time, so the bloom
-  never recomposes or reshapes the ayah.
-- `pos` / the gradient direction are normalised to the reading direction
-  (RTL for Arabic), so the reveal leads from the first letter (rightmost)
-  exactly as `letterFadeIn` does.
-
-Repeat (orange) blooms use the same overlay path: each word in the repeat
-chain gets an `InkBloomLayer.RevealColor` wash (directional, then a solid
-hold, then dissolve via `layerAlpha`) while the base span stays full ink —
-matching gloss mode's orange overlay + `letterFadeIn`. Mask/overlay bleed
-around glyph boxes is generous enough that Hafs marks and overhangs are not
-clipped mid-fade.
+- Instead the base ayah keeps one contiguous colour span per word. The active
+  word's base span stays at the upcoming (faint) floor; a **positioned overlay
+  `Text` of just that word** sits on its layout box and runs `letterFadeIn`
+  from faint→full ink — the same draw-phase mask as gloss mode, scoped to that
+  word's draw scope so bleed cannot touch neighbours.
+- Repeat (orange) uses the same overlay pattern: an orange word `Text` with
+  `letterFadeIn` (resting 0) and a dissolving `layerAlpha`, matching gloss
+  mode's orange overlay. No solid orange rectangles.
 
 ## What The Sources Say
 
