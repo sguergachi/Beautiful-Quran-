@@ -88,15 +88,17 @@ Jump behaviour:
   ayah (same "open surah at ayah" path Home already uses), so the reader
   never nests a second bleed or a modal route.
 - **Way back** — after a jump to a different ayah (same or other chapter),
-  the reader shows a **quiet floating ink line** in the same place as the
-  return-to-ayah ornament: centred just above the player bar, over the
-  reading column — not a chip, not embedded in the bar. It floats up
-  (slide + fade) on reveal. Green arrow + soft "Back to" + chapter name ·
-  `surah:ayah`. The whole line is one tap target (returns there); there is
-  no separate dismiss control — the first hand scroll or drag after the
-  jump settles arms a **30-second** countdown that then clears it (the
-  programmatic settle itself does not start the timer). The ornamented
-  return-to-ayah control yields to this line while it is visible.
+  a **quiet floating ink line** appears above the paper stack (centred near
+  the bottom; above the player bar while the reader is open): green arrow +
+  soft "Back to" + chapter name · `surah:ayah`. It is hosted in
+  `MainActivity`, not inside the reader sheet, so closing the reader or
+  returning to chapter selection leaves it in view. The whole line is one
+  tap target (returns there); there is no separate dismiss control — the
+  first hand scroll, drag, or paper-stack page turn after the jump settles
+  arms a **30-second** countdown that then clears it (the programmatic
+  settle itself does not start the timer). The ornamented return-to-ayah
+  control yields to this line while it is visible. Ink-bleed overlays
+  (Root Viewer / Lab / chooser) temporarily cover it.
 - Closing the reader sheet (paper-stack back) does not reopen the lexicon.
 
 Occurrence list ordering: Quranic order (surah, then ayah, then word

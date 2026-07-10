@@ -7,15 +7,22 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -29,9 +36,11 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -54,6 +63,7 @@ import com.beautifulquran.ui.AppViewModelFactory
 import com.beautifulquran.ui.PageTurnSounds
 import com.beautifulquran.ui.home.HomeScreen
 import com.beautifulquran.ui.home.HomeViewModel
+import com.beautifulquran.ui.reader.BackToOriginPill
 import com.beautifulquran.ui.reader.ReaderScreen
 import com.beautifulquran.ui.reader.ReaderViewModel
 import com.beautifulquran.ui.reader.RootReturnTarget
@@ -70,9 +80,18 @@ import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.TimingsLabAccents
 import com.beautifulquran.ui.theme.absorbPointerEvents
 import com.beautifulquran.ui.theme.contrastingOverlayColorScheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
+
+/** Grace after a concordance jump so the programmatic settle / page turn
+ *  that lands the jump does not arm the "Back to …" dismiss timer. */
+private const val ROOT_RETURN_SETTLE_GRACE_MS = 1_200L
+
+/** How long the "Back to …" line stays after the first hand scroll or
+ *  paper-stack move. */
+private const val ROOT_RETURN_DISMISS_MS = 30_000L
 
 class MainActivity : ComponentActivity() {
 
@@ -156,12 +175,21 @@ private fun PaperStackApp(
     /** Bumped on every concordance jump so the reader remounts even when the
      * target surah/ayah pair is unchanged. */
     var jumpEpoch by remember { mutableIntStateOf(0) }
-    /** Origin verse for the "Back to …" pill after a concordance jump. */
+    /** Origin verse for the "Back to …" line after a concordance jump.
+     *  Owned here (not in the reader) so the line survives closing the
+     *  reader sheet / returning to chapter selection. */
     var rootReturnTarget by remember { mutableStateOf<RootReturnTarget?>(null) }
+    /** First hand scroll or paper-stack move after the jump settle arms a
+     *  30s countdown that clears [rootReturnTarget]. */
+    var rootReturnDismissArmed by remember { mutableStateOf(false) }
     val stackPosition = remember { Animatable(settledLayer.toFloat()) }
     val scope = rememberCoroutineScope()
     val settingsLayer = if (selectedSurahId == 0) AYAH_LAYER else SETTINGS_LAYER
     val overlayBlocking = labVisible || rootVisible || chooserVisible
+    val rootReturnVisible = rootReturnTarget != null && !overlayBlocking
+    val onRootReturnUserMovedLatest = rememberUpdatedState {
+        if (rootReturnTarget != null) rootReturnDismissArmed = true
+    }
 
     val context = LocalContext.current
     val pageTurnSounds = remember { PageTurnSounds(context) }
@@ -257,6 +285,7 @@ private fun PaperStackApp(
     fun returnFromConcordanceJump() {
         val target = rootReturnTarget ?: return
         rootReturnTarget = null
+        rootReturnDismissArmed = false
         if (target.surahId != selectedSurahId) {
             readerViewModel.load(target.surahId)
         }
@@ -264,6 +293,27 @@ private fun PaperStackApp(
         selectedStartAyah = target.ayah
         jumpEpoch++
         animateTo(AYAH_LAYER)
+    }
+
+    // Concordance "Back to …" line: stay across the paper stack (including
+    // chapter selection) until the reader moves by hand or turns a page,
+    // then clear it 30s after that first move. Ignore the programmatic
+    // settle that lands the jump itself.
+    LaunchedEffect(rootReturnTarget) {
+        rootReturnDismissArmed = false
+        if (rootReturnTarget == null) return@LaunchedEffect
+        delay(ROOT_RETURN_SETTLE_GRACE_MS)
+        val baseline = stackPosition.value
+        snapshotFlow { stackPosition.value }.collect { pos ->
+            if (!rootReturnDismissArmed && abs(pos - baseline) > 0.05f) {
+                rootReturnDismissArmed = true
+            }
+        }
+    }
+    LaunchedEffect(rootReturnDismissArmed, rootReturnTarget) {
+        if (!rootReturnDismissArmed || rootReturnTarget == null) return@LaunchedEffect
+        delay(ROOT_RETURN_DISMISS_MS)
+        rootReturnTarget = null
     }
 
     BackHandler(enabled = settledLayer > COVER_LAYER || stackPosition.value > COVER_LAYER + 0.01f) {
@@ -355,9 +405,8 @@ private fun PaperStackApp(
                         onOpenSettings = { animateTo(SETTINGS_LAYER) },
                         onAyahSelectorExpandedChange = { ayahSelectorExpanded = it },
                         onOpenRootViewer = { sid, a, word -> onWordLongPress(sid, a, word) },
-                        rootReturnTarget = rootReturnTarget,
-                        onRootReturn = ::returnFromConcordanceJump,
-                        onDismissRootReturn = { rootReturnTarget = null },
+                        onRootReturnUserMoved = { onRootReturnUserMovedLatest.value() },
+                        rootReturnVisible = rootReturnVisible,
                         keepStatusBarVisible = overlayBlocking,
                     )
                 }
@@ -380,6 +429,37 @@ private fun PaperStackApp(
                 },
                 onOpenSettings = { animateTo(SETTINGS_LAYER) },
             )
+        }
+
+        // Concordance "Back to …" — hosted above the paper stack so it
+        // survives closing the reader / returning to chapter selection.
+        // Sits under ink-bleed overlays; clears 30s after the first hand
+        // scroll or page turn (see LaunchedEffects above).
+        val abovePlayer = page in 0.5f..1.5f && selectedSurahId != 0
+        AnimatedVisibility(
+            visible = rootReturnVisible,
+            enter = fadeIn(tween(280)) + slideInVertically(
+                animationSpec = tween(320),
+                initialOffsetY = { it / 3 },
+            ),
+            exit = fadeOut(tween(220)) + slideOutVertically(
+                animationSpec = tween(260),
+                targetOffsetY = { it / 3 },
+            ),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = if (abovePlayer) 100.dp else 20.dp)
+                .zIndex(2.5f),
+        ) {
+            val target = rootReturnTarget
+            if (target != null) {
+                BackToOriginPill(
+                    target = target,
+                    onClick = ::returnFromConcordanceJump,
+                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 10.dp),
+                )
+            }
         }
 
         // Ink-bleed overlays share one contrasting palette so the bloom reads

@@ -98,13 +98,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
-/** Grace after a concordance jump so the programmatic settle does not arm the
- *  "Back to …" dismiss timer. */
-private const val ROOT_RETURN_SETTLE_GRACE_MS = 1_200L
-
-/** How long the "Back to …" pill stays after the first hand scroll/move. */
-private const val ROOT_RETURN_DISMISS_MS = 30_000L
-
 private sealed interface LazyItem {
     val key: String
     data object Header : LazyItem {
@@ -131,11 +124,12 @@ fun ReaderScreen(
      *  MainActivity may intercept this into a chooser that can also open the
      *  Timings Lab. See docs/ROOT_VIEWER.md. */
     onOpenRootViewer: (surahId: Int, ayah: Int, wordPosition: Int) -> Unit = { _, _, _ -> },
-    /** Origin verse after a concordance jump — shown as "Back to …" in the
-     *  return-to-ayah slot until tapped or dismissed. */
-    rootReturnTarget: RootReturnTarget? = null,
-    onRootReturn: () -> Unit = {},
-    onDismissRootReturn: () -> Unit = {},
+    /** Fired on the first hand scroll/drag while a concordance "Back to"
+     *  line is showing — MainActivity owns the floating line and its timer. */
+    onRootReturnUserMoved: () -> Unit = {},
+    /** True while a concordance "Back to" line is showing above the stack
+     *  (hides the return-to-ayah ornament so the two never compete). */
+    rootReturnVisible: Boolean = false,
     /** True while an ink-bleed overlay (Root Viewer / Timings Lab / chooser)
      *  is riding over this reader, so the status bar stays visible under its
      *  header. */
@@ -172,11 +166,7 @@ fun ReaderScreen(
     var showRepeatDialog by remember { mutableStateOf(false) }
     var requestedJumpAyah by remember { mutableIntStateOf(0) }
     val haptics = LocalHapticFeedback.current
-    // First hand scroll/move after a concordance jump arms a 30s countdown
-    // that clears the "Back to …" pill. Programmatic settle of the jump itself
-    // must not arm it — see the grace window below.
-    var rootReturnDismissArmed by remember { mutableStateOf(false) }
-    val onDismissRootReturnLatest = rememberUpdatedState(onDismissRootReturn)
+    val onRootReturnUserMovedLatest = rememberUpdatedState(onRootReturnUserMoved)
 
     // In-surah English search: matches are ayahs whose translation or any
     // word gloss contains the query.
@@ -355,33 +345,6 @@ fun ReaderScreen(
         } finally {
             if (requestedJumpAyah == target) requestedJumpAyah = 0
         }
-    }
-
-    // Concordance "Back to …" pill: stay until the reader moves by hand, then
-    // clear it 30s after that first scroll/move. Ignore the programmatic
-    // settle that lands the jump itself.
-    LaunchedEffect(rootReturnTarget) {
-        rootReturnDismissArmed = false
-        if (rootReturnTarget == null) return@LaunchedEffect
-        delay(ROOT_RETURN_SETTLE_GRACE_MS)
-        // If the pill was dismissed during the grace window this effect is
-        // cancelled and restarted with a null target — no need to re-check.
-        val baselineIndex = listState.firstVisibleItemIndex
-        val baselineOffset = listState.firstVisibleItemScrollOffset
-        snapshotFlow {
-            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
-        }.collect { (index, offset) ->
-            if (!rootReturnDismissArmed &&
-                (index != baselineIndex || offset != baselineOffset)
-            ) {
-                rootReturnDismissArmed = true
-            }
-        }
-    }
-    LaunchedEffect(rootReturnDismissArmed, rootReturnTarget) {
-        if (!rootReturnDismissArmed || rootReturnTarget == null) return@LaunchedEffect
-        delay(ROOT_RETURN_DISMISS_MS)
-        onDismissRootReturnLatest.value()
     }
 
     fun selectedPlaybackAyah(): Int {
@@ -741,7 +704,9 @@ fun ReaderScreen(
                                         val distance = (change.position - down.position).getDistance()
                                         if (distance > touchSlop) {
                                             dragStarted = true
-                                            rootReturnDismissArmed = true
+                                            if (rootReturnVisible) {
+                                                onRootReturnUserMovedLatest.value()
+                                            }
                                             val dx = change.position.x - down.position.x
                                             val dy = change.position.y - down.position.y
                                             if (abs(dy) > abs(dx)) {
@@ -900,15 +865,12 @@ fun ReaderScreen(
                     .zIndex(1f),
             )
 
-            // Floating return controls — sit above the player bar, not inside
-            // it. They float up into place (slide + fade) and stay there until
-            // dismissed. Back-to (concordance) takes the slot when present;
-            // otherwise the ornamented return-to-ayah can appear.
-            val showRootReturn =
-                playerState.error == null && rootReturnTarget != null
+            // Ornamented return-to-ayah — floats above the player bar. Yields
+            // while MainActivity's concordance "Back to" line is showing so
+            // the two never compete for the same slot.
             val showReturnToAyah =
                 playerState.error == null &&
-                    !showRootReturn &&
+                    !rootReturnVisible &&
                     !followEnabled &&
                     recitingActive &&
                     activeAyahPlacement.value.isAway
@@ -918,26 +880,6 @@ fun ReaderScreen(
                     .matchParentSize()
                     .zIndex(1.2f),
             ) {
-                AnimatedVisibility(
-                    visible = showRootReturn,
-                    enter = fadeIn(tween(280)) + slideInVertically(
-                        animationSpec = tween(320),
-                        initialOffsetY = { it },
-                    ),
-                    exit = fadeOut(tween(220)) + slideOutVertically(
-                        animationSpec = tween(260),
-                        targetOffsetY = { it / 2 },
-                    ),
-                ) {
-                    val target = rootReturnTarget
-                    if (target != null) {
-                        BackToOriginPill(
-                            target = target,
-                            onClick = onRootReturn,
-                            modifier = Modifier.padding(horizontal = 28.dp, vertical = 10.dp),
-                        )
-                    }
-                }
                 AnimatedVisibility(
                     visible = showReturnToAyah,
                     enter = fadeIn(tween(280)) + slideInVertically(

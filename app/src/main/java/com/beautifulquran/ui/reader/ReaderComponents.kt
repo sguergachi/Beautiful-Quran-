@@ -1099,9 +1099,9 @@ fun PageBreak(page: Int, useArabicIndicDigits: Boolean = true) {
 /**
  * Quiet floating return after a Root Viewer concordance jump — a single ink
  * line on the page (arrow + chapter · ayah), not a chip and not a dismissible
- * badge. Floats above the player in the same slot as the return-to-ayah
- * ornament; tap returns, scroll arms the 30s fade. See docs/ROOT_VIEWER.md
- * and docs/DESIGN.md (hierarchy from ink strength, nothing floating as chrome).
+ * badge. Hosted above the paper stack in MainActivity so it survives closing
+ * the reader; tap returns, scroll or page-turn arms the 30s fade. See
+ * docs/ROOT_VIEWER.md and docs/DESIGN.md (hierarchy from ink strength).
  */
 @Composable
 fun BackToOriginPill(

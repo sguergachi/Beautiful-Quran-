@@ -2,8 +2,9 @@ package com.beautifulquran.ui.reader
 
 /**
  * Origin verse captured when the reader jumps via a Root Viewer concordance
- * hit. Shown as a quiet floating ink line above the player until the reader
- * taps it or it times out after the first hand scroll. See docs/ROOT_VIEWER.md.
+ * hit. Shown as a quiet floating ink line above the paper stack (survives
+ * closing the reader / chapter selection) until tapped or timed out after
+ * the first hand scroll or page turn. See docs/ROOT_VIEWER.md.
  */
 data class RootReturnTarget(
     val surahId: Int,
