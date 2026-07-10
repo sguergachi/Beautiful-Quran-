@@ -89,6 +89,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ReadingMode
+import com.beautifulquran.ui.home.FloatingPlaybackBottomInset
 import com.beautifulquran.ui.reader.focus.rememberReaderFocusController
 import com.beautifulquran.ui.theme.IslamicReturnToAyahButton
 import com.beautifulquran.ui.theme.absorbPointerEvents
@@ -934,7 +935,10 @@ fun ReaderScreen(
                         BackToOriginPill(
                             target = target,
                             onClick = onRootReturn,
-                            modifier = Modifier.padding(horizontal = 28.dp, vertical = 10.dp),
+                            modifier = Modifier.padding(
+                                horizontal = 28.dp,
+                                vertical = FloatingPlaybackBottomInset,
+                            ),
                         )
                     }
                 }
@@ -952,7 +956,8 @@ fun ReaderScreen(
                     IslamicReturnToAyahButton(
                         pointUp = activeAyahPlacement.value.pointUp,
                         onClick = { followEnabled = true },
-                        modifier = Modifier.padding(bottom = 10.dp),
+                        // Same bottom inset as home's FloatingPlaybackControl.
+                        modifier = Modifier.padding(bottom = FloatingPlaybackBottomInset),
                     )
                 }
             }
