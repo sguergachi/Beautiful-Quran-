@@ -38,6 +38,30 @@ export function wholeWordInkAlpha(progress: number, restingAlpha: number): numbe
   return restingAlpha + (1 - restingAlpha) * inkSmootherstep(p)
 }
 
+/**
+ * CSS mask-image for the directional ink wash.
+ * Samples [inkWashAlpha] across the word (layout L→R) so the reveal matches
+ * Android's smootherstep bloom instead of a blunt 3-stop wipe.
+ */
+export function washMaskImage(
+  progress: number,
+  restingAlpha: number,
+  rtl: boolean,
+  feather = 1.6,
+  stopCount = 17,
+): string {
+  const p = Math.min(1, Math.max(0, progress))
+  if (p >= 1) return 'none'
+  const n = Math.max(2, stopCount)
+  const stops: string[] = []
+  for (let i = 0; i < n; i++) {
+    const pos = i / (n - 1)
+    const a = inkWashAlpha(pos, p, restingAlpha, rtl, feather)
+    stops.push(`rgba(0,0,0,${a.toFixed(4)}) ${(pos * 100).toFixed(2)}%`)
+  }
+  return `linear-gradient(to right, ${stops.join(', ')})`
+}
+
 /** Cubic-bezier sample for sweep easing (matches InkEngine tuning defaults). */
 export function cubicBezierEase(
   t: number,

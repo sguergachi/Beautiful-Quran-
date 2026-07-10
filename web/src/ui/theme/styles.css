@@ -139,6 +139,12 @@ select {
   height: 100%;
   overflow: hidden;
   background: var(--paper);
+  /* Soft under-paper so peeks read as sheets, not empty void */
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--ink) 6%, var(--paper)) 0%,
+    var(--paper) 12%
+  );
 }
 
 .sheet {
@@ -148,9 +154,11 @@ select {
   flex-direction: column;
   background: var(--paper);
   transition:
-    transform 380ms var(--ease-sheet),
-    opacity 380ms ease;
+    transform 420ms cubic-bezier(0.24, 0.02, 0.12, 1),
+    opacity 380ms ease,
+    box-shadow 420ms ease;
   will-change: transform, opacity;
+  transform-origin: left center;
 }
 
 .sheet[data-name='home'] {
@@ -165,22 +173,76 @@ select {
   z-index: 3;
 }
 
-/* Under-sheet: home stays faintly present when covered */
-.sheet[data-name='home'][data-covered='true'] {
-  transform: translateX(-6%);
-  opacity: 0.55;
+.sheet[data-empty='true'] {
+  visibility: hidden;
   pointer-events: none;
 }
 
-.sheet[data-active='false']:not([data-name='home']) {
-  pointer-events: none;
-  opacity: 0;
-  transform: translateX(14%);
-}
-
-.sheet[data-active='true'] {
+/* Top sheet — full page */
+.sheet[data-depth='0'][data-active='true'] {
+  transform: translateX(0) scale(1);
   opacity: 1;
-  transform: translateX(0);
+  pointer-events: auto;
+  box-shadow: none;
+}
+
+/* One sheet beneath — peeks on the left; clickable edge */
+.sheet[data-depth='1'] {
+  transform: translateX(-7%) scale(0.985);
+  opacity: 0.72;
+  pointer-events: none;
+  box-shadow: 8px 0 28px color-mix(in srgb, var(--ink) 12%, transparent);
+}
+
+/* Two sheets beneath — deeper recess (Chapters under Reader under Settings) */
+.sheet[data-depth='2'] {
+  transform: translateX(-13%) scale(0.97);
+  opacity: 0.48;
+  pointer-events: none;
+  box-shadow: 10px 0 32px color-mix(in srgb, var(--ink) 10%, transparent);
+}
+
+/* Sheets above the current stack — parked off to the right */
+.sheet[data-name='reader'][data-active='false']:not([data-depth='1']):not([data-depth='2']),
+.sheet[data-name='settings'][data-active='false'] {
+  transform: translateX(12%) scale(1);
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: none;
+}
+
+/* Left-edge hit target on peeking sheets — go back by touching the previous page */
+.sheet-edge-back {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: clamp(28px, 8vw, 52px);
+  z-index: 30;
+  pointer-events: auto;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.sheet-edge-back:focus-visible {
+  outline: none;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--accent) 18%, transparent),
+    transparent
+  );
+}
+
+@media (hover: hover) {
+  .sheet-edge-back:hover {
+    background: linear-gradient(
+      to right,
+      color-mix(in srgb, var(--ink) 8%, transparent),
+      transparent
+    );
+  }
 }
 
 .sheet-frame {
@@ -638,6 +700,7 @@ select {
 
 .word-ink {
   transition: opacity 450ms ease;
+  position: relative;
 }
 
 .word-ink[data-state='Upcoming'] {
@@ -650,25 +713,31 @@ select {
   opacity: 1;
 }
 
-.word-wash {
-  -webkit-mask-image: linear-gradient(
-    var(--wash-dir, to left),
-    #000 0%,
-    #000 var(--wash-head, 0%),
-    rgba(0, 0, 0, 0.35) calc(var(--wash-head, 0%) + var(--wash-feather, 40%)),
-    rgba(0, 0, 0, 0.22) 100%
-  );
-  mask-image: linear-gradient(
-    var(--wash-dir, to left),
-    #000 0%,
-    #000 var(--wash-head, 0%),
-    rgba(0, 0, 0, 0.35) calc(var(--wash-head, 0%) + var(--wash-feather, 40%)),
-    rgba(0, 0, 0, 0.22) 100%
-  );
+.word-stack {
+  position: relative;
+  display: inline-block;
 }
 
-.word-repeat {
+.word-repeat-overlay {
+  position: absolute;
+  inset: 0;
   color: var(--repeat);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: inherit;
+}
+
+.word-wash {
+  /* mask-image set inline from washMaskImage() — smootherstep profile */
+}
+
+.hafs-word {
+  transition: opacity 450ms ease, color 450ms ease;
+}
+
+.hafs-word.hafs-active {
+  transition: opacity 140ms ease;
 }
 
 .ayah-translation {
@@ -714,7 +783,7 @@ select {
 }
 
 .player-bar .ctrl {
-  font-size: 0.92rem;
+  font-size: 1.05rem;
   color: var(--ink-muted);
   min-width: 44px;
   min-height: 44px;
@@ -725,6 +794,18 @@ select {
   transition: opacity 900ms ease, color 180ms ease;
 }
 
+.player-bar .ctrl.speed {
+  font-size: 0.95rem;
+  font-variant-numeric: lining-nums;
+  min-width: 48px;
+}
+
+.player-bar .ctrl svg,
+.player-bar .play svg,
+.floating-play svg {
+  display: block;
+}
+
 @media (hover: hover) {
   .player-bar .ctrl:hover {
     color: var(--accent);
@@ -732,12 +813,11 @@ select {
 }
 
 .player-bar .play {
-  font-size: 1.12rem;
+  font-size: 1.35rem;
   color: var(--accent);
-  letter-spacing: 0.02em;
-  min-width: 64px;
-  min-height: 44px;
-  padding: 0.45rem 0.75rem;
+  min-width: 56px;
+  min-height: 48px;
+  padding: 0.45rem 0.7rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1029,13 +1109,18 @@ select {
 .floating-play button {
   color: var(--accent);
   padding: 0.55rem 0.7rem;
-  font-size: 0.92rem;
+  font-size: 1.05rem;
   white-space: nowrap;
   min-height: 44px;
   min-width: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.floating-play .float-open {
+  font-size: 0.92rem;
+  padding-inline: 0.85rem;
 }
 
 @media (hover: hover) {

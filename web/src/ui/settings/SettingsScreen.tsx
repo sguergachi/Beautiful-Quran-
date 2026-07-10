@@ -1,17 +1,32 @@
 import { appStore, useAppState } from '../../store/appStore'
+import { settingsLayerFor, type StackLayer } from '../paper/stack'
 
-export function SettingsScreen() {
+export function SettingsScreen({
+  stackLayer,
+  hasReader,
+}: {
+  stackLayer: StackLayer
+  hasReader: boolean
+}) {
   const state = useAppState()
   const s = state.settings
+  const layer = settingsLayerFor(hasReader)
+  const depth = Math.max(0, stackLayer - layer)
   const active = state.sheet === 'settings'
 
   return (
-    <div className="sheet" data-name="settings" data-active={active}>
+    <div
+      className="sheet"
+      data-name="settings"
+      data-layer={layer}
+      data-depth={depth}
+      data-active={active}
+    >
       <div className="settings">
         <button
           type="button"
           className="back"
-          onClick={() => appStore.setSheet(state.content ? 'reader' : 'home')}
+          onClick={() => appStore.goBack()}
         >
           ← Back
         </button>
@@ -20,8 +35,10 @@ export function SettingsScreen() {
         <section className="settings-section">
           <h2>Reciter</h2>
           <div className="setting-row">
-            <span>Voice</span>
+            <label htmlFor="setting-reciter">Voice</label>
             <select
+              id="setting-reciter"
+              name="reciter"
               value={s.reciterId}
               onChange={(e) =>
                 appStore.updateSettings({ reciterId: Number(e.target.value) })
@@ -39,8 +56,10 @@ export function SettingsScreen() {
         <section className="settings-section">
           <h2>Reading</h2>
           <div className="setting-row">
-            <span>Mode</span>
+            <label htmlFor="setting-mode">Mode</label>
             <select
+              id="setting-mode"
+              name="reading-mode"
               value={s.readingMode}
               onChange={(e) =>
                 appStore.updateSettings({
@@ -88,8 +107,10 @@ export function SettingsScreen() {
             </button>
           </div>
           <div className="setting-row">
-            <span>Text size</span>
+            <label htmlFor="setting-font">Text size</label>
             <input
+              id="setting-font"
+              name="font-scale"
               type="range"
               min={0.85}
               max={1.4}
@@ -101,8 +122,10 @@ export function SettingsScreen() {
             />
           </div>
           <div className="setting-row">
-            <span>Selector side</span>
+            <label htmlFor="setting-selector">Selector side</label>
             <select
+              id="setting-selector"
+              name="selector-side"
               value={s.ayahSelectorSide}
               onChange={(e) =>
                 appStore.updateSettings({
@@ -119,8 +142,10 @@ export function SettingsScreen() {
         <section className="settings-section">
           <h2>Playback</h2>
           <div className="setting-row">
-            <span>Speed</span>
+            <label htmlFor="setting-speed">Speed</label>
             <select
+              id="setting-speed"
+              name="playback-speed"
               value={s.playbackSpeed}
               onChange={(e) =>
                 appStore.updateSettings({ playbackSpeed: Number(e.target.value) })
@@ -134,8 +159,10 @@ export function SettingsScreen() {
             </select>
           </div>
           <div className="setting-row">
-            <span>Repeat</span>
+            <label htmlFor="setting-repeat">Repeat</label>
             <select
+              id="setting-repeat"
+              name="repeat"
               value={state.player.repeatMode}
               onChange={(e) =>
                 appStore.setRepeat(e.target.value as typeof state.player.repeatMode)
@@ -151,8 +178,10 @@ export function SettingsScreen() {
         <section className="settings-section">
           <h2>Appearance</h2>
           <div className="setting-row">
-            <span>Theme</span>
+            <label htmlFor="setting-theme">Theme</label>
             <select
+              id="setting-theme"
+              name="theme"
               value={s.themeMode}
               onChange={(e) =>
                 appStore.updateSettings({

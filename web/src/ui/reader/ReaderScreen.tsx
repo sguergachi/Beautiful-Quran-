@@ -3,7 +3,21 @@ import { AyahBlock } from '../../render/AyahBlock'
 import { BASMALAH_UTHMANI, prefaceState, InkState } from '../../engine'
 import { FocusEngine, isAway, type TargetGeometry } from '../../engine/focus'
 import { surahOpensWithBasmalahPreface } from '../../engine/basmalah'
-import { appStore, useAppState } from '../../store/appStore'
+import {
+  appStore,
+  useAppState,
+  COVER_LAYER,
+  READER_LAYER,
+} from '../../store/appStore'
+import type { StackLayer } from '../paper/stack'
+import {
+  IconNext,
+  IconPause,
+  IconPlay,
+  IconPrev,
+  IconRepeat,
+  IconRepeatOne,
+} from '../icons/PlaybackIcons'
 
 function Rosette() {
   return (
@@ -24,7 +38,7 @@ function Rosette() {
   )
 }
 
-export function ReaderScreen() {
+export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const state = useAppState()
   const content = state.content
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -36,10 +50,13 @@ export function ReaderScreen() {
 
   const side = state.settings.ayahSelectorSide
   const receded = state.chromeReceded
-  const active = state.sheet === 'reader'
+  const depth = content ? Math.max(0, stackLayer - READER_LAYER) : 0
+  const isTop = content != null && stackLayer === READER_LAYER
+  const peeking = content != null && stackLayer > READER_LAYER
+  const active = isTop || peeking
 
   useEffect(() => {
-    if (!content || !active) return
+    if (!content || !isTop) return
     const el = scrollRef.current
     if (!el) return
     const target = el.querySelector(`#ayah-${state.settings.lastAyah || 1}`)
@@ -47,11 +64,11 @@ export function ReaderScreen() {
       const top = (target as HTMLElement).offsetTop - el.clientHeight * 0.1
       el.scrollTo({ top: Math.max(0, top), behavior: 'instant' as ScrollBehavior })
     }
-  }, [content?.surah.id, active])
+  }, [content?.surah.id, isTop])
 
   useEffect(() => {
     const el = scrollRef.current
-    if (!el || !content || !active) return
+    if (!el || !content || !isTop) return
 
     const update = () => {
       const viewport = el.clientHeight
@@ -104,10 +121,10 @@ export function ReaderScreen() {
     el.addEventListener('scroll', onScroll, { passive: true })
     update()
     return () => el.removeEventListener('scroll', onScroll)
-  }, [content?.surah.id, state.activeAyah, focusedAyah, active])
+  }, [content?.surah.id, state.activeAyah, focusedAyah, isTop])
 
   useEffect(() => {
-    if (!state.followEnabled || !state.activeAyah || !scrollRef.current || !active) return
+    if (!state.followEnabled || !state.activeAyah || !scrollRef.current || !isTop) return
     if (lastFollowAyah.current === state.activeAyah) return
     lastFollowAyah.current = state.activeAyah
     const el = scrollRef.current
@@ -118,7 +135,7 @@ export function ReaderScreen() {
     const top = target.offsetTop - anchor
     el.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
     setShowReturn(false)
-  }, [state.activeAyah, state.followEnabled, active])
+  }, [state.activeAyah, state.followEnabled, isTop])
 
   const jumpToAyah = (ayah: number) => {
     const el = scrollRef.current
@@ -131,11 +148,14 @@ export function ReaderScreen() {
 
   if (!content) {
     return (
-      <div className="sheet" data-name="reader" data-active={active}>
-        <div className="boot">
-          <p>Open a chapter to begin.</p>
-        </div>
-      </div>
+      <div
+        className="sheet"
+        data-name="reader"
+        data-layer={READER_LAYER}
+        data-depth={0}
+        data-active="false"
+        data-empty="true"
+      />
     )
   }
 
@@ -173,10 +193,31 @@ export function ReaderScreen() {
     </div>
   )
 
+  const repeatMode = state.player.repeatMode
+
   return (
-    <div className="sheet" data-name="reader" data-active={active}>
+    <div
+      className="sheet"
+      data-name="reader"
+      data-layer={READER_LAYER}
+      data-depth={depth}
+      data-active={active}
+    >
+      {peeking ? (
+        <button
+          type="button"
+          className="sheet-edge-back"
+          aria-label="Back to reader"
+          onClick={() => appStore.revealLayer(READER_LAYER)}
+        />
+      ) : null}
+
       <div className="reader-top" data-receded={receded}>
-        <button type="button" className="back" onClick={() => appStore.setSheet('home')}>
+        <button
+          type="button"
+          className="back"
+          onClick={() => appStore.revealLayer(COVER_LAYER)}
+        >
           ← Chapters
         </button>
         <button type="button" className="meta-btn" onClick={() => appStore.setSheet('settings')}>
@@ -260,25 +301,42 @@ export function ReaderScreen() {
               type="button"
               className="ctrl"
               data-receded={receded}
+              aria-label={repeatMode === 'off' ? 'Repeat off' : `Repeat ${repeatMode}`}
               onClick={() =>
-                appStore.setRepeat(state.player.repeatMode === 'ayah' ? 'off' : 'ayah')
+                appStore.setRepeat(repeatMode === 'ayah' ? 'off' : 'ayah')
               }
             >
-              {state.player.repeatMode === 'off' ? 'Repeat' : `Repeat · ${state.player.repeatMode}`}
-            </button>
-            <button type="button" className="ctrl" onClick={() => void appStore.prev()}>
-              Prev
-            </button>
-            <button type="button" className="play" onClick={() => void appStore.playPause()}>
-              {state.player.isPlaying ? 'Pause' : 'Play'}
-            </button>
-            <button type="button" className="ctrl" onClick={() => void appStore.next()}>
-              Next
+              {repeatMode === 'ayah' ? <IconRepeatOne /> : <IconRepeat />}
             </button>
             <button
               type="button"
               className="ctrl"
+              aria-label="Previous ayah"
+              onClick={() => void appStore.prev()}
+            >
+              <IconPrev />
+            </button>
+            <button
+              type="button"
+              className="play"
+              aria-label={state.player.isPlaying ? 'Pause' : 'Play'}
+              onClick={() => void appStore.playPause()}
+            >
+              {state.player.isPlaying ? <IconPause /> : <IconPlay />}
+            </button>
+            <button
+              type="button"
+              className="ctrl"
+              aria-label="Next ayah"
+              onClick={() => void appStore.next()}
+            >
+              <IconNext />
+            </button>
+            <button
+              type="button"
+              className="ctrl speed"
               data-receded={receded}
+              aria-label={`Speed ${state.settings.playbackSpeed}×`}
               onClick={() => {
                 const speeds = [0.75, 1, 1.25, 1.5]
                 const i = speeds.indexOf(state.settings.playbackSpeed)

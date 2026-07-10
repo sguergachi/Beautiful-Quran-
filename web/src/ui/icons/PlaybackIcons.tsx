@@ -1,0 +1,64 @@
+/** Inline playback glyphs — ink-colored, no Material chrome. */
+import type { ReactNode, SVGProps } from 'react'
+
+type IconProps = SVGProps<SVGSVGElement> & { title?: string }
+
+function base(props: IconProps, path: ReactNode) {
+  const { title, ...rest } = props
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="1.15em"
+      height="1.15em"
+      fill="currentColor"
+      aria-hidden={title ? undefined : true}
+      role={title ? 'img' : undefined}
+      {...rest}
+    >
+      {title ? <title>{title}</title> : null}
+      {path}
+    </svg>
+  )
+}
+
+export function IconPlay(props: IconProps) {
+  return base(props, <path d="M8 5.14v13.72L19 12 8 5.14z" />)
+}
+
+export function IconPause(props: IconProps) {
+  return base(
+    props,
+    <path d="M7 5h3.5v14H7V5zm6.5 0H17v14h-3.5V5z" />,
+  )
+}
+
+export function IconPrev(props: IconProps) {
+  return base(
+    props,
+    <path d="M11 12L18 6.5v11L11 12zm-5 6.5V5.5h2.2v13H6z" />,
+  )
+}
+
+export function IconNext(props: IconProps) {
+  return base(
+    props,
+    <path d="M13 12l-7 5.5v-11L13 12zm5-6.5v13h-2.2v-13H18z" />,
+  )
+}
+
+export function IconRepeat(props: IconProps) {
+  return base(
+    props,
+    <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z" />,
+  )
+}
+
+export function IconRepeatOne(props: IconProps) {
+  return base(
+    props,
+    <>
+      <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z" />
+      <path d="M12 9.2h1.1V15H11.7v-4.3h-.9V9.6c.4-.2.8-.3 1.2-.4z" />
+    </>,
+  )
+}
