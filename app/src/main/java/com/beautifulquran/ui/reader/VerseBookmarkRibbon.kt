@@ -59,9 +59,9 @@ private const val NOTCH_DP = 5.5f
 private const val WAVE_AMP_DP = 4.5f    // cloth sway while unfurling
 private const val SETTLE_AMP_DP = 3.2f  // final flutter amplitude
 private const val OVERSHOOT = 0.06f     // tip past the block bottom, then spring back
-private const val NUB_ALPHA = 0.20f
-private const val NUB_FOCUSED_ALPHA = 0.40f
-private const val SOLID_ALPHA = 0.90f
+private const val NUB_ALPHA = 0.38f
+private const val NUB_FOCUSED_ALPHA = 0.62f
+private const val SOLID_ALPHA = 0.92f
 
 /** Gravity spill: slow peel, then accelerates, eases as length runs out. */
 private val UnfurlEasing = CubicBezierEasing(0.45f, 0.02f, 0.22f, 1f)
