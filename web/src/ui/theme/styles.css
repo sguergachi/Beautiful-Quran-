@@ -305,6 +305,11 @@ select {
   position: relative;
   flex: 1;
   min-height: 0;
+  /* Clip the scrollport to this box — without it, .scroll grows with content
+     and overflow:auto never engages (mouse wheel does nothing). */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .edge-fade::before,
@@ -329,6 +334,8 @@ select {
 }
 
 .scroll {
+  flex: 1;
+  min-height: 0;
   height: 100%;
   overflow: auto;
   overscroll-behavior: contain;
@@ -560,7 +567,11 @@ select {
 .reader-main {
   flex: 1;
   min-width: 0;
+  /* Shrink below content height so .scroll can overflow and take the wheel. */
+  min-height: 0;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .ayah-rail {
