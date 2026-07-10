@@ -49,8 +49,11 @@ val activeWordPosition by remember(ayah.number) {
 
 A word boundary therefore recomposes exactly one `AyahBlock` (whose
 `WordUnit` children skip via stable parameters, so only the two words whose
-state changed re-execute). The rest of the screen — list, top bar, player —
-is untouched.
+state changed re-execute). The same pattern applies to `isActiveAyah` /
+dimming: each list item reads `activeAyah` through a per-ayah
+`derivedStateOf`, so an ayah boundary only wakes the two blocks whose
+active bit flips. The rest of the screen — list, top bar, player — is
+untouched.
 
 ### 3. A cheap position ticker that publishes only boundaries
 
@@ -59,9 +62,17 @@ applies `distinctUntilChanged` on the **derived word position**, so
 downstream state changes ~2–3×/second during recitation, not 30×. The loop
 runs only while the surah is loaded (`flatMapLatest` + `WhileSubscribed`),
 drops to a gentle 250 ms poll while paused, and stops entirely when the
-reader leaves the screen. `HighlightEngine` is a binary search over a small
-sorted list — microseconds per tick, zero allocations on the hot path except
-one small `ActiveWord` per boundary.
+reader leaves the screen. Repeat / high-water tables are built once when
+timings load (`HighlightEngine.PreparedTimings`); each poll is a binary
+search + O(1) lookup with **zero allocations** until a word boundary emits
+a new `ActiveWord`.
+
+### 3b. Playlist preload + cache warm
+
+ExoPlayer's `PreloadConfiguration` buffers ~5 s of the *next* ayah in the
+playlist (Media3 1.10), cutting inter-ayah join latency. `AudioPrefetcher`
+still warms a few ayahs beyond that on any network, and the whole surah on
+unmetered Wi‑Fi, writing into the same 1 GB LRU cache the player reads.
 
 ### 4. Edge fades without offscreen compositing
 

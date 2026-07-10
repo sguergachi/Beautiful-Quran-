@@ -41,6 +41,10 @@ class PlaybackService : MediaSessionService() {
         val prefetcher = AudioPrefetcher(cache, upstream, getSystemService()!!)
         this.prefetcher = prefetcher
 
+        // Playlist preload covers the next ayah's join latency (Media3 1.10).
+        // Surah-wide warming on unmetered networks stays in AudioPrefetcher —
+        // PreloadConfiguration only looks ahead one item.
+        @Suppress("UnstableApiUsage")
         val player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(cacheDataSource))
             .setAudioAttributes(
@@ -52,7 +56,13 @@ class PlaybackService : MediaSessionService() {
             )
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
+            .experimentalSetDynamicSchedulingEnabled(true)
             .build()
+            .also { exo ->
+                exo.preloadConfiguration = ExoPlayer.PreloadConfiguration(
+                    /* targetPreloadDurationUs = */ PLAYLIST_PRELOAD_US,
+                )
+            }
 
         player.addListener(PrefetchListener(player, prefetcher))
 
@@ -120,6 +130,11 @@ class PlaybackService : MediaSessionService() {
         /** Recently-heard surahs stay offline for a while: audio is small
          * (a few MB per surah), so a 1 GB LRU budget holds hundreds of them. */
         private const val CACHE_BYTES = 1024L * 1024 * 1024
+
+        /** How much of the *next* playlist item ExoPlayer should buffer ahead
+         * of the current ayah. Ayah MP3s are short; ~5 s covers a typical
+         * join without racing the player's own buffer. */
+        private const val PLAYLIST_PRELOAD_US = 5_000_000L
 
         private var cache: SimpleCache? = null
 

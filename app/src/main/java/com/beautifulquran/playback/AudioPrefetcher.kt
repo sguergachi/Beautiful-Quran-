@@ -23,16 +23,18 @@ import kotlin.coroutines.coroutineContext
  * stutters and recently-heard surahs work offline. Fully automatic: driven by
  * playback events, no user configuration.
  *
- * Two independent, self-superseding jobs write into the *same* [SimpleCache]
- * the player reads from, so there is no second cache to keep consistent:
+ * ExoPlayer's playlist [androidx.media3.exoplayer.ExoPlayer.PreloadConfiguration]
+ * already buffers the *next* playlist item. This class covers what that API
+ * does not:
  *
- *  - **Read-ahead** ([readAhead]) pulls the next few ayahs on any network. It's
- *    tiny and tied to active playback, so it runs even on cellular.
+ *  - **Read-ahead** ([readAhead]) pulls a few ayahs beyond the next one on any
+ *    network, so a skip/seek still lands on warm cache.
  *  - **Surah warming** ([warmSurah]) pulls the whole surah, but only on an
  *    unmetered network so it never eats a data plan.
  *
- * Cache keys default to the URI string in both the player's [CacheDataSource]
- * and the one built here, so writes made here satisfy the player's reads.
+ * Both jobs write into the *same* [SimpleCache] the player reads from. Cache
+ * keys default to the URI string in both the player's [CacheDataSource] and
+ * the one built here, so writes made here satisfy the player's reads.
  */
 class AudioPrefetcher(
     private val cache: Cache,
@@ -54,16 +56,20 @@ class AudioPrefetcher(
     private var readAheadJob: Job? = null
     private var warmJob: Job? = null
 
-    /** How many upcoming ayahs to keep warm during playback. */
+    /** How many upcoming ayahs to keep warm during playback, *beyond* the
+     * single next item ExoPlayer already preloads via PreloadConfiguration. */
     private val readAheadCount = 3
 
     /**
-     * Warm [readAheadCount] ayahs after [currentIndex]. Cancels any prior
-     * read-ahead so a skip/seek doesn't leave stale work running.
+     * Warm [readAheadCount] ayahs after [currentIndex], skipping the immediate
+     * next item (ExoPlayer's playlist preload already covers that). Cancels any
+     * prior read-ahead so a skip/seek doesn't leave stale work running.
      */
     fun readAhead(uris: List<String>, currentIndex: Int) {
         readAheadJob?.cancel()
-        val next = uris.drop(currentIndex + 1).take(readAheadCount)
+        // drop(currentIndex + 2): +1 is "next" (player preload), +2 starts our
+        // deeper warm so we don't double-fetch the same URI.
+        val next = uris.drop(currentIndex + 2).take(readAheadCount)
         if (next.isEmpty()) return
         readAheadJob = scope.launch { cacheAll(next) }
     }

@@ -753,7 +753,15 @@ fun ReaderScreen(
                         }
                         is LazyItem.AyahItem -> {
                             val ayah = content.ayahs[item.ayahIndex]
-                            val isActive = activeAyah == ayah.number
+                            // Per-ayah derived reads so an ayah/word boundary
+                            // recomposes exactly the blocks whose bit flips —
+                            // never every visible AyahBlock (docs/PERFORMANCE.md).
+                            val isActive by remember(ayah.number, isThisSurahPlaying) {
+                                derivedStateOf {
+                                    isThisSurahPlaying &&
+                                        activeAyahState.value == ayah.number
+                                }
+                            }
                             val activeWord by remember(ayah.number) {
                                 derivedStateOf {
                                     activeWordState.value?.takeIf { it.ayah == ayah.number }
