@@ -104,37 +104,47 @@ fun Modifier.letterFadeIn(
  * - A separate overlay [Text] of one word re-shapes in isolation (no fade).
  * - [drawText] with a [Color] argument does **not** override existing
  *   [SpanStyle] colours — painting over a transparent active span stays
- *   invisible until the word becomes recited (the bug this API fixes).
+ *   invisible until the word becomes recited.
  * - Inflated paper/orange rects bleed onto neighbours.
+ * - Baking "upcoming" into span colours flashes the whole ayah when it
+ *   becomes active (Plain→Upcoming with no tween). Upcoming dim lives in
+ *   the draw phase instead, animated like gloss mode's ink alpha.
  *
  * So every bloom operates on the ayah's already-shaped [TextLayoutResult],
  * clipped to [TextLayoutResult.getPathForRange]:
- * - [InkReveal]: base word is full ink; paper coverage of `1 − glyphAlpha`
- *   yields the same upcoming→full curve as [letterFadeIn].
- * - [ColorReveal]: re-draw the shaped glyphs, [BlendMode.SrcIn]-tint them
- *   orange, then apply the [letterFadeIn] DstIn wash.
+ * - [UpcomingDim]: static paper cover (animated on ayah activation).
+ * - [InkReveal]: paper coverage of `1 − glyphAlpha` along the wash curve.
+ * - [ColorReveal]: re-draw shaped glyphs, [BlendMode.SrcIn]-tint orange,
+ *   then apply the [letterFadeIn] DstIn wash.
  */
 sealed class ShapedWordBloom {
     abstract val range: IntRange
-    abstract val progress: Float
-    abstract val restingAlpha: Float
+
+    /** Upcoming words: paper cover over full-ink glyphs. [coverAlpha] is
+     * animated 0→`(1 − resting)` when the ayah becomes active so the verse
+     * does not flash faint in one frame. */
+    data class UpcomingDim(
+        override val range: IntRange,
+        val paper: Color,
+        val coverAlpha: Float,
+    ) : ShapedWordBloom()
 
     /** First-pass ink: paper cover over full-ink glyphs, wash from
      * [restingAlpha] → 1 (same curve as [letterFadeIn]). */
     data class InkReveal(
         override val range: IntRange,
-        override val progress: Float,
+        val progress: Float,
         val paper: Color,
-        override val restingAlpha: Float,
+        val restingAlpha: Float,
     ) : ShapedWordBloom()
 
     /** Repeat (orange): shaped glyphs tinted to [color], wash from
      * [restingAlpha] → 1, then dissolve via [layerAlpha]. */
     data class ColorReveal(
         override val range: IntRange,
-        override val progress: Float,
+        val progress: Float,
         val color: Color,
-        override val restingAlpha: Float = 0f,
+        val restingAlpha: Float = 0f,
         val layerAlpha: Float = 1f,
     ) : ShapedWordBloom()
 }
@@ -165,17 +175,27 @@ fun Modifier.shapedWordBloom(
             val bounds = path.getBounds()
             if (bounds.isEmpty || bounds.width <= 0f) return@forEach
 
-            val p = bloom.progress.coerceIn(0f, 1f)
-            val w = bounds.width
-            val edge = (w * InkWashFeather).coerceAtLeast(1f)
-            val head = p * (w + edge)
-
             when (bloom) {
+                is ShapedWordBloom.UpcomingDim -> {
+                    val a = bloom.coverAlpha.coerceIn(0f, 1f)
+                    if (a <= 0f) return@forEach
+                    clipPath(path) {
+                        drawRect(
+                            color = bloom.paper.copy(alpha = a),
+                            topLeft = Offset(bounds.left, bounds.top),
+                            size = Size(bounds.width, bounds.height),
+                        )
+                    }
+                }
                 is ShapedWordBloom.InkReveal -> {
                     // Full ink is already on the page; pull paper back along the
                     // wash so glyphs breathe in. Clip to the word path — no
                     // inflated rects, so neighbours stay untouched.
+                    val p = bloom.progress.coerceIn(0f, 1f)
                     if (p >= 1f) return@forEach
+                    val w = bounds.width
+                    val edge = (w * InkWashFeather).coerceAtLeast(1f)
+                    val head = p * (w + edge)
                     val paperColors = stops.map { t ->
                         val s = inkSmootherstep(t)
                         val glyphAlpha = bloom.restingAlpha +
@@ -207,6 +227,10 @@ fun Modifier.shapedWordBloom(
                     if (bloom.layerAlpha <= 0f) return@forEach
                     // Re-draw the same shaped glyphs, tint them orange with
                     // SrcIn (keeps harf shapes), then DstIn-wash like letterFadeIn.
+                    val p = bloom.progress.coerceIn(0f, 1f)
+                    val w = bounds.width
+                    val edge = (w * InkWashFeather).coerceAtLeast(1f)
+                    val head = p * (w + edge)
                     val washColors = stops.map { t ->
                         val s = inkSmootherstep(t)
                         val a = bloom.restingAlpha +
