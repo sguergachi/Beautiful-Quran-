@@ -33,13 +33,13 @@ parameter).
 The no-gloss Arabic path (`ResponsiveHafsAyah`) cannot put `letterFadeIn` on
 the whole ayah. It keeps the shaped ayah as static full-ink spans and applies
 `shapedWordBloom` in the draw phase: upcoming words get a full-strength paper
-cover from the   first Upcoming frame — and the same cover is used while the ayah is recessed
-  (`dimmed`), so landing on the next verse does not change unread ink. Block
-  alpha stays at 1 for Arabic-only during recitation (no 0.32→1 brightening
-  ramp). First-pass pulls the cover back on the ink-wash curve; repeat
-  SrcIn-tints the same shaped glyphs orange then DstIn-washes. Progress is
-  read only at draw time, so the sweep never reshapes the ayah or paints
-  onto neighbouring words.
+cover from the first Upcoming frame — and the same cover is used while the ayah
+is recessed (`dimmed`), so landing on the next verse does not change unread ink.
+Block alpha stays at 1 during recitation in every mode (word-level Upcoming ink
+for gloss/English; paper cover for Arabic-only). First-pass pulls the cover back
+on the ink-wash curve; repeat SrcIn-tints the same shaped glyphs orange then
+DstIn-washes. Progress is read only at draw time, so the sweep never reshapes
+the ayah or paints onto neighbouring words.
 
 ### 2. Recomposition confined to one ayah
 
