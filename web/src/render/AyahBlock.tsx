@@ -1,8 +1,8 @@
 import { memo, useEffect, useMemo, useRef } from 'react'
 import type { ActiveWord, Ayah } from '../data/models'
 import type { ReadingMode } from '../data/settings'
-import { InkEngine } from '../engine/ink'
 import { WordUnit } from './WordUnit'
+import { HafsWord } from './HafsWord'
 import { VerseBookmarkRibbon } from './VerseBookmarkRibbon'
 
 function toArabicIndic(n: number): string {
@@ -89,31 +89,29 @@ function AyahBlockInner({
 
       {arabicOnly ? (
         <p className="hafs-ayah" dir="rtl">
-          {words.map((w) => {
-            const ink = InkEngine.word(w.position, activeWord, isActiveAyah, dimmed)
-            const opacity = InkEngine.inkAlpha(ink.state)
-            const isLit = ink.state === 'Active'
-            return (
-              <span
-                key={w.position}
-                ref={isLit ? (node) => { activeWordRef.current = node } : undefined}
-                className={`hafs-word${ink.repeat ? ' word-repeat' : ''}${
-                  isLit ? ' hafs-active' : ''
-                }`}
-                style={{
-                  opacity,
-                  color: ink.repeat ? 'var(--repeat)' : undefined,
-                }}
-                onClick={() => onPlayAyah(ayah.number, true)}
-                onContextMenu={(e) => {
-                  e.preventDefault()
-                  onHoldWord(ayah.number, w.position, w.arabic, w.translation)
-                }}
-              >
-                {w.arabic}{' '}
-              </span>
-            )
-          })}
+          {words.map((w) => (
+            <HafsWord
+              key={w.position}
+              word={w}
+              activeWord={isActiveAyah ? activeWord : null}
+              isActiveAyah={isActiveAyah}
+              dimmed={dimmed}
+              speed={speed}
+              rootRef={
+                isActiveAyah && activeWord?.wordPosition === w.position
+                  ? activeWordRef
+                  : undefined
+              }
+              onPlay={() => onPlayAyah(ayah.number, true)}
+              onHold={() =>
+                onHoldWord(ayah.number, w.position, w.arabic, w.translation)
+              }
+              onContextMenu={(e) => {
+                e.preventDefault()
+                onHoldWord(ayah.number, w.position, w.arabic, w.translation)
+              }}
+            />
+          ))}
           <span className="ayah-mark" style={{ opacity: markOpacity }}>
             ﴿{toArabicIndic(ayah.number)}﴾
           </span>

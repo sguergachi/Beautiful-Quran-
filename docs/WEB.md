@@ -201,8 +201,11 @@ may change *mechanism* to protect shaping, but must not degrade to static
 color, whole-ayah highlight, or non-animated state change.
 
 **v1 priority:** gloss + English first (prove engines + sync + paper UI).
-Arabic-only shaped bloom is Phase 3 — same quality bar, more DOM/Canvas
-work.
+Arabic-only uses per-word full-ink glyphs with a paper-cover bloom
+(`paperCoverMaskImage` / `HafsWord`) — same wash curve as gloss, without
+glyph alpha (semi-transparent Hafs marks look dirty). A single shaped
+paragraph with Range/Canvas clipping remains a later polish if joining
+artifacts appear.
 
 Repeat orange wash: second overlay on the same wash curve; dissolve when
 the repeat chain releases (`InkEngine` + `REPEAT_HIGHLIGHTING.md`).
@@ -267,7 +270,8 @@ sans.
 - Bookmarks ribbon; settings persistence; continue listening.
 
 ### Phase 4 — Arabic-only + depth features
-- Shaped Hafs bloom (`shapedWordBloom` equivalent).
+- ✅ Arabic-only paper-cover bloom (`HafsWord` / `paperCoverMaskImage` —
+  same wash curve as gloss; glyphs stay full ink).
 - Root Word Viewer (ink bleed) + morphology queries.
 - PWA installability; offline shell + DB + audio cache.
 - Optional Ink Lab (developer unlock).
