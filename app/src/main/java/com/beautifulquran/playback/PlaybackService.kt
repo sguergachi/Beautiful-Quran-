@@ -6,6 +6,7 @@ import android.net.ConnectivityManager
 import androidx.core.content.getSystemService
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.database.StandaloneDatabaseProvider
@@ -17,6 +18,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import com.beautifulquran.domain.BASMALAH_PLAYLIST_AYAH
 import java.io.File
 
 class PlaybackService : MediaSessionService() {
@@ -65,6 +67,7 @@ class PlaybackService : MediaSessionService() {
             }
 
         player.addListener(PrefetchListener(player, prefetcher))
+        player.addListener(BasmalahSkipListener(player))
 
         mediaSession = MediaSession.Builder(this, player).build()
     }
@@ -97,6 +100,26 @@ class PlaybackService : MediaSessionService() {
             return (0 until timeline.windowCount).mapNotNull { i ->
                 timeline.getWindow(i, window).mediaItem.localConfiguration?.uri?.toString()
             }
+        }
+    }
+
+    /**
+     * The basmalah lead-in streams a dedicated everyayah clip that sits
+     * outside the guaranteed ayah-per-file layout, so a reciter pack missing
+     * it must not kill chapter-start playback: when that item is what failed,
+     * skip into ayah 1 and keep reciting. The item stays in the playlist
+     * (indices keep their lead-in layout); errors on ayah items keep the
+     * player's normal error behavior.
+     */
+    private class BasmalahSkipListener(private val player: Player) : Player.Listener {
+
+        override fun onPlayerError(error: PlaybackException) {
+            val mediaId = player.currentMediaItem?.mediaId ?: return
+            val ayah = PlayerController.parseMediaId(mediaId)?.ayah ?: return
+            if (ayah != BASMALAH_PLAYLIST_AYAH || !player.hasNextMediaItem()) return
+            player.seekToNextMediaItem()
+            player.prepare()
+            player.play()
         }
     }
 

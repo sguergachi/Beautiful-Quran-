@@ -111,8 +111,10 @@ class HomeViewModel(
             val (filtered, ayahTarget) = filterSurahs(surahs, q)
             val nowPlaying = playerState.nowPlaying
             val floating = nowPlaying?.let { np ->
+                // The basmalah lead-in reports ayah 0; the float reads (and
+                // opens the reader at) the chapter opening, ayah 1.
                 surahs.firstOrNull { it.id == np.surahId }
-                    ?.let { FloatingPlaybackTarget(it, np.ayah) }
+                    ?.let { FloatingPlaybackTarget(it, np.ayah.coerceAtLeast(1)) }
             }
             val reciterName = nowPlaying?.let { names[it.reciterId] }
                 ?: names[prefs.reciterId].orEmpty()

@@ -208,6 +208,8 @@ class RootViewerViewModel(
             surahName = surahName.ifBlank { surahId.toString() },
             startPositionMs = startMs,
             preserveRepeatRange = false,
+            // A word audition is not a chapter opening — no basmalah item.
+            includeBasmalahLeadIn = false,
         )
     }
 
