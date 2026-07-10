@@ -787,14 +787,46 @@ select {
   /* mask-image set inline from washMaskImage() — smootherstep profile */
 }
 
+/* Arabic-only: full-ink glyphs + paper cover (never glyph alpha). */
 .hafs-word {
-  transition: opacity 450ms ease, color 450ms ease;
+  cursor: pointer;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
 }
 
-.hafs-word.hafs-active {
-  /* Snap like gloss Active — no mid-fade flicker on word hand-off. */
+.hafs-shell {
+  position: relative;
+  display: inline-block;
+}
+
+.hafs-glyph {
+  color: var(--ink);
+}
+
+.hafs-paper-cover {
+  position: absolute;
+  /* Pad for Hafs mark/AA overhang — local to the word box, no neighbour bleed. */
+  inset: -0.12em -0.06em;
+  background: var(--paper);
+  pointer-events: none;
+  opacity: 0;
+  /* Soften ON when recessing; Active wash snaps (transition none below). */
+  transition: opacity 120ms ease;
+}
+
+.hafs-word[data-state='Upcoming'] .hafs-paper-cover {
+  opacity: var(--upcoming-cover, 0.78);
+}
+
+.hafs-word[data-state='Active'] .hafs-paper-cover {
   transition: none;
-  opacity: 1;
+}
+
+.hafs-repeat-overlay {
+  position: absolute;
+  inset: 0;
+  color: var(--repeat);
+  pointer-events: none;
 }
 
 .ayah-translation {
@@ -812,14 +844,8 @@ select {
   text-align: right;
 }
 
-.hafs-word {
-  cursor: pointer;
-  -webkit-touch-callout: none;
-  touch-action: manipulation;
-}
-
 @media (hover: hover) {
-  .hafs-word:hover {
+  .hafs-word:hover .hafs-glyph {
     color: var(--accent);
   }
 }

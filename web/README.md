@@ -30,7 +30,7 @@ copied from the Android app assets — no separate data pipeline.
 src/engine/     pure TS ports of HighlightEngine, FocusEngine, InkEngine, fade math
 src/data/       WASM SQLite (sql.js) over quran.db + settings/bookmarks
 src/playback/   HTMLAudioElement + Media Session + 33 ms position tick
-src/render/     WordUnit / AyahBlock (directional ink wash via CSS mask + rAF)
+src/render/     WordUnit / HafsWord / AyahBlock (directional ink + paper-cover bloom)
 src/ui/         paper stack: Home | Reader | Settings + entrance cover + root viewer
                 ReaderFocusController keeps the playing ayah on its anchor
 src/store/      hand-rolled app store (boundary-only React updates)

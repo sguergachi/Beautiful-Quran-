@@ -1,26 +1,29 @@
+/**
+ * Arabic-only word: full-ink glyph + paper-cover bloom.
+ *
+ * Mirrors Android `ResponsiveHafsAyah` / `shapedWordBloom`: glyphs stay opaque
+ * full ink; Upcoming/recess use a paper cover; Active pulls that cover back on
+ * the same smootherstep wash as gloss `letterFadeIn`. Never dims via glyph
+ * alpha (semi-transparent Hafs marks look dirty).
+ */
 import {
   useLayoutEffect,
   useRef,
-  type CSSProperties,
   type MouseEvent,
   type MutableRefObject,
   type PointerEvent,
 } from 'react'
 import type { ActiveWord, Word } from '../data/models'
 import { InkEngine, InkState, getTuning, startRevealed, sweepMs } from '../engine/ink'
-import { cubicBezierEase, washMaskImage } from '../engine/fade'
-import { applyMask } from './inkWash'
+import { cubicBezierEase, paperCoverMaskImage, washMaskImage } from '../engine/fade'
+import { applyMask, runWash } from './inkWash'
 
 interface Props {
   word: Word
   activeWord: ActiveWord | null
   isActiveAyah: boolean
   dimmed: boolean
-  showGloss: boolean
-  showTransliteration: boolean
-  englishMode?: boolean
   speed: number
-  /** Optional external ref so the ayah can keep the active word in view. */
   rootRef?: MutableRefObject<HTMLElement | null>
   onPlay: () => void
   onHold: () => void
@@ -30,14 +33,11 @@ interface Props {
 const HOLD_MS = 450
 const MOVE_CANCEL_PX = 10
 
-export function WordUnit({
+export function HafsWord({
   word,
   activeWord,
   isActiveAyah,
   dimmed,
-  showGloss,
-  showTransliteration,
-  englishMode = false,
   speed,
   rootRef: externalRootRef,
   onPlay,
@@ -46,16 +46,16 @@ export function WordUnit({
 }: Props) {
   const ink = InkEngine.word(word.position, activeWord, isActiveAyah, dimmed)
   const localRootRef = useRef<HTMLSpanElement>(null)
-  const rootRef = externalRootRef ?? localRootRef
+  const coverRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
   const prevState = useRef(ink.state)
-  /** Captured at Active entry — stable for the whole time the word is lit. */
   const revealedOnEntry = useRef(false)
   const prevRepeat = useRef(ink.repeat)
   const holdTimer = useRef<number | null>(null)
   const startXY = useRef<{ x: number; y: number } | null>(null)
   const held = useRef(false)
   const tuning = getTuning()
+  const upcomingCover = 1 - tuning.upcomingAlpha
 
   const clearHold = () => {
     if (holdTimer.current != null) {
@@ -65,15 +65,13 @@ export function WordUnit({
   }
 
   /*
-   * Directional ink wash on Active entry.
-   * useLayoutEffect so the progress-0 mask lands before paint — otherwise the
-   * word flashes full ink for a frame (CSS Active opacity) then snaps faint
-   * when the mask arrives. Matches Android: snap base alpha to 1, let the
-   * letter sweep carry the reveal from the Upcoming floor.
+   * Paper-cover bloom on Active entry (Android shapedWordBloom InkReveal).
+   * useLayoutEffect so progress-0 cover lands before paint — matches Upcoming
+   * cover strength, then peels directionally RTL.
    */
   useLayoutEffect(() => {
-    const el = rootRef.current
-    if (!el) return
+    const cover = coverRef.current
+    if (!cover) return
     const prev = prevState.current
     const enteredActive = ink.state === InkState.Active && prev !== InkState.Active
     if (enteredActive) {
@@ -83,54 +81,59 @@ export function WordUnit({
     }
     prevState.current = ink.state
 
-    const rtl = !englishMode
     const t = getTuning()
     const resting = t.upcomingAlpha
+    const ease = {
+      x1: t.sweepEaseX1,
+      y1: t.sweepEaseY1,
+      x2: t.sweepEaseX2,
+      y2: t.sweepEaseY2,
+    }
+
+    if (ink.state === InkState.Upcoming) {
+      applyMask(cover, 'none')
+      cover.style.opacity = String(1 - resting)
+      return
+    }
 
     if (ink.state !== InkState.Active) {
-      applyMask(el, 'none')
+      applyMask(cover, 'none')
+      cover.style.opacity = '0'
       return
     }
 
     if (revealedOnEntry.current) {
-      applyMask(el, 'none')
+      applyMask(cover, 'none')
+      cover.style.opacity = '0'
       return
     }
 
-    // Still Active from a prior entry whose rAF is running — do not restart
-    // (restarting mid-word is itself a flicker).
+    // Still Active from a prior entry — do not restart mid-word.
     if (!enteredActive) return
 
     const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
-    const start = performance.now()
-    // Progress 0 mask = Upcoming floor across the glyph. Applied before paint.
-    applyMask(el, washMaskImage(0, resting, rtl, t.washFeather))
+    cover.style.opacity = '1'
+    applyMask(cover, paperCoverMaskImage(0, resting, true, t.washFeather))
 
-    let raf = 0
-    let cancelled = false
-    const tick = (now: number) => {
-      if (cancelled) return
-      const p = Math.min(1, (now - start) / duration)
-      const eased = cubicBezierEase(
-        p,
-        t.sweepEaseX1,
-        t.sweepEaseY1,
-        t.sweepEaseX2,
-        t.sweepEaseY2,
-      )
-      applyMask(el, washMaskImage(eased, resting, rtl, t.washFeather))
-      if (p < 1) raf = requestAnimationFrame(tick)
-      else applyMask(el, 'none')
-    }
-    raf = requestAnimationFrame(tick)
-    return () => {
-      cancelled = true
-      cancelAnimationFrame(raf)
-    }
-    // speed/duration captured at Active entry only — mid-word setting changes
-    // must not cancel and restart the sweep (that is itself a flicker).
+    return runWash(
+      duration,
+      ease,
+      cubicBezierEase,
+      (p, eased) => {
+        if (p >= 1) {
+          applyMask(cover, 'none')
+          cover.style.opacity = '0'
+          return
+        }
+        applyMask(cover, paperCoverMaskImage(eased, resting, true, t.washFeather))
+      },
+      () => {
+        applyMask(cover, 'none')
+        cover.style.opacity = '0'
+      },
+    )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.state, activeWord, englishMode])
+  }, [ink.state, activeWord])
 
   // Orange repeat overlay: wash in on chain entry, dissolve on release.
   useLayoutEffect(() => {
@@ -140,35 +143,34 @@ export function WordUnit({
     const enteredRepeat = ink.repeat && !was
     const leftRepeat = !ink.repeat && was
     prevRepeat.current = ink.repeat
-    const rtl = !englishMode
     const t = getTuning()
+    const ease = {
+      x1: t.sweepEaseX1,
+      y1: t.sweepEaseY1,
+      x2: t.sweepEaseX2,
+      y2: t.sweepEaseY2,
+    }
 
-    let raf = 0
-    let cancelled = false
     if (enteredRepeat) {
       const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
-      const start = performance.now()
       overlay.style.opacity = '1'
-      applyMask(overlay, washMaskImage(0, 0, rtl, t.washFeather))
-      const tick = (now: number) => {
-        if (cancelled) return
-        const p = Math.min(1, (now - start) / duration)
-        const eased = cubicBezierEase(
-          p,
-          t.sweepEaseX1,
-          t.sweepEaseY1,
-          t.sweepEaseX2,
-          t.sweepEaseY2,
-        )
-        applyMask(overlay, washMaskImage(eased, 0, rtl, t.washFeather))
-        if (p < 1) raf = requestAnimationFrame(tick)
-        else applyMask(overlay, 'none')
-      }
-      raf = requestAnimationFrame(tick)
-    } else if (leftRepeat) {
+      applyMask(overlay, washMaskImage(0, 0, true, t.washFeather))
+      return runWash(
+        duration,
+        ease,
+        cubicBezierEase,
+        (_p, eased) => {
+          applyMask(overlay, washMaskImage(eased, 0, true, t.washFeather))
+        },
+        () => applyMask(overlay, 'none'),
+      )
+    }
+    if (leftRepeat) {
       const duration = t.repeatFadeOutMs
-      const start = performance.now()
       applyMask(overlay, 'none')
+      const start = performance.now()
+      let raf = 0
+      let cancelled = false
       const tick = (now: number) => {
         if (cancelled) return
         const p = Math.min(1, (now - start) / duration)
@@ -177,28 +179,19 @@ export function WordUnit({
         else overlay.style.opacity = '0'
       }
       raf = requestAnimationFrame(tick)
-    } else if (ink.repeat) {
-      // Still in chain from a prior entry — hold orange, do not restart wash.
+      return () => {
+        cancelled = true
+        cancelAnimationFrame(raf)
+      }
+    }
+    if (ink.repeat) {
       overlay.style.opacity = '1'
     } else {
       overlay.style.opacity = '0'
       applyMask(overlay, 'none')
     }
-    return () => {
-      cancelled = true
-      cancelAnimationFrame(raf)
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.repeat, activeWord, englishMode])
-
-  const rtl = !englishMode
-  const style: CSSProperties = {
-    ['--upcoming-alpha' as string]: String(tuning.upcomingAlpha),
-  }
-
-  const label = englishMode ? word.translation || word.arabic : word.arabic
-  const secondaryAlpha =
-    ink.state === InkState.Active ? 1 : ink.state === InkState.Upcoming ? tuning.upcomingAlpha : 1
+  }, [ink.repeat, activeWord])
 
   const onPointerDown = (e: PointerEvent) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return
@@ -230,9 +223,9 @@ export function WordUnit({
         localRootRef.current = node
         if (externalRootRef) externalRootRef.current = node
       }}
-      className="word-unit word-ink"
+      className="hafs-word"
       data-state={ink.state}
-      style={style}
+      style={{ ['--upcoming-cover' as string]: String(upcomingCover) }}
       onClick={() => {
         if (held.current) {
           held.current = false
@@ -252,27 +245,19 @@ export function WordUnit({
         if (e.key === 'Enter' || e.key === ' ') onPlay()
       }}
     >
-      <span className="word-stack" dir={rtl ? 'rtl' : 'ltr'}>
-        <span className={englishMode ? 'word-gloss' : 'word-arabic'}>{label}</span>
+      <span className="hafs-shell">
+        <span className="hafs-glyph">{word.arabic}</span>
+        <span ref={coverRef} className="hafs-paper-cover" aria-hidden="true" />
         <span
           ref={overlayRef}
-          className="word-repeat-overlay"
+          className="hafs-repeat-overlay"
           aria-hidden="true"
           style={{ opacity: 0 }}
         >
-          {label}
+          {word.arabic}
         </span>
       </span>
-      {!englishMode && showGloss && word.translation ? (
-        <span className="word-gloss" style={{ opacity: secondaryAlpha }}>
-          {word.translation}
-        </span>
-      ) : null}
-      {showTransliteration && word.transliteration ? (
-        <span className="word-translit" style={{ opacity: secondaryAlpha * 0.75 }}>
-          {word.transliteration}
-        </span>
-      ) : null}
+      {' '}
     </span>
   )
 }

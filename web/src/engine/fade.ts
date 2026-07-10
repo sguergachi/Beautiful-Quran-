@@ -62,6 +62,31 @@ export function washMaskImage(
   return `linear-gradient(to right, ${stops.join(', ')})`
 }
 
+/**
+ * Paper-cover mask for Arabic-only shaped bloom (Android `shapedWordBloom`
+ * InkReveal). Glyphs stay full ink; this masks a paper overlay whose alpha is
+ * `1 − glyphAlpha`, so progress 0 matches UpcomingDim cover strength.
+ */
+export function paperCoverMaskImage(
+  progress: number,
+  restingAlpha: number,
+  rtl: boolean,
+  feather = 1.6,
+  stopCount = 17,
+): string {
+  const p = Math.min(1, Math.max(0, progress))
+  if (p >= 1) return 'none'
+  const n = Math.max(2, stopCount)
+  const stops: string[] = []
+  for (let i = 0; i < n; i++) {
+    const pos = i / (n - 1)
+    const glyphA = inkWashAlpha(pos, p, restingAlpha, rtl, feather)
+    const paperA = Math.min(1, Math.max(0, 1 - glyphA))
+    stops.push(`rgba(0,0,0,${paperA.toFixed(4)}) ${(pos * 100).toFixed(2)}%`)
+  }
+  return `linear-gradient(to right, ${stops.join(', ')})`
+}
+
 /** Cubic-bezier sample for sweep easing (matches InkEngine tuning defaults). */
 export function cubicBezierEase(
   t: number,

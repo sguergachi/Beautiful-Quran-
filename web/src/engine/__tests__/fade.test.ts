@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { inkSmootherstep, inkWashAlpha, washMaskImage, wholeWordInkAlpha } from '../fade'
+import {
+  inkSmootherstep,
+  inkWashAlpha,
+  paperCoverMaskImage,
+  washMaskImage,
+  wholeWordInkAlpha,
+} from '../fade'
 
 describe('fade math', () => {
   it('smootherstep is 0 at 0 and 1 at 1', () => {
@@ -26,5 +32,13 @@ describe('fade math', () => {
     const mask = washMaskImage(0.4, 0.22, true)
     expect(mask.startsWith('linear-gradient(to right,')).toBe(true)
     expect(mask.split('rgba').length).toBeGreaterThan(8)
+  })
+
+  it('paperCoverMaskImage is the inverse of glyph wash alpha', () => {
+    expect(paperCoverMaskImage(1, 0.22, true)).toBe('none')
+    const mask = paperCoverMaskImage(0, 0.22, true)
+    expect(mask.startsWith('linear-gradient(to right,')).toBe(true)
+    // Progress 0 → uniform paper cover of (1 − restingAlpha).
+    expect(mask).toContain('rgba(0,0,0,0.7800)')
   })
 })
