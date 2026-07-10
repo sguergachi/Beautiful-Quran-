@@ -85,6 +85,7 @@ import com.beautifulquran.ui.theme.IslamicBackToOriginCapsule
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.TranslationFontFamily
 import com.beautifulquran.ui.theme.gilded
+import com.beautifulquran.ui.theme.InkBloomLayer
 import com.beautifulquran.ui.theme.inkBloomOverlay
 import com.beautifulquran.ui.theme.letterFadeIn
 import com.beautifulquran.ui.theme.quietClickable
@@ -550,11 +551,15 @@ private class WordInkPalette(
         .copy(alpha = WordVisualState.Upcoming.inkAlpha())
         .compositeOver(paper)
 
-    fun colorFor(state: WordVisualState, repeat: Boolean): Color = when {
-        repeat -> repeatInk
-        state == WordVisualState.Upcoming -> fadedInk
+    /** Span colour only — orange repeat ink is painted as a draw-phase overlay
+     * so it can bloom directionally without splitting the shaped run. */
+    fun colorFor(state: WordVisualState): Color = when (state) {
+        WordVisualState.Upcoming -> fadedInk
         else -> fullInk
     }
+
+    val paperColor: Color get() = paper
+    val repeatInkColor: Color get() = repeatInk
 }
 
 @Composable
@@ -579,6 +584,21 @@ private fun rememberLetterSweeps(
         active = state == WordVisualState.Active,
         sweepMs = activeSweepMs.takeIf { state == WordVisualState.Active },
         startRevealed = rememberStartRevealed(state),
+    )
+}
+
+/** Orange wash per word in the repeat chain — same timing as gloss mode. */
+@Composable
+private fun rememberRepeatWashes(
+    states: List<WordVisualState>,
+    repeats: List<Boolean>,
+    activeSweepMs: Int?,
+): List<RepeatWash> = repeats.mapIndexed { index, repeat ->
+    rememberRepeatWash(
+        repeat = repeat,
+        sweepMs = activeSweepMs.takeIf {
+            states.getOrElse(index) { WordVisualState.Plain } == WordVisualState.Active
+        },
     )
 }
 
@@ -639,13 +659,11 @@ private fun ResponsiveHafsAyah(
     onWordLongClick: ((Word) -> Unit)? = null,
 ) {
     val palette = rememberWordInkPalette()
-    val paper = MaterialTheme.colorScheme.background
     val ayahMarkInk = LocalQuranAccents.current.gold
     val sweeps = rememberLetterSweeps(states, activeSweepMs)
+    val repeatWashes = rememberRepeatWashes(states, repeats, activeSweepMs)
     val activeIndex = states.indexOf(WordVisualState.Active)
     val activeIsRepeat = activeIndex >= 0 && repeats.getOrElse(activeIndex) { false }
-    // First-pass ink reveal only: repeat (orange) stays a whole-word colour.
-    val bloomSweep = activeIndex.takeIf { it >= 0 && !activeIsRepeat }?.let { sweeps[it] }
     val style = ArabicWordStyle.merge(
         TextStyle(
             fontFamily = HafsFontFamily,
@@ -657,20 +675,19 @@ private fun ResponsiveHafsAyah(
     var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     val hitSlopPx = with(LocalDensity.current) { 8.dp.toPx() }
 
-    // Static colours only: the active word is full ink (or orange if repeating).
-    // The directional bloom is a draw-phase paper overlay — reading the sweep
-    // here would recompose and reshape the whole ayah every frame.
-    val rendered = remember(ayah, states, repeats, palette, ayahMarkInk, fontSize) {
+    // Static colours only: upcoming is faint, everything else is full ink.
+    // First-pass bloom and orange repeat bloom are draw-phase overlays —
+    // reading those sweeps here would reshape the ayah every frame.
+    val rendered = remember(ayah, states, palette, ayahMarkInk, fontSize) {
         val ranges = ArrayList<IntRange>(ayah.words.size)
         val text = buildAnnotatedString {
             ayah.words.forEachIndexed { index, word ->
                 val state = states.getOrElse(index) { WordVisualState.Plain }
-                val repeat = repeats.getOrElse(index) { false }
                 val start = length
                 // One contiguous colour span per word keeps Uthmanic Hafs
                 // joining/ligatures intact. Per-glyph spans split shaping runs
                 // and caused a visible font flip (#133).
-                withStyle(SpanStyle(color = palette.colorFor(state, repeat))) {
+                withStyle(SpanStyle(color = palette.colorFor(state))) {
                     append(word.arabic)
                 }
                 ranges += start until length
@@ -689,27 +706,46 @@ private fun ResponsiveHafsAyah(
         }
         RenderedLineText(text = text, wordRanges = ranges)
     }
-    val activeRange = activeIndex.takeIf { it >= 0 }?.let { rendered.wordRanges.getOrNull(it) }
     Text(
         text = rendered.text,
         style = style,
         modifier = Modifier
             .fillMaxWidth()
             .widthIn(max = 560.dp)
-            .then(
-                if (bloomSweep != null && activeRange != null) {
-                    Modifier.inkBloomOverlay(
-                        progress = { bloomSweep.value },
-                        boxes = {
-                            layoutResult?.wordBoxes(activeRange).orEmpty()
-                        },
-                        paper = paper,
-                        rtl = true,
-                        restingAlpha = WordVisualState.Upcoming.inkAlpha(),
-                    )
-                } else {
-                    Modifier
+            .inkBloomOverlay(
+                layers = {
+                    val layout = layoutResult
+                    val layers = ArrayList<InkBloomLayer>(repeats.size + 1)
+                    // First-pass ink reveal on the active word (gloss-mode
+                    // letterFadeIn equivalent). Skipped while repeating —
+                    // the orange overlay carries the motion, same as WordUnit.
+                    if (activeIndex >= 0 && !activeIsRepeat) {
+                        val range = rendered.wordRanges.getOrNull(activeIndex)
+                        if (range != null) {
+                            layers += InkBloomLayer.CoverWithPaper(
+                                progress = sweeps[activeIndex].value,
+                                boxes = layout?.wordBoxes(range).orEmpty(),
+                                paper = palette.paperColor,
+                                restingAlpha = WordVisualState.Upcoming.inkAlpha(),
+                            )
+                        }
+                    }
+                    // Orange directional bloom for every word still in (or
+                    // dissolving out of) the repeat chain.
+                    repeatWashes.forEachIndexed { index, wash ->
+                        if (wash.alpha.value <= 0f) return@forEachIndexed
+                        val range = rendered.wordRanges.getOrNull(index) ?: return@forEachIndexed
+                        layers += InkBloomLayer.RevealColor(
+                            progress = wash.progress.value,
+                            boxes = layout?.wordBoxes(range).orEmpty(),
+                            color = palette.repeatInkColor,
+                            restingAlpha = 0f,
+                            layerAlpha = wash.alpha.value,
+                        )
+                    }
+                    layers
                 },
+                rtl = true,
             )
             .then(
                 if (onWordClick == null) {

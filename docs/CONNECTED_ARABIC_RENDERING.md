@@ -53,8 +53,12 @@ the word-by-word modes, without splitting the shaped run:
   (RTL for Arabic), so the reveal leads from the first letter (rightmost)
   exactly as `letterFadeIn` does.
 
-Repeat (orange) blooms in the responsive renderer remain a whole-word colour for
-now; only the first-pass ink reveal spreads.
+Repeat (orange) blooms use the same overlay path: each word in the repeat
+chain gets an `InkBloomLayer.RevealColor` wash (directional, then a solid
+hold, then dissolve via `layerAlpha`) while the base span stays full ink —
+matching gloss mode's orange overlay + `letterFadeIn`. Mask/overlay bleed
+around glyph boxes is generous enough that Hafs marks and overhangs are not
+clipped mid-fade.
 
 ## What The Sources Say
 
