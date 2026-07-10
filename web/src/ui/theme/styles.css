@@ -178,7 +178,7 @@ select {
   pointer-events: none;
 }
 
-/* Top sheet — full page */
+/* Top sheet — full page; nudge right when something peeks beneath */
 .sheet[data-depth='0'][data-active='true'] {
   transform: translateX(0) scale(1);
   opacity: 1;
@@ -186,44 +186,58 @@ select {
   box-shadow: none;
 }
 
-/* One sheet beneath — peeks on the left; clickable edge */
-.sheet[data-depth='1'] {
-  transform: translateX(-7%) scale(0.985);
-  opacity: 0.72;
-  pointer-events: none;
-  box-shadow: 8px 0 28px color-mix(in srgb, var(--ink) 12%, transparent);
+/* Yield a left gutter so pages beneath read as a stack of sheets. */
+.app-shell[data-stack='1'] .sheet[data-depth='0'][data-active='true'] {
+  transform: translateX(clamp(26px, 6.5vw, 44px)) scale(1);
+  box-shadow: -12px 0 32px color-mix(in srgb, var(--ink) 14%, transparent);
 }
 
-/* Two sheets beneath — deeper recess (Chapters under Reader under Settings) */
-.sheet[data-depth='2'] {
-  transform: translateX(-13%) scale(0.97);
-  opacity: 0.48;
+.app-shell[data-stack='2'] .sheet[data-depth='0'][data-active='true'] {
+  transform: translateX(clamp(44px, 11vw, 72px)) scale(1);
+  box-shadow: -12px 0 32px color-mix(in srgb, var(--ink) 14%, transparent);
+}
+
+/* Reader peek under Settings — middle strip of the gutter */
+.sheet[data-depth='1'] {
+  transform: translateX(clamp(18px, 4.5vw, 30px)) scale(0.988);
+  opacity: 0.82;
   pointer-events: none;
-  box-shadow: 10px 0 32px color-mix(in srgb, var(--ink) 10%, transparent);
+}
+
+/* Chapters peek under Reader (and under Settings) — far-left strip */
+.sheet[data-depth='2'] {
+  transform: translateX(0) scale(0.975);
+  opacity: 0.58;
+  pointer-events: none;
 }
 
 /* Sheets above the current stack — parked off to the right */
 .sheet[data-name='reader'][data-active='false']:not([data-depth='1']):not([data-depth='2']),
 .sheet[data-name='settings'][data-active='false'] {
-  transform: translateX(12%) scale(1);
+  transform: translateX(14%) scale(1);
   opacity: 0;
   pointer-events: none;
   box-shadow: none;
 }
 
-/* Left-edge hit target on peeking sheets — go back by touching the previous page */
+/* Left-edge hit target — covers the exposed gutter of the peeking sheet */
 .sheet-edge-back {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
-  width: clamp(28px, 8vw, 52px);
+  width: clamp(22px, 5.5vw, 36px);
   z-index: 30;
   pointer-events: auto;
-  cursor: pointer;
+  cursor: w-resize;
   background: transparent;
   border: none;
   padding: 0;
+}
+
+/* Reader peek under Settings gets a slightly wider strip */
+.sheet[data-name='reader'] > .sheet-edge-back {
+  width: clamp(28px, 7vw, 48px);
 }
 
 .sheet-edge-back:focus-visible {
