@@ -621,6 +621,10 @@ private fun ResponsiveHafsAyah(
     ayah: Ayah,
     states: List<WordVisualState>,
     repeats: List<Boolean>,
+    /** True while another ayah is the lyric line — cover every word with the
+     * same upcoming paper so unread ink does not change when this ayah
+     * becomes active. */
+    dimmed: Boolean,
     fontSize: TextUnit,
     activeSweepMs: Int?,
     onAyahClick: () -> Unit,
@@ -633,9 +637,15 @@ private fun ResponsiveHafsAyah(
     val repeatWashes = rememberRepeatWashes(states, repeats, activeSweepMs)
     val activeIndex = states.indexOf(WordVisualState.Active)
     val activeIsRepeat = activeIndex >= 0 && repeats.getOrElse(activeIndex) { false }
-    // Full upcoming paper cover whenever a word is Upcoming — never animate
-    // 0→1 on ayah activation (that briefly showed unread words at full ink).
     val upcomingCover = 1f - WordVisualState.Upcoming.inkAlpha()
+    // While recessed, the same upcoming paper cover sits on every word.
+    // Soften ON when leaving the lyric line; snap OFF when landing so unread
+    // ink is already at full cover in the same frame Upcoming covers apply.
+    val recessCover = animateFloatAsState(
+        targetValue = if (dimmed) upcomingCover else 0f,
+        animationSpec = if (dimmed) tween(120) else snap(),
+        label = "recessCover",
+    )
     val style = ArabicWordStyle.merge(
         TextStyle(
             fontFamily = HafsFontFamily,
@@ -685,25 +695,32 @@ private fun ResponsiveHafsAyah(
             .widthIn(max = 560.dp)
             .shapedWordBloom(
                 blooms = {
+                    val recess = recessCover.value
                     val blooms = ArrayList<ShapedWordBloom>(states.size + 1)
-                    // Upcoming dim: full paper cover from the first frame the
-                    // word is Upcoming, so the ayah never flashes full-ink
-                    // unread when playback lands on it.
+                    // Faint cover while recessed (all words) or Upcoming while
+                    // active. Same cover strength — ayah handoff does not
+                    // change unread ink; only the active word starts its bloom.
                     states.forEachIndexed { index, state ->
-                        if (state != WordVisualState.Upcoming) return@forEachIndexed
+                        val coverAlpha = when {
+                            recess > 0f -> recess
+                            state == WordVisualState.Upcoming -> upcomingCover
+                            else -> 0f
+                        }
+                        if (coverAlpha <= 0f) return@forEachIndexed
                         val range = rendered.wordRanges.getOrNull(index)
                             ?: return@forEachIndexed
                         blooms += ShapedWordBloom.UpcomingDim(
                             range = range,
                             paper = palette.paperColor,
-                            coverAlpha = upcomingCover,
+                            coverAlpha = coverAlpha,
                         )
                     }
                     // First-pass ink reveal: paper cover over the shaped full-ink
                     // glyphs, pulled back on the letterFadeIn curve. Skipped
                     // while repeating — orange carries the motion, same as
-                    // WordUnit.
-                    if (activeIndex >= 0 && !activeIsRepeat) {
+                    // WordUnit. At progress 0 this matches UpcomingDim, so the
+                    // first word hands off without a flash.
+                    if (activeIndex >= 0 && !activeIsRepeat && recess <= 0f) {
                         val range = rendered.wordRanges.getOrNull(activeIndex)
                         if (range != null) {
                             blooms += ShapedWordBloom.InkReveal(
@@ -717,17 +734,19 @@ private fun ResponsiveHafsAyah(
                     // Orange directional bloom: SrcIn-tint the shaped glyphs,
                     // then DstIn-wash — same motion as gloss mode's orange
                     // overlay, without re-shaping or painting neighbour rects.
-                    repeatWashes.forEachIndexed { index, wash ->
-                        if (wash.alpha.value <= 0f) return@forEachIndexed
-                        val range = rendered.wordRanges.getOrNull(index)
-                            ?: return@forEachIndexed
-                        blooms += ShapedWordBloom.ColorReveal(
-                            range = range,
-                            progress = wash.progress.value,
-                            color = palette.repeatInkColor,
-                            restingAlpha = 0f,
-                            layerAlpha = wash.alpha.value,
-                        )
+                    if (recess <= 0f) {
+                        repeatWashes.forEachIndexed { index, wash ->
+                            if (wash.alpha.value <= 0f) return@forEachIndexed
+                            val range = rendered.wordRanges.getOrNull(index)
+                                ?: return@forEachIndexed
+                            blooms += ShapedWordBloom.ColorReveal(
+                                range = range,
+                                progress = wash.progress.value,
+                                color = palette.repeatInkColor,
+                                restingAlpha = 0f,
+                                layerAlpha = wash.alpha.value,
+                            )
+                        }
                     }
                     blooms
                 },
@@ -847,13 +866,25 @@ fun AyahBlock(
     // State is read inside graphicsLayer so the dim animates draw-phase-only.
     // Fade out slowly when the selector blooms; snap back quickly when it
     // clears so a hand-initiated jump's decelerating scroll is visible.
+    //
+    // Arabic-only (no gloss) dims via the same path-clipped paper covers as
+    // Upcoming words, not via this block alpha — otherwise undimming
+    // 0.32→1 over 120ms brightens the whole verse on ayah handoff. Gloss /
+    // English still use the block recede (DESIGN.md: 32 %).
+    val arabicOnlyDim = readingMode != ReadingMode.ENGLISH_ONLY && !showGloss
     val blockAlpha = animateFloatAsState(
         targetValue = when {
             obscuredBySelector -> 0.07f
-            dimmed -> 0.32f
+            dimmed && !arabicOnlyDim -> 0.32f
             else -> 1f
         },
-        animationSpec = tween(if (obscuredBySelector) 600 else 120),
+        // Snap when becoming the active lyric line so Arabic-only (and gloss)
+        // never ramp through a brighter intermediate. Soft tween when receding.
+        animationSpec = when {
+            obscuredBySelector -> tween(600)
+            dimmed -> tween(120)
+            else -> snap()
+        },
         label = "ayahAlpha",
     )
 
@@ -970,6 +1001,9 @@ fun AyahBlock(
                         ayah = ayah,
                         states = ayah.words.map(::stateFor),
                         repeats = ayah.words.map(::inRepeatChain),
+                        // Same faint cover while another ayah is playing, so
+                        // landing on this verse does not change unread ink.
+                        dimmed = dimmed,
                         fontSize = ArabicWordStyle.fontSize * fontScale * ARABIC_ONLY_HAFS_FONT_MULTIPLIER,
                         activeSweepMs = sweepMs,
                         onAyahClick = onAyahClick,
@@ -980,6 +1014,9 @@ fun AyahBlock(
             }
             if (showTranslation && readingMode == ReadingMode.ARABIC_ENGLISH) {
                 Spacer(Modifier.height(12.dp))
+                // Arabic-only keeps blockAlpha at 1 while dimmed (paper covers
+                // handle the Arabic); the translation still needs to recede.
+                val translationAlpha = if (arabicOnlyDim && dimmed) 0.66f * 0.32f else 0.66f
                 Text(
                     text = highlightMatches(
                         text = ayah.translation,
@@ -991,7 +1028,7 @@ fun AyahBlock(
                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * (0.9f + 0.1f * fontScale),
                         lineHeight = 26.sp,
                     ),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = translationAlpha),
                     modifier = Modifier
                         .fillMaxWidth()
                         .quietClickable(onClick = onAyahClick),
