@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "postinstall": "cp node_modules/sql.js/dist/sql-wasm.wasm public/sql-wasm.wasm && cp node_modules/sql.js/dist/sql-wasm-browser.wasm public/sql-wasm-browser.wasm",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "build:pages": "tsc --noEmit && VITE_BASE=/Beautiful-Quran-/app/ vite build --outDir ../docs/app --emptyOutDir",
