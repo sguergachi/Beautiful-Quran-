@@ -32,6 +32,7 @@ src/data/       WASM SQLite (sql.js) over quran.db + settings/bookmarks
 src/playback/   HTMLAudioElement + Media Session + 33 ms position tick
 src/render/     WordUnit / AyahBlock (directional ink wash via CSS mask + rAF)
 src/ui/         paper stack: Home | Reader | Settings + entrance cover + root viewer
+                ReaderFocusController keeps the playing ayah on its anchor
 src/store/      hand-rolled app store (boundary-only React updates)
 ```
 
