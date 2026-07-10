@@ -16,7 +16,7 @@ ANDROID_DEVICE_ID="${ANDROID_DEVICE_ID:-pixel_7}"
 CMDLINE_TOOLS_VERSION="${ANDROID_CMDLINE_TOOLS_VERSION:-14742923}"
 CMDLINE_TOOLS_ZIP="commandlinetools-linux-${CMDLINE_TOOLS_VERSION}_latest.zip"
 CMDLINE_TOOLS_URL="${ANDROID_CMDLINE_TOOLS_URL:-https://dl.google.com/android/repository/$CMDLINE_TOOLS_ZIP}"
-JDK_URL="${ANDROID_DEV_JDK_URL:-https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse?project=jdk}"
+JDK_URL="${ANDROID_DEV_JDK_URL:-https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse?project=jdk}"
 
 SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
 AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
@@ -51,14 +51,14 @@ install_java_if_missing() {
   require_cmd curl
   require_cmd tar
 
-  log "Installing local JDK 17 in $ANDROID_DEV_JDK_HOME"
+  log "Installing local JDK 21 in $ANDROID_DEV_JDK_HOME"
   tmp_dir="$(mktemp -d)"
   trap 'rm -rf "$tmp_dir"' EXIT
 
-  curl --fail --location --output "$tmp_dir/jdk17.tar.gz" "$JDK_URL"
+  curl --fail --location --output "$tmp_dir/jdk21.tar.gz" "$JDK_URL"
   rm -rf "$ANDROID_DEV_JDK_HOME"
   mkdir -p "$ANDROID_DEV_JDK_HOME"
-  tar -xzf "$tmp_dir/jdk17.tar.gz" --strip-components=1 -C "$ANDROID_DEV_JDK_HOME"
+  tar -xzf "$tmp_dir/jdk21.tar.gz" --strip-components=1 -C "$ANDROID_DEV_JDK_HOME"
 
   export JAVA_HOME="$ANDROID_DEV_JDK_HOME"
   export PATH="$JAVA_HOME/bin:$PATH"

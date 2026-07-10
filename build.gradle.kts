@@ -1,6 +1,13 @@
+buildscript {
+    dependencies {
+        // AGP 9 ships built-in Kotlin against KGP 2.2.10+; pin a newer KGP so
+        // the Compose and Serialization plugins resolve against Kotlin 2.4.0.
+        classpath(libs.kotlin.gradle.plugin)
+    }
+}
+
 plugins {
     alias(libs.plugins.android.application) apply false
-    alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.kotlin.serialization) apply false
 }

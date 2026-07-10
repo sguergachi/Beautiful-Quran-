@@ -7,7 +7,7 @@ documentation lives.
 
 Quick essentials (details and rationale in AGENTS.md):
 
-- Test with `./gradlew testDebugUnitTest` (JDK 17); run it before committing.
+- Test with `./gradlew testDebugUnitTest` (JDK 21); run it before committing.
 - `app/src/main/assets/quran.db` is a committed asset — only regenerate it
   (`python3 tools/build_db.py`) when deliberately changing data, and bump
   `QuranDatabase.DB_FILE_NAME` whenever its content changes.

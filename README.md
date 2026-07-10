@@ -42,8 +42,8 @@ scripts/setup_android_emulator.sh
 scripts/run_android_app.sh
 ```
 
-The setup script installs/verifies JDK 17, using
-`~/.local/share/android-dev/jdk-17` if no system Java is available, downloads
+The setup script installs/verifies JDK 21, using
+`~/.local/share/android-dev/jdk-21` if no system Java is available, downloads
 Android command-line tools to `~/Android/Sdk`, installs API 35 emulator
 packages, writes `local.properties`, builds `app/src/main/assets/quran.db` if
 needed, and creates an AVD named `BeautifulQuran_API_35`.
