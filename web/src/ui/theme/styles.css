@@ -400,32 +400,6 @@ select {
   margin: 0 auto;
 }
 
-.search-row input {
-  width: 100%;
-  padding: 0.75rem 0;
-  font-size: 16px;
-  border-bottom: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
-  opacity: 0.9;
-  cursor: text;
-}
-
-@media (hover: hover) {
-  .search-row input:hover,
-  .search-row input:focus {
-    border-bottom-color: color-mix(in srgb, var(--accent) 45%, transparent);
-    opacity: 1;
-  }
-}
-
-.search-row input:focus {
-  border-bottom-color: color-mix(in srgb, var(--accent) 45%, transparent);
-  opacity: 1;
-}
-
-.search-row input::placeholder {
-  color: var(--ink-muted);
-}
-
 .continue {
   display: block;
   max-width: var(--home-max);
@@ -984,37 +958,281 @@ select {
   min-height: 48px;
 }
 
-.setting-row select {
-  text-align: end;
-  color: var(--accent);
-  max-width: 62%;
-  padding: 0.45rem 0;
-  min-height: 44px;
-  font-size: 16px;
+/* —— Base UI paper kit —— */
+.paper-field-label {
+  color: var(--ink);
+  flex: 1;
+  min-width: 0;
 }
 
-.setting-row .toggle {
-  color: var(--accent);
-  min-width: 44px;
-  min-height: 44px;
-  text-align: end;
-  padding: 0.45rem 0;
+.paper-select-trigger {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 0.4rem;
+  max-width: 68%;
+  min-height: 44px;
+  padding: 0.35rem 0;
+  color: var(--accent);
+  font-size: 16px;
+  text-align: end;
+  cursor: pointer;
+  background: none;
+  border: none;
+  font-family: inherit;
+}
+
+.paper-select-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.paper-select-icon {
+  flex-shrink: 0;
+  color: var(--ink-muted);
+  display: inline-flex;
+  transition: transform 180ms ease;
+}
+
+.paper-select-trigger[data-popup-open] .paper-select-icon {
+  transform: rotate(180deg);
+  color: var(--accent);
 }
 
 @media (hover: hover) {
-  .setting-row .toggle:hover {
-    opacity: 0.75;
+  .paper-select-trigger:hover {
+    opacity: 0.82;
   }
 }
 
-.setting-row input[type='range'] {
-  width: min(9rem, 40vw);
-  accent-color: var(--accent);
-  cursor: pointer;
+.paper-select-positioner {
+  z-index: 50;
+  outline: none;
+}
+
+.paper-select-popup {
+  box-sizing: border-box;
+  min-width: var(--anchor-width, 10rem);
+  max-width: min(22rem, calc(100vw - 2rem));
+  max-height: min(18rem, 50vh);
+  overflow: auto;
+  padding: 0.35rem 0;
+  background: var(--paper-surface);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  /* Soft paper lift without Material elevation chrome */
+  filter: drop-shadow(0 10px 28px color-mix(in srgb, var(--ink) 16%, transparent));
+  transform-origin: top right;
+  animation: paper-popup-in 160ms var(--ease-sheet);
+}
+
+.paper-select-popup-wide {
+  min-width: max(var(--anchor-width, 12rem), 16rem);
+}
+
+@keyframes paper-popup-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.paper-select-list {
+  outline: none;
+  padding: 0;
+  margin: 0;
+}
+
+.paper-select-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 1rem;
   min-height: 44px;
+  cursor: pointer;
+  outline: none;
+  color: var(--ink);
+  user-select: none;
+}
+
+.paper-select-item[data-highlighted] {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+}
+
+.paper-select-item[data-selected] {
+  color: var(--accent);
+}
+
+.paper-select-item-text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.paper-select-check {
+  flex-shrink: 0;
+  color: var(--accent);
+  display: inline-flex;
+  opacity: 0;
+}
+
+.paper-select-item[data-selected] .paper-select-check {
+  opacity: 1;
+}
+
+.paper-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 2.6rem;
+  height: 1.45rem;
+  flex-shrink: 0;
+  padding: 0.15rem;
+  border: none;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
+  cursor: pointer;
+  transition: background-color 180ms ease;
+}
+
+.paper-switch[data-checked] {
+  background: color-mix(in srgb, var(--accent) 78%, var(--paper));
+}
+
+.paper-switch:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.paper-switch-thumb {
+  display: block;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 50%;
+  background: var(--paper-surface);
+  transition: translate 180ms var(--ease-sheet);
+  translate: 0 0;
+}
+
+.paper-switch[data-checked] .paper-switch-thumb {
+  translate: 1.15rem 0;
+}
+
+.paper-field-slider {
+  display: block;
+  padding-block: 0.95rem;
+}
+
+.paper-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  width: 100%;
+}
+
+.paper-slider-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.paper-slider-value {
+  color: var(--accent);
+  font-variant-numeric: lining-nums;
+  font-size: 0.95rem;
+}
+
+.paper-slider-control {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  touch-action: none;
+  user-select: none;
+}
+
+.paper-slider-track {
+  position: relative;
+  width: 100%;
+  height: 2px;
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
+}
+
+.paper-slider-indicator {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  background: var(--accent);
+}
+
+.paper-slider-thumb {
+  position: absolute;
+  top: 50%;
+  width: 0.95rem;
+  height: 0.95rem;
+  margin-top: -0.475rem;
+  margin-left: -0.475rem;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: grab;
+}
+
+.paper-slider-thumb:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.paper-slider-thumb:active {
+  cursor: grabbing;
+}
+
+.paper-input {
+  width: 100%;
+  font: inherit;
+  font-size: 16px;
+  color: inherit;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0.55rem 0;
+  border-radius: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.paper-input::placeholder {
+  color: color-mix(in srgb, var(--ink-muted) 70%, transparent);
+}
+
+.search-row .paper-input {
+  width: 100%;
+  padding: 0.65rem 0;
+  color: var(--ink);
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  transition: border-color 180ms ease;
+}
+
+@media (hover: hover) {
+  .search-row .paper-input:hover,
+  .search-row .paper-input:focus {
+    border-bottom-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+}
+
+.search-row .paper-input:focus {
+  border-bottom-color: var(--accent);
 }
 
 /* —— Ink bleed / root viewer —— */

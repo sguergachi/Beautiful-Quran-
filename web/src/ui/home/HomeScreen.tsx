@@ -4,6 +4,7 @@ import {
   IconPlay,
   IconPrev,
 } from '../icons/PlaybackIcons'
+import { PaperInput } from '../kit'
 import { appStore, useAppState, COVER_LAYER, READER_LAYER } from '../../store/appStore'
 import type { StackLayer } from '../paper/stack'
 
@@ -59,13 +60,13 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
         </header>
 
         <div className="search-row">
-          <input
+          <PaperInput
             id="chapter-search"
             name="chapter-search"
             type="search"
             placeholder="Search chapters…"
             value={state.search}
-            onChange={(e) => appStore.setSearch(e.target.value)}
+            onValueChange={(v) => appStore.setSearch(v)}
             aria-label="Search chapters"
           />
         </div>
