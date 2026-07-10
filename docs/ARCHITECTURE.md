@@ -117,10 +117,14 @@ per-item derivedStateOf in the reader list  ──►  one ayah recomposes
   (a `MediaSessionService`), mirroring player callbacks into a
   `PlayerUiState` StateFlow. Playlists are one `MediaItem` per ayah with
   `mediaId = "surah:ayah:reciterId"`, so `currentMediaItemIndex` ↔ ayah is a
-  trivial mapping and ayah-repeat is just `REPEAT_MODE_ONE`. Range-repeat
-  (loop ayah *m*..*n*) is enforced in the controller's listener: whenever the
-  player crosses past the range's last item (auto-advance, "next", or end of
-  playlist) it seeks back to the range's first item.
+  trivial mapping and ayah-repeat is just `REPEAT_MODE_ONE`. Surahs that open
+  with a basmalah preface prepend a dedicated everyayah basmalah clip
+  (`mediaId` ayah `0`, URI `…/bismillah.mp3` or `…/001000.mp3`) so chapter-start
+  playback hears the basmalah before ayah 1; playlist indices shift by one when
+  that lead-in is present. Range-repeat (loop ayah *m*..*n*) is enforced in the
+  controller's listener: whenever the player crosses past the range's last item
+  (auto-advance, "next", or end of playlist) it seeks back to the range's first
+  item.
 - `ReaderViewModel.activeWord` runs the polling loop only while this surah is
   audible (`flatMapLatest` on the playing state) and publishes only *changes*
   (word boundaries), so downstream recomposition happens ~2–3×/sec during

@@ -44,6 +44,14 @@ class InkEngineTest {
     }
 
     @Test
+    fun `basmalah preface ink follows active and recess`() {
+        assertEquals(State.Plain, InkEngine.prefaceState(isActive = false, dimmed = false))
+        assertEquals(State.Active, InkEngine.prefaceState(isActive = true, dimmed = false))
+        assertEquals(State.Active, InkEngine.prefaceState(isActive = true, dimmed = true))
+        assertEquals(State.Upcoming, InkEngine.prefaceState(isActive = false, dimmed = true))
+    }
+
+    @Test
     fun `active ayah with no lit word rests every word at upcoming`() {
         // E.g. during the basmalah lead before the first word's segment.
         assertEquals(

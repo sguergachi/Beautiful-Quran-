@@ -1,5 +1,6 @@
 package com.beautifulquran.playback
 
+import com.beautifulquran.domain.BASMALAH_PLAYLIST_AYAH
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -16,6 +17,16 @@ class MediaIdTest {
         assertEquals("2:255:7", id)
         assertEquals(
             NowPlaying(surahId = 2, ayah = 255, reciterId = 7),
+            PlayerController.parseMediaId(id),
+        )
+    }
+
+    @Test
+    fun `basmalah lead-in uses ayah zero in the mediaId`() {
+        val id = PlayerController.mediaId(surah = 18, ayah = BASMALAH_PLAYLIST_AYAH, reciterId = 1)
+        assertEquals("18:0:1", id)
+        assertEquals(
+            NowPlaying(surahId = 18, ayah = BASMALAH_PLAYLIST_AYAH, reciterId = 1),
             PlayerController.parseMediaId(id),
         )
     }

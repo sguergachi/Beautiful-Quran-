@@ -185,4 +185,16 @@ object InkEngine {
      */
     fun startRevealed(previous: State, current: State): Boolean =
         current == State.Active && previous == State.Recited
+
+    /**
+     * Ink for the surah-header basmalah calligraphy (a single glyph, not
+     * word-timed): Active while the dedicated lead-in clip plays, Upcoming
+     * while another ayah is recited (same recess as verse words), Plain at
+     * rest on the page.
+     */
+    fun prefaceState(isActive: Boolean, dimmed: Boolean): State = when {
+        isActive -> State.Active
+        dimmed -> State.Upcoming
+        else -> State.Plain
+    }
 }
