@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 /** A verse the reader has marked to return to, identified by [surahId] + [ayah].
  * [createdAt] is epoch millis at the moment it was marked — unused by the reader
- * strip (which orders by position) but kept for a future global "marked verses"
+ * list (which orders by position) but kept for a future global "marked verses"
  * index that would list newest-first. */
 data class Bookmark(
     val surahId: Int,
@@ -33,7 +33,7 @@ class BookmarkRepository(context: Context) {
 
     private val _bookmarks = MutableStateFlow(read())
 
-    /** All bookmarks, ordered by surah then ayah so the reader strip and any
+    /** All bookmarks, ordered by surah then ayah so the reader ribbons and any
      * index render in reading order. */
     val bookmarks: StateFlow<List<Bookmark>> = _bookmarks
 
