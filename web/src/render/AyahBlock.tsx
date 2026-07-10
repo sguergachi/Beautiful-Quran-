@@ -3,6 +3,7 @@ import type { ActiveWord, Ayah } from '../data/models'
 import type { ReadingMode } from '../data/settings'
 import { InkEngine } from '../engine/ink'
 import { WordUnit } from './WordUnit'
+import { VerseBookmarkRibbon } from './VerseBookmarkRibbon'
 
 function toArabicIndic(n: number): string {
   return String(n).replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)]!)
@@ -20,10 +21,12 @@ interface Props {
   showTranslation: boolean
   bookmarked: boolean
   bookmarkSide: 'left' | 'right'
+  bookmarkChromeAlpha?: number
+  bookmarkInteractive?: boolean
   speed: number
   fontScale: number
   onPlayAyah: (ayah: number, fromWord?: boolean) => void
-  onToggleBookmark: (ayah: number) => void
+  onToggleBookmark: (ayah: number) => boolean
   onHoldWord: (ayah: number, position: number, arabic: string, translation: string) => void
 }
 
@@ -39,6 +42,8 @@ function AyahBlockInner({
   showTranslation,
   bookmarked,
   bookmarkSide,
+  bookmarkChromeAlpha = 1,
+  bookmarkInteractive = true,
   speed,
   fontScale,
   onPlayAyah,
@@ -58,13 +63,13 @@ function AyahBlockInner({
       style={{ ['--font-scale' as string]: String(fontScale) }}
       id={`ayah-${ayah.number}`}
     >
-      <button
-        type="button"
-        className="bookmark-tip"
-        data-side={bookmarkSide}
-        data-on={bookmarked}
-        aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark verse'}
-        onClick={() => onToggleBookmark(ayah.number)}
+      <VerseBookmarkRibbon
+        bookmarked={bookmarked}
+        focused={focused}
+        side={bookmarkSide}
+        chromeAlpha={bookmarkChromeAlpha}
+        interactive={bookmarkInteractive}
+        onToggle={() => onToggleBookmark(ayah.number)}
       />
 
       {arabicOnly ? (
