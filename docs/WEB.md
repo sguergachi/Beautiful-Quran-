@@ -5,8 +5,11 @@ engines (Focus, Highlight, Ink), the same paper metaphor, and the same
 performance bar as the Android app. This document is the working spec for
 implementation; it does not change Android behavior.
 
-**Status:** plan only. No `web/` package yet. Approve or amend this before
-coding.
+**Status: implemented (v1).** The `web/` package ships the three pure engines
+with Vitest parity, WASM SQLite over the committed `quran.db`, paper-stack UI
+(Home / Reader / Settings), directional ink wash, focus follow, bookmarks,
+root viewer, and a basic PWA shell. See `web/README.md` for run instructions.
+The sections below remain the design record and quality bar.
 
 ---
 

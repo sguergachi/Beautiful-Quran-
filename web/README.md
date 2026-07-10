@@ -1,0 +1,39 @@
+# Beautiful Quran — Web
+
+Browser port of Beautiful Quran: the same Focus / Highlight / Ink engines,
+the same paper metaphor, and lyric-style word highlighting synced to
+recitation audio.
+
+## Quick start
+
+```bash
+cd web
+npm install
+npm run dev      # http://localhost:5173
+npm test         # engine unit tests (Vitest)
+npm run build    # static site → dist/
+```
+
+Requires Node 20+. The committed `public/quran.db` (~27 MB) and fonts are
+copied from the Android app assets — no separate data pipeline.
+
+## Architecture
+
+```
+src/engine/     pure TS ports of HighlightEngine, FocusEngine, InkEngine, fade math
+src/data/       WASM SQLite (sql.js) over quran.db + settings/bookmarks
+src/playback/   HTMLAudioElement + Media Session + 33 ms position tick
+src/render/     WordUnit / AyahBlock (directional ink wash via CSS mask + rAF)
+src/ui/         paper stack: Home | Reader | Settings + root-viewer ink bleed
+src/store/      hand-rolled app store (boundary-only React updates)
+```
+
+Engines are DOM-free and unit-tested against the Android JVM suites. See
+[`docs/WEB.md`](../docs/WEB.md) for the full plan and quality bar.
+
+## Notes
+
+- First load downloads `quran.db`; a service worker caches the shell + DB.
+- Audio streams from everyayah.com and can be cached by the browser.
+- Hold a word to open the Root Word Viewer (ink bleed).
+- Themes: Paper / Nightfall / Royal green (Settings).

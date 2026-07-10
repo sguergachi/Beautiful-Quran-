@@ -8,6 +8,8 @@ captures/
 .externalNativeBuild/
 .cxx/
 .android-emulator.log
+web/node_modules/
+web/dist/
 
 # Source data cache for tools/build_db.py. The built database is committed
 # as app/src/main/assets/quran.db so normal app builds are offline.
