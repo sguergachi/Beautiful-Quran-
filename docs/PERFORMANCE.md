@@ -31,10 +31,10 @@ chrome (`chromeAlpha: () -> Float` — a deferred read, not a Float
 parameter).
 
 The no-gloss Arabic path (`ResponsiveHafsAyah`) cannot put `letterFadeIn` on
-the whole ayah, and cannot split the active word into per-glyph colour spans
-(that breaks Hafs joining). It draws the active word at full ink, then applies
-`inkBloomOverlay` — a paper gradient clipped to that word's layout boxes —
-so the directional bloom still lives entirely in the draw phase.
+the whole ayah. It keeps the shaped ayah as static colour spans and places a
+word-local overlay `Text` on the active (or repeating) word's layout box,
+running the same `letterFadeIn` mask gloss mode uses. The mask is scoped to
+that overlay's draw scope, so it never paints onto neighbouring words.
 
 ### 2. Recomposition confined to one ayah
 
