@@ -263,6 +263,11 @@ class PlayerController(private val context: Context) {
         if (c.isPlaying) c.pause() else c.play()
     }
 
+    /** Pause if playing — used by one-shot word clips that must not resume. */
+    fun pause() = withController { c ->
+        if (c.isPlaying) c.pause()
+    }
+
     /**
      * Seeks to [ayah] at [positionMs] within it (when the ayah is in the
      * loaded playlist) and optionally starts playback. The four public

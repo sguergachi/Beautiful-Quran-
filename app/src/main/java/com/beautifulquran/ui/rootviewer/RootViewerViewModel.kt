@@ -6,6 +6,7 @@ import com.beautifulquran.data.QuranRepository
 import com.beautifulquran.data.SettingsRepository
 import com.beautifulquran.data.model.Reciter
 import com.beautifulquran.data.model.RootOccurrence
+import com.beautifulquran.data.model.Segment
 import com.beautifulquran.data.model.Word
 import com.beautifulquran.data.model.WordMorphology
 import com.beautifulquran.playback.PlayerController
@@ -30,6 +31,24 @@ data class RootViewerUiState(
     /** True while the header speaker is auditioning this word. */
     val isPlayingWord: Boolean = false,
 )
+
+/**
+ * Start/end ms for a single word clip. Prefer the segment's own end; if
+ * missing or non-positive, use the next word's start so we still stop
+ * before the following word. Null when the word has no usable timing.
+ */
+internal fun wordClipBounds(segments: List<Segment>, position: Int): Pair<Long, Long>? {
+    val segment = segments.firstOrNull { it.position == position } ?: return null
+    val startMs = segment.startMs.coerceAtLeast(0L)
+    val ownEnd = segment.endMs.takeIf { it > startMs }
+    val nextStart = segments
+        .filter { it.position > position }
+        .minByOrNull { it.position }
+        ?.startMs
+        ?.takeIf { it > startMs }
+    val endMs = ownEnd ?: nextStart ?: return null
+    return startMs to endMs
+}
 
 /**
  * Loads morphology + root concordance for the long-pressed word. The screen
@@ -76,9 +95,9 @@ class RootViewerViewModel(
     }
 
     /**
-     * Plays the open word with the currently selected reciter, from its
-     * timing mark when available, and pauses at the word's end so the
-     * header speaker is a pronunciation cue — not a full-ayah start.
+     * Plays **only** the open word with the currently selected reciter —
+     * from its timing mark to its end, then pauses. Without a usable
+     * segment the speaker is a no-op (never starts the rest of the ayah).
      */
     fun playCurrentWord() {
         val st = _ui.value
@@ -89,17 +108,15 @@ class RootViewerViewModel(
             if (reciters.isEmpty()) return@launch
             val reciterId = settings.settings.value.reciterId
             val reciter = reciters.firstOrNull { it.id == reciterId } ?: reciters.first()
-            val segment = repository.timings(reciter.id, st.surahId)[st.ayah]
-                ?.firstOrNull { it.position == word.position }
-            val startMs = segment?.startMs ?: 0L
-            val endMs = segment?.endMs?.takeIf { it > startMs }
+            val segments = repository.timings(reciter.id, st.surahId)[st.ayah].orEmpty()
+            val clip = wordClipBounds(segments, word.position) ?: return@launch
             startWordAudition(
                 surahId = st.surahId,
                 ayah = st.ayah,
                 surahName = st.surahNameTransliteration,
                 reciter = reciter,
-                startMs = startMs,
-                endMs = endMs,
+                startMs = clip.first,
+                endMs = clip.second,
             )
         }
     }
@@ -110,57 +127,69 @@ class RootViewerViewModel(
         surahName: String,
         reciter: Reciter,
         startMs: Long,
-        endMs: Long?,
+        endMs: Long,
     ) {
-        stopWordAudition(pauseIfPlaying = false)
+        stopWordAudition(pauseIfPlaying = true)
         player.clearRepeatRange()
-        val np = player.state.value.nowPlaying
-        val canSeekInPlace = np != null &&
-            np.surahId == surahId &&
-            np.reciterId == reciter.id
-        if (canSeekInPlace) {
-            player.seekToWordAndPlay(ayah, startMs)
-        } else {
-            loadAyahAndPlay(surahId, ayah, surahName, reciter, startMs)
-        }
+        // Always load a one-ayah playlist so a late pause cannot spill into
+        // the next ayah, and seek lands on this verse even if the reader had
+        // a different surah loaded.
+        loadAyahAndPlay(surahId, ayah, surahName, reciter, startMs)
         _ui.value = _ui.value.copy(isPlayingWord = true)
         wordClipJob = viewModelScope.launch {
-            if (canSeekInPlace) {
-                // Seek is a no-op when the ayah isn't in the loaded playlist
-                // (e.g. Timings Lab left a different one-ayah item). Fall back.
-                delay(PLAY_SETTLE_MS)
-                val now = player.state.value.nowPlaying
-                val playing = player.state.value.isPlaying || player.state.value.isBuffering
-                if (now?.ayah != ayah || !playing) {
-                    loadAyahAndPlay(surahId, ayah, surahName, reciter, startMs)
-                    delay(PLAY_SETTLE_MS)
-                }
+            if (!awaitPlaybackIntoWord(surahId, ayah, startMs)) {
+                _ui.value = _ui.value.copy(isPlayingWord = false)
+                wordClipJob = null
+                return@launch
             }
-            if (endMs != null) {
-                while (true) {
-                    val now = player.state.value.nowPlaying
-                    if (now?.surahId == surahId && now.ayah == ayah &&
-                        player.positionMs >= endMs
-                    ) {
-                        pausePlayer()
-                        break
-                    }
-                    if (!player.state.value.isPlaying && !player.state.value.isBuffering &&
-                        player.positionMs >= startMs
-                    ) {
-                        break
-                    }
-                    delay(WORD_CLIP_POLL_MS)
+            // Hard-stop at the word boundary — never continue into the next word.
+            while (true) {
+                val now = player.state.value.nowPlaying
+                if (now?.surahId != surahId || now.ayah != ayah) {
+                    break
                 }
-            } else {
-                delay(PLAY_SETTLE_MS)
-                while (player.state.value.isPlaying || player.state.value.isBuffering) {
-                    delay(WORD_CLIP_POLL_MS)
+                if (player.positionMs >= endMs) {
+                    player.pause()
+                    break
                 }
+                delay(WORD_CLIP_POLL_MS)
+            }
+            // Belt-and-suspenders: if we left the loop while still past the
+            // end (or still playing), force a pause.
+            if (player.state.value.isPlaying &&
+                player.state.value.nowPlaying?.surahId == surahId &&
+                player.state.value.nowPlaying?.ayah == ayah &&
+                player.positionMs >= endMs
+            ) {
+                player.pause()
             }
             _ui.value = _ui.value.copy(isPlayingWord = false)
             wordClipJob = null
         }
+    }
+
+    /**
+     * Wait until the playhead is on [ayah] at/after [startMs] and audio is
+     * moving (or buffering). Returns false if the load never engages.
+     */
+    private suspend fun awaitPlaybackIntoWord(
+        surahId: Int,
+        ayah: Int,
+        startMs: Long,
+    ): Boolean {
+        val deadline = System.nanoTime() + PLAY_READY_TIMEOUT_MS * 1_000_000L
+        while (System.nanoTime() < deadline) {
+            val now = player.state.value.nowPlaying
+            val onTarget = now?.surahId == surahId && now.ayah == ayah
+            val engaged = player.state.value.isPlaying || player.state.value.isBuffering
+            if (onTarget && engaged && player.positionMs >= startMs - SEEK_SLACK_MS) {
+                return true
+            }
+            delay(WORD_CLIP_POLL_MS)
+        }
+        // Timed out — don't leave a runaway ayah playing.
+        player.pause()
+        return false
     }
 
     /** One-ayah playlist for this word — same shape as Timings Lab. */
@@ -191,14 +220,10 @@ class RootViewerViewModel(
         val wasAuditioning = _ui.value.isPlayingWord
         wordClipJob?.cancel()
         wordClipJob = null
-        if (pauseIfPlaying && wasAuditioning) pausePlayer()
+        if (pauseIfPlaying && wasAuditioning) player.pause()
         if (wasAuditioning) {
             _ui.value = _ui.value.copy(isPlayingWord = false)
         }
-    }
-
-    private fun pausePlayer() {
-        if (player.state.value.isPlaying) player.togglePlayPause()
     }
 
     override fun onCleared() {
@@ -207,7 +232,9 @@ class RootViewerViewModel(
     }
 
     private companion object {
-        const val PLAY_SETTLE_MS = 80L
-        const val WORD_CLIP_POLL_MS = 32L
+        const val WORD_CLIP_POLL_MS = 16L
+        const val PLAY_READY_TIMEOUT_MS = 4_000L
+        /** Allow a small seek undershoot before treating the clip as started. */
+        const val SEEK_SLACK_MS = 40L
     }
 }
