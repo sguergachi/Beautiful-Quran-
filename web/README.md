@@ -42,9 +42,10 @@ Engines are DOM-free and unit-tested against the Android JVM suites. See
 ## Notes
 
 - Cold start opens on the closed mushaf (entrance ceremony): title wash, optional
-  isti'adha from the chosen reciter's everyayah pack, then the cover swings open
-  on its left hinge (right→left into the left side) onto the chapter list. Tap
-  or Escape skips; autoplay-blocked or offline falls back to a silent ink wash.
+  isti'adha from the chosen reciter's everyayah pack, then the cover (sheet-width
+  on desktop) lifts open on its left hinge toward the reader onto the chapter
+  list. Tap or Escape skips; autoplay-blocked or offline falls back to a silent
+  ink wash.
 - First load downloads `quran.db`; a service worker caches the DB, fonts, and
   hashed assets (cache-first). Navigations / `index.html` are network-first so
   a deploy cannot leave phones on a stale shell that points at deleted JS.
