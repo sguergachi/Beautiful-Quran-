@@ -911,12 +911,9 @@ fun ReaderScreen(
             } else {
                 AyahSelectorSide.RIGHT
             }
-            val ayahNumbers = remember(content.surah.id) {
-                content.ayahs.map { it.number }
-            }
             BookmarkRibbonStrip(
                 listState = listState,
-                ayahNumbers = ayahNumbers,
+                ayahNumberByItemIndex = ayahNumberByItemIndex,
                 bookmarkedAyahs = bookmarkedAyahs,
                 focusedAyah = scrolledAyah,
                 side = bookmarkSide,
