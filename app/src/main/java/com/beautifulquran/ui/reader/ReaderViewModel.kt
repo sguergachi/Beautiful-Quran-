@@ -149,6 +149,12 @@ class ReaderViewModel(
         ayahWithFadeLead(ayah)
     }
 
+    val activeBasmalah: StateFlow<Boolean?> = pollingWhileLoaded(key = { it }) { np ->
+        np.ayah == 1 &&
+            surahOpensWithBasmalahPreface(np.surahId) &&
+            player.positionMs < (timings[1]?.firstOrNull()?.startMs ?: 0L)
+    }
+
     /** Advances the lit ayah to the next one during the final [FADE_LEAD_MS] of
      * the current ayah's audio, so its fade-in leads the audio boundary. Only
      * while playing (a paused position must not jump the highlight forward). */

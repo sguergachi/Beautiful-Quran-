@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.R
 
 /**
@@ -41,14 +42,17 @@ fun surahOpensWithBasmalahPreface(surahId: Int): Boolean =
 @Composable
 fun BasmalahCalligraphy(
     modifier: Modifier = Modifier,
+    active: Boolean = false,
+    onClick: (() -> Unit)? = null,
 ) {
-    val ink = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f)
+    val ink = MaterialTheme.colorScheme.onSurface.copy(alpha = if (active) 1f else 0.88f)
     Image(
         painter = painterResource(R.drawable.basmalah_naskh),
         contentDescription = BASMALAH_UTHMANI,
         colorFilter = ColorFilter.tint(ink),
         contentScale = ContentScale.FillWidth,
         modifier = modifier
+            .then(if (onClick != null) Modifier.quietClickable(onClick = onClick) else Modifier)
             .fillMaxWidth()
             .padding(horizontal = 12.dp),
     )

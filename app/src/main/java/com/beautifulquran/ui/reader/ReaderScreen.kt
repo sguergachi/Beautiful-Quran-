@@ -188,6 +188,7 @@ fun ReaderScreen(
     // Lead-adjusted: crosses to the next ayah ~500ms before the current one's
     // audio ends, so the block fade to the next ayah starts a touch early.
     val activeAyahState = viewModel.activeAyah.collectAsStateWithLifecycle()
+    val activeBasmalah by viewModel.activeBasmalah.collectAsStateWithLifecycle()
     val activeAyah = if (isThisSurahPlaying) activeAyahState.value else null
 
     // When a repeat range loops back, the player dips out of "playing" for a
@@ -749,6 +750,13 @@ fun ReaderScreen(
                                 revelationPlace = content.surah.revelationPlace,
                                 ayahCount = content.surah.ayahCount,
                                 sheen = sheen,
+                                basmalahActive = isThisSurahPlaying && activeBasmalah == true,
+                                onBasmalahClick = {
+                                    notifPermission.request {
+                                        followEnabled = true
+                                        viewModel.playFromAyah(1)
+                                    }
+                                },
                             )
                         }
                         is LazyItem.AyahItem -> {

@@ -1059,6 +1059,8 @@ fun SurahHeader(
     revelationPlace: String,
     ayahCount: Int,
     sheen: State<Float>,
+    basmalahActive: Boolean = false,
+    onBasmalahClick: (() -> Unit)? = null,
 ) {
     val accents = LocalQuranAccents.current
     val weaveFade = MaterialTheme.colorScheme.background
@@ -1108,7 +1110,7 @@ fun SurahHeader(
         )
         if (showBasmalah) {
             Spacer(Modifier.height(28.dp))
-            BasmalahCalligraphy()
+            BasmalahCalligraphy(active = basmalahActive, onClick = onBasmalahClick)
         }
     }
 }
