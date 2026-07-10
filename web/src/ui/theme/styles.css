@@ -678,7 +678,7 @@ select {
 .ayah-block {
   max-width: var(--reader-max);
   margin: 0 auto;
-  padding: 1.2rem 0.15rem 1.45rem;
+  padding: 1.2rem 2.6rem 1.45rem;
   position: relative;
   scroll-margin-top: 12vh;
 }
@@ -926,57 +926,53 @@ select {
   }
 }
 
-.bookmark-tip {
+/* —— Verse bookmark ribbon (canvas swallowtail) —— */
+.verse-ribbon {
   position: absolute;
-  top: 0.35rem;
-  width: 1.1rem;
-  height: 1.1rem;
-  background: color-mix(in srgb, var(--bookmark) 35%, transparent);
-  clip-path: polygon(0 0, 100% 0, 100% 70%, 50% 100%, 0 70%);
-  opacity: 0.4;
-  transition:
-    height 500ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    opacity 300ms ease,
-    background 200ms ease;
-  cursor: pointer;
-  z-index: 1;
-  /* Expand hit target without changing the drawn tip much */
+  top: 0;
+  bottom: 0;
+  width: 44px;
   padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  z-index: 2;
+  -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  transition: opacity 900ms ease;
 }
 
-/* Hidden while reciting — zero chrome on the verse (Android bookmarkChromeAlpha). */
-.bookmark-tip[data-receded='true'] {
-  opacity: 0;
-  pointer-events: none;
-  cursor: default;
+.verse-ribbon[data-side='left'] {
+  left: 0;
 }
+
+.verse-ribbon[data-side='right'] {
+  right: 0;
+}
+
+.verse-ribbon-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
 
 @media (hover: hover) {
-  .bookmark-tip:hover:not([data-receded='true']) {
-    opacity: 0.75;
+  .verse-ribbon:hover .verse-ribbon-canvas {
+    filter: brightness(1.08);
   }
 }
 
-.bookmark-tip[data-side='left'] {
-  left: -0.15rem;
+.verse-ribbon:focus-visible {
+  outline: none;
 }
 
-.bookmark-tip[data-side='right'] {
-  right: -0.15rem;
+.verse-ribbon:focus-visible .verse-ribbon-canvas {
+  filter: brightness(1.12);
 }
 
-.bookmark-tip[data-on='true'] {
-  height: calc(100% - 2.75rem);
-  min-height: 2.5rem;
-  width: 0.7rem;
-  opacity: 1;
-  background: var(--bookmark);
-}
-
-.bookmark-tip[data-on='true'][data-receded='true'] {
-  opacity: 0;
-}
 
 /* —— Settings —— */
 .settings {
@@ -1463,7 +1459,7 @@ select {
   }
 
   .ayah-block {
-    padding-inline: 0.2rem;
+    padding-inline: 2.4rem;
   }
 
   .word-arabic {
@@ -1472,14 +1468,6 @@ select {
 
   .hafs-ayah {
     font-size: calc(1.65rem * var(--font-scale, 1));
-  }
-
-  .bookmark-tip[data-side='left'] {
-    left: 0;
-  }
-
-  .bookmark-tip[data-side='right'] {
-    right: 0;
   }
 
   .player-bar {

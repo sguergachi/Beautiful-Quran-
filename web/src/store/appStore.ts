@@ -326,8 +326,9 @@ class AppStore {
     player.setRepeatMode(mode, range)
   }
 
-  toggleBookmark(ayah: number) {
-    if (!this.state.content) return
+  /** Returns true when the verse is *now* bookmarked. */
+  toggleBookmark(ayah: number): boolean {
+    if (!this.state.content) return false
     const bookmarks = toggleBookmark(
       this.state.bookmarks,
       this.state.content.surah.id,
@@ -335,6 +336,9 @@ class AppStore {
     )
     saveBookmarks(bookmarks)
     this.set({ bookmarks })
+    return bookmarks.some(
+      (b) => b.surahId === this.state.content!.surah.id && b.ayah === ayah,
+    )
   }
 
   isBookmarked(ayah: number): boolean {
