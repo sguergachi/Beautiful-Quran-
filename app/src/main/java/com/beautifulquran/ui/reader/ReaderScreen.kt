@@ -153,6 +153,7 @@ fun ReaderScreen(
     // one ayah block — never the whole screen.
     val activeWordState = viewModel.activeWord.collectAsStateWithLifecycle()
     val settings by viewModel.settings.settings.collectAsStateWithLifecycle()
+    val bookmarkedAyahs by viewModel.bookmarkedAyahs.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
     // Gilding sheen: light catches the header rosette as the page moves.
@@ -956,6 +957,36 @@ fun ReaderScreen(
                     )
                 }
             }
+
+            // The bookmark strip is the selector's mirror twin: it lives on the
+            // opposite edge and shares the selector's chrome rules (hidden while
+            // reciting, faded with the rest of the chrome).
+            val bookmarkSide = if (selectorSide == AyahSelectorSide.RIGHT) {
+                AyahSelectorSide.LEFT
+            } else {
+                AyahSelectorSide.RIGHT
+            }
+            BookmarkRibbonStrip(
+                ayahCount = content.surah.ayahCount,
+                side = bookmarkSide,
+                bookmarkedAyahs = bookmarkedAyahs,
+                focusedPosition = railCurrentPosition,
+                chromeAlpha = { if (recitingActive) 0f else chromeAlpha.value },
+                interactive = !recitingActive,
+                onToggleBookmark = { viewModel.toggleBookmark(it) },
+                onJumpToAyah = { requestedJumpAyah = it },
+                modifier = Modifier
+                    .align(
+                        if (bookmarkSide == AyahSelectorSide.RIGHT) {
+                            AbsoluteAlignment.CenterRight
+                        } else {
+                            AbsoluteAlignment.CenterLeft
+                        },
+                    )
+                    .fillMaxHeight()
+                    .padding(top = padding.calculateTopPadding())
+                    .zIndex(1f),
+            )
         }
     }
 

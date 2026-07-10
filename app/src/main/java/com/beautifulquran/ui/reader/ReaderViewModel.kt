@@ -3,6 +3,7 @@ package com.beautifulquran.ui.reader
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
+import com.beautifulquran.data.BookmarkRepository
 import com.beautifulquran.data.QuranRepository
 import com.beautifulquran.data.SettingsRepository
 import com.beautifulquran.data.model.Reciter
@@ -18,6 +19,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flatMapLatest
@@ -56,6 +58,7 @@ data class ReaderUiState(
 class ReaderViewModel(
     private val repository: QuranRepository,
     val settings: SettingsRepository,
+    private val bookmarks: BookmarkRepository,
     val player: PlayerController,
 ) : ViewModel() {
 
@@ -65,6 +68,17 @@ class ReaderViewModel(
     val playerState: StateFlow<PlayerUiState> = player.state
 
     private var surahId: Int = 0
+
+    /** Drives [bookmarkedAyahs]: the surah currently loaded into the reader, so
+     * the bookmark strip only ever renders marks for the verses on screen. */
+    private val loadedSurah = MutableStateFlow(0)
+
+    /** The ayah numbers bookmarked *in the loaded surah*. The strip reads this;
+     * it recomposes only when a mark is added or removed. */
+    val bookmarkedAyahs: StateFlow<Set<Int>> =
+        combine(bookmarks.bookmarks, loadedSurah) { all, surah ->
+            all.filter { it.surahId == surah }.map { it.ayah }.toSet()
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(1_000), emptySet())
     private var timings: Map<Int, List<Segment>> = emptyMap()
     private var loadJob: Job? = null
 
@@ -172,6 +186,7 @@ class ReaderViewModel(
             return
         }
         this.surahId = surahId
+        loadedSurah.value = surahId
         timings = emptyMap()
         _uiState.value = ReaderUiState(
             reciters = _uiState.value.reciters,
@@ -227,6 +242,14 @@ class ReaderViewModel(
     }
 
     fun segmentsFor(ayah: Int): List<Segment>? = timings[ayah]
+
+    /** Marks or unmarks [ayah] in the loaded surah. Returns `true` when the
+     * verse is now bookmarked, so the strip runs the unroll animation only on an
+     * add (never on a remove). */
+    fun toggleBookmark(ayah: Int): Boolean {
+        val surah = surahId.takeIf { it != 0 } ?: return false
+        return bookmarks.toggle(surah, ayah)
+    }
 
     fun fastForward() {
         val content = _uiState.value.content ?: return
