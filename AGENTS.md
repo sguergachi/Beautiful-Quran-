@@ -102,6 +102,7 @@ Requires **JDK 21**. No Android device/emulator is needed for tests.
 | `docs/TIMINGS_LAB.md` | The in-app timing editor and its patch workflow (developer mode) |
 | `tools/timing_overrides/README.md` | Committed timing-correction patch format |
 | `PLAN.md` | Historical product/engineering plan — context, not current spec |
+| `docs/WEB.md` | Web port plan — Focus / Highlight / Ink engines + paper reader in the browser |
 
 ## Working style
 
