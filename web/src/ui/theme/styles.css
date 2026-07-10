@@ -1573,27 +1573,30 @@ select {
 }
 
 /* —— Entrance ceremony (closed mushaf) —— */
+/* Full-viewport host; the board itself matches the paper-sheet column. */
 .entrance {
   position: fixed;
   inset: 0;
   z-index: 40;
-  perspective: 1400px;
-  perspective-origin: 0% 50%;
-  /* Full-bleed under the notch / home indicator while the cover is up. */
-  padding: 0;
+  pointer-events: none;
+  /* Soft margins outside the sheet column (desktop) stay under-paper. */
+  background: transparent;
 }
 
 .entrance-board {
+  pointer-events: auto;
   position: absolute;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  /* Match .sheet: full-bleed on small screens. */
+  left: 0;
+  right: 0;
   display: block;
-  width: 100%;
-  height: 100%;
   margin: 0;
   padding: 0;
   border: none;
   cursor: pointer;
-  /* Left-edge hinge: free edge swings right→left into the left side. */
+  /* Left-edge hinge: free edge lifts toward the reader, then into the left. */
   transform-origin: left center;
   transform-style: preserve-3d;
   transition: opacity 550ms linear;
@@ -1601,6 +1604,8 @@ select {
   color: #e8e2d5;
   background: transparent;
   overflow: hidden;
+  container-type: inline-size;
+  container-name: entrance-board;
 }
 
 .entrance-board:disabled {
@@ -1612,16 +1617,18 @@ select {
   pointer-events: none;
 }
 
+/* Negative rotateY with left origin: free edge comes toward the camera (opens
+ * "up" out of the page), not folding down into the sheet. */
 @keyframes entrance-cover-open {
   0% {
-    transform: perspective(1400px) rotateY(0deg);
+    transform: perspective(1600px) rotateY(0deg);
     opacity: 1;
   }
   62% {
     opacity: 1;
   }
   100% {
-    transform: perspective(1400px) rotateY(88deg);
+    transform: perspective(1600px) rotateY(-88deg);
     opacity: 0;
   }
 }
@@ -1654,9 +1661,51 @@ select {
 .entrance-frame {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
   pointer-events: none;
+}
+
+.entrance-frame-outer {
+  position: absolute;
+  inset: 16px;
+  border: 2px solid #d9b44a;
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 1px rgba(154, 123, 42, 0.35),
+    inset 0 1px 0 rgba(237, 209, 136, 0.35);
+}
+
+.entrance-frame-inner {
+  position: absolute;
+  inset: 26px;
+  border: 1px solid rgba(217, 180, 74, 0.85);
+  border-radius: 6px;
+}
+
+.entrance-corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  /* Sit on the inner rule's corners — fixed size, never stretched. */
+}
+
+.entrance-corner--tl {
+  top: calc(26px - 11px);
+  left: calc(26px - 11px);
+}
+
+.entrance-corner--tr {
+  top: calc(26px - 11px);
+  right: calc(26px - 11px);
+}
+
+.entrance-corner--bl {
+  bottom: calc(26px - 11px);
+  left: calc(26px - 11px);
+}
+
+.entrance-corner--br {
+  bottom: calc(26px - 11px);
+  right: calc(26px - 11px);
 }
 
 .entrance-content {
@@ -1685,6 +1734,11 @@ select {
 
 .entrance-medallion {
   flex-shrink: 0;
+  /* Scale to the board (sheet) width — square, never squeezed. */
+  width: min(52%, 15rem);
+  aspect-ratio: 1;
+  height: auto;
+  display: block;
   filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.12)) drop-shadow(0 -1px 0 rgba(0, 0, 0, 0.35));
   animation: entrance-sheen 6.5s ease-in-out infinite alternate;
 }
@@ -1703,7 +1757,7 @@ select {
 .entrance-title-ar {
   margin: 1.75rem 0 0;
   font-family: var(--font-arabic);
-  font-size: clamp(1.85rem, 7vw, 2.5rem);
+  font-size: clamp(1.85rem, 8cqi, 2.5rem);
   line-height: 1.6;
   text-align: center;
   color: #e8e2d5;
@@ -1717,7 +1771,7 @@ select {
 .entrance-title-en {
   margin: 0.25rem 0 0;
   font-family: var(--font-display);
-  font-size: clamp(1.05rem, 3.5vw, 1.35rem);
+  font-size: clamp(1.05rem, 4.2cqi, 1.35rem);
   letter-spacing: 0.2em;
   text-align: center;
   color: rgba(232, 226, 213, 0.58);
@@ -1736,7 +1790,7 @@ select {
 .entrance-dua-ar {
   margin: 0;
   font-family: var(--font-arabic);
-  font-size: clamp(1.15rem, 4.2vw, 1.5rem);
+  font-size: clamp(1.15rem, 5cqi, 1.5rem);
   line-height: 1.9;
   text-align: center;
   color: #e8e2d5;
@@ -1766,6 +1820,14 @@ select {
 html[data-entrance='true'],
 html[data-entrance='true'] body {
   background: #031c15;
+}
+
+@media (min-width: 900px) {
+  /* Same centered 56rem column as .sheet — the cover is a board for the stack. */
+  .entrance-board {
+    left: max(0px, calc(50% - var(--sheet-half)));
+    right: max(0px, calc(50% - var(--sheet-half)));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

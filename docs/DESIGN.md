@@ -218,11 +218,14 @@ three moments:
    at a reciter's pace, silently. If a recitation session is already live
    (activity recreated over playback), the du'a stays silent rather than
    reciting over the reciter.
-3. **The opening.** The board swings open on its **left** hinge — free edge
-   traveling right→left into the left side of the screen — slower and heavier
+3. **The opening.** The board swings open on its **left** hinge — the free
+   edge lifts **toward the reader** (opens "up", not down into the page) and
+   travels right→left into the left side of the screen — slower and heavier
    than a page (1150 ms vs 460 ms), with the flip stems pitched slightly down
    (`PageTurnSounds.playCoverOpen`), revealing the chapter list beneath.
-   (`rotationY` positive, origin at the left edge).
+   (`rotationY` negative, origin at the left edge). On web the cover is sized
+   to the paper-sheet column (not the full viewport), with ornaments kept at
+   their natural aspect ratio.
 
 A tap anywhere (or back) opens the cover at once; the ceremony never holds a
 reader hostage, and it plays only once per session (`rememberSaveable`), so
