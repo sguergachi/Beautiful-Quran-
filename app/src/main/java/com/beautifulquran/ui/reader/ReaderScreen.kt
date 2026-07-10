@@ -957,23 +957,28 @@ fun ReaderScreen(
                 }
             }
 
-            // The bookmark strip is the selector's mirror twin: it lives on the
-            // opposite edge and shares the selector's chrome rules (hidden while
-            // reciting, faded with the rest of the chrome).
+            // The bookmark strip is the selector's mirror twin on the opposite
+            // edge, sharing the selector's chrome rules (hidden while reciting).
+            // Each ribbon is glued to its verse's block, so the strip shares the
+            // LazyColumn's coordinate origin: no top padding, and its canvas y
+            // matches the list's item layout offsets directly.
             val bookmarkSide = if (selectorSide == AyahSelectorSide.RIGHT) {
                 AyahSelectorSide.LEFT
             } else {
                 AyahSelectorSide.RIGHT
             }
+            val ayahNumbers = remember(content.surah.id) {
+                content.ayahs.map { it.number }
+            }
             BookmarkRibbonStrip(
-                ayahCount = content.surah.ayahCount,
-                side = bookmarkSide,
+                listState = listState,
+                ayahNumbers = ayahNumbers,
                 bookmarkedAyahs = bookmarkedAyahs,
-                focusedPosition = railCurrentPosition,
+                focusedAyah = scrolledAyah,
+                side = bookmarkSide,
                 chromeAlpha = { if (recitingActive) 0f else chromeAlpha.value },
                 interactive = !recitingActive,
                 onToggleBookmark = { viewModel.toggleBookmark(it) },
-                onJumpToAyah = { requestedJumpAyah = it },
                 modifier = Modifier
                     .align(
                         if (bookmarkSide == AyahSelectorSide.RIGHT) {
@@ -983,7 +988,6 @@ fun ReaderScreen(
                         },
                     )
                     .fillMaxHeight()
-                    .padding(top = padding.calculateTopPadding())
                     .zIndex(1f),
             )
         }
