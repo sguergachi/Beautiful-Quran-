@@ -43,8 +43,8 @@ import com.beautifulquran.playback.PlayerUiState
 import com.beautifulquran.ui.theme.quietClickable
 
 /**
- * Bottom clearance shared with the reader's floating Back-to / return-to-ayah
- * controls ([com.beautifulquran.ui.reader.BackToOriginPill],
+ * Bottom clearance shared with the stack-level Back-to line and the reader's
+ * return-to-ayah ornament ([com.beautifulquran.ui.reader.BackToOriginPill],
  * [com.beautifulquran.ui.theme.IslamicReturnToAyahButton]). Keeping the same
  * inset means the home float and those ink lines sit on one vertical rhythm
  * when the paper stack turns between cover and reader.
