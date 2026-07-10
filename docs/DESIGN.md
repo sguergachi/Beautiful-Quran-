@@ -198,8 +198,8 @@ image, so it is crisp at any density and nearly free to render.
 
 The paper metaphor begins before the first sheet: a cold start opens on the
 **closed mushaf** (`ui/entrance/EntranceCover` on Android and web), and chapter
-selection is what the reader finds when its cover turns. The ceremony has
-three moments:
+selection is what the reader finds when its cover turns. The Android ceremony
+has two moments:
 
 1. **Arrival.** The board fades in from the system splash: deep-green
    leather (fixed across themes — a bound book keeps its own boards, colors
@@ -208,21 +208,21 @@ three moments:
    into each corner (`MushafCoverFrame`), carrying the gilded khatam
    medallion (`GildedMedallion`) with the title **القرآن الكريم** beneath it
    in the Hafs hand, leafed in gold and written in with the letter wash.
-2. **The isti'adha.** أعوذ بالله من الشيطان الرجيم is recited once — streamed
-   from the chosen reciter's everyayah pack (`audhubillah.mp3`, an optional
-   special; falls back to the first bundled pack) by `IstiadhaPlayer`, a bare
-   `MediaPlayer` with transient audio focus, never a playback session or a
-   notification. The du'a's words ink themselves onto the cover with the same
-   letter wash the reader uses, following the reciter's live position.
-   Offline, or when the pack lacks the file, the words still write themselves
-   at a reciter's pace, silently. If a recitation session is already live
-   (activity recreated over playback), the du'a stays silent rather than
-   reciting over the reciter.
-3. **The opening.** The board swings open on its **left** hinge — free edge
-   traveling right→left into the left side of the screen — slower and heavier
-   than a page (1150 ms vs 460 ms), with the flip stems pitched slightly down
+   The frame's inset and corner radii are derived from the display's
+   rounded corners (`WindowInsets.getRoundedCorner`, via
+   `coverFrameGeometry`) so the gilt rule is concentric with the phone's
+   silhouette — the cover reads as cut for that screen, not a fixed square
+   border floating inside it.
+2. **The opening.** After a brief hold on the settled cover, the board
+   swings open on its **left** hinge — free edge traveling right→left into
+   the left side of the screen — slower and heavier than a page (1150 ms vs
+   460 ms), with the flip stems pitched slightly down
    (`PageTurnSounds.playCoverOpen`), revealing the chapter list beneath.
    (`rotationY` positive, origin at the left edge).
+
+(The web entrance still includes a third moment — the isti'adha recited
+once from the chosen reciter's everyayah pack — before the cover opens;
+Android does not.)
 
 A tap anywhere (or back) opens the cover at once; the ceremony never holds a
 reader hostage, and it plays only once per session (`rememberSaveable`), so
