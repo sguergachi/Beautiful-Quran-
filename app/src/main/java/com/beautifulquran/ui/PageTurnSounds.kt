@@ -166,6 +166,18 @@ class PageTurnSounds(context: Context) {
         soundPool.play(sampleId, VOLUME, VOLUME, 1, 0, rate)
     }
 
+    /**
+     * One whole flip paced for the entrance cover's slow hinge open (~1.1 s):
+     * lift as the board leaves the page block, sweep through the arc, drop as
+     * it settles flat. Fired once by the entrance, not scrubbed like the stack.
+     */
+    fun playCoverOpen() {
+        val flip = FLIPS[Random.nextInt(FLIPS.size)]
+        playStem(flip.liftRes, COVER_OPEN_RATE)
+        handler.postDelayed({ playStem(flip.sweepRes, COVER_OPEN_RATE) }, 260)
+        handler.postDelayed({ playStem(flip.dropRes, COVER_OPEN_RATE) }, 820)
+    }
+
     /** Play a whole flip at natural pace — for auditioning in developer settings. */
     fun auditionFlip(index: Int) {
         val flip = FLIPS.getOrNull(index) ?: return
@@ -181,6 +193,8 @@ class PageTurnSounds(context: Context) {
 
     companion object {
         private const val VOLUME = 0.09f
+        // A touch under natural pitch so the cover reads heavier than a page.
+        private const val COVER_OPEN_RATE = 0.92f
         private const val START_EPS = 0.03f
         private const val SETTLE_EPS = 0.03f
         private const val SWEEP_AT = 0.42f
