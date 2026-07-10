@@ -268,6 +268,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     showTranslation={state.settings.showTranslation}
                     bookmarked={appStore.isBookmarked(ayah.number)}
                     bookmarkSide={side === 'left' ? 'right' : 'left'}
+                    bookmarkVisible={!receded}
                     speed={state.settings.playbackSpeed}
                     fontScale={state.settings.fontScale}
                     onPlayAyah={(n, fromWord) => void appStore.playAyah(n, fromWord)}

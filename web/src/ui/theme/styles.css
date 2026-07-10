@@ -929,8 +929,15 @@ select {
   touch-action: manipulation;
 }
 
+/* Hidden while reciting — zero chrome on the verse (Android bookmarkChromeAlpha). */
+.bookmark-tip[data-receded='true'] {
+  opacity: 0;
+  pointer-events: none;
+  cursor: default;
+}
+
 @media (hover: hover) {
-  .bookmark-tip:hover {
+  .bookmark-tip:hover:not([data-receded='true']) {
     opacity: 0.75;
   }
 }
@@ -949,6 +956,10 @@ select {
   width: 0.7rem;
   opacity: 1;
   background: var(--bookmark);
+}
+
+.bookmark-tip[data-on='true'][data-receded='true'] {
+  opacity: 0;
 }
 
 /* —— Settings —— */
