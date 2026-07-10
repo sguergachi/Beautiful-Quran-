@@ -216,11 +216,11 @@ rest of the chrome and vanishes entirely while reciting.
 
 - **Every verse carries a nub; a saved verse carries the whole ribbon.** An
   idle verse shows only a small ruby **nub** at the top corner of its block —
-  the rolled-up head of a ribbon, and the tap target. Bookmark it and the
-  ribbon runs the **entire vertical length** of the verse's block (Arabic,
-  gloss, and translation together). Either way the mark is *glued to the verse*
-  and scrolls with it, dissolving into the page at the same top/bottom fade
-  bands as the text.
+  the rolled-up head of a ribbon, and the tap target. Retracted nubs stay
+  soft (a quiet hint); bookmark it and the ribbon runs the **entire vertical
+  length** of the verse's block (Arabic, gloss, and translation together) at
+  full ink. Either way the mark is *glued to the verse* and scrolls with it,
+  dissolving into the page at the same top/bottom fade bands as the text.
 - **Marking is where you tap.** A tap alongside a verse marks (or unmarks)
   *that* verse — the nub on the verse you are reading burns a little brighter
   so the affordance finds your eye. No aiming at a separate scale.
