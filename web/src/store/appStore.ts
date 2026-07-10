@@ -123,6 +123,10 @@ class AppStore {
           this.set({ loadLabel: 'Preparing the reader…' })
           return
         }
+        if (p.phase === 'asm') {
+          this.set({ loadLabel: 'Preparing the reader (compatibility)…' })
+          return
+        }
         if (p.total > 0) {
           const pct = Math.min(99, Math.round((p.loaded / p.total) * 100))
           this.set({ loadLabel: `Loading the book… ${pct}%` })

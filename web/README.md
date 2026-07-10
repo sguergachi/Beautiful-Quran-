@@ -41,6 +41,8 @@ Engines are DOM-free and unit-tested against the Android JVM suites. See
 ## Notes
 
 - First load downloads `quran.db`; a service worker caches the shell + DB.
+- `sql.js`’s browser build requests `sql-wasm-browser.wasm` (copied into
+  `public/` on `npm install`). Shipping only `sql-wasm.wasm` 404s on Pages.
 - Audio streams from everyayah.com and can be cached by the browser.
 - Click a word to play from there; right-click / long-press opens the Root Word Viewer.
 - Themes: Paper / Nightfall / Royal green (Settings).
