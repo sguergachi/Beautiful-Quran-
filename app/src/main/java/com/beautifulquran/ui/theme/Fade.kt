@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.drawText
@@ -112,8 +113,10 @@ fun Modifier.letterFadeIn(
  *
  * So every bloom operates on the ayah's already-shaped [TextLayoutResult],
  * clipped to [TextLayoutResult.getPathForRange]:
- * - [UpcomingDim]: static paper cover (animated on ayah activation).
- * - [InkReveal]: paper coverage of `1 − glyphAlpha` along the wash curve.
+ * - [UpcomingDim]: static paper cover (padded beyond the selection box so
+ *   Hafs marks/AA edges do not peek through as white corners).
+ * - [InkReveal]: paper coverage of `1 − glyphAlpha` along the wash curve
+ *   (same pad as UpcomingDim).
  * - [ColorReveal]: re-draw shaped glyphs, [BlendMode.SrcIn]-tint orange,
  *   then apply the [letterFadeIn] DstIn wash.
  */
@@ -179,18 +182,28 @@ fun Modifier.shapedWordBloom(
                 is ShapedWordBloom.UpcomingDim -> {
                     val a = bloom.coverAlpha.coerceIn(0f, 1f)
                     if (a <= 0f) return@forEach
-                    clipPath(path) {
+                    // getPathForRange is a selection box — Hafs marks and AA
+                    // edges sit outside it, so a tight clipPath leaves white
+                    // corners. A small pad covers those without the old
+                    // neighbour-bleed rects (18dp).
+                    val pad = PaperCoverPad.toPx()
+                    clipRect(
+                        left = bounds.left - pad,
+                        top = bounds.top - pad,
+                        right = bounds.right + pad,
+                        bottom = bounds.bottom + pad,
+                    ) {
                         drawRect(
                             color = bloom.paper.copy(alpha = a),
-                            topLeft = Offset(bounds.left, bounds.top),
-                            size = Size(bounds.width, bounds.height),
+                            topLeft = Offset(bounds.left - pad, bounds.top - pad),
+                            size = Size(bounds.width + pad * 2f, bounds.height + pad * 2f),
                         )
                     }
                 }
                 is ShapedWordBloom.InkReveal -> {
                     // Full ink is already on the page; pull paper back along the
-                    // wash so glyphs breathe in. Clip to the word path — no
-                    // inflated rects, so neighbours stay untouched.
+                    // wash so glyphs breathe in. Padded clip covers mark/AA
+                    // overhangs (same as UpcomingDim).
                     val p = bloom.progress.coerceIn(0f, 1f)
                     if (p >= 1f) return@forEach
                     val w = bounds.width
@@ -215,11 +228,17 @@ fun Modifier.shapedWordBloom(
                             endX = bounds.left + head,
                         )
                     }
-                    clipPath(path) {
+                    val pad = PaperCoverPad.toPx()
+                    clipRect(
+                        left = bounds.left - pad,
+                        top = bounds.top - pad,
+                        right = bounds.right + pad,
+                        bottom = bounds.bottom + pad,
+                    ) {
                         drawRect(
                             brush = brush,
-                            topLeft = Offset(bounds.left, bounds.top),
-                            size = Size(bounds.width, bounds.height),
+                            topLeft = Offset(bounds.left - pad, bounds.top - pad),
+                            size = Size(bounds.width + pad * 2f, bounds.height + pad * 2f),
                         )
                     }
                 }
@@ -292,6 +311,11 @@ private const val InkProfileStops = 9
  * clipped by the offscreen [letterFadeIn] / [shapedWordBloom] mask. Local to
  * the word's draw scope — does not paint onto neighbours. */
 private val FadeLayerBleed = 14.dp
+
+/** Pad beyond [TextLayoutResult.getPathForRange] when painting paper covers.
+ * Selection boxes miss Hafs mark/AA overhangs; a few dp closes the white
+ * corner peek without the old neighbour-bleed rects. */
+private val PaperCoverPad = 4.dp
 
 // The ink wash feathers over 1.6× the word's own width, so the reveal reads as a
 // whole-word breath with a gentle directional lead rather than a hard moving
