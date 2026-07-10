@@ -174,7 +174,9 @@ image, so it is crisp at any density and nearly free to render.
   manuscript calligraphy beneath the chapter title — ink on the page, not a
   numbered ayah and not ornament. The VectorDrawable
   (`basmalah_naskh`) is adapted from Wikimedia Commons File:Basmala.svg
-  (Baba66, CC BY-SA 3.0) and tinted to the current surface ink.
+  (Baba66, CC BY-SA 3.0) and tinted to the current surface ink. Starting
+  playback from ayah 1 of those surahs also prepends the reciter's everyayah
+  basmalah clip before the first ayah.
 - **Restraint rule:** ornament appears in exactly three places — the surah
   header (rosette + weave), ayah number marks, and the home title mark.
   Nothing else on the sheet is decorated.

@@ -299,6 +299,7 @@ class TimingsLabViewModel(
             surahName = st.surahName,
             startPositionMs = startMs,
             preserveRepeatRange = false,
+            includeBasmalahLeadIn = false,
         )
         viewModelScope.launch {
             delay(PLAY_SETTLE_MS)

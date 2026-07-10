@@ -41,6 +41,24 @@ data class Reciter(
         val a = ayah.toString().padStart(3, '0')
         return "https://everyayah.com/data/$slug/$s$a.mp3"
     }
+
+    /**
+     * Dedicated everyayah basmalah clip for this reciter. Most packs ship
+     * `bismillah.mp3`; a few only publish the legacy `001000.mp3` alias.
+     * Ayah-1 files themselves usually omit the basmalah, so chapter-start
+     * playback prepends this clip.
+     */
+    fun basmalahAudioUrl(): String {
+        val file = if (slug in BASMALAH_001000_SLUGS) "001000.mp3" else "bismillah.mp3"
+        return "https://everyayah.com/data/$slug/$file"
+    }
+
+    private companion object {
+        val BASMALAH_001000_SLUGS = setOf(
+            "Minshawy_Murattal_128kbps",
+            "Abdurrahmaan_As-Sudais_192kbps",
+        )
+    }
 }
 
 /** One highlighted span: word [position] is active from [startMs] until [endMs]. */

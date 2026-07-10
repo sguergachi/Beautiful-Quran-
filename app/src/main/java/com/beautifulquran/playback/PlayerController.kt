@@ -9,6 +9,8 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.beautifulquran.data.model.Reciter
+import com.beautifulquran.domain.BASMALAH_PLAYLIST_AYAH
+import com.beautifulquran.domain.surahOpensWithBasmalahPreface
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,7 +23,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Which ayah the player is on, parsed from the current MediaItem. */
+/** Which ayah the player is on, parsed from the current MediaItem.
+ * [ayah] is 0 while the chapter-opening basmalah lead-in is playing. */
 data class NowPlaying(
     val surahId: Int,
     val ayah: Int,
@@ -60,6 +63,12 @@ class PlayerController(private val context: Context) {
     private var endedLoopHandledIndex: Int? = null
     private var repeatBoundaryJob: Job? = null
 
+    /**
+     * When the loaded playlist opens with a basmalah lead-in item, ayah N sits
+     * at index N (basmalah at 0). Otherwise ayah N sits at index N - 1.
+     */
+    private var basmalahLeadIn: Boolean = false
+
     val positionMs: Long
         get() = controller?.currentPosition ?: 0L
 
@@ -78,6 +87,7 @@ class PlayerController(private val context: Context) {
                     // Service went away (e.g. task removed while paused).
                     // Drop the stale handle so the next command reconnects.
                     this@PlayerController.controller = null
+                    basmalahLeadIn = false
                     _state.value = PlayerUiState()
                 }
             })
@@ -168,8 +178,8 @@ class PlayerController(private val context: Context) {
     private fun loopRangeIfNeeded(player: Player): Boolean {
         val range = repeatRange ?: return false
         if (player.mediaItemCount == 0) return false
-        val lastIdx = (range.last - 1).coerceAtMost(player.mediaItemCount - 1)
-        val firstIdx = (range.first - 1).coerceIn(0, player.mediaItemCount - 1)
+        val lastIdx = playlistIndex(range.last).coerceAtMost(player.mediaItemCount - 1)
+        val firstIdx = playlistIndex(range.first).coerceIn(0, player.mediaItemCount - 1)
         val idx = player.currentMediaItemIndex
         val endedAtRangeEnd = player.playbackState == Player.STATE_ENDED && idx >= lastIdx
         if (idx > lastIdx || endedAtRangeEnd) {
@@ -192,8 +202,10 @@ class PlayerController(private val context: Context) {
         withController { c ->
             c.repeatMode = Player.REPEAT_MODE_OFF
             val idx = c.currentMediaItemIndex
-            if (c.mediaItemCount > 0 && (idx < startAyah - 1 || idx > endAyah - 1)) {
-                c.seekTo((startAyah - 1).coerceIn(0, c.mediaItemCount - 1), 0L)
+            val firstIdx = playlistIndex(startAyah)
+            val lastIdx = playlistIndex(endAyah)
+            if (c.mediaItemCount > 0 && (idx < firstIdx || idx > lastIdx)) {
+                c.seekTo(firstIdx.coerceIn(0, c.mediaItemCount - 1), 0L)
             }
             if (c.isPlaying) startRepeatBoundaryMonitor()
         }
@@ -210,7 +222,15 @@ class PlayerController(private val context: Context) {
         _state.value = _state.value.copy(repeatRange = null)
     }
 
-    /** Loads the whole surah as a playlist and starts from [startAyah]. */
+    /**
+     * Loads the whole surah as a playlist and starts from [startAyah].
+     *
+     * When [includeBasmalahLeadIn] is true (the default) and the surah opens
+     * with a basmalah preface, a dedicated everyayah basmalah clip is prepended.
+     * Pass [startWithBasmalah] = true to begin on that clip (chapter opening);
+     * word taps and mid-ayah seeks leave it false so ayah 1 starts at the
+     * requested position without re-hearing the basmalah.
+     */
     fun playSurah(
         surahId: Int,
         ayahCount: Int,
@@ -219,6 +239,8 @@ class PlayerController(private val context: Context) {
         surahName: String,
         startPositionMs: Long = 0L,
         preserveRepeatRange: Boolean = true,
+        includeBasmalahLeadIn: Boolean = true,
+        startWithBasmalah: Boolean = false,
     ) {
         val boundedRange = repeatRange
             ?.takeIf { preserveRepeatRange }
@@ -230,23 +252,53 @@ class PlayerController(private val context: Context) {
         repeatRange = boundedRange
         if (boundedRange == null) repeatEndPositionMs = null
         _state.value = _state.value.copy(repeatRange = boundedRange)
+
+        val withBasmalah = includeBasmalahLeadIn && surahOpensWithBasmalahPreface(surahId)
+        basmalahLeadIn = withBasmalah
+
         withController { c ->
-            val items = (1..ayahCount).map { ayah ->
-                MediaItem.Builder()
-                    .setMediaId(mediaId(surahId, ayah, reciter.id))
-                    .setUri(reciter.audioUrl(surahId, ayah))
-                    .setMediaMetadata(
-                        MediaMetadata.Builder()
-                            .setTitle("$surahName • Ayah $ayah")
-                            .setArtist(reciter.name)
+            val items = buildList {
+                if (withBasmalah) {
+                    add(
+                        MediaItem.Builder()
+                            .setMediaId(mediaId(surahId, BASMALAH_PLAYLIST_AYAH, reciter.id))
+                            .setUri(reciter.basmalahAudioUrl())
+                            .setMediaMetadata(
+                                MediaMetadata.Builder()
+                                    .setTitle("$surahName • Basmalah")
+                                    .setArtist(reciter.name)
+                                    .build(),
+                            )
                             .build(),
                     )
-                    .build()
+                }
+                for (ayah in 1..ayahCount) {
+                    add(
+                        MediaItem.Builder()
+                            .setMediaId(mediaId(surahId, ayah, reciter.id))
+                            .setUri(reciter.audioUrl(surahId, ayah))
+                            .setMediaMetadata(
+                                MediaMetadata.Builder()
+                                    .setTitle("$surahName • Ayah $ayah")
+                                    .setArtist(reciter.name)
+                                    .build(),
+                            )
+                            .build(),
+                    )
+                }
             }
             val effectiveStartAyah = boundedRange
                 ?.let { startAyah.coerceIn(it.first, it.last) }
                 ?: startAyah
-            c.setMediaItems(items, effectiveStartAyah - 1, startPositionMs)
+            val startAtBasmalah =
+                withBasmalah && startWithBasmalah && effectiveStartAyah == 1
+            val startIndex = if (startAtBasmalah) {
+                0
+            } else {
+                playlistIndex(effectiveStartAyah)
+            }
+            val startPos = if (startAtBasmalah) 0L else startPositionMs
+            c.setMediaItems(items, startIndex, startPos)
             c.prepare()
             c.play()
             if (boundedRange != null) startRepeatBoundaryMonitor()
@@ -270,7 +322,7 @@ class PlayerController(private val context: Context) {
      */
     private fun seekTo(ayah: Int, positionMs: Long, play: Boolean, playIfOutOfRange: Boolean = play) =
         withController { c ->
-            val index = ayah - 1
+            val index = playlistIndex(ayah)
             val inRange = index in 0 until c.mediaItemCount
             if (inRange) c.seekTo(index, positionMs)
             if ((inRange && play) || (!inRange && playIfOutOfRange)) c.play()
@@ -278,9 +330,21 @@ class PlayerController(private val context: Context) {
 
     fun seekToAyah(ayah: Int) = seekTo(ayah, 0L, play = false)
 
+    /** Restart the chapter-opening basmalah clip (no-op when the playlist has none). */
+    fun seekToBasmalah() = withController { c ->
+        if (!basmalahLeadIn || c.mediaItemCount == 0) return@withController
+        c.seekTo(0, 0L)
+    }
+
     /** Seek to [ayah] in the already-loaded playlist and play — also resumes
-     * when the index is out of range (e.g. a stale jump request). */
-    fun playLoadedFromAyah(ayah: Int) = seekTo(ayah, 0L, play = true, playIfOutOfRange = true)
+     * when the index is out of range (e.g. a stale jump request). When seeking
+     * to ayah 1 of a basmalah-preface surah, restarts from the basmalah clip. */
+    fun playLoadedFromAyah(ayah: Int) = withController { c ->
+        val startAtBasmalah = basmalahLeadIn && ayah == 1
+        val index = if (startAtBasmalah) 0 else playlistIndex(ayah)
+        if (index in 0 until c.mediaItemCount) c.seekTo(index, 0L)
+        c.play()
+    }
 
     fun seekToWord(ayah: Int, positionMs: Long) = seekTo(ayah, positionMs, play = false)
 
@@ -296,6 +360,7 @@ class PlayerController(private val context: Context) {
 
     fun stop() {
         resetRepeatState()
+        basmalahLeadIn = false
         scope.launch {
             controller?.let {
                 it.stop()
@@ -303,6 +368,9 @@ class PlayerController(private val context: Context) {
             }
         }
     }
+
+    private fun playlistIndex(ayah: Int): Int =
+        if (basmalahLeadIn) ayah else ayah - 1
 
     private fun startRepeatBoundaryMonitor() {
         if (repeatBoundaryJob?.isActive == true) return
@@ -315,8 +383,8 @@ class PlayerController(private val context: Context) {
                     continue
                 }
 
-                val firstIdx = (range.first - 1).coerceIn(0, c.mediaItemCount - 1)
-                val lastIdx = (range.last - 1).coerceAtMost(c.mediaItemCount - 1)
+                val firstIdx = playlistIndex(range.first).coerceIn(0, c.mediaItemCount - 1)
+                val lastIdx = playlistIndex(range.last).coerceAtMost(c.mediaItemCount - 1)
                 val idx = c.currentMediaItemIndex
                 if (!c.isPlaying) {
                     delay(REPEAT_BOUNDARY_PAUSED_POLL_MS)

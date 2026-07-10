@@ -11,25 +11,19 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.beautifulquran.R
+import com.beautifulquran.domain.BASMALAH_UTHMANI as DomainBasmalahUthmani
+import com.beautifulquran.domain.SURAH_WITHOUT_BASMALAH as DomainSurahWithoutBasmalah
+import com.beautifulquran.domain.surahOpensWithBasmalahPreface as domainSurahOpensWithBasmalahPreface
 
-/**
- * The basmalah as it appears in the Uthmani text (Al-Fatihah 1:1). Kept for
- * tests and for accessibility labels on the calligraphic render.
- */
-const val BASMALAH_UTHMANI = "بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ"
+/** Re-export for reader UI and existing tests. */
+const val BASMALAH_UTHMANI = DomainBasmalahUthmani
 
-/** At-Tawbah: the one surah that does not open with the basmalah. */
-const val SURAH_WITHOUT_BASMALAH = 9
+/** Re-export for reader UI and existing tests. */
+const val SURAH_WITHOUT_BASMALAH = DomainSurahWithoutBasmalah
 
-/** Al-Fatihah: the basmalah is counted as ayah 1, so it is not prefaced. */
-private const val SURAH_BASMALAH_IS_AYAH_ONE = 1
-
-/**
- * Whether the reader should draw the basmalah as a preface under the surah
- * header. False for Al-Fatihah (already ayah 1) and At-Tawbah (none).
- */
+/** Re-export for reader UI and existing tests. */
 fun surahOpensWithBasmalahPreface(surahId: Int): Boolean =
-    surahId != SURAH_BASMALAH_IS_AYAH_ONE && surahId != SURAH_WITHOUT_BASMALAH
+    domainSurahOpensWithBasmalahPreface(surahId)
 
 /**
  * Traditional Naskh manuscript calligraphy of the basmalah — ink on the page,

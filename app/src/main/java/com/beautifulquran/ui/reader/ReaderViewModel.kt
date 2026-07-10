@@ -10,6 +10,7 @@ import com.beautifulquran.data.model.Reciter
 import com.beautifulquran.data.model.Segment
 import com.beautifulquran.data.model.SurahContent
 import com.beautifulquran.domain.HighlightEngine
+import com.beautifulquran.domain.BASMALAH_PLAYLIST_AYAH
 import com.beautifulquran.playback.NowPlaying
 import com.beautifulquran.playback.PlayerController
 import com.beautifulquran.playback.PlayerUiState
@@ -133,9 +134,10 @@ class ReaderViewModel(
     /** The ayah whose block is lit on the sheet. Normally the playing ayah,
      * but the highlight crosses to the next ayah [FADE_LEAD_MS] before the
      * current one's audio ends, so the fade onto the next ayah begins a touch
-     * early and the transition feels anticipatory rather than abrupt. */
+     * early and the transition feels anticipatory rather than abrupt.
+     * Null while the chapter-opening basmalah lead-in is playing (no ayah yet). */
     val activeAyah: StateFlow<Int?> = pollingWhileLoaded(key = { it.ayah }) { ayah ->
-        ayahWithFadeLead(ayah)
+        if (ayah == BASMALAH_PLAYLIST_AYAH) null else ayahWithFadeLead(ayah)
     }
 
     /** Advances the lit ayah to the next one during the final [FADE_LEAD_MS] of
@@ -225,7 +227,9 @@ class ReaderViewModel(
         val np = player.state.value.nowPlaying
         if (np != null && np.surahId == surahId && np.reciterId != reciter.id) {
             val preservedRange = player.state.value.repeatRange
-            playFromAyah(np.ayah)
+            // Basmalah lead-in (ayah 0) restarts as a chapter opening.
+            val resumeAyah = np.ayah.coerceAtLeast(1)
+            playFromAyah(resumeAyah)
             if (preservedRange != null) {
                 player.setRepeatRange(
                     preservedRange.first,
@@ -254,6 +258,11 @@ class ReaderViewModel(
     fun fastForward() {
         val content = _uiState.value.content ?: return
         val np = playerState.value.nowPlaying?.takeIf { it.surahId == surahId } ?: return
+        // During the basmalah lead-in, skip ahead into ayah 1.
+        if (np.ayah == BASMALAH_PLAYLIST_AYAH) {
+            player.seekToAyah(1)
+            return
+        }
         val midpointMs = midpointForLongAyah(np.ayah)
         if (midpointMs != null && player.positionMs < midpointMs - MIDPOINT_SEEK_GRACE_MS) {
             player.seekToWord(np.ayah, midpointMs)
@@ -267,6 +276,10 @@ class ReaderViewModel(
 
     fun fastBackward() {
         val np = playerState.value.nowPlaying?.takeIf { it.surahId == surahId } ?: return
+        if (np.ayah == BASMALAH_PLAYLIST_AYAH) {
+            player.seekToBasmalah()
+            return
+        }
         if (player.positionMs > START_SEEK_GRACE_MS) {
             player.seekToAyah(np.ayah)
             return
@@ -274,6 +287,9 @@ class ReaderViewModel(
 
         if (np.ayah > 1) {
             player.seekToAyah(np.ayah - 1)
+        } else if (np.ayah == 1) {
+            // Restart from the basmalah lead-in when present.
+            player.playLoadedFromAyah(1)
         }
     }
 
@@ -284,11 +300,14 @@ class ReaderViewModel(
     }
 
     /** Loads this surah as the playlist from [startAyah]; no-op until content
-     * and reciter are ready. Returns false when not started. */
+     * and reciter are ready. Returns false when not started.
+     * [startWithBasmalah] prepends and begins on the everyayah basmalah clip
+     * when opening a chapter from ayah 1 (not for mid-ayah word seeks). */
     private fun startSurah(
         startAyah: Int,
         startPositionMs: Long = 0L,
         preserveRepeatRange: Boolean = true,
+        startWithBasmalah: Boolean = false,
     ): Boolean {
         val content = _uiState.value.content ?: return false
         val reciter = _uiState.value.currentReciter ?: return false
@@ -300,13 +319,17 @@ class ReaderViewModel(
             surahName = content.surah.nameTransliteration,
             startPositionMs = startPositionMs,
             preserveRepeatRange = preserveRepeatRange,
+            startWithBasmalah = startWithBasmalah,
         )
         return true
     }
 
     fun playFromAyah(ayah: Int) {
         // Playing a specific ayah abandons any active repeat range.
-        if (startSurah(ayah, preserveRepeatRange = false)) rememberPosition(ayah)
+        // Chapter openings (ayah 1) include the basmalah lead-in.
+        if (startSurah(ayah, preserveRepeatRange = false, startWithBasmalah = ayah == 1)) {
+            rememberPosition(ayah)
+        }
     }
 
     fun playFromWord(ayah: Int, positionMs: Long) {
@@ -335,6 +358,7 @@ class ReaderViewModel(
             val ayah = playerState.value.nowPlaying
                 ?.takeIf { it.surahId == surahId }
                 ?.ayah
+                ?.coerceAtLeast(1)
                 ?: settings.settings.value.lastAyah
             setRepeatRange(ayah, ayah)
             return
