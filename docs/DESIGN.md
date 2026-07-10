@@ -163,6 +163,10 @@ image, so it is crisp at any density and nearly free to render.
   to be felt more than seen.
 - **The weave.** Behind each surah opening, a star-and-cross tessellation at
   ~4 % ink, embossed, dissolving into the page at its edges.
+- **Basmalah.** Every surah except Al-Fatihah (where it *is* ayah 1) and
+  At-Tawbah (which has none) opens with the basmalah as a quiet centered
+  line of Arabic beneath the chapter title — ink on the page, not a
+  numbered ayah and not ornament.
 - **Restraint rule:** ornament appears in exactly three places — the surah
   header (rosette + weave), ayah number marks, and the home title mark.
   Nothing else on the sheet is decorated.
