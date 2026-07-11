@@ -19,6 +19,11 @@ import {
 } from '../data/models'
 import { BASMALAH_PLAYLIST_AYAH, surahOpensWithBasmalahPreface } from '../domain/Basmalah'
 import { AudioPrefetcher } from './audioPrefetch'
+import {
+  AudioBoundaryAnalyzer,
+  crossedAudibleEnd,
+  type AudibleBounds,
+} from './audioBounds'
 import { isIOSMediaEnvironment } from './iosMedia'
 import { PlaybackStallWatchdog } from './playbackStallWatchdog'
 import { peekPlaylistNextIndex } from './playlistNext'
@@ -75,7 +80,10 @@ export class PlayerController {
   private reciter: Reciter | null = null
   private content: SurahContent | null = null
   private tickTimer: number | null = null
+  private gaplessTimer: number | null = null
   private readonly prefetcher: AudioPrefetcher
+  private readonly boundaryAnalyzer = new AudioBoundaryAnalyzer()
+  private readonly audibleBounds = new Map<string, AudibleBounds>()
   private readonly singleElementPlayback: boolean
   /** Playlist index the standby element is prepared for, or -1. */
   private standbyIndex = -1
@@ -85,6 +93,8 @@ export class PlayerController {
   private readonly stallWatchdog = new PlaybackStallWatchdog()
   /** True while performing the pause/play cycle that revives frozen Safari audio. */
   private recoveringStall = false
+  /** Prevents rAF + `ended` from advancing the same audible boundary twice. */
+  private gaplessAdvancing = false
   /**
    * When true, the next `pause` event on the active element must not clear
    * isPlaying — set while swapping `src` during an in-flight playIndex
@@ -250,10 +260,12 @@ export class PlayerController {
         return
       }
       this.onTime()
+      this.maybeAdvanceAtAudibleEnd()
       this.detectSilentStall(nowMs)
       this.tickTimer = window.requestAnimationFrame(loop)
     }
     this.tickTimer = window.requestAnimationFrame(loop)
+    this.scheduleGaplessBoundary()
   }
 
   /**
@@ -305,6 +317,10 @@ export class PlayerController {
       cancelAnimationFrame(this.tickTimer)
       this.tickTimer = null
     }
+    if (this.gaplessTimer != null) {
+      window.clearTimeout(this.gaplessTimer)
+      this.gaplessTimer = null
+    }
   }
 
   private playlistUrls(): string[] {
@@ -314,7 +330,81 @@ export class PlayerController {
   private schedulePrefetch() {
     const urls = this.playlistUrls()
     this.prefetcher.readAhead(urls, this.index)
+    void this.prepareAudioBounds(this.index)
+    const next = this.peekNextIndex({ forStandby: true })
+    if (next != null) void this.prepareAudioBounds(next)
     void this.prepareStandby()
+  }
+
+  /** Decode only the current/next warm blobs; failures retain ordinary playback. */
+  private async prepareAudioBounds(index: number): Promise<void> {
+    const item = this.playlist[index]
+    if (!item || this.audibleBounds.has(item.url)) return
+    const src = await this.prefetcher.ensure(item.url)
+    if (!src) return
+    const bounds = await this.boundaryAnalyzer.analyze(src)
+    if (bounds) {
+      this.audibleBounds.set(item.url, bounds)
+      this.scheduleGaplessBoundary()
+    }
+  }
+
+  /**
+   * EveryAyah files carry encoded quiet on both sides. Advance at the measured
+   * audible end rather than `ended`; the next prepared clip starts at its own
+   * measured audible start. The normal ended path remains the fallback.
+   */
+  private maybeAdvanceAtAudibleEnd() {
+    if (this.gaplessAdvancing || !this.state.isPlaying) return
+    const current = this.playlist[this.index]
+    const bounds = current ? this.audibleBounds.get(current.url) : null
+    if (!crossedAudibleEnd(this.active.currentTime, this.active.duration, bounds)) return
+
+    const next = this.peekNextIndex({ forStandby: false })
+    if (next == null) return
+    const nextItem = this.playlist[next]
+    if (!nextItem || !this.audibleBounds.has(nextItem.url)) return
+    if (
+      this.standby != null &&
+      (this.standbyIndex !== next || this.standby.readyState < HAVE_FUTURE_DATA)
+    ) {
+      return
+    }
+
+    this.gaplessAdvancing = true
+    void this.playIndex(next, true).finally(() => {
+      this.gaplessAdvancing = false
+      this.scheduleGaplessBoundary()
+    })
+  }
+
+  /** Timer-backed boundary so a short trim window cannot fall between rAFs. */
+  private scheduleGaplessBoundary() {
+    if (this.gaplessTimer != null) window.clearTimeout(this.gaplessTimer)
+    this.gaplessTimer = null
+    if (!this.state.isPlaying || this.gaplessAdvancing) return
+    const item = this.playlist[this.index]
+    const bounds = item ? this.audibleBounds.get(item.url) : null
+    const duration = this.active.duration
+    if (!bounds || !Number.isFinite(duration) || duration - bounds.endS < 0.04) return
+    const remainingS = Math.max(0, bounds.endS - this.active.currentTime)
+    const delayMs = Math.max(8, remainingS / Math.max(0.1, this.state.speed) * 1_000)
+    const expectedIndex = this.index
+    this.gaplessTimer = window.setTimeout(() => {
+      this.gaplessTimer = null
+      this.maybeAdvanceAtAudibleEnd()
+      if (this.index === expectedIndex && this.state.isPlaying && !this.gaplessAdvancing) {
+        this.scheduleGaplessBoundary()
+      }
+    }, delayMs)
+  }
+
+  private seekActiveToAudibleStart(index: number) {
+    const item = this.playlist[index]
+    const startS = item ? this.audibleBounds.get(item.url)?.startS : null
+    if (startS != null && startS > 0 && this.active.currentTime < startS) {
+      this.active.currentTime = startS
+    }
   }
 
   /**
@@ -349,6 +439,7 @@ export class PlayerController {
     this.standby.playbackRate = this.state.speed
     this.standby.load()
     this.standbyIndex = nextIndex
+    this.scheduleGaplessBoundary()
   }
 
   private standbySrcMatches(src: string): boolean {
@@ -513,6 +604,7 @@ export class PlayerController {
     ) {
       this.swapToStandby()
       this.index = i
+      this.seekActiveToAudibleStart(i)
       // Intent before await play() so chrome recess does not wait on the
       // media element (and so a mid-await pause still sees isPlaying).
       this.publishNowPlaying({ playing: true })
@@ -621,6 +713,7 @@ export class PlayerController {
           this.setBuffering(false)
           return
         }
+        this.seekActiveToAudibleStart(i)
         await this.active.play()
         if (token !== this.playToken || !this.state.isPlaying) return
         this.setBuffering(false)
@@ -748,6 +841,7 @@ export class PlayerController {
         await this.waitForCanPlay(this.active)
       }
       if (token !== this.playToken || !this.state.isPlaying) return
+      this.seekActiveToAudibleStart(this.index)
       await this.active.play()
       if (token !== this.playToken || !this.state.isPlaying) return
       this.setBuffering(false)
@@ -839,12 +933,14 @@ export class PlayerController {
   seekMs(ms: number) {
     this.active.currentTime = Math.max(0, ms / 1000)
     this.onTime()
+    this.scheduleGaplessBoundary()
   }
 
   setSpeed(speed: number) {
     this.active.playbackRate = speed
     if (this.standby) this.standby.playbackRate = speed
     this.patch({ speed })
+    this.scheduleGaplessBoundary()
   }
 
   setRepeatMode(mode: PlayerState['repeatMode'], range: PlayerState['repeatRange'] = null) {
@@ -868,6 +964,7 @@ export class PlayerController {
   }
 
   private async onEnded() {
+    if (this.gaplessAdvancing) return
     if (this.state.repeatMode === 'ayah') {
       // Prefer native loop; this is a fallback if loop was unset.
       this.active.currentTime = 0
