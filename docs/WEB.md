@@ -216,7 +216,9 @@ Three sheets, hand-rolled paper stack (no router chrome):
 
 1. **Home** — surah list, search, continue-listening, floating playback
    control while a verse is loaded.
-2. **Reader** — header + ayahs + icon player bar; focus rail;
+2. **Reader** — header + ayahs + icon player bar; centered ayah
+   selector rail (hover-magnified dashes, gold focal tick);
+
    return-to-ayah ornament; bookmark ribbon.
 3. **Settings** — reciter, reading mode, text size, display toggles, theme.
    Opens as a third sheet **over** the reader when a surah is open
@@ -264,7 +266,8 @@ sans.
 
 ### Phase 3 — Focus + paper stack polish
 - ✅ `ReaderFocusController` (doorstep + `homeScrollStep`, recitation-follow,
-  selector rail, return-to-ayah, tall-verse word keep-in-view).
+  centered hover-magnify ayah selector rail, return-to-ayah, tall-verse word
+  keep-in-view).
 - ✅ Recess/dim only while playing; full Plain ink when paused or idle.
 - Sheet transitions + page-turn feel (audio optional).
 - Bookmarks ribbon; settings persistence; continue listening.
