@@ -912,6 +912,9 @@ select {
   padding: 1.2rem 2.6rem 1.45rem;
   position: relative;
   scroll-margin-top: 12vh;
+  /* Shared with .word-arabic / .ayah-mark so the verse sign tracks glyph size. */
+  --word-arabic-size: calc(1.8rem * var(--font-scale, 1));
+  --word-arabic-line: 1.9;
 }
 
 .ayah-mark {
@@ -920,6 +923,28 @@ select {
   font-size: 0.95rem;
   margin-inline-start: 0.35rem;
   transition: opacity var(--ink-fade-ms) var(--recede-ease);
+  line-height: 1;
+}
+
+/*
+ * Gloss / word-unit row: center the ﴿N﴾ mark on the Arabic line box only
+ * (Android ArabicAyahNumberUnit). Without this, flex stretch parks the
+ * smaller mark at the top of the tall word column (Arabic + gloss).
+ */
+.words[data-lyric='arabic'] > .ayah-mark {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  height: calc(var(--word-arabic-size) * var(--word-arabic-line));
+  /* Match .word-unit padding-top so the box lines up with the glyph row. */
+  margin-block-start: 0.2rem;
+}
+
+/* English lyric: sit mid-row beside the single gloss line. */
+.words[data-lyric='english'] > .ayah-mark {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
 }
 
 .words {
@@ -958,8 +983,8 @@ select {
 
 .word-arabic {
   font-family: var(--font-arabic);
-  font-size: calc(1.8rem * var(--font-scale, 1));
-  line-height: 1.9;
+  font-size: var(--word-arabic-size);
+  line-height: var(--word-arabic-line);
   position: relative;
 }
 
@@ -1131,6 +1156,15 @@ select {
   line-height: 2;
   direction: rtl;
   text-align: right;
+}
+
+/* Arabic-only continuous line: middle-align the smaller mark to the glyphs. */
+.hafs-ayah > .ayah-mark {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  /* Parent body size × line-height — mark keeps its own smaller font-size. */
+  height: calc(1.85rem * var(--font-scale, 1) * 2);
 }
 
 @media (hover: hover) {
@@ -2002,14 +2036,15 @@ select {
 
   .ayah-block {
     padding-inline: 2.85rem;
-  }
-
-  .word-arabic {
-    font-size: calc(1.65rem * var(--font-scale, 1));
+    --word-arabic-size: calc(1.65rem * var(--font-scale, 1));
   }
 
   .hafs-ayah {
     font-size: calc(1.65rem * var(--font-scale, 1));
+  }
+
+  .hafs-ayah > .ayah-mark {
+    height: calc(1.65rem * var(--font-scale, 1) * 2);
   }
 
   .player-bar {

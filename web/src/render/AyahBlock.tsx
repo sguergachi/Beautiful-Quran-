@@ -131,7 +131,7 @@ function AyahBlockInner({
           </span>
         </p>
       ) : (
-        <div className="words" dir={englishOnly ? 'ltr' : 'rtl'}>
+        <div className="words" dir={englishOnly ? 'ltr' : 'rtl'} data-lyric={englishOnly ? 'english' : 'arabic'}>
           {words.map((w) => (
             <WordUnit
               key={w.position}
