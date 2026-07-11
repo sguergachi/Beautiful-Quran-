@@ -28,6 +28,16 @@ python3 tools/build_db.py     # builds app/src/main/assets/quran.db
 ./gradlew assembleDebug
 ```
 
+To create the Play Store app bundle, place the uncommitted signing key at
+`release.keystore`, then run:
+
+```bash
+scripts/build_release_bundle.sh
+```
+
+The script builds `app-release.aab` and verifies that it is signed with the
+upload certificate expected by Google Play.
+
 `tools/build_db.py` downloads the Quran text, word-by-word data, and word-level
 audio timings, validates them against each other, and packs them into a single
 SQLite asset. CI (GitHub Actions) runs unit tests on every push; on `master`
