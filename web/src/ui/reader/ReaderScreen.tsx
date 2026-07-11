@@ -32,7 +32,7 @@ import { OrnateSurahTitle } from './OrnateSurahTitle'
 import { ReaderFocusController } from './ReaderFocusController'
 import { shouldPauseFollowOnDrag } from './followGesture'
 import { RootViewer } from '../root/RootViewer'
-import { SearchHitFlash } from '../../engine/wordSearch'
+import { SearchHitFlash, searchHitFlashTotalMs } from '../../engine/wordSearch'
 
 /** Usable in-surah query — mirrors Android `SurahSearchState.activeQuery`. */
 function activeSearchQuery(active: boolean, query: string): string | null {
@@ -223,7 +223,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content?.surah.id, isTop])
 
-  // Home word-search hit: soft orange ink breath (fade in / out × 2) on the
+  // Home word-search hit: orange repeat wash (wash in → dissolve × 2) on the
   // matched word once the verse is on screen (Android SearchHitFlash).
   const pendingFlash = state.pendingSearchFlash
   const [flashTarget, setFlashTarget] = useState<{
@@ -247,14 +247,11 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     const startTimer = window.setTimeout(() => {
       if (cancelled) return
       setFlashTarget({ ayah, wordPosition: word })
-      const pulseMs =
-        SearchHitFlash.PULSES *
-        (SearchHitFlash.FADE_IN_MS + SearchHitFlash.FADE_OUT_MS)
       clearTimer = window.setTimeout(() => {
         if (cancelled) return
         setFlashTarget(null)
         appStore.clearSearchFlash()
-      }, pulseMs)
+      }, searchHitFlashTotalMs())
     }, SearchHitFlash.START_DELAY_MS)
     return () => {
       cancelled = true

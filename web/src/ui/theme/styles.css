@@ -646,7 +646,9 @@ select {
   color: color-mix(in srgb, var(--ink-muted) 70%, transparent);
 }
 
-/* Search-hit flash overlay — same box as the repeat orange layer. */
+/* Search-hit flash overlay — same box as the repeat orange layer.
+   Motion is driven by runSearchHitDoubleWash (directional mask + dissolve),
+   not CSS opacity keyframes. */
 .word-search-flash-overlay {
   position: absolute;
   left: 0;
@@ -679,27 +681,6 @@ select {
   pointer-events: none;
   color: var(--repeat);
   opacity: 0;
-}
-
-/* Soft ink breath — fade in / out over 500 ms, twice.
-   Ease applies between keyframes so each half breathes in and out.
-   (Android SearchHitFlash.BreathEasing.) */
-@keyframes search-hit-flash-pulse {
-  0% {
-    opacity: 0;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
-.word-search-flash-overlay[data-pulse='true'],
-.hafs-search-flash-overlay[data-pulse='true'] {
-  animation: search-hit-flash-pulse 500ms cubic-bezier(0.37, 0, 0.63, 1) 2
-    forwards;
 }
 
 .surah-row {

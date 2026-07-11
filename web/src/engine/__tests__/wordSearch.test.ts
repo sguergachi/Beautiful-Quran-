@@ -8,11 +8,14 @@ import {
   normalizeArabicForSearch,
   parseAyahReference,
   SearchHitFlash,
+  searchHitFlashCycleMs,
+  searchHitFlashTotalMs,
   sectionWordSearchHits,
   shouldRunWordSearch,
   type WordSearchIndexEntry,
   type WordSearchHit,
 } from '../wordSearch'
+import { getTuning } from '../ink'
 
 function entry(
   surahId: number,
@@ -184,10 +187,11 @@ describe('filterSurahs', () => {
 })
 
 describe('SearchHitFlash', () => {
-  it('each breath is half a second', () => {
-    const cycle = SearchHitFlash.FADE_IN_MS + SearchHitFlash.FADE_OUT_MS
+  it('pulses reuse the ink-engine repeat wash timings', () => {
+    const tuning = getTuning()
+    const cycle = searchHitFlashCycleMs()
     expect(SearchHitFlash.PULSES).toBe(2)
-    expect(cycle).toBe(500)
-    expect(cycle * SearchHitFlash.PULSES).toBe(1000)
+    expect(cycle).toBe(tuning.repeatSweepMs + tuning.repeatFadeOutMs)
+    expect(searchHitFlashTotalMs()).toBe(cycle * SearchHitFlash.PULSES)
   })
 })

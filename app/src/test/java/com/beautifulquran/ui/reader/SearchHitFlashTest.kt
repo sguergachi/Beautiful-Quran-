@@ -6,12 +6,13 @@ import org.junit.Test
 class SearchHitFlashTest {
 
     @Test
-    fun `each breath is half a second with a soft ease`() {
-        val cycleMs = SearchHitFlash.FADE_IN_MS + SearchHitFlash.FADE_OUT_MS
+    fun `pulses reuse the ink-engine repeat wash timings`() {
+        val cycleMs = SearchHitFlash.cycleMs()
         assertEquals(2, SearchHitFlash.PULSES)
-        assertEquals(250, SearchHitFlash.FADE_IN_MS)
-        assertEquals(250, SearchHitFlash.FADE_OUT_MS)
-        assertEquals(500, cycleMs)
-        assertEquals(1000, cycleMs * SearchHitFlash.PULSES)
+        assertEquals(
+            InkEngine.tuning.repeatSweepMs + InkEngine.tuning.repeatFadeOutMs,
+            cycleMs,
+        )
+        assertEquals(cycleMs.toLong() * SearchHitFlash.PULSES, SearchHitFlash.totalMs())
     }
 }

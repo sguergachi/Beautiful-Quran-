@@ -21,8 +21,10 @@ import {
   applyMask,
   cachedPaperCoverMask,
   cachedWashMask,
+  runSearchHitDoubleWash,
   runWash,
 } from './inkWash'
+import { SearchHitFlash } from '../engine/wordSearch'
 
 interface Props {
   word: Word
@@ -114,6 +116,8 @@ export function WordUnit({
   const baseRef = useRef<HTMLSpanElement>(null)
   const coverRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
+  const flashRef = useRef<HTMLSpanElement>(null)
+  const glossFlashRef = useRef<HTMLSpanElement>(null)
   const glossRef = useRef<HTMLSpanElement>(null)
   const translitRef = useRef<HTMLSpanElement>(null)
   const prevState = useRef(ink.state)
@@ -356,6 +360,28 @@ export function WordUnit({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ink.repeat, englishMode])
 
+  // Search-hit flash: same orange directional wash as the repeat overlay,
+  // wash in → dissolve × 2. Separate overlay so real repeat is untouched.
+  useLayoutEffect(() => {
+    if (!searchFlash) return
+    const cancels: Array<() => void> = []
+    if (flashRef.current) {
+      cancels.push(
+        runSearchHitDoubleWash(
+          flashRef.current,
+          !englishMode,
+          SearchHitFlash.PULSES,
+        ),
+      )
+    }
+    if (glossFlashRef.current) {
+      cancels.push(
+        runSearchHitDoubleWash(glossFlashRef.current, false, SearchHitFlash.PULSES),
+      )
+    }
+    return () => cancels.forEach((c) => c())
+  }, [searchFlash, englishMode])
+
   const rtl = !englishMode
   const style: CSSProperties = englishMode
     ? { ['--upcoming-alpha' as string]: String(tuning.upcomingAlpha) }
@@ -439,9 +465,9 @@ export function WordUnit({
         </span>
         {searchFlash ? (
           <span
+            ref={flashRef}
             className={`word-search-flash-overlay ${baseClass}`}
             aria-hidden="true"
-            data-pulse="true"
           >
             {label}
           </span>
@@ -461,9 +487,9 @@ export function WordUnit({
           </span>
           {searchFlash ? (
             <span
+              ref={glossFlashRef}
               className="word-search-flash-overlay word-gloss"
               aria-hidden="true"
-              data-pulse="true"
             >
               {word.translation}
             </span>
