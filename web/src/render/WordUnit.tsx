@@ -48,7 +48,6 @@ export function WordUnit({
 }: Props) {
   const ink = InkEngine.word(word.position, activeWord, isActiveAyah, dimmed)
   const localRootRef = useRef<HTMLSpanElement>(null)
-  const rootRef = externalRootRef ?? localRootRef
   const textRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
   const prevState = useRef(ink.state)
