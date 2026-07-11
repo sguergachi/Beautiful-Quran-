@@ -68,12 +68,20 @@ export interface WordSearchIndexEntry {
  * Strips tashkeel / tatweel and unifies alef / ya variants so typed Arabic
  * can match Uthmani surface forms. Mirrors Android `normalizeArabicForSearch`
  * and `tools/build_db.py` `normalize_for_alignment`.
+ *
+ * Uses Arabic mark code-point ranges instead of `\p{M}` so index build over
+ * ~77k words stays cheap on the main thread.
  */
 export function normalizeArabicForSearch(input: string): string {
   if (!input) return input
   let out = ''
-  for (const ch of input) {
-    let cp = ch.codePointAt(0)!
+  for (let i = 0; i < input.length; i++) {
+    let cp = input.charCodeAt(i)
+    // Skip UTF-16 surrogate pairs' trail — Quran Arabic is BMP.
+    if (cp >= 0xd800 && cp <= 0xdbff) {
+      i++
+      continue
+    }
     if (cp === 0x0671 || cp === 0x0622 || cp === 0x0623 || cp === 0x0625) {
       cp = 0x0627
     } else if (cp === 0x0649) {
@@ -81,9 +89,16 @@ export function normalizeArabicForSearch(input: string): string {
     } else if (cp === 0x0640) {
       continue
     }
-    const s = String.fromCodePoint(cp)
-    if (/\p{M}/u.test(s)) continue
-    if (cp >= 0x0621 && cp <= 0x064a) out += s
+    // Arabic diacritics / Quranic annotation marks (not full \p{M}).
+    if (
+      (cp >= 0x064b && cp <= 0x065f) ||
+      cp === 0x0670 ||
+      (cp >= 0x06d6 && cp <= 0x06ed) ||
+      (cp >= 0x08d3 && cp <= 0x08ff)
+    ) {
+      continue
+    }
+    if (cp >= 0x0621 && cp <= 0x064a) out += String.fromCharCode(cp)
   }
   return out
 }
@@ -141,11 +156,11 @@ export function matchWordSearch(
   if (!isWordSearchQuery(trimmed)) return []
   const arabicNorm = normalizeArabicForSearch(trimmed)
   const lower = trimmed.toLowerCase()
+  const wantArabic = arabicNorm.length >= WORD_SEARCH_MIN_QUERY_LENGTH
   const out: WordSearchHit[] = []
   for (const entry of index) {
     const hit =
-      (arabicNorm.length >= WORD_SEARCH_MIN_QUERY_LENGTH &&
-        entry.arabicNorm.includes(arabicNorm)) ||
+      (wantArabic && entry.arabicNorm.includes(arabicNorm)) ||
       entry.translationLower.includes(lower) ||
       entry.transliterationLower.includes(lower)
     if (!hit) continue
@@ -153,6 +168,54 @@ export function matchWordSearch(
     if (out.length >= maxHits) break
   }
   return out
+}
+
+/** How many index rows to scan before yielding to the event loop. */
+export const WORD_SEARCH_CHUNK = 4_000
+
+/**
+ * Cooperative match — same results as [matchWordSearch], but yields every
+ * [WORD_SEARCH_CHUNK] rows so typing stays responsive on the main thread.
+ * Callers pass [isCancelled] to drop stale queries (Android `collectLatest`).
+ */
+export async function matchWordSearchAsync(
+  index: WordSearchIndexEntry[],
+  query: string,
+  maxHits = WORD_SEARCH_MAX_HITS,
+  isCancelled: () => boolean = () => false,
+): Promise<WordSearchHit[]> {
+  const trimmed = query.trim()
+  if (!isWordSearchQuery(trimmed)) return []
+  const arabicNorm = normalizeArabicForSearch(trimmed)
+  const lower = trimmed.toLowerCase()
+  const wantArabic = arabicNorm.length >= WORD_SEARCH_MIN_QUERY_LENGTH
+  const out: WordSearchHit[] = []
+  for (let i = 0; i < index.length; i++) {
+    if (i > 0 && i % WORD_SEARCH_CHUNK === 0) {
+      if (isCancelled()) return out
+      await yieldToEventLoop()
+      if (isCancelled()) return out
+    }
+    const entry = index[i]!
+    const hit =
+      (wantArabic && entry.arabicNorm.includes(arabicNorm)) ||
+      entry.translationLower.includes(lower) ||
+      entry.transliterationLower.includes(lower)
+    if (!hit) continue
+    out.push(toHit(entry))
+    if (out.length >= maxHits) break
+  }
+  return out
+}
+
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => resolve())
+    } else {
+      setTimeout(resolve, 0)
+    }
+  })
 }
 
 export function sectionWordSearchHits(

@@ -23,10 +23,13 @@ import type { StackLayer } from '../paper/stack'
 
 export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const state = useAppState()
-  const searching = state.search.trim().length > 0
+  // Local query — typing must not emit through appStore (that re-renders the
+  // whole paper stack, including the mounted reader under the cover).
+  const [search, setSearch] = useState('')
+  const searching = search.trim().length > 0
   const { surahs: filtered, ayahTarget } = useMemo(
-    () => filterSurahs(state.surahs, state.search),
-    [state.surahs, state.search],
+    () => filterSurahs(state.surahs, search),
+    [state.surahs, search],
   )
 
   const [wordHits, setWordHits] = useState<WordSearchHit[]>([])
@@ -37,18 +40,25 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
 
   useEffect(() => {
     setExpandedSurahIds(new Set())
-    if (!shouldRunWordSearch(state.search)) {
+    if (!shouldRunWordSearch(search)) {
       setWordHits([])
       setWordLoading(false)
       return
     }
     setWordLoading(true)
+    let cancelled = false
     const handle = window.setTimeout(() => {
-      setWordHits(QuranRepository.searchWords(state.search))
-      setWordLoading(false)
-    }, 220)
-    return () => window.clearTimeout(handle)
-  }, [state.search])
+      void QuranRepository.searchWordsAsync(search, () => cancelled).then((hits) => {
+        if (cancelled) return
+        setWordHits(hits)
+        setWordLoading(false)
+      })
+    }, 160)
+    return () => {
+      cancelled = true
+      window.clearTimeout(handle)
+    }
+  }, [search])
 
   const wordSections = useMemo(
     () => sectionWordSearchHits(wordHits, expandedSurahIds),
@@ -135,8 +145,8 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
             name="chapter-search"
             type="search"
             placeholder="Search surah, word, or 2:255"
-            value={state.search}
-            onValueChange={(v) => appStore.setSearch(v)}
+            value={search}
+            onValueChange={setSearch}
             aria-label="Search surah, word, or ayah reference"
           />
         </div>
@@ -209,7 +219,7 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
                   <WordSearchSection
                     key={section.surahId}
                     section={section}
-                    query={state.search}
+                    query={search}
                     onToggle={() => toggleSection(section.surahId)}
                     onOpenHit={(hit) =>
                       appStore.openSurah(

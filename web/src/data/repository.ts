@@ -12,6 +12,7 @@ import type {
 } from './models'
 import {
   matchWordSearch,
+  matchWordSearchAsync,
   normalizeArabicForSearch,
   shouldRunWordSearch,
   WORD_SEARCH_MAX_HITS,
@@ -22,6 +23,7 @@ import {
 let surahsCache: Surah[] | null = null
 let recitersCache: Reciter[] | null = null
 let wordSearchIndex: WordSearchIndexEntry[] | null = null
+let wordSearchIndexPromise: Promise<WordSearchIndexEntry[]> | null = null
 
 export async function ensureReady(
   onProgress?: (p: LoadProgress) => void,
@@ -188,26 +190,50 @@ export function rootSummary(root: string): RootSummary | null {
   return { root, occurrenceCount: countRow, occurrences }
 }
 
-function wordSearchIndexRows(): WordSearchIndexEntry[] {
-  if (wordSearchIndex) return wordSearchIndex
-  wordSearchIndex = queryAll(
-    `SELECT w.surah_id, w.ayah_number, w.position, w.arabic,
-            w.translation_en AS word_translation, w.transliteration,
-            a.text_uthmani, a.translation_en AS ayah_translation,
-            s.name_transliteration, s.name_arabic
-     FROM words w
-     JOIN ayahs a
-       ON a.surah_id = w.surah_id AND a.ayah_number = w.ayah_number
-     JOIN surahs s ON s.id = w.surah_id
-     ORDER BY w.surah_id, w.ayah_number, w.position`,
+/**
+ * Build the Quran-wide word-search index without a words⋈ayahs JOIN.
+ *
+ * Ayah text/translation and surah names are loaded once and shared by
+ * reference across every word in that ayah — much cheaper than sql.js
+ * duplicating those strings on ~77k joined rows (Android builds on IO;
+ * web must stay responsive on the main thread).
+ */
+function buildWordSearchIndex(): WordSearchIndexEntry[] {
+  const ayahMeta = new Map<string, { text: string; translation: string }>()
+  queryAll(
+    'SELECT surah_id, ayah_number, text_uthmani, translation_en FROM ayahs',
     [],
     (r) => {
+      ayahMeta.set(`${Number(r.surah_id)}:${Number(r.ayah_number)}`, {
+        text: String(r.text_uthmani),
+        translation: String(r.translation_en),
+      })
+      return null
+    },
+  )
+
+  const surahNames = new Map<number, { en: string; ar: string }>()
+  for (const s of surahs()) {
+    surahNames.set(s.id, { en: s.nameTransliteration, ar: s.nameArabic })
+  }
+
+  const index: WordSearchIndexEntry[] = []
+  queryAll(
+    `SELECT surah_id, ayah_number, position, arabic, translation_en, transliteration
+     FROM words
+     ORDER BY surah_id, ayah_number, position`,
+    [],
+    (r) => {
+      const surahId = Number(r.surah_id)
+      const ayahNumber = Number(r.ayah_number)
       const arabic = String(r.arabic)
-      const translation = String(r.word_translation)
+      const translation = String(r.translation_en)
       const transliteration = String(r.transliteration)
-      return {
-        surahId: Number(r.surah_id),
-        ayahNumber: Number(r.ayah_number),
+      const meta = ayahMeta.get(`${surahId}:${ayahNumber}`)
+      const names = surahNames.get(surahId)
+      index.push({
+        surahId,
+        ayahNumber,
         position: Number(r.position),
         arabic,
         arabicNorm: normalizeArabicForSearch(arabic),
@@ -215,14 +241,54 @@ function wordSearchIndexRows(): WordSearchIndexEntry[] {
         translationLower: translation.toLowerCase(),
         transliteration,
         transliterationLower: transliteration.toLowerCase(),
-        ayahText: String(r.text_uthmani),
-        ayahTranslation: String(r.ayah_translation),
-        surahNameTransliteration: String(r.name_transliteration),
-        surahNameArabic: String(r.name_arabic),
-      }
+        // Shared string refs — one ayah text object for every word in it.
+        ayahText: meta?.text ?? '',
+        ayahTranslation: meta?.translation ?? '',
+        surahNameTransliteration: names?.en ?? '',
+        surahNameArabic: names?.ar ?? '',
+      })
+      return null
     },
   )
+  return index
+}
+
+function wordSearchIndexRows(): WordSearchIndexEntry[] {
+  if (wordSearchIndex) return wordSearchIndex
+  wordSearchIndex = buildWordSearchIndex()
   return wordSearchIndex
+}
+
+/**
+ * Warm the word-search index after boot so the first typed query does not
+ * hitch on a cold sql.js scan. Safe to call repeatedly; concurrent callers
+ * share one build promise.
+ */
+export function warmWordSearchIndex(): Promise<WordSearchIndexEntry[]> {
+  if (wordSearchIndex) return Promise.resolve(wordSearchIndex)
+  if (wordSearchIndexPromise) return wordSearchIndexPromise
+  wordSearchIndexPromise = new Promise((resolve) => {
+    const run = () => {
+      try {
+        resolve(wordSearchIndexRows())
+      } catch {
+        wordSearchIndexPromise = null
+        resolve([])
+      }
+    }
+    // Prefer idle time; fall back to a macrotask so Safari still warms.
+    const ric = (
+      globalThis as unknown as {
+        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number
+      }
+    ).requestIdleCallback
+    if (typeof ric === 'function') {
+      ric(run, { timeout: 2_500 })
+    } else {
+      setTimeout(run, 0)
+    }
+  })
+  return wordSearchIndexPromise
 }
 
 /**
@@ -235,6 +301,20 @@ export function searchWords(query: string): WordSearchHit[] {
   return matchWordSearch(wordSearchIndexRows(), query, WORD_SEARCH_MAX_HITS)
 }
 
+/**
+ * Async cover-sheet search — yields during the scan and honours cancellation
+ * so rapid typing does not stack main-thread work (Android `collectLatest`).
+ */
+export async function searchWordsAsync(
+  query: string,
+  isCancelled: () => boolean = () => false,
+): Promise<WordSearchHit[]> {
+  if (!shouldRunWordSearch(query)) return []
+  const index = await warmWordSearchIndex()
+  if (isCancelled()) return []
+  return matchWordSearchAsync(index, query, WORD_SEARCH_MAX_HITS, isCancelled)
+}
+
 export const QuranRepository = {
   ensureReady,
   surahs,
@@ -245,4 +325,6 @@ export const QuranRepository = {
   wordMorphology,
   rootSummary,
   searchWords,
+  searchWordsAsync,
+  warmWordSearchIndex,
 }

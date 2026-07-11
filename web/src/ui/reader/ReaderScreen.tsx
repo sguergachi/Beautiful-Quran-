@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { AyahBlock } from '../../render/AyahBlock'
 import { BasmalahCalligraphy } from '../../render/BasmalahCalligraphy'
 import { prefaceState } from '../../engine/ink'
@@ -131,20 +131,31 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const receded = recitingActive && !searchActive
 
   const activeQuery = activeSearchQuery(searchActive, searchQuery)
+  // Keep the input snappy — match/highlight work trails by a frame or two.
+  const deferredQuery = useDeferredValue(activeQuery)
+  const searchableAyahs = useMemo(() => {
+    if (!content) return [] as { number: number; translationLower: string; glossLowers: string[] }[]
+    return content.ayahs.map((a) => ({
+      number: a.number,
+      translationLower: a.translation.toLowerCase(),
+      glossLowers: a.words.map((w) => w.translation.toLowerCase()),
+    }))
+  }, [content])
   const searchMatches = useMemo(() => {
-    if (!activeQuery || !content) return [] as number[]
-    const q = activeQuery.toLowerCase()
+    if (!deferredQuery) return [] as number[]
+    const q = deferredQuery.toLowerCase()
     const matches: number[] = []
-    for (const a of content.ayahs) {
+    for (const a of searchableAyahs) {
       if (
-        a.translation.toLowerCase().includes(q) ||
-        a.words.some((w) => w.translation.toLowerCase().includes(q))
+        a.translationLower.includes(q) ||
+        a.glossLowers.some((g) => g.includes(q))
       ) {
         matches.push(a.number)
       }
     }
     return matches
-  }, [content, activeQuery])
+  }, [searchableAyahs, deferredQuery])
+  const matchAyahSet = useMemo(() => new Set(searchMatches), [searchMatches])
   const matchIndex = Math.min(
     Math.max(0, searchIndex),
     Math.max(0, searchMatches.length - 1),
@@ -182,20 +193,29 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   }, [activeQuery])
 
   // Jump the reading line to the current search hit.
+  // Debounce while the query is changing so each keystroke does not start a
+  // Motion glide; prev/next (matchIndex only) jumps immediately.
+  const prevSearchQueryRef = useRef(deferredQuery)
   useEffect(() => {
-    if (!isTop || !content || activeQuery == null) return
+    if (!isTop || !content || deferredQuery == null) return
     const target = searchMatches[matchIndex]
     if (target == null) return
-    pendingJumpAyah.current = target
-    setFocusedAyah(target)
-    setFocusedPosition(target)
-    void focus.focus(target, { animate: true, preRoll: true }).finally(() => {
+    const queryChanged = prevSearchQueryRef.current !== deferredQuery
+    prevSearchQueryRef.current = deferredQuery
+    const delay = queryChanged ? 140 : 0
+    const handle = window.setTimeout(() => {
+      pendingJumpAyah.current = target
       setFocusedAyah(target)
       setFocusedPosition(target)
-      pendingJumpAyah.current = null
-    })
+      void focus.focus(target, { animate: true, preRoll: true }).finally(() => {
+        setFocusedAyah(target)
+        setFocusedPosition(target)
+        pendingJumpAyah.current = null
+      })
+    }, delay)
+    return () => window.clearTimeout(handle)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeQuery, matchIndex, searchMatches, isTop, content?.surah.id])
+  }, [deferredQuery, matchIndex, searchMatches, isTop, content?.surah.id])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -741,7 +761,11 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     onPlayWord={onPlayWord}
                     onToggleBookmark={onToggleBookmark}
                     onHoldWord={onHoldWord}
-                    searchQuery={activeQuery}
+                    searchQuery={
+                      deferredQuery != null && matchAyahSet.has(ayah.number)
+                        ? deferredQuery
+                        : null
+                    }
                     flashWordPosition={
                       flashTarget?.ayah === ayah.number
                         ? flashTarget.wordPosition
