@@ -274,9 +274,10 @@ function wordSearchIndexRows(): WordSearchIndexEntry[] {
 }
 
 /**
- * Warm the word-search index after boot so the first typed query does not
- * hitch on a cold sql.js scan. Safe to call repeatedly; concurrent callers
- * share one build promise.
+ * Build the word-search index on demand after the user starts a word query.
+ * It is intentionally not warmed at boot: chapter taps take priority over a
+ * full-Quran scan. Safe to call repeatedly; concurrent callers share a build
+ * promise.
  */
 export function warmWordSearchIndex(): Promise<WordSearchIndexEntry[]> {
   if (wordSearchIndex) return Promise.resolve(wordSearchIndex)

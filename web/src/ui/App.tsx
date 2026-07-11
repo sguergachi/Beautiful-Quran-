@@ -69,8 +69,7 @@ export function App() {
   }, [entranceDone])
 
   const stack = state.stackLayer
-  // Peel-first open sets content null with sheet 'reader' — still count as
-  // reader so Settings does not flash on layer 1 for a frame.
+  // Keep explicit reader ownership as a guard for transient state restores.
   const hasReader = hasReaderOpen(state.content, state.sheet)
   // The cover *is* the loading screen — show the shell underneath only once
   // the book is ready so the open reveals chapters, not an empty page.

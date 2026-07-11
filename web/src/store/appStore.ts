@@ -4,7 +4,7 @@
  * Paper stack: stackLayer 0=Chapters, 1=Reader, 2=Settings (over reader).
  * When no surah is open, Settings occupies layer 1.
  */
-import { startTransition, useSyncExternalStore } from 'react'
+import { useSyncExternalStore } from 'react'
 import type { ActiveWord, Reciter, Surah, SurahContent, Segment } from '../data/models'
 import { QuranRepository } from '../data/repository'
 import {
@@ -187,7 +187,7 @@ class AppStore {
   }
 
   private hasReader(): boolean {
-    // Match App.tsx — peel-first open claims sheet 'reader' before content.
+    // Match App.tsx — retain the sheet check for transient reader ownership.
     return hasReaderOpen(this.state.content, this.state.sheet)
   }
 
@@ -251,9 +251,6 @@ class AppStore {
         loadProgress: 1,
       })
       player.setSpeed(this.state.settings.playbackSpeed)
-      // Warm the Quran-wide word index while the cover is still up so the
-      // first typed query does not hitch on a cold sql.js scan.
-      void QuranRepository.warmWordSearchIndex()
       // Only install the offline worker after a successful boot so a failed
       // first paint cannot pin a poisoned shell in the Cache API.
       void import('../swRegistration').then((m) => m.registerServiceWorker())
@@ -308,6 +305,15 @@ class AppStore {
     return prepared
   }
 
+  /**
+   * Decode one chapter into the repository cache before navigation commits.
+   * Home calls this on hover, focus, and pointer-down so the subsequent click
+   * only swaps already-materialized data into the paper stack.
+   */
+  prepareSurah(surahId: number) {
+    QuranRepository.surahContent(surahId)
+  }
+
   openSurah(surahId: number, ayah = 1, wordPosition?: number) {
     const reciter =
       this.state.reciters.find((r) => r.id === this.state.settings.reciterId) ??
@@ -343,12 +349,22 @@ class AppStore {
 
     const token = ++this.openToken
 
-    // Phase 1 — start the paper peel on this frame with a blank reader sheet.
-    // Mounting ayahs here would steal frames from the CSS transition.
+    // Materialize chapter text before changing sheets. Most clicks hit the
+    // pointer/focus cache warmed by Home; cold programmatic opens do the same
+    // work while the current paper remains visible, never on an empty reader.
+    const content = QuranRepository.surahContent(surahId)
+    if (token !== this.openToken) return
+
+    // Never let highlight lookups from the previous chapter leak into the new
+    // sheet while audio metadata hydrates independently.
+    this.timingSegments = new Map()
+    this.prepared = new Map()
+
+    // One state commit: the first reader frame already contains Quran text.
     this.set({
       stackLayer: READER_LAYER,
       sheet: 'reader',
-      content: null,
+      content,
       settings,
       hasTimings: false,
       activeWord: null,
@@ -360,39 +376,34 @@ class AppStore {
       pendingSearchFlash: flash,
     })
 
-    // Phase 2 — after the peel has painted, load + mount a tight ayah window.
-    // Double rAF: commit stackLayer, paint one transition frame, then work.
+    // Audio and timings begin only after the content-bearing reader frame has
+    // been handed to the browser. Neither can delay chapter navigation.
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+      const runAudio = () => {
         if (token !== this.openToken) return
-        const content = QuranRepository.surahContent(surahId)
+        player.loadSurah(content, reciter, ayah, { warm: false, quiet: true })
+      }
+      setTimeout(runAudio, 0)
+
+      // Timings are independent of the initial text render. Parse them in an
+      // idle task and refresh the current highlight if Play was tapped first.
+      const loadTimings = () => {
+        if (token !== this.openToken) return
         const map = QuranRepository.timings(reciter.id, surahId)
+        if (token !== this.openToken) return
         this.timingSegments = map
-        this.prepared = new Map()
         this.ensurePrepared(ayah)
         this.ensurePrepared(ayah + 1)
-
-        startTransition(() => {
-          if (token !== this.openToken) return
-          this.set({
-            content,
-            hasTimings: reciter.hasTimings && map.size > 0,
-          })
-        })
-
-        // Audio after the peel is underway — quiet so it does not re-emit mid-slide.
-        const runAudio = () => {
-          if (token !== this.openToken) return
-          player.loadSurah(content, reciter, ayah, { warm: false, quiet: true })
+        this.recomputeActive(this.state.player)
+        this.set({ hasTimings: reciter.hasTimings && map.size > 0 })
+      }
+      const ric = (
+        globalThis as unknown as {
+          requestIdleCallback?: (fn: () => void, opts?: { timeout: number }) => number
         }
-        const ric = (
-          globalThis as unknown as {
-            requestIdleCallback?: (fn: () => void, opts?: { timeout: number }) => number
-          }
-        ).requestIdleCallback
-        if (typeof ric === 'function') ric(runAudio, { timeout: 500 })
-        else setTimeout(runAudio, 0)
-      })
+      ).requestIdleCallback
+      if (typeof ric === 'function') ric(loadTimings, { timeout: 250 })
+      else setTimeout(loadTimings, 32)
     })
   }
 

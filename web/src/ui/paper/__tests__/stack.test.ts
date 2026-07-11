@@ -11,7 +11,7 @@ describe('hasReaderOpen', () => {
     expect(hasReaderOpen(null, 'home')).toBe(false)
   })
 
-  it('is true while peel-first open claims reader before content', () => {
+  it('is true while an explicit reader state owns the layer before content', () => {
     // Regression: content null + sheet reader must keep Settings off layer 1.
     expect(hasReaderOpen(null, 'reader')).toBe(true)
     expect(settingsLayerFor(true)).toBe(2)

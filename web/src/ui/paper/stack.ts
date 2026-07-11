@@ -15,9 +15,9 @@ export type SheetId = 'home' | 'reader' | 'settings'
 /**
  * Whether the reader owns layer 1.
  *
- * True while a surah is loaded *or* while peel-first `openSurah` has claimed
- * the reader sheet before content arrives. Without the sheet check, Settings
- * briefly steals layer 1 (`sheetAtLayer(1, false)` → `'settings'`).
+ * True while a surah is loaded or an explicitly restored reader state owns
+ * layer 1. The sheet check keeps Settings from claiming a transient reader
+ * state (`sheetAtLayer(1, false)` → `'settings'`).
  */
 export function hasReaderOpen(
   content: unknown | null,

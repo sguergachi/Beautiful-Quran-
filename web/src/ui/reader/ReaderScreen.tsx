@@ -123,7 +123,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   }, [state.bookmarks, content?.surah.id])
 
   const side = state.settings.ayahSelectorSide
-  // Keep depth/active correct while content is still loading (peel-first open).
+  // Keep depth/active correct for the parked empty reader at app start.
   const depth = Math.max(0, stackLayer - READER_LAYER)
   const isTop = stackLayer === READER_LAYER
   const peeking = stackLayer > READER_LAYER
@@ -553,8 +553,6 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       : 0
 
   if (!content) {
-    // Peel-first open: show a blank paper sheet (not visibility:hidden) so the
-    // slide-in animation is visible while sql.js / timings load.
     return (
       <div
         className="sheet"
@@ -562,7 +560,6 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
         data-layer={READER_LAYER}
         data-depth={depth}
         data-active={active}
-        data-loading={isTop ? 'true' : undefined}
         data-empty={!isTop && !peeking ? 'true' : undefined}
       />
     )
