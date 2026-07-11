@@ -21,6 +21,8 @@ import {
   applyMask,
   cachedPaperCoverMask,
   cachedWashMask,
+  runRepeatFadeOut,
+  runRepeatWashIn,
   runSearchHitDoubleWash,
   runWash,
 } from './inkWash'
@@ -126,6 +128,7 @@ export function WordUnit({
   const baseRef = useRef<HTMLSpanElement>(null)
   const coverRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
+  const flashRef = useRef<HTMLSpanElement>(null)
   const glossFlashRef = useRef<HTMLSpanElement>(null)
   const glossRef = useRef<HTMLSpanElement>(null)
   const translitRef = useRef<HTMLSpanElement>(null)
@@ -321,42 +324,13 @@ export function WordUnit({
     const leftRepeat = !ink.repeat && was
     prevRepeat.current = ink.repeat
     const rtl = !englishMode
-    const t = getTuning()
 
-    const ease = {
-      x1: t.sweepEaseX1,
-      y1: t.sweepEaseY1,
-      x2: t.sweepEaseX2,
-      y2: t.sweepEaseY2,
-    }
     if (enteredRepeat) {
-      const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
-      overlay.style.opacity = '1'
-      applyMask(overlay, cachedWashMask(0, 0, rtl, t.washFeather))
-      return runWash(
-        duration,
-        ease,
-        cubicBezierEase,
-        (_p, eased) => {
-          applyMask(overlay, cachedWashMask(eased, 0, rtl, t.washFeather))
-        },
-        () => applyMask(overlay, 'none'),
-      )
+      const duration = sweepMs(activeWord, speed) ?? getTuning().repeatSweepMs
+      return runRepeatWashIn(overlay, rtl, duration)
     }
     if (leftRepeat) {
-      const duration = t.repeatFadeOutMs
-      applyMask(overlay, 'none')
-      return runWash(
-        duration,
-        ease,
-        cubicBezierEase,
-        (_p, eased) => {
-          overlay.style.opacity = String(1 - eased)
-        },
-        () => {
-          overlay.style.opacity = '0'
-        },
-      )
+      return runRepeatFadeOut(overlay)
     }
     if (ink.repeat) {
       // Still in chain from a prior entry — hold full orange, do not restart.
@@ -369,16 +343,16 @@ export function WordUnit({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ink.repeat, englishMode])
 
-  // Search-hit flash: drive the *same* orange overlay the repeat wash uses
-  // (wash in → dissolve × 2). No second DOM node — mounting an extra glyph
-  // layer was shifting layout when CSS lost to .word-arabic position:relative.
+  // Search-hit pulse: same ink-engine wash helpers as the karaoke repeat
+  // overlay, on a dedicated always-mounted twin (left/top, glyph-sized) so
+  // the mask edge aligns with the letters and never fights real repeat.
   useLayoutEffect(() => {
-    if (!searchFlash || ink.repeat) return
+    if (!searchFlash) return
     const cancels: Array<() => void> = []
-    if (overlayRef.current) {
+    if (flashRef.current) {
       cancels.push(
         runSearchHitDoubleWash(
-          overlayRef.current,
+          flashRef.current,
           !englishMode,
           SearchHitFlash.PULSES,
         ),
@@ -390,7 +364,7 @@ export function WordUnit({
       )
     }
     return () => cancels.forEach((c) => c())
-  }, [searchFlash, englishMode, ink.repeat])
+  }, [searchFlash, englishMode])
 
   const rtl = !englishMode
   const style: CSSProperties = englishMode
@@ -473,6 +447,17 @@ export function WordUnit({
         >
           {label}
         </span>
+        {/* Search-hit pulse twin — same classes/box as the karaoke repeat
+            overlay so the ink-engine mask sizes to the glyphs (left/top, not
+            inset:0). Always mounted at opacity 0; never fights real repeat. */}
+        <span
+          ref={flashRef}
+          className={`word-repeat-overlay ${baseClass}`}
+          aria-hidden="true"
+          style={{ opacity: 0 }}
+        >
+          {label}
+        </span>
       </span>
       {/* Gloss/translit are siblings of the glyph stack (not nested under the
           wash mask). Arabic path: they own Upcoming dim. English path: parent
@@ -486,10 +471,9 @@ export function WordUnit({
           >
             {word.translation}
           </span>
-          {/* Always mounted (opacity 0) like the repeat overlay — no mount jitter. */}
           <span
             ref={glossFlashRef}
-            className="word-search-flash-overlay word-gloss"
+            className="word-repeat-overlay word-gloss"
             aria-hidden="true"
             style={{ opacity: 0 }}
           >

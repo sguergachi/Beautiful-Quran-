@@ -1119,8 +1119,8 @@ select {
 }
 
 @media (hover: hover) {
-  .word-unit:hover .word-arabic:not(.word-repeat-overlay):not(.word-search-flash-overlay),
-  .word-unit:hover .word-gloss:not(.word-repeat-overlay):not(.word-search-flash-overlay) {
+  .word-unit:hover .word-arabic:not(.word-repeat-overlay),
+  .word-unit:hover .word-gloss:not(.word-repeat-overlay) {
     color: var(--accent);
   }
 }
@@ -1211,34 +1211,9 @@ select {
   color: var(--repeat);
 }
 
-/* Search-hit flash overlay — same box as the repeat orange layer.
-   Motion is driven by runSearchHitDoubleWash (directional mask + dissolve).
-   Kept here (after .word-arabic) so position:absolute beats the base glyph's
-   position:relative — an earlier rule let the flash join flow and shift text. */
-.word-search-flash-overlay {
-  position: absolute;
-  left: 0;
-  top: 0;
-  pointer-events: none;
-  white-space: nowrap;
-  color: var(--repeat);
-  opacity: 0;
-}
-
-.word-search-flash-overlay.word-arabic,
-.word-search-flash-overlay.word-gloss {
-  position: absolute;
-  color: var(--repeat);
-}
-
 .word-gloss-flash {
   position: relative;
-}
-
-.word-gloss-flash .word-search-flash-overlay {
-  position: absolute;
-  inset: 0;
-  white-space: normal;
+  display: inline-block;
 }
 
 .word-wash {
