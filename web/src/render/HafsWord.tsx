@@ -57,7 +57,8 @@ export function HafsWord({
   const overlayRef = useRef<HTMLSpanElement>(null)
   const prevState = useRef(ink.state)
   const revealedOnEntry = useRef(false)
-  const prevRepeat = useRef(ink.repeat)
+  // false so a word that mounts already in the chain still washes orange in.
+  const prevRepeat = useRef(false)
   const holdTimer = useRef<number | null>(null)
   const startXY = useRef<{ x: number; y: number } | null>(null)
   const held = useRef(false)
@@ -156,6 +157,8 @@ export function HafsWord({
   }, [ink.state, ink.repeat, activeWord?.wordPosition])
 
   // Orange repeat overlay: wash in on chain entry, dissolve on release.
+  // Key only on `ink.repeat` — advancing within the chain must not cancel
+  // a mid-wash on earlier members (Android LaunchedEffect(repeat)).
   useLayoutEffect(() => {
     const overlay = overlayRef.current
     if (!overlay) return
@@ -206,12 +209,13 @@ export function HafsWord({
     }
     if (ink.repeat) {
       overlay.style.opacity = '1'
+      applyMask(overlay, 'none')
     } else {
       overlay.style.opacity = '0'
       applyMask(overlay, 'none')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.repeat, activeWord?.wordPosition])
+  }, [ink.repeat])
 
   const onPointerDown = (e: PointerEvent) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return
@@ -270,7 +274,7 @@ export function HafsWord({
         <span ref={coverRef} className="hafs-paper-cover" aria-hidden="true" />
         <span
           ref={overlayRef}
-          className="hafs-repeat-overlay"
+          className="hafs-repeat-overlay hafs-glyph"
           aria-hidden="true"
           style={{ opacity: 0 }}
         >

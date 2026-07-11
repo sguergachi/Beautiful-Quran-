@@ -48,16 +48,20 @@ export function WordUnit({
 }: Props) {
   const ink = InkEngine.word(word.position, activeWord, isActiveAyah, dimmed)
   const localRootRef = useRef<HTMLSpanElement>(null)
-  const rootRef = externalRootRef ?? localRootRef
+  /** Base glyph layer — Active wash targets this, not the whole unit (gloss). */
+  const baseRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
   const prevState = useRef(ink.state)
   /** Captured at Active entry — stable for the whole time the word is lit. */
   const revealedOnEntry = useRef(false)
-  const prevRepeat = useRef(ink.repeat)
+  // false so a word that mounts already in the chain still washes orange in
+  // (Android Animatable starts at progress 0 when repeat is true on first compose).
+  const prevRepeat = useRef(false)
   const holdTimer = useRef<number | null>(null)
   const startXY = useRef<{ x: number; y: number } | null>(null)
   const held = useRef(false)
   const tuning = getTuning()
+  const baseClass = englishMode ? 'word-gloss' : 'word-arabic'
 
   const clearHold = () => {
     if (holdTimer.current != null) {
@@ -72,9 +76,12 @@ export function WordUnit({
    * word flashes full ink for a frame (CSS Active opacity) then snaps faint
    * when the mask arrives. Matches Android: snap base alpha to 1, let the
    * letter sweep carry the reveal from the Upcoming floor.
+   *
+   * While repeating, the base layer stays untouched — orange carries the motion
+   * (Android WordHighlight.baseLayer skips letterFadeIn when repeat).
    */
   useLayoutEffect(() => {
-    const el = rootRef.current
+    const el = baseRef.current
     if (!el) return
     const prev = prevState.current
     const enteredActive = ink.state === InkState.Active && prev !== InkState.Active
@@ -90,6 +97,12 @@ export function WordUnit({
     const resting = t.upcomingAlpha
 
     if (ink.state !== InkState.Active) {
+      applyMask(el, 'none')
+      return
+    }
+
+    // Repeat chain: orange overlay carries the motion (Android skips base wash).
+    if (ink.repeat) {
       applyMask(el, 'none')
       return
     }
@@ -132,9 +145,11 @@ export function WordUnit({
     // speed/duration captured at Active entry only — mid-word setting changes
     // must not cancel and restart the sweep (that is itself a flicker).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.state, activeWord?.wordPosition, englishMode])
+  }, [ink.state, ink.repeat, activeWord?.wordPosition, englishMode])
 
   // Orange repeat overlay: wash in on chain entry, dissolve on release.
+  // Key only on `ink.repeat` (Android LaunchedEffect(repeat)) — advancing the
+  // active word inside a chain must not cancel a mid-wash on earlier members.
   useLayoutEffect(() => {
     const overlay = overlayRef.current
     if (!overlay) return
@@ -180,8 +195,9 @@ export function WordUnit({
       }
       raf = requestAnimationFrame(tick)
     } else if (ink.repeat) {
-      // Still in chain from a prior entry — hold orange, do not restart wash.
+      // Still in chain from a prior entry — hold full orange, do not restart.
       overlay.style.opacity = '1'
+      applyMask(overlay, 'none')
     } else {
       overlay.style.opacity = '0'
       applyMask(overlay, 'none')
@@ -191,7 +207,7 @@ export function WordUnit({
       cancelAnimationFrame(raf)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.repeat, activeWord?.wordPosition, englishMode])
+  }, [ink.repeat, englishMode])
 
   const rtl = !englishMode
   const style: CSSProperties = {
@@ -254,14 +270,17 @@ export function WordUnit({
     >
       <span className="word-stack" dir={rtl ? 'rtl' : 'ltr'}>
         <span
-          className={englishMode ? 'word-gloss' : 'word-arabic'}
+          ref={baseRef}
+          className={baseClass}
           data-search-hit={englishMode && searchHit ? 'true' : undefined}
         >
           {label}
         </span>
+        {/* Same typography as the base glyph — without word-arabic/word-gloss
+            the orange layer inherited body size and read as tiny text. */}
         <span
           ref={overlayRef}
-          className="word-repeat-overlay"
+          className={`word-repeat-overlay ${baseClass}`}
           aria-hidden="true"
           style={{ opacity: 0 }}
         >

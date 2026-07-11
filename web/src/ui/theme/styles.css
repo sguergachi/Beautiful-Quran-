@@ -861,8 +861,8 @@ select {
 }
 
 @media (hover: hover) {
-  .word-unit:hover .word-arabic,
-  .word-unit:hover .word-gloss {
+  .word-unit:hover .word-arabic:not(.word-repeat-overlay),
+  .word-unit:hover .word-gloss:not(.word-repeat-overlay) {
     color: var(--accent);
   }
 }
@@ -915,18 +915,31 @@ select {
   display: inline-block;
 }
 
+/* Orange second fade — same box/typography as the base glyph it covers.
+   left/top (not inset:0 + flex) so the overlay sizes to its own text and
+   sits flush on the base; inset+flex with mismatched font looked like tiny
+   orange text in the corner of the word box. */
 .word-repeat-overlay {
   position: absolute;
-  inset: 0;
-  color: var(--repeat);
+  left: 0;
+  top: 0;
   pointer-events: none;
-  display: flex;
-  flex-direction: column;
-  align-items: inherit;
+  white-space: nowrap;
+}
+
+/* Beat .word-gloss / .word-arabic (and their hover accent) when both classes
+   share the overlay node — orange must stay orange. */
+.word-repeat-overlay.word-arabic,
+.word-repeat-overlay.word-gloss {
+  color: var(--repeat);
 }
 
 .word-wash {
   /* mask-image set inline from washMaskImage() — smootherstep profile */
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
 }
 
 /* Arabic-only: full-ink glyphs + paper cover (never glyph alpha). */
@@ -970,9 +983,15 @@ select {
 
 .hafs-repeat-overlay {
   position: absolute;
-  inset: 0;
-  color: var(--repeat);
+  left: 0;
+  top: 0;
   pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Beat .hafs-glyph ink (and hover accent) on the shared overlay node. */
+.hafs-repeat-overlay.hafs-glyph {
+  color: var(--repeat);
 }
 
 .ayah-translation {
@@ -997,7 +1016,7 @@ select {
 }
 
 @media (hover: hover) {
-  .hafs-word:hover .hafs-glyph {
+  .hafs-word:hover .hafs-glyph:not(.hafs-repeat-overlay) {
     color: var(--accent);
   }
 }
