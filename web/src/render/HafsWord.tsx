@@ -157,6 +157,8 @@ export function HafsWord({
   }, [ink.state, ink.repeat, activeWord?.wordPosition])
 
   // Orange repeat overlay: wash in on chain entry, dissolve on release.
+  // Key only on `ink.repeat` — advancing within the chain must not cancel
+  // a mid-wash on earlier members (Android LaunchedEffect(repeat)).
   useLayoutEffect(() => {
     const overlay = overlayRef.current
     if (!overlay) return
@@ -207,12 +209,13 @@ export function HafsWord({
     }
     if (ink.repeat) {
       overlay.style.opacity = '1'
+      applyMask(overlay, 'none')
     } else {
       overlay.style.opacity = '0'
       applyMask(overlay, 'none')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.repeat, activeWord?.wordPosition])
+  }, [ink.repeat])
 
   const onPointerDown = (e: PointerEvent) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return

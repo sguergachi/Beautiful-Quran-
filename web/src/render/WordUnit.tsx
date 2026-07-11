@@ -148,6 +148,8 @@ export function WordUnit({
   }, [ink.state, ink.repeat, activeWord?.wordPosition, englishMode])
 
   // Orange repeat overlay: wash in on chain entry, dissolve on release.
+  // Key only on `ink.repeat` (Android LaunchedEffect(repeat)) — advancing the
+  // active word inside a chain must not cancel a mid-wash on earlier members.
   useLayoutEffect(() => {
     const overlay = overlayRef.current
     if (!overlay) return
@@ -193,8 +195,9 @@ export function WordUnit({
       }
       raf = requestAnimationFrame(tick)
     } else if (ink.repeat) {
-      // Still in chain from a prior entry — hold orange, do not restart wash.
+      // Still in chain from a prior entry — hold full orange, do not restart.
       overlay.style.opacity = '1'
+      applyMask(overlay, 'none')
     } else {
       overlay.style.opacity = '0'
       applyMask(overlay, 'none')
@@ -204,7 +207,7 @@ export function WordUnit({
       cancelAnimationFrame(raf)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.repeat, activeWord?.wordPosition, englishMode])
+  }, [ink.repeat, englishMode])
 
   const rtl = !englishMode
   const style: CSSProperties = {

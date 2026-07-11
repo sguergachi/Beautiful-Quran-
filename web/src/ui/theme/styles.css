@@ -924,6 +924,7 @@ select {
   left: 0;
   top: 0;
   pointer-events: none;
+  white-space: nowrap;
 }
 
 /* Beat .word-gloss / .word-arabic (and their hover accent) when both classes
@@ -935,6 +936,10 @@ select {
 
 .word-wash {
   /* mask-image set inline from washMaskImage() — smootherstep profile */
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
 }
 
 /* Arabic-only: full-ink glyphs + paper cover (never glyph alpha). */
@@ -981,6 +986,7 @@ select {
   left: 0;
   top: 0;
   pointer-events: none;
+  white-space: nowrap;
 }
 
 /* Beat .hafs-glyph ink (and hover accent) on the shared overlay node. */
