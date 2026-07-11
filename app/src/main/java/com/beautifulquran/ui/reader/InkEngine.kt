@@ -157,14 +157,19 @@ object InkEngine {
 
     /**
      * How long the active word's letter sweep should run: the time the
-     * reciter actually dwells on the word, corrected for playback speed and
-     * clamped so very short words still breathe and very long holds do not
-     * crawl. Null when nothing is lit.
+     * word stays lit (karaoke hold until the next word), corrected for
+     * playback speed. Clamped up to [Tuning.minSweepMs] only when the hold
+     * is long enough — never past the handoff, or the wash outlives Active
+     * and Arabic-only's paper cover flickers on the completed word. Long
+     * holds are capped by [Tuning.maxSweepMs]. Null when nothing is lit.
      */
-    fun sweepMs(activeWord: ActiveWord?, playbackSpeed: Float): Int? =
-        activeWord
-            ?.let { (it.durationMs / playbackSpeed).toInt() }
-            ?.coerceIn(tuning.minSweepMs, tuning.maxSweepMs)
+    fun sweepMs(activeWord: ActiveWord?, playbackSpeed: Float): Int? {
+        val word = activeWord ?: return null
+        val raw = (word.durationMs / playbackSpeed).toInt().coerceAtLeast(0)
+        if (raw <= 0) return 1
+        val floor = minOf(tuning.minSweepMs, raw)
+        return raw.coerceIn(floor, tuning.maxSweepMs)
+    }
 
     /**
      * Whether a word entering [current] from [previous] should start its

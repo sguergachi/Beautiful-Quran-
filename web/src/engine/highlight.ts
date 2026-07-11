@@ -8,6 +8,11 @@ export interface ActiveInfo {
   position: number
   startMs: number
   endMs: number
+  /**
+   * When the karaoke hold ends: next segment start, or [endMs] for the last
+   * word. Letter sweep uses this so a min-sweep clamp cannot outlive Active.
+   */
+  holdEndMs: number
   isRepeat: boolean
   highWater: number
   /** First word of the current repeat chain. Equals [position] when not repeating. */
@@ -26,10 +31,13 @@ export class PreparedTimings {
     if (idx == null) return null
     const seg = this.segments[idx]!
     const maxBefore = this.maxBeforeByIndex[idx]!
+    const next = this.segments[idx + 1]
+    const holdEndMs = Math.max(seg.startMs, next ? next.startMs : seg.endMs)
     return {
       position: seg.position,
       startMs: seg.startMs,
       endMs: seg.endMs,
+      holdEndMs,
       isRepeat: seg.position <= maxBefore,
       highWater: Math.max(maxBefore, seg.position),
       repeatStart: this.repeatStartByIndex[idx]!,

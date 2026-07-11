@@ -115,8 +115,15 @@ describe('InkEngine', () => {
 
   it('sweep clamps to the tuned floor and ceiling', () => {
     const tuning = getTuning()
-    expect(sweepMs(active(1, 10), 1)).toBe(tuning.minSweepMs)
+    expect(sweepMs(active(1, tuning.minSweepMs), 1)).toBe(tuning.minSweepMs)
+    expect(sweepMs(active(1, 500), 1)).toBe(500)
     expect(sweepMs(active(1, 60_000), 1)).toBe(tuning.maxSweepMs)
+  })
+
+  it('short hold is not stretched past handoff by the min sweep floor', () => {
+    expect(sweepMs(active(1, 80), 1)).toBe(80)
+    expect(sweepMs(active(1, 80), 2)).toBe(40)
+    expect(sweepMs(active(1, 10), 1)).toBe(10)
   })
 
   it('no active word means no sweep', () => {

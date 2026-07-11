@@ -108,8 +108,12 @@ export function sweepMs(
   playbackSpeed: number,
 ): number | null {
   if (!activeWord) return null
-  const raw = Math.round(activeWord.durationMs / playbackSpeed)
-  return Math.min(tuning.maxSweepMs, Math.max(tuning.minSweepMs, raw))
+  const raw = Math.max(0, Math.round(activeWord.durationMs / playbackSpeed))
+  if (raw <= 0) return 1
+  // Never clamp the floor above the lit lifetime — that left the wash running
+  // past handoff and flickered Arabic-only's paper cover on the completed word.
+  const floor = Math.min(tuning.minSweepMs, raw)
+  return Math.min(tuning.maxSweepMs, Math.max(floor, raw))
 }
 
 export function startRevealed(previous: InkState, current: InkState): boolean {

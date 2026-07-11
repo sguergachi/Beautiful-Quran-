@@ -130,7 +130,7 @@ export function WordUnit({
     // speed/duration captured at Active entry only — mid-word setting changes
     // must not cancel and restart the sweep (that is itself a flicker).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.state, activeWord, englishMode])
+  }, [ink.state, activeWord?.wordPosition, englishMode])
 
   // Orange repeat overlay: wash in on chain entry, dissolve on release.
   useLayoutEffect(() => {
@@ -189,7 +189,7 @@ export function WordUnit({
       cancelAnimationFrame(raf)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.repeat, activeWord, englishMode])
+  }, [ink.repeat, activeWord?.wordPosition, englishMode])
 
   const rtl = !englishMode
   const style: CSSProperties = {

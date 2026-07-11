@@ -221,17 +221,20 @@ private fun Modifier.repeatInkLayer(
 
 /**
  * Drives the letter-fade sweep for the active word: restarts at 0 each time
- * the word lights up and runs for [sweepMs] — the time the reciter actually
- * spends on this word — so the last letter finishes inking exactly as the
- * voice moves on.
+ * the word lights up and runs for [sweepMs] — the time the word stays lit
+ * (karaoke hold until the next word) — so the last letter finishes inking
+ * exactly as the voice moves on.
  *
  * When [startRevealed] is true the word begins the sweep already fully inked
  * (progress 1) instead of snapping to the faint "upcoming" floor. That is the
- * case for a word that lights up directly from a full-ink state — the first
- * word after pressing play, or after a seek/jump — where there is no preceding
- * "upcoming" dim to breathe out of. Snapping such a word to faint made it flash
+ * case for a word that lights up directly from a full-ink state — after a
+ * seek/jump or repeat re-entry — where there is no preceding "upcoming" dim
+ * to breathe out of. Snapping such a word to faint made it flash
  * full → faint → sweep; holding it revealed simply skips the reveal for that
  * one already-read word and removes the flicker.
+ *
+ * [sweepMs] is captured at Active entry only: mid-word retunes (speed, etc.)
+ * must not cancel and restart the wash — that is itself a flicker.
  */
 @Composable
 private fun rememberLetterSweep(
@@ -241,7 +244,9 @@ private fun rememberLetterSweep(
 ): State<Float> {
     val runSweep = active && sweepMs != null && !startRevealed
     val sweep = remember(active) { Animatable(if (runSweep) 0f else 1f) }
-    LaunchedEffect(active, sweepMs, startRevealed) {
+    // Key on active + startRevealed only — not sweepMs — so a duration tweak
+    // while the word is lit cannot snap progress back to 0.
+    LaunchedEffect(active, startRevealed) {
         val ms = sweepMs
         if (active && ms != null && !startRevealed) {
             sweep.snapTo(0f)

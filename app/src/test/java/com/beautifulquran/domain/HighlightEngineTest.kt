@@ -154,6 +154,20 @@ class HighlightEngineTest {
     }
 
     @Test
+    fun `hold end is the next segment start so the sweep matches karaoke hold`() {
+        // Gap between word 1 end (960) and word 2 start (970): hold through the gap.
+        val info = HighlightEngine.activeInfo(segments, 500)!!
+        assertEquals(1, info.position)
+        assertEquals(960, info.endMs)
+        assertEquals(970, info.holdEndMs)
+
+        val last = HighlightEngine.activeInfo(segments, 3000)!!
+        assertEquals(4, last.position)
+        assertEquals(6210, last.endMs)
+        assertEquals(6210, last.holdEndMs)
+    }
+
+    @Test
     fun `PreparedTimings matches convenience activeInfo and allocates tables once`() {
         val prepared = HighlightEngine.PreparedTimings.prepare(withRepeat)
         for (ms in listOf(500L, 2500L, 3500L, 4500L, 5500L, 99999L)) {

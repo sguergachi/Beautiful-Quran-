@@ -150,7 +150,7 @@ class TimingsLabViewModel(
                         ActiveWord(
                             ayah = st.ayah,
                             wordPosition = it.position,
-                            durationMs = it.endMs - it.startMs,
+                            durationMs = (it.holdEndMs - it.startMs).coerceAtLeast(0L),
                             isRepeat = it.isRepeat,
                             highWater = it.highWater,
                             repeatStart = it.repeatStart,

@@ -153,12 +153,28 @@ class InkEngineTest {
         val tuning = InkEngine.tuning
         assertEquals(
             tuning.minSweepMs,
-            InkEngine.sweepMs(active(1, durationMs = 10), playbackSpeed = 1f),
+            InkEngine.sweepMs(
+                active(1, durationMs = tuning.minSweepMs.toLong()),
+                playbackSpeed = 1f,
+            ),
+        )
+        assertEquals(
+            500,
+            InkEngine.sweepMs(active(1, durationMs = 500), playbackSpeed = 1f),
         )
         assertEquals(
             tuning.maxSweepMs,
             InkEngine.sweepMs(active(1, durationMs = 60_000), playbackSpeed = 1f),
         )
+    }
+
+    @Test
+    fun `short hold is not stretched past handoff by the min sweep floor`() {
+        // A 80 ms lit lifetime must sweep in 80 ms — clamping up to minSweepMs
+        // left the wash running into the next word (Arabic-only cover flicker).
+        assertEquals(80, InkEngine.sweepMs(active(1, durationMs = 80), playbackSpeed = 1f))
+        assertEquals(40, InkEngine.sweepMs(active(1, durationMs = 80), playbackSpeed = 2f))
+        assertEquals(10, InkEngine.sweepMs(active(1, durationMs = 10), playbackSpeed = 1f))
     }
 
     @Test

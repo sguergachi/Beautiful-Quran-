@@ -366,8 +366,10 @@ InkEngine owns that too, as data rather than as animation code:
 - **Pure policy** (JVM-tested in `InkEngineTest`):
   `wordState(position, activeWord, isActiveAyah, dimmed)` (including the
   high-water rule), `inRepeatChain(position, activeWord)`, the bundled
-  `word(...) → InkEngine.Word(state, repeat)`, `sweepMs(activeWord, speed)`
-  with the min/max clamps, `startRevealed(previous, current)` — the rule
+  `word(...) → InkEngine.Word(state, repeat)`,   `sweepMs(activeWord, speed)`
+  with the min/max clamps (the min floor never exceeds the word's lit
+  lifetime — stretching past handoff flickered Arabic-only's paper cover),
+  `startRevealed(previous, current)` — the rule
   that only a Recited→Active transition skips the reveal sweep — and
   `prefaceState(isActive, dimmed)` / `prefaceWashProgress(positionMs, durationMs)`
   for the surah-header basmalah VectorDrawable (Active during the Al-Fatihah
