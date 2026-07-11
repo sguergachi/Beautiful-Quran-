@@ -244,10 +244,11 @@ Three sheets, hand-rolled paper stack (no router chrome):
 1. **Home** — surah list, search, continue-listening, floating playback
    control while a verse is loaded (chapter · ayah label, transport, quiet
    Close that stops the session — Android parity).
-2. **Reader** — header + ayahs + icon player bar; ayah selector rail
+2. **Reader** — header + ayahs + icon player bar; once the opening surah
+   header scrolls off, a compact ornate title (Arabic + chapter ·
+   transliteration) reappears in the top bar; ayah selector rail
    (hover-magnified dashes, gold focal tick; centered on desktop, Android-
    style edge-flush on mobile ≤640px so bars grow from the screen edge);
-
    return-to-ayah roundel (gilt corolla, qalam arrow painted toward the
    active verse); bookmark ribbon.
 3. **Settings** — reciter, reading mode, text size, display toggles, theme.
@@ -324,6 +325,9 @@ sans.
   home playback control, Media Session.
 - ✅ Prefetch next ayahs into Cache API + dual `<audio>` standby so verse
   joins do not stall (see `web/src/playback/audioPrefetch.ts`).
+- ✅ Collapsed surah title in the reader top bar once the opening header
+  scrolls off (Android `OrnateSurahTitle` parity — Arabic + chapter ·
+  transliteration, flanked by gilded flourishes).
 - Visual QA against Android screenshots (`docs/ss*.png`).
 - CI: Vitest on every PR; optional Playwright on `master`.
 
