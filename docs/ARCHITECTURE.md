@@ -217,10 +217,11 @@ sit on top of each other like pages of a book, and moving between them is a
 horizontal page turn — draggable, fling-able, with page-turn audio
 (`PageTurnSounds`) tracking the live sheet position:
 
-- `home/HomeScreen` — surah list with search, a continue-listening card, and
-  a floating playback control (paper-native transport) while a verse is
-  loaded in the session; the reader's embedded `PlayerBar` takes over once
-  that sheet is open.
+- `home/HomeScreen` — surah list with search (surah names / `surah:ayah`
+  references, plus Quran-wide word hits sectioned by surah with truncated
+  expand-in-place lists), a continue-listening card, and a floating playback
+  control (paper-native transport) while a verse is loaded in the session;
+  the reader's embedded `PlayerBar` takes over once that sheet is open.
 - `reader/ReaderScreen` — the follow-along view. Composed of
   `SurahHeader` + one `AyahBlock` per ayah in a `LazyColumn`;
   `AyahBlock` renders `WordUnit`s (Arabic mode, RTL flow) or

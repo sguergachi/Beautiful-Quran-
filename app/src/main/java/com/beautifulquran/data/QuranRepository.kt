@@ -10,6 +10,12 @@ import com.beautifulquran.data.model.Surah
 import com.beautifulquran.data.model.SurahContent
 import com.beautifulquran.data.model.Word
 import com.beautifulquran.data.model.WordMorphology
+import com.beautifulquran.data.model.WordSearchHit
+import com.beautifulquran.domain.WORD_SEARCH_MAX_HITS
+import com.beautifulquran.domain.WordSearchIndexEntry
+import com.beautifulquran.domain.isWordSearchQuery
+import com.beautifulquran.domain.matchWordSearch
+import com.beautifulquran.domain.normalizeArabicForSearch
 import com.beautifulquran.timingslab.OverrideKey
 import com.beautifulquran.timingslab.TimingOverrides
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +45,10 @@ class QuranRepository(
 
     @Volatile
     private var recitersCache: List<Reciter>? = null
+
+    /** Lazily built once — ~77k word rows with ayah text for home search. */
+    @Volatile
+    private var wordSearchIndex: List<WordSearchIndexEntry>? = null
 
     /** Runs [sql] and maps every row with [map] — the shape of every query here. */
     private fun <T> queryList(sql: String, args: Array<String>? = null, map: (Cursor) -> T): List<T> =
@@ -149,6 +159,53 @@ class QuranRepository(
                 )
             }
         }
+
+    /**
+     * Quran-wide word search for the cover sheet: Arabic (diacritic-insensitive),
+     * English gloss, or transliteration substring. Returns hits in mushaf order.
+     * Blank / too-short / `surah:ayah` queries yield an empty list.
+     */
+    suspend fun searchWords(query: String): List<WordSearchHit> = withContext(Dispatchers.IO) {
+        if (!isWordSearchQuery(query)) return@withContext emptyList()
+        matchWordSearch(wordSearchIndex(), query, WORD_SEARCH_MAX_HITS)
+    }
+
+    private fun wordSearchIndex(): List<WordSearchIndexEntry> {
+        wordSearchIndex?.let { return it }
+        val built = queryList(
+            """
+            SELECT w.surah_id, w.ayah_number, w.position, w.arabic, w.translation_en, w.transliteration,
+                   a.text_uthmani, a.translation_en,
+                   s.name_transliteration, s.name_arabic
+            FROM words w
+            JOIN ayahs a
+              ON a.surah_id = w.surah_id AND a.ayah_number = w.ayah_number
+            JOIN surahs s ON s.id = w.surah_id
+            ORDER BY w.surah_id, w.ayah_number, w.position
+            """.trimIndent(),
+        ) { c ->
+            val arabic = c.getString(3)
+            val translation = c.getString(4)
+            val transliteration = c.getString(5)
+            WordSearchIndexEntry(
+                surahId = c.getInt(0),
+                ayahNumber = c.getInt(1),
+                position = c.getInt(2),
+                arabic = arabic,
+                arabicNorm = normalizeArabicForSearch(arabic),
+                translation = translation,
+                translationLower = translation.lowercase(),
+                transliteration = transliteration,
+                transliterationLower = transliteration.lowercase(),
+                ayahText = c.getString(6),
+                ayahTranslation = c.getString(7),
+                surahNameTransliteration = c.getString(8),
+                surahNameArabic = c.getString(9),
+            )
+        }
+        wordSearchIndex = built
+        return built
+    }
 
     /** Root concordance: count + every occurrence in Quranic order, joined
      *  with the word's Arabic/gloss and surah name for the jump list. */
