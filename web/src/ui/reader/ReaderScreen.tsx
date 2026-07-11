@@ -571,7 +571,9 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const railPosition =
     recitingActive && state.activeAyah != null ? state.activeAyah : focusedPosition
 
-  const rail = (
+  // Keep the rail off under-sheets — when Settings (or any sheet above) is
+  // open, a peek of the reader must not show the dial hanging beside it.
+  const rail = isTop ? (
     <AyahSelectorRail
       ayahCount={ayahCount}
       currentAyah={railAyah}
@@ -580,7 +582,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       receded={receded}
       onJump={jumpToAyah}
     />
-  )
+  ) : null
 
   const repeatMode = state.player.repeatMode
   const keepWordInView =
