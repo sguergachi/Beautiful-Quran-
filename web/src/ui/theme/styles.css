@@ -1044,6 +1044,10 @@ select {
   pointer-events: none;
 }
 
+/* Idle tip only while the verse is hovered; saved ribbons stay visible. */
+.ayah-block:not(:hover) .verse-ribbon[data-on='false']:not(:focus-visible) .verse-ribbon-canvas {
+  opacity: 0;
+}
 
 @media (hover: hover) {
   .verse-ribbon:hover .verse-ribbon-canvas {
