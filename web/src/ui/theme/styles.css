@@ -1050,6 +1050,13 @@ select {
   contain-intrinsic-size: auto 7.5rem;
 }
 
+/* FocusEngine needs the chosen ayah's real wrapped-text height even while it
+ * is far offscreen; `auto` would otherwise expose only the intrinsic estimate. */
+.ayah-block[data-focus-target='true'] {
+  content-visibility: visible;
+  contain-intrinsic-size: none;
+}
+
 /* Progressive-mount scroll padding — one block above/below the window. */
 .ayah-mount-pad {
   pointer-events: none;

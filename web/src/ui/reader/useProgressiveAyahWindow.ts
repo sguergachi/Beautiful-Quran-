@@ -29,6 +29,23 @@ export function initialAyahMountRange(
 }
 
 /**
+ * Materialize a requested ayah before the focus controller measures it.
+ * A far target gets a fresh tight window instead of mounting every intervening
+ * verse; the padding preserves its approximate content-space position until
+ * the real block height can be measured.
+ */
+export function mountRangeForAyah(
+  current: AyahMountRange,
+  ayahCount: number,
+  requestedAyah: number,
+): AyahMountRange {
+  if (ayahCount < 1) return { lo: 1, hi: 1, complete: true }
+  const target = Math.min(ayahCount, Math.max(1, Math.round(requestedAyah)))
+  if (target >= current.lo && target <= current.hi) return current
+  return initialAyahMountRange(ayahCount, target)
+}
+
+/**
  * Progressive ayah mount window for the reader.
  *
  * Mount a tight window around [anchorAyah] first, then expand on idle
@@ -38,6 +55,7 @@ export function useProgressiveAyahWindow(
   ayahCount: number,
   anchorAyah: number,
   surahKey: number | undefined,
+  requestedAyah: number | null = null,
 ): AyahMountRange {
   const [range, setRange] = useState<AyahMountRange>(() =>
     initialAyahMountRange(ayahCount, anchorAyah),
@@ -92,6 +110,14 @@ export function useProgressiveAyahWindow(
     // Re-window only when the surah identity changes — not on every lastAyah tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [surahKey, ayahCount])
+
+  // Selector/search/playback jumps may arrive before idle expansion has
+  // mounted their target. Put that target in the DOM first so FocusEngine can
+  // use its actual text height and the live scrollport height.
+  useEffect(() => {
+    if (!surahKey || requestedAyah == null) return
+    setRange((prev) => mountRangeForAyah(prev, ayahCount, requestedAyah))
+  }, [requestedAyah, ayahCount, surahKey])
 
   return range
 }

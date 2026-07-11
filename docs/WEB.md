@@ -131,6 +131,14 @@ JS-driven washes / ribbons / entrance also use the `motion` package
 (`web/src/ui/motion/easing.ts` for shared Android curves); wash masks are
 quantized + cached so ink frames stay cheap.
 
+Progressive reader mounting must materialize a selector/search target before
+the DOM controller measures it. Far jumps re-window tightly around the target;
+the controller then anchors from the live scrollport height and the rendered
+ayah's actual text height. The focused block is forced out of
+`content-visibility: auto` while measured so the browser cannot substitute its
+intrinsic placeholder height. A missing target must never be treated as a
+successful focus.
+
 **Follow pause (Android parity):** lyric follow is paused only by a vertical
 hand drag past touch-slop or a wheel gesture (`followGesture.ts`) — never by
 `scroll` events from FocusEngine or `keepWordInView`. Programmatic verse
