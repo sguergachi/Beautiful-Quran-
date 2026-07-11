@@ -55,6 +55,8 @@ export interface AppState {
   ready: boolean
   error: string | null
   loadLabel: string
+  /** 0..1 while the DB bytes stream in; null for indeterminate phases. */
+  loadProgress: number | null
   /** Continuous paper-stack position: 0 Chapters · 1 Reader · 2 Settings. */
   stackLayer: StackLayer
   /** Derived top sheet name (for labels / legacy checks). */
@@ -93,6 +95,7 @@ class AppStore {
     ready: false,
     error: null,
     loadLabel: 'Opening the book…',
+    loadProgress: null,
     stackLayer: COVER_LAYER,
     sheet: 'home',
     surahs: [],
@@ -193,23 +196,36 @@ class AppStore {
     try {
       await QuranRepository.ensureReady((p) => {
         if (p.phase === 'wasm') {
-          this.set({ loadLabel: 'Preparing the reader…' })
+          this.set({ loadLabel: 'Preparing the reader…', loadProgress: null })
           return
         }
         if (p.phase === 'asm') {
-          this.set({ loadLabel: 'Preparing the reader (compatibility)…' })
+          this.set({
+            loadLabel: 'Preparing the reader (compatibility)…',
+            loadProgress: null,
+          })
           return
         }
         if (p.total > 0) {
           const pct = Math.min(99, Math.round((p.loaded / p.total) * 100))
-          this.set({ loadLabel: `Loading the book… ${pct}%` })
+          this.set({
+            loadLabel: `Loading the book… ${pct}%`,
+            loadProgress: Math.min(0.99, p.loaded / p.total),
+          })
         } else {
-          this.set({ loadLabel: 'Loading the book…' })
+          this.set({ loadLabel: 'Loading the book…', loadProgress: null })
         }
       })
       const surahs = QuranRepository.surahs()
       const reciters = QuranRepository.reciters()
-      this.set({ ready: true, surahs, reciters, error: null, loadLabel: '' })
+      this.set({
+        ready: true,
+        surahs,
+        reciters,
+        error: null,
+        loadLabel: '',
+        loadProgress: 1,
+      })
       player.setSpeed(this.state.settings.playbackSpeed)
       // Only install the offline worker after a successful boot so a failed
       // first paint cannot pin a poisoned shell in the Cache API.
@@ -217,6 +233,7 @@ class AppStore {
     } catch (e) {
       this.set({
         ready: false,
+        loadProgress: null,
         error: e instanceof Error ? e.message : 'Failed to load Quran data',
       })
     }
