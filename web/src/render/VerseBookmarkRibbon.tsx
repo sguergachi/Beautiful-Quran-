@@ -230,15 +230,6 @@ export function VerseBookmarkRibbon({
       ctx.closePath()
     }
 
-    // Soft shadow on the paper
-    const shadowNudge = mirrored ? -2.4 : 2.4
-    ctx.save()
-    ctx.translate(shadowNudge, 2.6)
-    buildBodyPath()
-    ctx.fillStyle = `rgba(45, 10, 18, ${0.28 * alpha})`
-    ctx.fill()
-    ctx.restore()
-
     // Primary silk fill — tube shading baked into the ruby itself
     buildBodyPath()
     const x0 = Math.min(ax(outer), ax(inner))
