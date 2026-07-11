@@ -238,7 +238,11 @@ Translate `docs/PERFORMANCE.md` into web terms:
    while `isPlaying || isBuffering` for ayah joins). Pause works mid-buffer.
    Play intent flips `isPlaying` before `canplay`. Focus glide is deferred one
    frame so the icon + CSS recess paint first.
-7. **Measure on mid-tier mobile Chrome/Safari**, not only desktop. Target:
+7. **Sheet peel first.** `openSurah` starts the paper slide on the tap frame,
+   then loads content / mounts ayahs under `startTransition`. Long surahs
+   progressive-mount a window around the landing ayah; parked reader sheets
+   use `content-visibility: hidden`. Same-surah reopen peels without remount.
+8. **Measure on mid-tier mobile Chrome/Safari**, not only desktop. Target:
    scroll and ink at display refresh with no layout thrash during wash.
 
 If a technique forces React to re-render per frame, it is wrong — fix the

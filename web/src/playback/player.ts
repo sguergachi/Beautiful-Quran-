@@ -313,8 +313,16 @@ export class PlayerController {
    * Build playlist from [startAyah]. When startAyah is 1 and the surah opens
    * with a basmalah preface, prepend the dedicated basmalah clip. Mid-surah
    * starts (word taps) skip the preface.
+   *
+   * [opts.warm] defaults true for play-from paths; openSurah passes false so
+   * the sheet peel is not competing with a whole-surah MP3 warm.
    */
-  loadSurah(content: SurahContent, reciter: Reciter, startAyah = 1) {
+  loadSurah(
+    content: SurahContent,
+    reciter: Reciter,
+    startAyah = 1,
+    opts: { warm?: boolean } = {},
+  ) {
     this.content = content
     this.reciter = reciter
     this.surahId = content.surah.id
@@ -332,10 +340,9 @@ export class PlayerController {
     }
     this.index = 0
     this.clearStandby()
-    // Warm the chapter on unmetered / non-data-saver connections; always
-    // read-ahead the first few ayahs so the opening join is buffered.
     const urls = this.playlistUrls()
-    this.prefetcher.warmSurah(urls)
+    // Always read-ahead the opening window; whole-surah warm is optional.
+    if (opts.warm !== false) this.prefetcher.warmSurah(urls)
     this.prefetcher.readAhead(urls, -1) // include index 0 as "next" from -1
     void this.playIndex(0, /*autoplay*/ false)
     this.updateMediaSession()

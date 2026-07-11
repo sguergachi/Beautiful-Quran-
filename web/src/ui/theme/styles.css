@@ -173,15 +173,23 @@ select {
   flex-direction: column;
   background: var(--paper);
   transition:
-    left 420ms cubic-bezier(0.24, 0.02, 0.12, 1),
-    right 420ms cubic-bezier(0.24, 0.02, 0.12, 1),
-    transform 420ms cubic-bezier(0.24, 0.02, 0.12, 1),
-    opacity 380ms ease,
-    box-shadow 420ms ease;
-  will-change: transform, opacity, left, right;
+    transform 380ms cubic-bezier(0.24, 0.02, 0.12, 1),
+    opacity 320ms ease,
+    left 380ms cubic-bezier(0.24, 0.02, 0.12, 1),
+    right 380ms cubic-bezier(0.24, 0.02, 0.12, 1);
   transform-origin: center center;
   transform: translateX(0) scale(1);
   opacity: 1;
+}
+
+/* Promote to a compositor layer only while the paper deck is moving. */
+.app-shell[data-stack] .sheet {
+  will-change: auto;
+}
+.app-shell[data-stack='1'] .sheet[data-name='home'],
+.app-shell[data-stack='1'] .sheet[data-name='reader'],
+.app-shell[data-stack='2'] .sheet {
+  will-change: transform, opacity;
 }
 
 .sheet[data-name='home'] {
@@ -249,6 +257,16 @@ select {
   opacity: 0;
   pointer-events: none;
   box-shadow: none;
+  /* Drop the parked reader out of layout/paint — close must stay smooth
+     even when a long surah is still mounted underneath. */
+  content-visibility: hidden;
+  contain: strict;
+}
+
+.sheet[data-loading='true'] {
+  /* Blank paper during peel-first open — visible, no empty-hide. */
+  visibility: visible;
+  pointer-events: none;
 }
 
 /* Left-edge hit target — desktop peek gutter only (phones have no peek). */
@@ -1030,6 +1048,17 @@ select {
   /* Shared with .word-arabic / .ayah-mark so the verse sign tracks glyph size. */
   --word-arabic-size: calc(1.8rem * var(--font-scale, 1));
   --word-arabic-line: 1.9;
+  /* Skip paint/layout for off-screen verses after mount (browser virtualization). */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 7.5rem;
+}
+
+/* Progressive-mount placeholder — keeps scroll geometry while the window expands. */
+.ayah-block--spacer {
+  padding: 0;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 7rem;
+  pointer-events: none;
 }
 
 /*

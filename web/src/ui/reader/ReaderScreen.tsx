@@ -35,6 +35,10 @@ import { ReaderFocusController } from './ReaderFocusController'
 import { selectedPlaybackAyah } from './selectedPlaybackAyah'
 import { shouldPauseFollowOnDrag } from './followGesture'
 import { isRecitingSession } from './recitingActive'
+import {
+  AYAH_SPACER_EST_PX,
+  useProgressiveAyahWindow,
+} from './useProgressiveAyahWindow'
 import { RootViewer } from '../root/RootViewer'
 import { SearchHitFlash, searchHitFlashTotalMs } from '../../engine/wordSearch'
 
@@ -117,9 +121,10 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   }, [state.bookmarks, content?.surah.id])
 
   const side = state.settings.ayahSelectorSide
-  const depth = content ? Math.max(0, stackLayer - READER_LAYER) : 0
-  const isTop = content != null && stackLayer === READER_LAYER
-  const peeking = content != null && stackLayer > READER_LAYER
+  // Keep depth/active correct while content is still loading (peel-first open).
+  const depth = Math.max(0, stackLayer - READER_LAYER)
+  const isTop = stackLayer === READER_LAYER
+  const peeking = stackLayer > READER_LAYER
   const active = isTop || peeking
   // Instant recess — hold across ayah-join buffering, release on user pause
   // in the same tick (no 350 ms debounce lag on the transport).
@@ -129,6 +134,13 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     isBuffering: state.player.isBuffering,
   })
   const receded = recitingActive && !searchActive
+
+  const mountAnchor = state.settings.lastAyah || 1
+  const mountRange = useProgressiveAyahWindow(
+    content?.surah.ayahCount ?? 0,
+    mountAnchor,
+    content?.surah.id,
+  )
 
   const activeQuery = activeSearchQuery(searchActive, searchQuery)
   // Keep the input snappy — match/highlight work trails by a frame or two.
@@ -223,16 +235,36 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     focus.bind(el, count, 0)
   }, [content?.surah.id, content?.surah.ayahCount, isTop])
 
-  // Initial settle on the saved ayah (no animation).
+  // Initial settle on the saved ayah — wait two frames so the paper peel and
+  // the first progressive ayah window paint before the layout pass.
   useEffect(() => {
     if (!content || !isTop) return
     const ayah = state.settings.lastAyah || 1
-    void focus.focus(ayah, { animate: false, preRoll: false }).then(() => {
-      setFocusedAyah(focus.focusedAyah())
+    let cancelled = false
+    let raf2 = 0
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        if (cancelled) return
+        void focus.focus(ayah, { animate: false, preRoll: false }).then(() => {
+          if (cancelled) return
+          setFocusedAyah(focus.focusedAyah())
+        })
+      })
     })
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+    }
     // Only on surah open / becoming top sheet.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content?.surah.id, isTop])
+
+  // Progressive mount expands — refresh focus geometry without re-homing.
+  useEffect(() => {
+    if (!content || !isTop) return
+    focus.invalidateLayout()
+  }, [mountRange.lo, mountRange.hi, mountRange.complete, content?.surah.id, isTop])
 
   // Home word-search hit: orange repeat wash (wash in → dissolve × 2) on the
   // matched word once the verse is on screen (Android SearchHitFlash).
@@ -511,14 +543,17 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   )
 
   if (!content) {
+    // Peel-first open: show a blank paper sheet (not visibility:hidden) so the
+    // slide-in animation is visible while sql.js / timings load.
     return (
       <div
         className="sheet"
         data-name="reader"
         data-layer={READER_LAYER}
-        data-depth={0}
-        data-active="false"
-        data-empty="true"
+        data-depth={depth}
+        data-active={active}
+        data-loading={isTop ? 'true' : undefined}
+        data-empty={!isTop && !peeking ? 'true' : undefined}
       />
     )
   }
@@ -729,6 +764,23 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                   )
                 }
                 const ayah = item.ayah
+                // Progressive mount — spacers keep scroll geometry while the
+                // window expands after the paper peel.
+                if (
+                  !mountRange.complete &&
+                  (ayah.number < mountRange.lo || ayah.number > mountRange.hi)
+                ) {
+                  return (
+                    <div
+                      key={ayah.number}
+                      className="ayah-block ayah-block--spacer"
+                      data-ayah={ayah.number}
+                      id={`ayah-${ayah.number}`}
+                      style={{ height: AYAH_SPACER_EST_PX }}
+                      aria-hidden
+                    />
+                  )
+                }
                 const isActive = state.activeAyah === ayah.number
                 // Karaoke ink only while audio is moving. Global recess is CSS
                 // on `.scroll[data-reciting]` — keep dimmed false so inactive
