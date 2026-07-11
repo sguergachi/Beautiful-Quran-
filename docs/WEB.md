@@ -216,6 +216,13 @@ mid-tier phones — measure first.
   promotion path. `PlayerController` exposes `isBuffering` so the play button
   can show the join. A playback-clock watchdog remains as a last-resort guard
   for iOS Safari's silent freeze mode (no `waiting` / `stalled` event).
+  EveryAyah MP3s include reciter-dependent encoded quiet at both edges (often
+  hundreds of milliseconds, occasionally close to a second). The player
+  decodes only the warm current/next clips, detects their audible RMS bounds,
+  advances at the padded audible end, and starts the next clip at its padded
+  audible beginning. This preserves a small natural breath without stacking
+  two files' padding into a perceptible join; failed/unsupported analysis falls
+  back to the ordinary `ended` path.
   The play control shows a spinner while fetching / underrunning. `isPlaying`
   flips on play intent (before canplay) so chrome recess starts on the tap.
   Whole-surah warm runs when the connection is not data-saver / slow-2g. Soft
