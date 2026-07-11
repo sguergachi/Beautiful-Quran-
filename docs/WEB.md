@@ -196,9 +196,10 @@ mid-tier phones — measure first.
   for the playhead window are never LRU-evicted mid-join. `PlayerController`
   keeps a standby `<audio>` loaded from a **blob** (Safari will not deeply
   buffer a remote second element) and exposes `isBuffering` so the play button
-  shows a spinner while fetching / underrunning. Whole-surah warm runs when
-  the connection is not data-saver / slow-2g. Soft caps: ~40 blob URLs in
-  memory, ~200 Cache API entries.
+  shows a spinner while fetching / underrunning. `isPlaying` flips on play
+  intent (before canplay) so chrome recess starts on the tap. Whole-surah warm
+  runs when the connection is not data-saver / slow-2g. Soft caps: ~40 blob
+  URLs in memory, ~200 Cache API entries.
 - Media Session metadata + play/pause/seek actions for lock-screen / OS
   controls where the browser allows.
 
@@ -300,7 +301,9 @@ over `repeatFadeOutMs`.
 Motion: fade + slide only (≤ 420 ms), except chrome recede (520 ms) and
 verse ink recess (400 ms), plus far ayah jumps (up to 1000 ms via
 `FocusEngine.planJump`). The root-viewer ink bleed enter/exit pair is also
-420 ms.
+420 ms. Chrome recess starts on play *intent* (optimistic `isPlaying`),
+not after the audio element finishes buffering — otherwise the fade lags
+a beat behind the tap while the clip warms.
 
 Themes: Paper / Nightfall / Royal green — same tokens.
 
