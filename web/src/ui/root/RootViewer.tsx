@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { appStore, useAppState, type RootViewerState } from '../../store/appStore'
 import { IconClose } from '../icons/PlaybackIcons'
+import { featureSummary, posLabel, spacedRoot } from './morphologyLabels'
 
 /** Exit hole duration — keep in sync with `.ink-bleed[data-closing]` in styles.css. */
 const BLEED_OUT_MS = 420
@@ -52,43 +53,85 @@ function RootViewerBleed({ closing, rv }: { closing: boolean; rv: RootViewerStat
             <IconClose width="1.35em" height="1.35em" />
           </button>
         </div>
-        <p className="arabic-lg">{rv.arabic}</p>
-        <p className="muted">{rv.translation}</p>
-        <h2>{rv.root || 'Word'}</h2>
-        {rv.lemma ? (
-          <p className="muted">
-            {rv.lemma}
-            {rv.pos ? ` · ${rv.pos}` : ''}
+
+        <div className="ink-bleed-word">
+          <p className="arabic-lg" lang="ar" dir="rtl">
+            {rv.arabic}
           </p>
-        ) : null}
-        {rv.occurrenceCount > 0 ? (
-          <p className="muted" style={{ marginBottom: '1.25rem' }}>
-            {rv.occurrenceCount} occurrence{rv.occurrenceCount === 1 ? '' : 's'}
-          </p>
-        ) : (
-          <p className="muted">No root data for this word.</p>
-        )}
-        <div>
-          {rv.occurrences.slice(0, 80).map((o) => (
-            <button
-              key={`${o.surahId}:${o.ayahNumber}:${o.position}`}
-              type="button"
-              className="occurrence"
-              onClick={() => {
-                appStore.closeRootViewer()
-                appStore.openSurah(o.surahId, o.ayahNumber)
-              }}
-            >
-              <div className="ref">
-                {o.surahNameTransliteration} {o.ayahNumber}:{o.position}
-              </div>
-              <div dir="rtl" style={{ fontFamily: 'var(--font-arabic)', fontSize: '1.25rem' }}>
-                {o.arabic}
-              </div>
-              <div className="muted">{o.translation}</div>
-            </button>
-          ))}
+          {rv.translation ? (
+            <p className="ink-bleed-word-translation">{rv.translation}</p>
+          ) : null}
         </div>
+
+        {rv.root ? (
+          <section className="ink-bleed-section">
+            <p className="ink-bleed-label">Root</p>
+            <h2 className="ink-bleed-root" lang="ar" dir="rtl">
+              {spacedRoot(rv.root)}
+            </h2>
+          </section>
+        ) : null}
+
+        {rv.pos || rv.lemma ? (
+          <section className="ink-bleed-section">
+            <p className="ink-bleed-label">This form</p>
+            {rv.pos ? <p className="ink-bleed-form-pos">{posLabel(rv.pos)}</p> : null}
+            {featureSummary(rv.features) ? (
+              <p className="muted">{featureSummary(rv.features)}</p>
+            ) : null}
+            {rv.lemma ? (
+              <p className="ink-bleed-lemma">
+                <span className="ink-bleed-lemma-label">Lemma</span>
+                <span className="ink-bleed-lemma-ar" lang="ar" dir="rtl">
+                  {rv.lemma}
+                </span>
+              </p>
+            ) : null}
+          </section>
+        ) : null}
+
+        {rv.occurrenceCount > 0 ? (
+          <section className="ink-bleed-section">
+            <p className="ink-bleed-label">In the Quran</p>
+            <p className="ink-bleed-count">
+              {rv.occurrenceCount === 1
+                ? 'Appears once'
+                : `Appears ${rv.occurrenceCount} times`}
+            </p>
+            <div className="occurrence-list">
+              {rv.occurrences.slice(0, 80).map((o) => (
+                <button
+                  key={`${o.surahId}:${o.ayahNumber}:${o.position}`}
+                  type="button"
+                  className="occurrence"
+                  onClick={() => {
+                    appStore.closeRootViewer()
+                    appStore.openSurah(o.surahId, o.ayahNumber)
+                  }}
+                >
+                  <div className="ref">
+                    {o.surahNameTransliteration} {o.ayahNumber}:{o.position}
+                  </div>
+                  <div className="occurrence-row">
+                    <span className="occurrence-ar" lang="ar" dir="rtl">
+                      {o.arabic}
+                    </span>
+                    {o.translation ? (
+                      <span className="occurrence-tr">{o.translation}</span>
+                    ) : null}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        <p className="ink-bleed-attribution">
+          Morphology from the Quranic Arabic Corpus —{' '}
+          <a href="https://corpus.quran.com" target="_blank" rel="noreferrer">
+            corpus.quran.com
+          </a>
+        </p>
       </div>
     </div>
   )
