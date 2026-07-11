@@ -14,6 +14,7 @@ import {
 import type { StackLayer } from '../paper/stack'
 import { PaperInput } from '../kit'
 import {
+  IconBuffering,
   IconChevronDown,
   IconChevronUp,
   IconClose,
@@ -579,8 +580,16 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
               <button
                 type="button"
                 className="play"
-                aria-label={state.player.isPlaying ? 'Pause' : 'Play'}
+                aria-label={
+                  state.player.isBuffering
+                    ? 'Buffering'
+                    : state.player.isPlaying
+                      ? 'Pause'
+                      : 'Play'
+                }
+                aria-busy={state.player.isBuffering || undefined}
                 onClick={() => {
+                  if (state.player.isBuffering) return
                   if (!state.player.isPlaying) {
                     followWasEnabled.current = false
                     appStore.setFollowEnabled(true)
@@ -588,7 +597,13 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                   void appStore.playPause()
                 }}
               >
-                {state.player.isPlaying ? <IconPause /> : <IconPlay />}
+                {state.player.isBuffering ? (
+                  <IconBuffering />
+                ) : state.player.isPlaying ? (
+                  <IconPause />
+                ) : (
+                  <IconPlay />
+                )}
               </button>
               <button
                 type="button"

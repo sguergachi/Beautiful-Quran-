@@ -175,11 +175,14 @@ mid-tier phones — measure first.
 - Poll `currentTime` at ~33 ms while playing; publish `ActiveWord` only on
   change (`distinctUntilChanged` equivalent).
 - **Prefetch / buffering (Android parity):** `AudioPrefetcher` read-aheads the
-  next few ayahs into a dedicated Cache API store (`beautiful-quran-audio-v1`)
-  and in-memory blob URLs; `PlayerController` keeps a standby `<audio>`
-  element loaded with the next clip so verse joins do not stall on `src`
-  assignment. Whole-surah warm runs when the connection is not data-saver /
-  slow-2g. Soft caps: ~24 blob URLs in memory, ~200 Cache API entries.
+  next ~8 ayahs into a dedicated Cache API store (`beautiful-quran-audio-v1`)
+  with parallel fetches (concurrency 3) and in-memory blob URLs; pinned blobs
+  for the playhead window are never LRU-evicted mid-join. `PlayerController`
+  keeps a standby `<audio>` loaded from a **blob** (Safari will not deeply
+  buffer a remote second element) and exposes `isBuffering` so the play button
+  shows a spinner while fetching / underrunning. Whole-surah warm runs when
+  the connection is not data-saver / slow-2g. Soft caps: ~40 blob URLs in
+  memory, ~200 Cache API entries.
 - Media Session metadata + play/pause/seek actions for lock-screen / OS
   controls where the browser allows.
 

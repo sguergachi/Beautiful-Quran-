@@ -32,6 +32,30 @@ export function IconPause(props: IconProps) {
   )
 }
 
+/** Indeterminate buffer ring — Android CircularProgressIndicator parity. */
+export function IconBuffering(props: IconProps) {
+  const { title, className, ...rest } = props
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="1.15em"
+      height="1.15em"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden={title ? undefined : true}
+      role={title ? 'img' : undefined}
+      className={['icon-buffering', className].filter(Boolean).join(' ')}
+      {...rest}
+    >
+      {title ? <title>{title}</title> : null}
+      <circle cx="12" cy="12" r="9" opacity="0.2" />
+      <path d="M12 3a9 9 0 0 1 9 9" />
+    </svg>
+  )
+}
+
 export function IconPrev(props: IconProps) {
   return base(
     props,

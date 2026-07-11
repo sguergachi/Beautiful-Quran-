@@ -6,19 +6,28 @@
  * dedicated Cache API store (separate from the PWA shell cache) and an
  * in-memory blob-URL map so `<audio>` can start from a local object URL.
  *
- * Prefetch is best-effort — failures never block playback.
+ * Safari/iOS often refuses to deeply buffer remote progressive MP3s on a
+ * standby element — full blob fetches are the reliable path there. Prefetch
+ * is best-effort; failures never block playback.
  */
 
 const AUDIO_CACHE = 'beautiful-quran-audio-v1'
 
-/** Upcoming ayahs to keep warm beyond the one currently playing. */
-export const READ_AHEAD_COUNT = 4
+/**
+ * Upcoming ayahs to keep warm beyond the one currently playing.
+ * Higher than Android's deeper read-ahead because web has no ExoPlayer
+ * playlist preload covering the immediate next item.
+ */
+export const READ_AHEAD_COUNT = 8
 
 /** Soft cap on in-memory blob URLs (Cache API still holds the bytes). */
-const MEMORY_CAP = 24
+const MEMORY_CAP = 40
 
 /** Soft cap on Cache API entries; oldest inserted are evicted first. */
 const CACHE_ENTRY_CAP = 200
+
+/** Parallel fetches so mobile networks fill the read-ahead window faster. */
+const FETCH_CONCURRENCY = 3
 
 type ConnectionLike = {
   saveData?: boolean
@@ -37,6 +46,7 @@ export interface AudioPrefetcherOptions {
   readAheadCount?: number
   memoryCap?: number
   cacheEntryCap?: number
+  concurrency?: number
 }
 
 /**
@@ -51,12 +61,15 @@ export class AudioPrefetcher {
   private readonly readAheadCount: number
   private readonly memoryCap: number
   private readonly cacheEntryCap: number
+  private readonly concurrency: number
 
   /** url → object URL */
   private readonly memory = new Map<string, string>()
   /** Insertion order for Cache API LRU eviction. */
   private readonly cacheOrder: string[] = []
   private readonly inflight = new Map<string, Promise<string | null>>()
+  /** URLs the player is about to need — never evict their blob URLs. */
+  private pinned = new Set<string>()
   private readAheadGen = 0
   private warmGen = 0
   private released = false
@@ -80,6 +93,7 @@ export class AudioPrefetcher {
     this.readAheadCount = options.readAheadCount ?? READ_AHEAD_COUNT
     this.memoryCap = options.memoryCap ?? MEMORY_CAP
     this.cacheEntryCap = options.cacheEntryCap ?? CACHE_ENTRY_CAP
+    this.concurrency = Math.max(1, options.concurrency ?? FETCH_CONCURRENCY)
   }
 
   /** Blob URL if warm in memory; otherwise the remote URL. */
@@ -93,13 +107,26 @@ export class AudioPrefetcher {
   }
 
   /**
+   * Mark [urls] as non-evictable in the memory LRU (current + read-ahead
+   * window). Call whenever the playhead moves.
+   */
+  setPinned(urls: string[]): void {
+    this.pinned = new Set(urls)
+  }
+
+  /**
    * Ensure [url] is fetched into Cache API + memory. Returns a blob object URL
    * on success, or null on failure / release.
    */
   ensure(url: string): Promise<string | null> {
     if (this.released) return Promise.resolve(null)
     const existing = this.memory.get(url)
-    if (existing) return Promise.resolve(existing)
+    if (existing) {
+      // Touch LRU.
+      this.memory.delete(url)
+      this.memory.set(url, existing)
+      return Promise.resolve(existing)
+    }
 
     const pending = this.inflight.get(url)
     if (pending) return pending
@@ -118,7 +145,9 @@ export class AudioPrefetcher {
   readAhead(urls: string[], currentIndex: number): void {
     if (this.released || urls.length === 0) return
     const gen = ++this.readAheadGen
-    const next = urls.slice(currentIndex + 1, currentIndex + 1 + this.readAheadCount)
+    const from = Math.max(0, currentIndex + 1)
+    const next = urls.slice(from, from + this.readAheadCount)
+    this.setPinned(urls.slice(Math.max(0, currentIndex), from + this.readAheadCount))
     void this.cacheAll(next, () => gen !== this.readAheadGen)
   }
 
@@ -139,6 +168,7 @@ export class AudioPrefetcher {
     this.readAheadGen++
     this.warmGen++
     this.inflight.clear()
+    this.pinned.clear()
     for (const objectUrl of this.memory.values()) {
       URL.revokeObjectURL(objectUrl)
     }
@@ -159,11 +189,19 @@ export class AudioPrefetcher {
   }
 
   private async cacheAll(urls: string[], cancelled: () => boolean): Promise<void> {
-    for (const url of urls) {
-      if (cancelled() || this.released) return
-      if (this.memory.has(url)) continue
-      await this.ensure(url)
-    }
+    const pending = urls.filter((url) => !this.memory.has(url))
+    if (pending.length === 0) return
+
+    let cursor = 0
+    const workers = Array.from({ length: Math.min(this.concurrency, pending.length) }, async () => {
+      while (true) {
+        if (cancelled() || this.released) return
+        const i = cursor++
+        if (i >= pending.length) return
+        await this.ensure(pending[i]!)
+      }
+    })
+    await Promise.all(workers)
   }
 
   private async load(url: string): Promise<string | null> {
@@ -209,12 +247,23 @@ export class AudioPrefetcher {
     // Refresh LRU position.
     this.memory.delete(url)
     this.memory.set(url, objectUrl)
+    this.evictMemory()
+  }
+
+  private evictMemory(): void {
+    // Prefer evicting unpinned entries. If everything is pinned, stop — better
+    // to hold a few extra blobs than revoke the next ayah mid-join (Safari).
     while (this.memory.size > this.memoryCap) {
-      const oldest = this.memory.keys().next().value
-      if (oldest == null) break
-      const stale = this.memory.get(oldest)
-      this.memory.delete(oldest)
-      if (stale) URL.revokeObjectURL(stale)
+      let evicted = false
+      for (const oldest of this.memory.keys()) {
+        if (this.pinned.has(oldest)) continue
+        const stale = this.memory.get(oldest)
+        this.memory.delete(oldest)
+        if (stale) URL.revokeObjectURL(stale)
+        evicted = true
+        break
+      }
+      if (!evicted) break
     }
   }
 
@@ -224,7 +273,9 @@ export class AudioPrefetcher {
     this.cacheOrder.push(url)
     while (this.cacheOrder.length > this.cacheEntryCap) {
       const evict = this.cacheOrder.shift()
-      if (evict) void cache.delete(evict)
+      if (evict && !this.pinned.has(evict)) void cache.delete(evict)
+      else if (evict) this.cacheOrder.push(evict) // pinned — rotate to end and stop
+      if (evict && this.pinned.has(evict)) break
     }
   }
 }
