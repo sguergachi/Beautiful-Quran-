@@ -81,7 +81,8 @@ export interface AppState {
 
 type Listener = () => void
 
-const FADE_LEAD_MS = 400
+/** Android `ReaderViewModel.FADE_LEAD_MS` — anticipatory next-ayah ink/focus. */
+const FADE_LEAD_MS = 500
 
 function deriveSheet(stackLayer: StackLayer, hasReader: boolean): Sheet {
   return sheetAtLayer(stackLayer, hasReader)
@@ -328,8 +329,8 @@ class AppStore {
     await player.toggle()
   }
 
-  async playAyah(ayah: number, fromWord = false) {
-    await player.playFrom(ayah, !fromWord && ayah === 1)
+  async playAyah(ayah: number, includeBasmalah = ayah === 1) {
+    await player.playFrom(ayah, includeBasmalah && ayah === 1)
     this.set({
       settings: {
         ...this.state.settings,
@@ -338,6 +339,35 @@ class AppStore {
       followEnabled: true,
     })
     saveSettings(this.state.settings)
+  }
+
+  /**
+   * Start recitation on the tapped word — Android `playFromWord`.
+   * Uses the word's timing `startMs` when available; otherwise falls back to
+   * the ayah start (no basmalah preface).
+   */
+  async playFromWord(ayah: number, wordPosition: number) {
+    const startMs = this.segmentStartMs(ayah, wordPosition)
+    if (startMs != null) {
+      await player.seekToWordAndPlay(ayah, startMs)
+    } else {
+      await player.playFrom(ayah, false)
+    }
+    this.set({
+      settings: {
+        ...this.state.settings,
+        lastAyah: ayah,
+      },
+      followEnabled: true,
+    })
+    saveSettings(this.state.settings)
+  }
+
+  /** First timing segment start for [ayah]/[wordPosition], if timings are loaded. */
+  segmentStartMs(ayah: number, wordPosition: number): number | null {
+    const prepared = this.prepared.get(ayah)
+    const segment = prepared?.segments.find((s) => s.position === wordPosition)
+    return segment != null ? segment.startMs : null
   }
 
   async next() {
