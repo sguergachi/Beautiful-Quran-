@@ -24,6 +24,12 @@ import {
   crossedAudibleEnd,
   type AudibleBounds,
 } from './audioBounds'
+import {
+  audioFadeGain,
+  VERSE_FADE_IN_MS,
+  verseFadeOutMs,
+  type AudioFadeDirection,
+} from './audioFade'
 import { isIOSMediaEnvironment } from './iosMedia'
 import { PlaybackStallWatchdog } from './playbackStallWatchdog'
 import { peekPlaylistNextIndex } from './playlistNext'
@@ -95,6 +101,7 @@ export class PlayerController {
   private recoveringStall = false
   /** Prevents rAF + `ended` from advancing the same audible boundary twice. */
   private gaplessAdvancing = false
+  private volumeFadeGeneration = 0
   /**
    * When true, the next `pause` event on the active element must not clear
    * isPlaying — set while swapping `src` during an in-flight playIndex
@@ -155,6 +162,9 @@ export class PlayerController {
       // A watchdog recovery deliberately cycles pause/play; it must preserve
       // the user's play intent while the media element restarts.
       if (this.recoveringStall) return
+      // The encoded file may end during its fitted fade-out. The boundary
+      // transition still owns play intent and will promote the prepared clip.
+      if (this.gaplessAdvancing) return
       // `pause()` fires this asynchronously; consume the one swap-induced pause
       // so the mid-join src swap does not momentarily clear isPlaying.
       if (this.suppressPauseSync) {
@@ -350,9 +360,9 @@ export class PlayerController {
   }
 
   /**
-   * EveryAyah files carry encoded quiet on both sides. Advance at the measured
-   * audible end rather than `ended`; the next prepared clip starts at its own
-   * measured audible start. The normal ended path remains the fallback.
+   * EveryAyah files carry encoded quiet on both sides. At the measured audible
+   * end, taper the outgoing padded tail before starting the next prepared clip
+   * at its own padded audible start. The normal ended path remains the fallback.
    */
   private maybeAdvanceAtAudibleEnd() {
     if (this.gaplessAdvancing || !this.state.isPlaying) return
@@ -371,11 +381,60 @@ export class PlayerController {
       return
     }
 
+    const outgoing = this.active
+    const transitionToken = this.playToken
+    const fadeOutMs = verseFadeOutMs(
+      Math.max(0, (outgoing.duration - outgoing.currentTime) * 1_000),
+      this.state.speed,
+    )
     this.gaplessAdvancing = true
-    void this.playIndex(next, true).finally(() => {
+    void (async () => {
+      outgoing.volume = 1
+      const faded = await this.fadeMediaVolume(outgoing, 'out', fadeOutMs)
+      if (!faded || transitionToken !== this.playToken || !this.state.isPlaying) {
+        outgoing.volume = 1
+        return
+      }
+      await this.playIndex(next, true, { fadeIn: true })
+    })().finally(() => {
+      if (outgoing !== this.active) outgoing.volume = 1
       this.gaplessAdvancing = false
       this.scheduleGaplessBoundary()
     })
+  }
+
+  /** Cancellable media-element gain envelope used only at automatic joins. */
+  private fadeMediaVolume(
+    audio: HTMLAudioElement,
+    direction: AudioFadeDirection,
+    durationMs: number,
+  ): Promise<boolean> {
+    const generation = ++this.volumeFadeGeneration
+    const startedAt = performance.now()
+    return new Promise((resolve) => {
+      const step = () => {
+        if (generation !== this.volumeFadeGeneration) {
+          resolve(false)
+          return
+        }
+        const progress = durationMs <= 0
+          ? 1
+          : Math.min(1, (performance.now() - startedAt) / durationMs)
+        audio.volume = audioFadeGain(progress, direction)
+        if (progress >= 1) {
+          resolve(true)
+          return
+        }
+        window.setTimeout(step, 10)
+      }
+      step()
+    })
+  }
+
+  private cancelVolumeFades() {
+    this.volumeFadeGeneration++
+    this.active.volume = 1
+    if (this.standby) this.standby.volume = 1
   }
 
   /** Timer-backed boundary so a short trim window cannot fall between rAFs. */
@@ -434,6 +493,7 @@ export class PlayerController {
     }
 
     this.standby.pause()
+    this.standby.volume = 1
     this.standby.loop = false
     this.standby.src = blobSrc
     this.standby.playbackRate = this.state.speed
@@ -585,7 +645,7 @@ export class PlayerController {
   private async playIndex(
     i: number,
     autoplay = true,
-    opts: { quiet?: boolean } = {},
+    opts: { quiet?: boolean; fadeIn?: boolean } = {},
   ) {
     if (i < 0 || i >= this.playlist.length) {
       this.setBuffering(false)
@@ -594,6 +654,8 @@ export class PlayerController {
     }
     const token = ++this.playToken
     const quiet = opts.quiet === true
+    this.volumeFadeGeneration++
+    if (!opts.fadeIn) this.active.volume = 1
 
     // Fast path: standby already holds this index — swap and play immediately.
     if (
@@ -605,6 +667,7 @@ export class PlayerController {
       this.swapToStandby()
       this.index = i
       this.seekActiveToAudibleStart(i)
+      this.active.volume = opts.fadeIn ? 0 : 1
       // Intent before await play() so chrome recess does not wait on the
       // media element (and so a mid-await pause still sees isPlaying).
       this.publishNowPlaying({ playing: true })
@@ -614,11 +677,22 @@ export class PlayerController {
       try {
         this.setBuffering(false)
         await this.active.play()
-        if (token !== this.playToken || !this.state.isPlaying) return
+        if (token !== this.playToken) return
+        if (!this.state.isPlaying) {
+          if (!opts.fadeIn) return
+          // An ended/pause event from the retiring clip can land between the
+          // standby promotion and play() resolution. The token proves that no
+          // user pause superseded this automatic join.
+          this.patch({ isPlaying: true, error: null })
+        }
+        if (opts.fadeIn) {
+          void this.fadeMediaVolume(this.active, 'in', VERSE_FADE_IN_MS)
+        }
         this.startTick()
         this.schedulePrefetch()
       } catch (e) {
         if (token !== this.playToken) return
+        this.active.volume = 1
         this.setBuffering(false)
         this.patch({
           error: e instanceof Error ? e.message : 'Playback blocked',
@@ -677,6 +751,7 @@ export class PlayerController {
     this.active.loop = this.state.repeatMode === 'ayah'
     this.active.src = src
     this.active.playbackRate = this.state.speed
+    this.active.volume = opts.fadeIn ? 0 : 1
     this.active.load()
     if (quiet) {
       // One emit after src assign — listeners see nowPlaying without a second
@@ -715,11 +790,19 @@ export class PlayerController {
         }
         this.seekActiveToAudibleStart(i)
         await this.active.play()
-        if (token !== this.playToken || !this.state.isPlaying) return
+        if (token !== this.playToken) return
+        if (!this.state.isPlaying) {
+          if (!opts.fadeIn) return
+          this.patch({ isPlaying: true, error: null })
+        }
+        if (opts.fadeIn) {
+          void this.fadeMediaVolume(this.active, 'in', VERSE_FADE_IN_MS)
+        }
         this.setBuffering(false)
         this.startTick()
       } catch (e) {
         if (token !== this.playToken) return
+        this.active.volume = 1
         this.setBuffering(false)
         if (this.playlist[this.index]?.ayah === BASMALAH_PLAYLIST_AYAH) {
           void this.playIndex(this.index + 1)
@@ -819,6 +902,7 @@ export class PlayerController {
     // User intent to stop wins — never let a pending swap suppress this pause.
     this.suppressPauseSync = false
     this.recoveringStall = false
+    this.cancelVolumeFades()
     this.active.pause()
     this.setBuffering(false)
     this.stopTick()
@@ -830,6 +914,7 @@ export class PlayerController {
   async play() {
     if (!this.playlist.length) return
     const token = ++this.playToken
+    this.cancelVolumeFades()
     // Recede chrome / flip the transport on the tap, before canplay.
     this.patch({ isPlaying: true, error: null })
     // Start the rAF position loop immediately so ink stays live even while
@@ -954,6 +1039,7 @@ export class PlayerController {
     this.playToken++
     this.suppressPauseSync = false
     this.recoveringStall = false
+    this.cancelVolumeFades()
     this.active.pause()
     this.active.removeAttribute('src')
     this.clearStandby()

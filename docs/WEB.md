@@ -218,11 +218,12 @@ mid-tier phones — measure first.
   for iOS Safari's silent freeze mode (no `waiting` / `stalled` event).
   EveryAyah MP3s include reciter-dependent encoded quiet at both edges (often
   hundreds of milliseconds, occasionally close to a second). The player
-  decodes only the warm current/next clips, detects their audible RMS bounds,
-  advances at the padded audible end, and starts the next clip at its padded
-  audible beginning. This preserves a small natural breath without stacking
-  two files' padding into a perceptible join; failed/unsupported analysis falls
-  back to the ordinary `ended` path.
+  decodes only the warm current/next clips and detects their audible RMS bounds.
+  At a join, the outgoing padded tail receives a short equal-power fade-out;
+  the next clip begins at its padded audible start with the complementary
+  fade-in. The envelope preserves the reciter's release instead of hard-cutting
+  it, without stacking two files' padding into a perceptible pause.
+  Failed/unsupported analysis falls back to the ordinary `ended` path.
   The play control shows a spinner while fetching / underrunning. `isPlaying`
   flips on play intent (before canplay) so chrome recess starts on the tap.
   Whole-surah warm runs when the connection is not data-saver / slow-2g. Soft

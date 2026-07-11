@@ -64,8 +64,8 @@ Engines are DOM-free and unit-tested against the Android JVM suites. See
   (~8 ahead). Desktop browsers promote a blob-backed standby `<audio>` at verse
   joins. iOS uses one persistent element with cache-warmed HTTPS sources to
   avoid WebKit's multi-element/blob playback stalls. Warm current/next clips
-  are decoded for their audible bounds so reciter-dependent MP3 edge padding
-  does not become an audible pause at every verse join; unsupported analysis
+  are decoded for their audible bounds; a short equal-power fade-out/fade-in
+  joins the padded edges without a pause or a hard cut. Unsupported analysis
   falls back to the normal media-element ending. The play button shows a
   spinner while buffering.
 - Click a word to play from there; right-click / long-press opens the Root Word Viewer.
