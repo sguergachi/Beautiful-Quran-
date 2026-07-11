@@ -598,7 +598,7 @@ select {
   gap: 1rem;
   padding: 0.65rem var(--sheet-pad) 0.25rem;
   padding-top: max(0.65rem, env(safe-area-inset-top));
-  max-width: calc(var(--reader-max) + 4.5rem);
+  max-width: var(--reader-max);
   width: 100%;
   margin: 0 auto;
   transition: opacity 900ms ease;
@@ -632,7 +632,7 @@ select {
   flex: 1;
   min-height: 0;
   position: relative;
-  max-width: calc(var(--reader-max) + 4.5rem);
+  max-width: var(--reader-max);
   width: 100%;
   margin: 0 auto;
 }
@@ -648,16 +648,25 @@ select {
 }
 
 .ayah-rail {
-  /* Wide enough for the longest magnified bar + ayah number. */
+  /* Overlay — never takes layout width, so verses stay centered. */
+  position: absolute;
+  top: 0;
+  bottom: 0;
   width: 6.5rem;
-  flex-shrink: 0;
-  position: relative;
   z-index: 6;
   transition: opacity 900ms ease;
   cursor: ns-resize;
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
+}
+
+.ayah-rail[data-side='left'] {
+  left: 0;
+}
+
+.ayah-rail[data-side='right'] {
+  right: 0;
 }
 
 .ayah-rail[data-receded='true'] {
