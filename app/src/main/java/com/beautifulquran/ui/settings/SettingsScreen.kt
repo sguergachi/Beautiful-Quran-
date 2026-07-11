@@ -133,6 +133,7 @@ fun SettingsScreen(
                     .padding(horizontal = 28.dp),
             ) {
                 AppHeader(
+                    developerModeEnabled = settings.developerModeEnabled,
                     onLogoClick = {
                         developerTapCount++
                         if (developerTapCount >= 3) {
@@ -364,6 +365,7 @@ private fun DeveloperSection(
 
 @Composable
 private fun AppHeader(
+    developerModeEnabled: Boolean,
     onLogoClick: () -> Unit,
     onLogoLongClick: () -> Unit,
 ) {
@@ -398,7 +400,10 @@ private fun AppHeader(
                 style = MaterialTheme.typography.titleLarge,
             )
             Text(
-                text = "Version ${BuildConfig.VERSION_NAME}",
+                text = buildString {
+                    append("Version ${BuildConfig.VERSION_NAME}")
+                    if (developerModeEnabled) append(" · developer mode")
+                },
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
             )
