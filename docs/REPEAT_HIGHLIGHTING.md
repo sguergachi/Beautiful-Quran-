@@ -213,7 +213,7 @@ read ink together while 12 fades in white as a new word.
 ## Traps we hit (read before touching this)
 
 - **`quran.db` is a committed app asset.** Normal local and CI builds use
-  `app/src/main/assets/quran.db` directly so they do not depend on the external
+  `data/quran.db` directly so they do not depend on the external
   data sources. When repeat timing data changes, update `tools/build_db.py`,
   rebuild the asset with `python3 tools/build_db.py`, and commit the regenerated
   database with the code change.

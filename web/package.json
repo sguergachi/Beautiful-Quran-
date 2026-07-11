@@ -5,9 +5,13 @@
   "type": "module",
   "scripts": {
     "postinstall": "cp node_modules/sql.js/dist/sql-wasm.wasm public/sql-wasm.wasm && cp node_modules/sql.js/dist/sql-wasm-browser.wasm public/sql-wasm-browser.wasm",
+    "sync:data": "node scripts/sync-data.mjs",
+    "predev": "npm run sync:data",
+    "prebuild": "npm run sync:data",
+    "prebuild:pages": "npm run sync:data",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "build:pages": "tsc --noEmit && VITE_BASE=/Beautiful-Quran-/app/ vite build --outDir ../docs/app --emptyOutDir",
+    "build:pages": "tsc --noEmit && VITE_BASE=/Beautiful-Quran-/app/ vite build --outDir ../_site/app --emptyOutDir",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"

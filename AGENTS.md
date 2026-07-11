@@ -21,14 +21,14 @@ app/                    The entire Android app (single Gradle module)
     ui/home|reader|settings|theme/   Compose screens + design system
     timingslab/         In-app editor for word-timing corrections
   src/test/             JVM unit tests (JUnit 4)
-  src/main/assets/quran.db   Committed, prebuilt SQLite database (see below)
+data/quran.db           Canonical committed SQLite database consumed by both apps
 tools/build_db.py       Data pipeline that generates quran.db (build-time, not app code)
 tools/timing_overrides/ Committed timing-correction patches applied by build_db.py
 scripts/                Linux emulator setup / run helpers
 docs/                   Architecture, design language, performance, timings docs
 web/                    Browser port (Vite + React): Focus / Highlight / Ink + paper reader
 .github/workflows/build.yml   CI: tests on all branches; assembleRelease + publish APK on master only
-.github/workflows/web.yml     CI: Vitest + web build when web/ changes; on master, republish docs/app (GitHub Pages)
+.github/workflows/web.yml     CI: Vitest + web build; deploys a Pages artifact on master
 ```
 
 ## Build, test, run
@@ -41,7 +41,7 @@ Requires **JDK 21**. No Android device/emulator is needed for tests.
 ./gradlew assembleRelease       # what CI ships (R8-minified; falls back to debug keystore)
 ```
 
-- `app/src/main/assets/quran.db` is **committed**, so a fresh clone builds
+- `data/quran.db` is **committed**, so a fresh clone builds
   offline with no extra steps. Only run `python3 tools/build_db.py` if you are
   deliberately changing the data (it downloads sources over HTTPS into
   `tools/.cache/` and regenerates the asset).
@@ -153,7 +153,7 @@ build/test commands from the "Build, test, run" section above work as-is.
   (`assembleDebug` / `assembleRelease`). The signature word-sync feature lives in
   the pure-JVM `HighlightEngine` and is fully unit-testable without a device.
   You can also inspect real bundled data directly with
-  `sqlite3 app/src/main/assets/quran.db`.
+  `sqlite3 data/quran.db`.
 - **`./gradlew lintDebug` fails on purpose here.** It reports ~37 pre-existing
   Media3 `@UnstableApi` opt-in errors. The real lint gate is `lintVitalRelease`,
   which runs inside `assembleRelease` with `checkReleaseBuilds = false` (see

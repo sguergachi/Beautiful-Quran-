@@ -1,18 +1,23 @@
 name: Web
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - 'web/**'
+      - 'data/quran.db'
+      - 'docs/**'
       - '.github/workflows/web.yml'
   pull_request:
     paths:
       - 'web/**'
+      - 'data/quran.db'
+      - 'docs/**'
       - '.github/workflows/web.yml'
 
-# Master publishes the built reader into docs/app (GitHub Pages source).
-permissions:
-  contents: write
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -30,61 +35,51 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - name: Verify quran.db asset
-        run: test -f public/quran.db && test -s public/quran.db
+      - name: Verify canonical and built Quran database
+        run: test -s ../data/quran.db && test -s dist/quran.db
 
-  # GitHub Pages serves master:/docs. The live reader is the committed build
-  # under docs/app — source changes in web/ do not update the site until this
-  # job runs build:pages and pushes the artifact. Without it, merges that only
-  # touch web/ leave https://sguergachi.github.io/Beautiful-Quran-/app/ stale.
-  publish-pages:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+  build-pages:
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/master'
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          # Fetch full history so the follow-up push can fast-forward if another
-          # master commit landed while this job was building.
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - name: Install and build Pages app
+      - name: Install web dependencies
         working-directory: web
+        run: npm ci
+      - name: Stage marketing site
         run: |
-          npm ci
-          npm run build:pages
-      - name: Commit docs/app for GitHub Pages
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p _site
+          cp -R docs/. _site/
+      - name: Build reader into Pages site
+        working-directory: web
+        run: npm run build:pages
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
 
-          # Concurrent master merges each rebuild hashed Vite assets under
-          # docs/app. A plain `git pull --rebase` then races and fails on
-          # rename/delete conflicts (seen on #247 / #249). On conflict: abort,
-          # reset to latest master, rebuild pages, and retry the push.
-          attempt=0
-          max_attempts=5
-          while [ "$attempt" -lt "$max_attempts" ]; do
-            attempt=$((attempt + 1))
-            git add docs/app
-            if git diff --staged --quiet; then
-              echo "docs/app already up to date — nothing to publish"
-              exit 0
-            fi
-            git commit -m "Publish web app to docs/app for GitHub Pages"
-            if git pull --rebase origin master && git push origin HEAD:master; then
-              echo "Published docs/app on attempt $attempt"
-              exit 0
-            fi
-            echo "Publish race on attempt $attempt — rebuilding against latest master"
-            git rebase --abort 2>/dev/null || true
-            git fetch origin master
-            git reset --hard origin/master
-            (cd web && npm run build:pages)
-          done
-          echo "Failed to publish docs/app after $max_attempts attempts"
-          exit 1
+  deploy-pages:
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/master'
+    needs: build-pages
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
