@@ -939,7 +939,7 @@ select {
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 0.75rem var(--sheet-pad) calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  padding: 1.15rem var(--sheet-pad) calc(1.15rem + env(safe-area-inset-bottom, 0px));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1003,7 +1003,7 @@ select {
 
 .return-ayah {
   position: absolute;
-  bottom: calc(4.85rem + env(safe-area-inset-bottom, 0px));
+  bottom: calc(5.55rem + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
   z-index: 6;
@@ -1425,10 +1425,19 @@ select {
   border-bottom-color: var(--accent);
 }
 
+/* Animatable hole radius for the exit punch (Android InkReveal punchHole). */
+@property --bleed-r {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 0%;
+}
+
 /* —— Ink bleed / root viewer ——
  * Contrasting workbench (mirrors Android contrastingOverlayColorScheme):
  * Royal Green over paper/night themes; Nightfall when the reader is already
- * Royal Green so the bloom still reads against the page. */
+ * Royal Green so the bloom still reads against the page.
+ * Enter: circle clip expands (ink spreads open). Exit: a hole punches open
+ * from the same origin, revealing the reader underneath — same as Android. */
 .ink-bleed {
   /* Royal Green palette — scoped so the bleed does not inherit reader paper. */
   --paper: #062c24;
@@ -1457,6 +1466,26 @@ select {
   padding-bottom: calc(3rem + env(safe-area-inset-bottom, 0px));
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+}
+
+.ink-bleed[data-closing='true'] {
+  /* Hole grows from the origin; content stays mounted until animationend. */
+  --bleed-r: 0%;
+  -webkit-mask-image: radial-gradient(
+    circle at var(--ox, 50%) var(--oy, 40%),
+    transparent 0%,
+    transparent var(--bleed-r),
+    #000 var(--bleed-r)
+  );
+  mask-image: radial-gradient(
+    circle at var(--ox, 50%) var(--oy, 40%),
+    transparent 0%,
+    transparent var(--bleed-r),
+    #000 var(--bleed-r)
+  );
+  animation: bleed-out 420ms ease forwards;
+  pointer-events: none;
+  overflow: hidden;
 }
 
 /* Under Royal Green the reader already is that green — Nightfall for contrast. */
@@ -1494,6 +1523,18 @@ select {
   to {
     clip-path: circle(150% at var(--ox, 50%) var(--oy, 40%));
     opacity: 1;
+  }
+}
+
+/* Box-minus-circle hole punch — mirrors Android InkRevealShape(punchHole=true). */
+@keyframes bleed-out {
+  from {
+    --bleed-r: 0%;
+    opacity: 1;
+  }
+  to {
+    --bleed-r: 150%;
+    opacity: 0.6;
   }
 }
 
