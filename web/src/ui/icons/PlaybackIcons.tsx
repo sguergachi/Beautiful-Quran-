@@ -56,17 +56,19 @@ export function IconBuffering(props: IconProps) {
   )
 }
 
-export function IconPrev(props: IconProps) {
+/** Material FastRewind — Android Icons.Rounded.FastRewind parity. */
+export function IconFastRewind(props: IconProps) {
   return base(
     props,
-    <path d="M11 12L18 6.5v11L11 12zm-5 6.5V5.5h2.2v13H6z" />,
+    <path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z" />,
   )
 }
 
-export function IconNext(props: IconProps) {
+/** Material FastForward — Android Icons.Rounded.FastForward parity. */
+export function IconFastForward(props: IconProps) {
   return base(
     props,
-    <path d="M13 12l-7 5.5v-11L13 12zm5-6.5v13h-2.2v-13H18z" />,
+    <path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z" />,
   )
 }
 

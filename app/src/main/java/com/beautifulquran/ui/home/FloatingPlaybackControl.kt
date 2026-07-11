@@ -177,7 +177,7 @@ fun FloatingPlaybackControl(
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(24.dp),
                                     strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             } else {
                                 Icon(
@@ -187,7 +187,7 @@ fun FloatingPlaybackControl(
                                         Icons.Rounded.PlayArrow
                                     },
                                     contentDescription = if (state.isPlaying) "Pause" else "Play",
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(34.dp),
                                 )
                             }

@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   IconBuffering,
   IconClose,
-  IconNext,
+  IconFastForward,
+  IconFastRewind,
   IconPause,
   IconPlay,
-  IconPrev,
 } from '../icons/PlaybackIcons'
 import { PaperInput } from '../kit'
 import { appStore, useAppState, COVER_LAYER, READER_LAYER } from '../../store/appStore'
@@ -260,8 +260,8 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
             <span className="float-ayah">{ayahLabel}</span>
           </button>
           <div className="float-transport">
-            <button type="button" aria-label="Previous ayah" onClick={() => void appStore.prev()}>
-              <IconPrev />
+            <button type="button" aria-label="Fast backward" onClick={() => void appStore.prev()}>
+              <IconFastRewind />
             </button>
             <button
               type="button"
@@ -286,8 +286,8 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
                 <IconPlay />
               )}
             </button>
-            <button type="button" aria-label="Next ayah" onClick={() => void appStore.next()}>
-              <IconNext />
+            <button type="button" aria-label="Fast forward" onClick={() => void appStore.next()}>
+              <IconFastForward />
             </button>
           </div>
         </div>
