@@ -20,6 +20,17 @@ export interface ReaderHighlightState {
 }
 
 /**
+ * Verse that owns karaoke ink. Focus may lead into the next verse before the
+ * media item changes, so it must never be used as the ink owner.
+ */
+export function readerInkAyah(
+  activeWord: ActiveWord | null | undefined,
+  nowPlayingAyah: number | null | undefined,
+): number | null {
+  return activeWord?.ayah ?? nowPlayingAyah ?? null
+}
+
+/**
  * Pure playback-to-reader projection shared by every store tick. Keeping this
  * out of AppStore makes fade-lead and full ActiveWord identity unit-testable.
  */

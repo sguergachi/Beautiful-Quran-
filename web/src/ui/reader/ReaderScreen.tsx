@@ -36,6 +36,7 @@ import { ReaderFocusController } from './focus/ReaderFocusController'
 import { selectedPlaybackAyah } from './selectedPlaybackAyah'
 import { shouldPauseFollowOnDrag } from './followGesture'
 import { isRecitingSession } from './recitingActive'
+import { readerInkAyah } from './ReaderHighlightState'
 import {
   AYAH_SPACER_EST_PX,
   useProgressiveAyahWindow,
@@ -619,6 +620,11 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const repeatMode = state.player.repeatMode
   const keepWordInView =
     state.followEnabled && recitingActive && activeExceedsViewport
+  // Focus leads by 500 ms to begin the glide before an ayah ends. Karaoke ink
+  // stays with the actual word/media owner until the audio item hands off.
+  const inkAyah = recitingActive
+    ? readerInkAyah(state.activeWord, state.player.nowPlaying?.ayah)
+    : null
   const reciterName =
     state.reciters.find((r) => r.id === state.settings.reciterId)?.name ?? 'Reciter'
   const matchLabel =
@@ -813,11 +819,11 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                   )
                 }
                 const ayah = item.ayah
-                const isActive = state.activeAyah === ayah.number
+                const isFocusTarget = state.activeAyah === ayah.number
                 // Karaoke ink only while audio is moving. Global recess is CSS
                 // on `.scroll[data-reciting]` — keep dimmed false so inactive
                 // ayahs do not reconcile on play/pause.
-                const inkActive = recitingActive && isActive
+                const inkActive = inkAyah === ayah.number
                 const aw =
                   inkActive && state.activeWord?.ayah === ayah.number
                     ? state.activeWord
@@ -830,7 +836,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     isActiveAyah={inkActive}
                     dimmed={false}
                     focused={focusedAyah === ayah.number}
-                    keepActiveWordInView={keepWordInView && isActive}
+                    keepActiveWordInView={keepWordInView && isFocusTarget}
                     onKeepWordInView={onKeepWordInView}
                     readingMode={state.settings.readingMode}
                     showWordGloss={state.settings.showWordGloss}

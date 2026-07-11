@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Segment } from '../../../data/models'
 import { PreparedTimings } from '../../../domain/HighlightEngine'
-import { readerHighlightKey, readerHighlightState } from '../ReaderHighlightState'
+import {
+  readerHighlightKey,
+  readerHighlightState,
+  readerInkAyah,
+} from '../ReaderHighlightState'
 
 function prepared(segments: Segment[]) {
   return PreparedTimings.prepare(segments)
@@ -35,6 +39,12 @@ describe('ReaderHighlightState', () => {
     )
     expect(state.activeAyah).toBe(2)
     expect(state.activeWord?.ayah).toBe(1)
+    expect(readerInkAyah(state.activeWord, 1)).toBe(1)
+  })
+
+  it('keeps ink on the media verse when no word owns the trailing silence', () => {
+    expect(readerInkAyah(null, 4)).toBe(4)
+    expect(readerInkAyah(null, null)).toBeNull()
   })
 
   it('distinguishes the real handoff when adjacent words share a position', () => {
