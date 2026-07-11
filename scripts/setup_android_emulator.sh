@@ -43,8 +43,8 @@ with_yes() {
   return "$status"
 }
 
-install_java_if_missing() {
-  if command -v java >/dev/null 2>&1; then
+ensure_java_21() {
+  if [[ "$(android_java_major_version "${JAVA_HOME:-}" || true)" == "21" ]]; then
     return
   fi
 
@@ -62,7 +62,7 @@ install_java_if_missing() {
 
   export JAVA_HOME="$ANDROID_DEV_JDK_HOME"
   export PATH="$JAVA_HOME/bin:$PATH"
-  java -version
+  require_android_java_21
 }
 
 install_cmdline_tools_if_missing() {
@@ -135,7 +135,7 @@ create_avd_if_missing() {
 }
 
 main() {
-  install_java_if_missing
+  ensure_java_21
   install_cmdline_tools_if_missing
   accept_licenses
   install_sdk_packages
