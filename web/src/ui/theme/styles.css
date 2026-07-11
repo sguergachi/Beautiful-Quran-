@@ -1024,13 +1024,16 @@ select {
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 0.75rem var(--sheet-pad) calc(0.95rem + env(safe-area-inset-bottom, 0px));
+  /* Extra top pad so the soft dissolve sits above the reciter, not through it. */
+  padding: 1.1rem var(--sheet-pad) calc(0.95rem + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 0.1rem;
-  background: linear-gradient(to top, var(--paper) 62%, transparent);
+  /* Opaque paper through the reciter + transport; brief fade only in the top pad
+   * (the old 62% stop left the reciter floating in the transparent zone). */
+  background: linear-gradient(to top, var(--paper) calc(100% - 0.85rem), transparent);
   z-index: 5;
 }
 
@@ -1124,7 +1127,7 @@ select {
  * No border/chip chrome: the gilt corolla is drawn on the canvas. */
 .return-ayah {
   position: absolute;
-  bottom: calc(6.9rem + env(safe-area-inset-bottom, 0px));
+  bottom: calc(7.25rem + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
   z-index: 6;
