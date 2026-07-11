@@ -79,8 +79,13 @@ export class PlayerController {
   /** Bumps on every playIndex entry so a superseded load aborts after awaits. */
   private playToken = 0
   /**
-   * When true, the active element's `pause` event must not clear isPlaying —
-   * used while swapping `src` during an in-flight playIndex (autoplay).
+   * When true, the next `pause` event on the active element must not clear
+   * isPlaying — set while swapping `src` during an in-flight playIndex
+   * (autoplay). `pause()` fires its event asynchronously, so this flag is
+   * consumed by the `pause` listener (and cleared when playback resumes)
+   * rather than reset synchronously: a stale isPlaying:false here drops
+   * `data-reciting` for a frame and flashes every verse to full ink on
+   * Firefox at the ayah join.
    */
   private suppressPauseSync = false
 
@@ -114,16 +119,24 @@ export class PlayerController {
     })
     audio.addEventListener('play', () => {
       if (audio !== this.active) return
+      // Playback resumed — any pending swap-pause is now moot.
+      this.suppressPauseSync = false
       this.patch({ isPlaying: true, error: null })
     })
     audio.addEventListener('playing', () => {
       if (audio !== this.active) return
+      this.suppressPauseSync = false
       this.setBuffering(false)
       this.patch({ isPlaying: true, error: null })
     })
     audio.addEventListener('pause', () => {
       if (audio !== this.active) return
-      if (this.suppressPauseSync) return
+      // `pause()` fires this asynchronously; consume the one swap-induced pause
+      // so the mid-join src swap does not momentarily clear isPlaying.
+      if (this.suppressPauseSync) {
+        this.suppressPauseSync = false
+        return
+      }
       this.patch({ isPlaying: false })
     })
     // Mid-stream underrun (common on mobile Safari with remote progressive MP3).
@@ -500,16 +513,14 @@ export class PlayerController {
 
     // Only suppress the pause→isPlaying:false sync when we intend to keep
     // playing after the src swap. Quiet loads (openSurah) must still clear it.
+    // The flag is consumed by the async `pause` event / a resumed `play`, not
+    // reset here — a synchronous reset lands before `pause()` fires its event.
     if (autoplay) this.suppressPauseSync = true
-    try {
-      this.active.pause()
-      this.active.loop = this.state.repeatMode === 'ayah'
-      this.active.src = src
-      this.active.playbackRate = this.state.speed
-      this.active.load()
-    } finally {
-      this.suppressPauseSync = false
-    }
+    this.active.pause()
+    this.active.loop = this.state.repeatMode === 'ayah'
+    this.active.src = src
+    this.active.playbackRate = this.state.speed
+    this.active.load()
     if (quiet) {
       // One emit after src assign — listeners see nowPlaying without a second
       // mid-mount patch from publishNowPlaying.
@@ -646,6 +657,8 @@ export class PlayerController {
     // Bump playToken so any in-flight playIndex / waitForCanPlay aborts without
     // restarting audio after the user already paused.
     this.playToken++
+    // User intent to stop wins — never let a pending swap suppress this pause.
+    this.suppressPauseSync = false
     this.active.pause()
     this.setBuffering(false)
     this.stopTick()
@@ -776,6 +789,7 @@ export class PlayerController {
 
   stop() {
     this.playToken++
+    this.suppressPauseSync = false
     this.active.pause()
     this.active.removeAttribute('src')
     this.clearStandby()
