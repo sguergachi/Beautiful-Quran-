@@ -2,8 +2,8 @@ import { formatReaderDigits } from '../../util/digits'
 
 /**
  * Subtle mushaf page break — thin gold hairline with Western digits on the
- * left and Arabic-Indic on the right (Western on both sides in English-only
- * mode). Mirrors Android `PageBreak` in `ReaderComponents.kt`.
+ * left and Arabic-Indic on the right. English-only keeps the Western number
+ * and rule, but omits the redundant right-hand number.
  */
 export function PageBreak({
   page,
@@ -12,14 +12,29 @@ export function PageBreak({
   page: number
   useArabicIndicDigits?: boolean
 }) {
+  const westernOnly = !useArabicIndicDigits
   const right = formatReaderDigits(page, useArabicIndicDigits)
   return (
-    <div className="page-break" role="separator" aria-label={`Page ${page}`}>
-      <span className="page-break__num">{page}</span>
-      <span className="page-break__line" aria-hidden="true" />
-      <span className="page-break__num" lang={useArabicIndicDigits ? 'ar' : undefined}>
-        {right}
-      </span>
+    <div
+      className={`page-break${westernOnly ? ' page-break--western-only' : ''}`}
+      role="separator"
+      aria-label={`Page ${page}`}
+    >
+      {westernOnly ? (
+        <>
+          <span className="page-break__line" aria-hidden="true" />
+          <span className="page-break__num">{page}</span>
+          <span className="page-break__line" aria-hidden="true" />
+        </>
+      ) : (
+        <>
+          <span className="page-break__num">{page}</span>
+          <span className="page-break__line" aria-hidden="true" />
+          <span className="page-break__num" lang="ar">
+            {right}
+          </span>
+        </>
+      )}
     </div>
   )
 }

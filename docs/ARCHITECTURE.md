@@ -226,8 +226,9 @@ horizontal page turn — draggable, fling-able, with page-turn audio
   embedded `PlayerBar` takes over once that sheet is open.
 - `reader/ReaderScreen` — the follow-along view. Composed of
   `SurahHeader` + one `AyahBlock` per ayah in a `LazyColumn`;
-  `AyahBlock` renders `WordUnit`s (Arabic mode, RTL flow) or
-  `EnglishWordUnit`s (English mode, LTR flow); `PlayerBar` sits flat at the
+  `AyahBlock` renders `WordUnit`s (Arabic mode, RTL flow) or one annotated
+  `ResponsiveEnglishAyah` (English mode, LTR prose with word ranges for ink
+  and taps); `PlayerBar` sits flat at the
   bottom. Floating Back-to / return-to-ayah ornaments share
   `FloatingPaperControl` (enter/exit + bottom inset) with the cover float. All scrolling and verse-position logic routes through the
   focus engine (`reader/focus/`, see below).

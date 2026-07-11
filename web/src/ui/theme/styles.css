@@ -1066,7 +1066,7 @@ select {
 
 /*
  * Mushaf page break — Android `PageBreak`: whisper-gold hairline with Western
- * digits left and Arabic-Indic right (both Western in English-only mode).
+ * digits left and Arabic-Indic right. English-only uses one Western number.
  */
 .page-break {
   max-width: var(--reader-max);
@@ -1096,6 +1096,13 @@ select {
   min-width: 0;
 }
 
+/* English has no mirrored Arabic folio number. Equal flexing rules on both
+   sides keep the surviving Western number mathematically centred. */
+.page-break--western-only .page-break__line {
+  height: 1px;
+  background: rgb(from var(--gold) r g b / 0.36);
+}
+
 .ayah-mark {
   font-family: var(--font-arabic);
   color: var(--gold);
@@ -1119,11 +1126,17 @@ select {
   margin-block-start: 0.2rem;
 }
 
-/* English lyric: sit mid-row beside the single gloss line. */
+/* English lyric: smaller mark, optically centred on the prose line. */
 .words[data-lyric='english'] > .ayah-mark {
-  display: inline-flex;
-  align-items: center;
-  align-self: center;
+  display: inline-block;
+  margin-inline-start: 0.2em;
+  font-size: 0.78em;
+  line-height: inherit;
+  /* Hafs' visible ﴿N﴾ ink sits far below its reported font box. Baseline
+     alignment alone therefore looks wrong; translate only the paint so the
+     prose line height and wrapping remain unchanged. */
+  vertical-align: 0.22em;
+  transform: translateY(-0.44em);
 }
 
 .words {
@@ -1131,6 +1144,61 @@ select {
   flex-wrap: wrap;
   gap: 0.5rem 0.8rem;
   justify-content: flex-start;
+}
+
+/*
+ * English-only scripture is continuous prose, not a row of word tiles.
+ * Keep per-word nodes for karaoke ink and interaction, while one inline
+ * formatting context owns spacing, baselines, and line breaking.
+ */
+.words[data-lyric='english'] {
+  display: block;
+  max-width: 32em;
+  margin-inline: auto;
+  font-family: var(--font-body);
+  font-size: calc(1.375rem * var(--font-scale, 1));
+  font-weight: 400;
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures;
+  font-variant-numeric: oldstyle-nums;
+  font-feature-settings: 'kern' 1, 'liga' 1, 'onum' 1;
+  line-height: 1.5;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-align: left;
+  text-wrap: pretty;
+  hyphens: none;
+}
+
+.english-word-run {
+  display: inline;
+}
+
+/* Structural keyed wrapper only; preserve the Arabic flex row's direct items. */
+.word-unit-run {
+  display: contents;
+}
+
+.words[data-lyric='english'] .word-unit {
+  display: inline;
+  padding: 0;
+  border-radius: 0;
+  font: inherit;
+  line-height: inherit;
+  vertical-align: baseline;
+}
+
+.words[data-lyric='english'] .word-stack,
+.words[data-lyric='english'] .word-ink-slot {
+  display: inline-block;
+  vertical-align: baseline;
+}
+
+.words[data-lyric='english'] .word-gloss {
+  font: inherit;
+  line-height: inherit;
+  color: inherit;
+  text-align: inherit;
 }
 
 .words[dir='rtl'] {

@@ -60,6 +60,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
@@ -74,6 +75,7 @@ import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.data.model.Ayah
 import com.beautifulquran.data.model.Word
+import com.beautifulquran.domain.EnglishTypography
 import com.beautifulquran.ui.theme.ArabicTitleStyle
 import com.beautifulquran.ui.theme.ArabicWordStyle
 import com.beautifulquran.ui.theme.GildedFlourish
@@ -557,44 +559,6 @@ fun ConnectedArabicWordUnit(
     )
 }
 
-/** One word of the English-only lyric flow. */
-@Composable
-fun EnglishWordUnit(
-    word: Word,
-    ink: InkEngine.Word,
-    fontScale: Float,
-    sweepMs: Int?,
-    searchHit: Boolean,
-    keepInView: Boolean,
-    onClick: (() -> Unit)?,
-    onLongClick: (() -> Unit)? = null,
-    /** When true, run the orange search-hit wash on the gloss. */
-    showFlash: Boolean = false,
-) {
-    val highlight = rememberWordHighlight(ink, sweepMs)
-    val searchHitWash = rememberSearchHitWash(showFlash)
-    HighlightLayeredText(
-        text = word.translation,
-        highlight = highlight,
-        rtl = false,
-        color = if (searchHit) {
-            LocalQuranAccents.current.gold
-        } else {
-            MaterialTheme.colorScheme.onBackground
-        },
-        style = TextStyle(
-            fontFamily = TranslationFontFamily,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 22.sp * fontScale,
-            lineHeight = 1.55.em,
-        ),
-        modifier = Modifier
-            .wordUnitBehavior(highlight.isActive, keepInView, onClick, onLongClick)
-            .padding(horizontal = 3.dp, vertical = 2.dp),
-        searchHitWash = searchHitWash,
-    )
-}
-
 /**
  * Ink colours for the Arabic-only shaped ayah. Base spans stay full ink —
  * upcoming dim, first-pass bloom, and orange repeat are all draw-phase
@@ -646,6 +610,189 @@ private fun rememberRepeatWashes(
     rememberRepeatWash(
         repeat = ink.repeat,
         sweepMs = activeSweepMs.takeIf { ink.state == InkEngine.State.Active },
+    )
+}
+
+/**
+ * English-only lyric set as one continuous prose line. Word ranges retain
+ * independent karaoke ink and hit targets without turning natural spaces into
+ * layout gaps, so the paragraph keeps a single baseline and browser-like wrap.
+ */
+@Composable
+private fun ResponsiveEnglishAyah(
+    ayah: Ayah,
+    inks: List<InkEngine.Word>,
+    markAlpha: () -> Float,
+    fontScale: Float,
+    activeSweepMs: Int?,
+    searchQuery: String?,
+    flashWordPosition: Int?,
+    keepActiveWordInView: Boolean,
+    onAyahClick: () -> Unit,
+    onWordClick: ((Word) -> Unit)?,
+    onWordLongClick: ((Word) -> Unit)?,
+) {
+    val palette = rememberWordInkPalette()
+    val gold = LocalQuranAccents.current.gold
+    val sweeps = rememberLetterSweeps(inks, activeSweepMs)
+    val repeatWashes = rememberRepeatWashes(inks, activeSweepMs)
+    val searchHitWash = rememberSearchHitWash(flashWordPosition != null)
+    val activeIndex = inks.indexOfFirst { it.state == InkEngine.State.Active }
+    val activeIsRepeat = activeIndex >= 0 && inks[activeIndex].repeat
+    val upcomingCover = 1f - InkEngine.State.Upcoming.inkAlpha()
+    val style = MaterialTheme.typography.bodyLarge.copy(
+        fontFamily = TranslationFontFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 22.sp * fontScale,
+        lineHeight = 1.5.em,
+        letterSpacing = 0.sp,
+        textAlign = TextAlign.Start,
+    )
+    var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val hitSlopPx = with(LocalDensity.current) { 8.dp.toPx() }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val punctuatedGlosses = remember(ayah) {
+        EnglishTypography.punctuate(ayah.words.map { it.translation })
+    }
+
+    val rendered = remember(ayah, palette.fullInkColor, gold, searchQuery, fontScale) {
+        val ranges = ArrayList<IntRange>(ayah.words.size)
+        var markRange = 0..-1
+        val text = buildAnnotatedString {
+            ayah.words.forEachIndexed { index, word ->
+                val start = length
+                withStyle(
+                    SpanStyle(
+                        color = if (
+                            searchQuery != null &&
+                            word.translation.contains(searchQuery, ignoreCase = true)
+                        ) {
+                            gold
+                        } else {
+                            palette.fullInkColor
+                        },
+                    ),
+                ) {
+                    append(punctuatedGlosses[index])
+                }
+                ranges += start until length
+                append(" ")
+            }
+            val markStart = length
+            withStyle(
+                SpanStyle(
+                    color = gold,
+                    fontFamily = HafsFontFamily,
+                    // Smaller ornament, lifted so its visual centre sits on
+                    // the English glyph line rather than its lower baseline.
+                    fontSize = 17.sp * fontScale,
+                    baselineShift = BaselineShift(0.64f),
+                ),
+            ) {
+                append("﴿")
+                append(ayah.number.toString())
+                append("﴾")
+            }
+            markRange = markStart until length
+        }
+        RenderedLineText(text = text, wordRanges = ranges, markRange = markRange)
+    }
+
+    LaunchedEffect(keepActiveWordInView, activeIndex, layoutResult) {
+        if (!keepActiveWordInView || activeIndex < 0) return@LaunchedEffect
+        val layout = layoutResult ?: return@LaunchedEffect
+        val range = rendered.wordRanges.getOrNull(activeIndex) ?: return@LaunchedEffect
+        if (range.isEmpty()) return@LaunchedEffect
+        val first = layout.getBoundingBox(range.first)
+        val last = layout.getBoundingBox(range.last)
+        bringIntoViewRequester.bringIntoView(
+            Rect(
+                left = minOf(first.left, last.left),
+                top = minOf(first.top, last.top),
+                right = maxOf(first.right, last.right),
+                bottom = maxOf(first.bottom, last.bottom),
+            ),
+        )
+    }
+
+    Text(
+        text = rendered.text,
+        style = style,
+        modifier = Modifier
+            .fillMaxWidth()
+            .widthIn(max = 560.dp)
+            .bringIntoViewRequester(bringIntoViewRequester)
+            .shapedWordBloom(
+                blooms = {
+                    val blooms = ArrayList<ShapedWordBloom>(inks.size + 2)
+                    inks.forEachIndexed { index, ink ->
+                        if (ink.state == InkEngine.State.Active) return@forEachIndexed
+                        val coverAlpha = if (ink.state == InkEngine.State.Upcoming) upcomingCover else 0f
+                        if (coverAlpha <= 0f) return@forEachIndexed
+                        blooms += ShapedWordBloom.UpcomingDim(
+                            range = rendered.wordRanges[index],
+                            paper = palette.paperColor,
+                            coverAlpha = coverAlpha,
+                        )
+                    }
+                    val markCover = (1f - markAlpha()).coerceIn(0f, 1f)
+                    if (markCover > 0f && !rendered.markRange.isEmpty()) {
+                        blooms += ShapedWordBloom.UpcomingDim(
+                            range = rendered.markRange,
+                            paper = palette.paperColor,
+                            coverAlpha = markCover,
+                        )
+                    }
+                    if (activeIndex >= 0 && !activeIsRepeat) {
+                        blooms += ShapedWordBloom.InkReveal(
+                            range = rendered.wordRanges[activeIndex],
+                            progress = sweeps[activeIndex].value,
+                            paper = palette.paperColor,
+                            restingAlpha = InkEngine.State.Upcoming.inkAlpha(),
+                        )
+                    }
+                    repeatWashes.forEachIndexed { index, wash ->
+                        if (wash.alpha.value <= 0f) return@forEachIndexed
+                        blooms += ShapedWordBloom.ColorReveal(
+                            range = rendered.wordRanges[index],
+                            progress = wash.progress.value,
+                            color = palette.repeatInkColor,
+                            restingAlpha = 0f,
+                            layerAlpha = wash.alpha.value,
+                        )
+                    }
+                    val flashIndex = ayah.words.indexOfFirst { it.position == flashWordPosition }
+                    if (flashIndex >= 0 && searchHitWash.alpha.value > 0f) {
+                        blooms += ShapedWordBloom.ColorReveal(
+                            range = rendered.wordRanges[flashIndex],
+                            progress = searchHitWash.progress.value,
+                            color = palette.repeatInkColor,
+                            restingAlpha = 0f,
+                            layerAlpha = searchHitWash.alpha.value,
+                        )
+                    }
+                    blooms
+                },
+                layout = { layoutResult },
+                rtl = false,
+                feather = InkEngine.tuning.washFeather,
+            )
+            .then(
+                if (onWordClick == null) {
+                    Modifier.quietClickable(onClick = onAyahClick)
+                } else {
+                    Modifier.wordTapTarget(
+                        words = ayah.words,
+                        ranges = rendered.wordRanges,
+                        layoutResult = layoutResult,
+                        hitSlopPx = hitSlopPx,
+                        onWordClick = onWordClick,
+                        onWordLongClick = onWordLongClick,
+                        onMiss = onAyahClick,
+                    )
+                },
+            ),
+        onTextLayout = { layoutResult = it },
     )
 }
 
@@ -1015,41 +1162,19 @@ fun AyahBlock(
                 .padding(horizontal = 28.dp, vertical = 14.dp),
         ) {
             if (readingMode == ReadingMode.ENGLISH_ONLY) {
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    ayah.words.forEachIndexed { index, word ->
-                        val ink = inks[index]
-                        val isActiveWord = ink.state == InkEngine.State.Active
-                        val flashing = flashWordPosition == word.position
-                        EnglishWordUnit(
-                            word = word,
-                            ink = ink,
-                            fontScale = fontScale,
-                            sweepMs = sweepMs.takeIf { isActiveWord },
-                            searchHit = hits(word),
-                            keepInView = keepActiveWordInView && isActiveWord,
-                            onClick = onWordClick?.let { handler -> { handler(word) } },
-                            onLongClick = onWordLongClick?.let { handler -> { handler(word) } },
-                            showFlash = flashing,
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .padding(horizontal = 6.dp)
-                            .graphicsLayer { alpha = ayahMarkAlpha.value },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        AyahNumberMark(
-                            number = ayah.number,
-                            fontScale = fontScale * 0.8f,
-                            verticalNudge = 4.dp * fontScale,
-                            useArabicIndicDigits = false,
-                        )
-                    }
-                }
+                ResponsiveEnglishAyah(
+                    ayah = ayah,
+                    inks = inks,
+                    markAlpha = { ayahMarkAlpha.value },
+                    fontScale = fontScale,
+                    activeSweepMs = sweepMs,
+                    searchQuery = searchQuery,
+                    flashWordPosition = flashWordPosition,
+                    keepActiveWordInView = keepActiveWordInView,
+                    onAyahClick = onAyahClick,
+                    onWordClick = onWordClick,
+                    onWordLongClick = onWordLongClick,
+                )
             } else if (showGloss) {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     FlowRow(

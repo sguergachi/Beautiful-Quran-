@@ -28,6 +28,8 @@ import { SearchHitFlash } from '../ui/reader/SearchHitFlash'
 
 interface Props {
   word: Word
+  /** Display-only English token; interaction and data identity stay on [word]. */
+  englishText?: string
   ink: InkWord
   sweepMs: number | null
   showGloss: boolean
@@ -104,6 +106,7 @@ function paintSecondary(
 
 export function WordUnit({
   word,
+  englishText,
   ink,
   sweepMs: activeSweepMs,
   showGloss,
@@ -364,7 +367,7 @@ export function WordUnit({
     ? { ['--upcoming-alpha' as string]: String(tuning.upcomingAlpha) }
     : { ['--upcoming-cover' as string]: String(upcomingCover) }
 
-  const label = englishMode ? word.translation || word.arabic : word.arabic
+  const label = englishMode ? englishText || word.translation || word.arabic : word.arabic
 
   const onPointerDown = (e: PointerEvent) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return
