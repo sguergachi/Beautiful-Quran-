@@ -49,11 +49,13 @@ export function WordUnit({
   const ink = InkEngine.word(word.position, activeWord, isActiveAyah, dimmed)
   const localRootRef = useRef<HTMLSpanElement>(null)
   const rootRef = externalRootRef ?? localRootRef
+  const textRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
   const prevState = useRef(ink.state)
   /** Captured at Active entry — stable for the whole time the word is lit. */
   const revealedOnEntry = useRef(false)
-  const prevRepeat = useRef(ink.repeat)
+  // false so a word that mounts already in a repeat chain still washes in.
+  const prevRepeat = useRef(false)
   const holdTimer = useRef<number | null>(null)
   const startXY = useRef<{ x: number; y: number } | null>(null)
   const held = useRef(false)
@@ -71,10 +73,11 @@ export function WordUnit({
    * useLayoutEffect so the progress-0 mask lands before paint — otherwise the
    * word flashes full ink for a frame (CSS Active opacity) then snaps faint
    * when the mask arrives. Matches Android: snap base alpha to 1, let the
-   * letter sweep carry the reveal from the Upcoming floor.
+   * letter sweep carry the reveal from the Upcoming floor. While repeating,
+   * the orange overlay carries the motion (base stays untouched).
    */
   useLayoutEffect(() => {
-    const el = rootRef.current
+    const el = textRef.current
     if (!el) return
     const prev = prevState.current
     const enteredActive = ink.state === InkState.Active && prev !== InkState.Active
@@ -89,7 +92,8 @@ export function WordUnit({
     const t = getTuning()
     const resting = t.upcomingAlpha
 
-    if (ink.state !== InkState.Active) {
+    // Repeat chain: orange overlay carries the motion (Android baseLayer skip).
+    if (ink.repeat || ink.state !== InkState.Active) {
       applyMask(el, 'none')
       return
     }
@@ -132,9 +136,11 @@ export function WordUnit({
     // speed/duration captured at Active entry only — mid-word setting changes
     // must not cancel and restart the sweep (that is itself a flicker).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.state, activeWord?.wordPosition, englishMode])
+  }, [ink.state, ink.repeat, activeWord?.wordPosition, englishMode])
 
   // Orange repeat overlay: wash in on chain entry, dissolve on release.
+  // Key only on `ink.repeat` (Android LaunchedEffect(repeat)) — advancing the
+  // active word inside a chain must not cancel a mid-wash on earlier members.
   useLayoutEffect(() => {
     const overlay = overlayRef.current
     if (!overlay) return
@@ -180,8 +186,9 @@ export function WordUnit({
       }
       raf = requestAnimationFrame(tick)
     } else if (ink.repeat) {
-      // Still in chain from a prior entry — hold orange, do not restart wash.
+      // Still in chain from a prior entry — hold full orange, do not restart.
       overlay.style.opacity = '1'
+      applyMask(overlay, 'none')
     } else {
       overlay.style.opacity = '0'
       applyMask(overlay, 'none')
@@ -191,7 +198,7 @@ export function WordUnit({
       cancelAnimationFrame(raf)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.repeat, activeWord?.wordPosition, englishMode])
+  }, [ink.repeat, englishMode])
 
   const rtl = !englishMode
   const style: CSSProperties = {
@@ -254,6 +261,7 @@ export function WordUnit({
     >
       <span className="word-stack" dir={rtl ? 'rtl' : 'ltr'}>
         <span
+          ref={textRef}
           className={englishMode ? 'word-gloss' : 'word-arabic'}
           data-search-hit={englishMode && searchHit ? 'true' : undefined}
         >
@@ -261,7 +269,7 @@ export function WordUnit({
         </span>
         <span
           ref={overlayRef}
-          className="word-repeat-overlay"
+          className={`word-repeat-overlay ${englishMode ? 'word-gloss' : 'word-arabic'}`}
           aria-hidden="true"
           style={{ opacity: 0 }}
         >

@@ -909,18 +909,31 @@ select {
   display: inline-block;
 }
 
+/*
+ * Orange repeat layer — same glyphs as the base word, stacked on top.
+ * Must share the base typography class (.word-arabic / .word-gloss); without
+ * that the overlay falls back to body size and reads as "smaller text."
+ * Top-left absolute (not inset:0 + flex) so the wash mask tracks the ink.
+ */
 .word-repeat-overlay {
   position: absolute;
-  inset: 0;
+  left: 0;
+  top: 0;
   color: var(--repeat);
   pointer-events: none;
-  display: flex;
-  flex-direction: column;
-  align-items: inherit;
+  white-space: nowrap;
+}
+
+.word-unit:hover .word-repeat-overlay {
+  color: var(--repeat);
 }
 
 .word-wash {
   /* mask-image set inline from washMaskImage() — smootherstep profile */
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
 }
 
 /* Arabic-only: full-ink glyphs + paper cover (never glyph alpha). */
@@ -964,9 +977,12 @@ select {
 
 .hafs-repeat-overlay {
   position: absolute;
-  inset: 0;
+  left: 0;
+  top: 0;
   color: var(--repeat);
   pointer-events: none;
+  white-space: nowrap;
+  /* Inherit Hafs size/family from .hafs-ayah — same ink as .hafs-glyph. */
 }
 
 .ayah-translation {
