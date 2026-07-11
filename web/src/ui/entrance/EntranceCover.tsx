@@ -98,33 +98,42 @@ async function runWash(
   })
 }
 
-/** Eight-fold khatam + octagram medallion — ceremonial scale, 1:1. */
+/**
+ * Eight-fold khatam + octagram medallion — ceremonial scale, 1:1. Geometry
+ * mirrors Android `GildedMedallion` (radii as fractions of the box): outer
+ * ring 0.485, inner ring 0.36, khatam 0.335, octagram 0.24, sixteen pearls
+ * stationed between the rings, a seed at the heart. Embossed (dark copy to
+ * the lower-right, light to the upper-left), faced in the three-stop leaf
+ * gradient — gold is never flat.
+ */
 function GildedMedallion() {
   const c = 100
-  const a = 33.5 * 0.7071
+  const khatamR = 67
+  const a = khatamR * 0.7071
   const khatam = [
     `M ${c - a} ${c - a} L ${c + a} ${c - a} L ${c + a} ${c + a} L ${c - a} ${c + a} Z`,
-    `M ${c} ${c - 33.5} L ${c + 33.5} ${c} L ${c} ${c + 33.5} L ${c - 33.5} ${c} Z`,
+    `M ${c} ${c - khatamR} L ${c + khatamR} ${c} L ${c} ${c + khatamR} L ${c - khatamR} ${c} Z`,
   ].join(' ')
   const oct: string[] = []
   const angles = Array.from({ length: 8 }, (_, i) => ((22.5 + i * 45) * Math.PI) / 180)
   let k = 0
   for (let i = 0; i < 9; i++) {
-    const x = c + 24 * Math.cos(angles[k]!)
-    const y = c + 24 * Math.sin(angles[k]!)
+    const x = c + 48 * Math.cos(angles[k]!)
+    const y = c + 48 * Math.sin(angles[k]!)
     oct.push(`${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`)
     k = (k + 3) % 8
   }
   oct.push('Z')
   const pearls = Array.from({ length: 16 }, (_, i) => {
     const ang = (i * 22.5 * Math.PI) / 180
-    const r = (48.5 + 36) / 2
+    const r = (97 + 72) / 2
     return {
       cx: c + r * Math.cos(ang),
       cy: c + r * Math.sin(ang),
-      rad: i % 2 === 0 ? 1.6 : 0.9,
+      rad: i % 2 === 0 ? 3.2 : 1.8,
     }
   })
+  const stars = `${khatam} ${oct.join(' ')}`
 
   return (
     <svg
@@ -133,31 +142,55 @@ function GildedMedallion() {
       aria-hidden="true"
     >
       <defs>
-        <linearGradient id="entrance-gold" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#edd188" />
+        <linearGradient id="entrance-leaf" x1="0%" y1="22%" x2="100%" y2="78%">
+          <stop offset="0%" stopColor="#9a7b2a" />
+          <stop offset="50%" stopColor="#edd188" />
           <stop offset="100%" stopColor="#9a7b2a" />
         </linearGradient>
       </defs>
-      <g fill="none" stroke="url(#entrance-gold)" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx={c} cy={c} r={48.5} strokeWidth={0.5} />
-        <circle cx={c} cy={c} r={36} strokeWidth={0.5} />
-        <path d={khatam} strokeWidth={1} />
-        <path d={oct.join(' ')} strokeWidth={1} />
-        <circle cx={c} cy={c} r={7} strokeWidth={0.5} />
+      {/* Relief first, face last — pressed into the leather. */}
+      <path
+        d={stars}
+        transform="translate(0.9 0.9)"
+        fill="none"
+        stroke="rgba(0, 0, 0, 0.4)"
+        strokeWidth={2}
+        strokeLinejoin="round"
+      />
+      <path
+        d={stars}
+        transform="translate(-0.9 -0.9)"
+        fill="none"
+        stroke="rgba(255, 255, 255, 0.12)"
+        strokeWidth={2}
+        strokeLinejoin="round"
+      />
+      <g fill="none" stroke="url(#entrance-leaf)" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx={c} cy={c} r={97} strokeWidth={1} />
+        <circle cx={c} cy={c} r={72} strokeWidth={1} />
+        <path d={khatam} strokeWidth={2} />
+        <path d={oct.join(' ')} strokeWidth={2} />
+        <circle cx={c} cy={c} r={14} strokeWidth={1} />
       </g>
-      <circle cx={c} cy={c} r={2.8} fill="url(#entrance-gold)" />
+      <circle cx={c} cy={c} r={5.6} fill="url(#entrance-leaf)" />
       {pearls.map((p, i) => (
-        <circle key={i} cx={p.cx} cy={p.cy} r={p.rad} fill="url(#entrance-gold)" />
+        <circle key={i} cx={p.cx} cy={p.cy} r={p.rad} fill="url(#entrance-leaf)" />
       ))}
     </svg>
   )
 }
 
-/** Corner seal — viewBox-only; diameter comes from `--cover-star`. */
+/**
+ * Corner seal — viewBox-only; diameter comes from `--cover-star`. Hairline
+ * khatam with a gilt pearl at the heart, embossed like the medallion
+ * (Android draws these at 1dp with a centre dot of 0.16 × the star radius).
+ */
 function CornerKhatam({ className }: { className: string }) {
   const c = 50
   const s = 36
   const a = s * 0.7071
+  const d = `M ${c - a} ${c - a} L ${c + a} ${c - a} L ${c + a} ${c + a} L ${c - a} ${c + a} Z
+      M ${c} ${c - s} L ${c + s} ${c} L ${c} ${c + s} L ${c - s} ${c} Z`
   return (
     <svg
       className={className}
@@ -165,13 +198,24 @@ function CornerKhatam({ className }: { className: string }) {
       preserveAspectRatio="xMidYMid meet"
       aria-hidden="true"
     >
-      <g fill="none" stroke="#d9b44a" strokeWidth="4.2" strokeLinejoin="round">
-        <path
-          d={`M ${c - a} ${c - a} L ${c + a} ${c - a} L ${c + a} ${c + a} L ${c - a} ${c + a} Z
-              M ${c} ${c - s} L ${c + s} ${c} L ${c} ${c + s} L ${c - s} ${c} Z`}
-        />
-      </g>
-      <circle cx={c} cy={c} r="6.5" fill="#edd188" />
+      <path
+        d={d}
+        transform="translate(1.4 1.4)"
+        fill="none"
+        stroke="rgba(0, 0, 0, 0.4)"
+        strokeWidth="3"
+        strokeLinejoin="round"
+      />
+      <path
+        d={d}
+        transform="translate(-1.4 -1.4)"
+        fill="none"
+        stroke="rgba(255, 255, 255, 0.12)"
+        strokeWidth="3"
+        strokeLinejoin="round"
+      />
+      <path d={d} fill="none" stroke="#d9b44a" strokeWidth="3" strokeLinejoin="round" />
+      <circle cx={c} cy={c} r="5.8" fill="#edd188" />
     </svg>
   )
 }

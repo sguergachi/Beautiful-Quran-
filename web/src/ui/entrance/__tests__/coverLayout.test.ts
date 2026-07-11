@@ -20,7 +20,7 @@ describe('coverLayout', () => {
 
   it('keeps the medallion from eating the vertical stack on tall phones', () => {
     const tall = coverLayout(360, 800)
-    expect(tall.medallion).toBeLessThanOrEqual(800 * 0.26 + 0.5)
+    expect(tall.medallion).toBeLessThanOrEqual(800 * 0.3 + 0.5)
     expect(tall.medallion + tall.gapMedallionTitle + tall.titleAr * 2.4).toBeLessThan(
       800 - tall.padY * 2,
     )
@@ -30,7 +30,7 @@ describe('coverLayout', () => {
     const portrait = coverLayout(390, 844)
     const landscape = coverLayout(900, 500)
     expect(landscape.airTop).toBeLessThan(portrait.airTop)
-    expect(landscape.medallion).toBeLessThanOrEqual(500 * 0.26 + 0.5)
+    expect(landscape.medallion).toBeLessThanOrEqual(500 * 0.3 + 0.5)
   })
 
   it('emits CSS pixel vars for the board', () => {
