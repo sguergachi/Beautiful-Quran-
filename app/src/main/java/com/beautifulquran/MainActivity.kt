@@ -206,6 +206,9 @@ private fun PaperStackApp(
     val settingsLayer = if (selectedSurahId == 0) AYAH_LAYER else SETTINGS_LAYER
     val overlayBlocking = labVisible || rootVisible || chooserVisible ||
         labRendered || rootRendered || chooserRendered || readerInkOverlayVisible
+    val stackGesturesBlocked = rememberUpdatedState(
+        ayahSelectorExpanded || overlayBlocking || entranceVisible,
+    )
     val rootReturnVisible = rootReturnTarget != null && !overlayBlocking
     val onRootReturnUserMovedLatest = rememberUpdatedState {
         if (rootReturnTarget != null) rootReturnDismissArmed = true
@@ -373,7 +376,10 @@ private fun PaperStackApp(
                 maxLayer = {
                     if (selectedSurahId == 0 && stackPosition.value <= COVER_LAYER + 0.01f) COVER_LAYER else settingsLayer
                 },
-                gesturesBlocked = { ayahSelectorExpanded || overlayBlocking || entranceVisible },
+                // The pointerInput coroutine is intentionally keyed only by
+                // navigation identity. Read a stable state holder here so the
+                // long-lived detector sees overlays that open after it starts.
+                gesturesBlocked = { stackGesturesBlocked.value },
                 onDragStart = {
                     dragStartPosition = stackPosition.value
                 },
