@@ -18,10 +18,10 @@ import {
   IconChevronDown,
   IconChevronUp,
   IconClose,
-  IconNext,
+  IconFastForward,
+  IconFastRewind,
   IconPause,
   IconPlay,
-  IconPrev,
   IconRepeat,
   IconRepeatOne,
   IconSearch,
@@ -756,10 +756,10 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
               <button
                 type="button"
                 className="ctrl"
-                aria-label="Previous ayah"
-                onClick={() => void appStore.prev()}
+                aria-label="Fast backward"
+                onClick={() => void appStore.fastBackward()}
               >
-                <IconPrev />
+                <IconFastRewind />
               </button>
               <button
                 type="button"
@@ -792,10 +792,10 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
               <button
                 type="button"
                 className="ctrl"
-                aria-label="Next ayah"
-                onClick={() => void appStore.next()}
+                aria-label="Fast forward"
+                onClick={() => void appStore.fastForward()}
               >
-                <IconNext />
+                <IconFastForward />
               </button>
               <button
                 type="button"

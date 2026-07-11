@@ -586,6 +586,39 @@ export class PlayerController {
     await this.playIndex(prev, true)
   }
 
+  /** Seek to [ayah] at [positionMs] within the loaded playlist (Android `seekTo`). */
+  async seekToAyah(ayah: number, positionMs = 0) {
+    const idx = this.playlist.findIndex((p) => p.ayah === ayah)
+    if (idx < 0) return
+    const autoplay = this.state.isPlaying
+    if (this.index !== idx) {
+      await this.playIndex(idx, autoplay)
+    }
+    this.seekMs(Math.max(0, positionMs))
+  }
+
+  /** Restart the chapter-opening basmalah clip (no-op when the playlist has none). */
+  seekToBasmalah() {
+    void this.seekToAyah(BASMALAH_PLAYLIST_AYAH, 0)
+  }
+
+  /** Seek to [ayah] in the loaded playlist and play from its start. */
+  async playLoadedFromAyah(ayah: number) {
+    const startAtBasmalah =
+      ayah === 1 &&
+      this.content != null &&
+      surahOpensWithBasmalahPreface(this.content.surah.id)
+    const target = startAtBasmalah ? BASMALAH_PLAYLIST_AYAH : ayah
+    const idx = this.playlist.findIndex((p) => p.ayah === target)
+    if (idx < 0) return
+    await this.playIndex(idx, true)
+    this.seekMs(0)
+  }
+
+  async seekToWord(ayah: number, positionMs: number) {
+    await this.seekToAyah(ayah, positionMs)
+  }
+
   seekMs(ms: number) {
     this.active.currentTime = Math.max(0, ms / 1000)
     this.onTime()

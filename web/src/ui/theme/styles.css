@@ -1452,18 +1452,19 @@ select {
 
 .player-bar .play {
   font-size: 1.35rem;
-  color: var(--accent);
+  color: var(--ink-muted);
   min-width: 56px;
   min-height: 48px;
   padding: 0.45rem 0.7rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: color 180ms ease;
 }
 
 @media (hover: hover) {
   .player-bar .play:hover {
-    opacity: 0.8;
+    color: var(--accent);
   }
 }
 
@@ -2172,7 +2173,7 @@ select {
 }
 
 .floating-play .float-transport button {
-  color: var(--accent);
+  color: var(--ink-muted);
   padding: 0.55rem 0.75rem;
   font-size: 1.05rem;
   white-space: nowrap;
@@ -2181,6 +2182,7 @@ select {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: color 180ms ease;
 }
 
 @media (hover: hover) {

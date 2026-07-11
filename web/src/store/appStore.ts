@@ -52,6 +52,10 @@ export interface RootViewerState {
   }[]
 }
 
+const LONG_AYAH_MIN_WORDS = 20
+const MIDPOINT_SEEK_GRACE_MS = 1_000
+const START_SEEK_GRACE_MS = 1_500
+
 export interface AppState {
   ready: boolean
   error: string | null
@@ -395,6 +399,63 @@ class AppStore {
 
   async prev() {
     await player.prev()
+  }
+
+  /** Reader transport — Android [ReaderViewModel.fastForward] parity. */
+  async fastForward() {
+    const content = this.state.content
+    if (!content) return
+    const np = this.state.player.nowPlaying
+    if (!np || np.surahId !== content.surah.id) return
+
+    if (np.ayah === BASMALAH_PLAYLIST_AYAH) {
+      await player.seekToAyah(1)
+      return
+    }
+
+    const midpointMs = this.midpointForLongAyah(np.ayah)
+    if (
+      midpointMs != null &&
+      this.state.player.positionMs < midpointMs - MIDPOINT_SEEK_GRACE_MS
+    ) {
+      await player.seekToWord(np.ayah, midpointMs)
+      return
+    }
+
+    if (np.ayah < content.surah.ayahCount) {
+      await player.seekToAyah(np.ayah + 1)
+    }
+  }
+
+  /** Reader transport — Android [ReaderViewModel.fastBackward] parity. */
+  async fastBackward() {
+    const content = this.state.content
+    if (!content) return
+    const np = this.state.player.nowPlaying
+    if (!np || np.surahId !== content.surah.id) return
+
+    if (np.ayah === BASMALAH_PLAYLIST_AYAH) {
+      player.seekToBasmalah()
+      return
+    }
+
+    if (this.state.player.positionMs > START_SEEK_GRACE_MS) {
+      await player.seekToAyah(np.ayah)
+      return
+    }
+
+    if (np.ayah > 1) {
+      await player.seekToAyah(np.ayah - 1)
+    } else if (np.ayah === 1) {
+      await player.playLoadedFromAyah(1)
+    }
+  }
+
+  private midpointForLongAyah(ayah: number): number | null {
+    const prepared = this.prepared.get(ayah)
+    const segments = prepared?.segments
+    if (!segments || segments.length < LONG_AYAH_MIN_WORDS) return null
+    return segments[Math.floor(segments.length / 2)]!.startMs
   }
 
   /** Dismiss the cover float and end the playback session. */
