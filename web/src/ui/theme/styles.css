@@ -25,6 +25,11 @@
   --home-max: 40rem;
   --ease-sheet: cubic-bezier(0.22, 0.61, 0.36, 1);
   --upcoming-alpha: 0.22;
+  /* Play-start recess — even ease-in-out, matched to Android. */
+  --chrome-recede-ms: 520ms;
+  --ink-fade-ms: 400ms;
+  --recess-ms: 400ms;
+  --recede-ease: cubic-bezier(0.4, 0, 0.2, 1);
   color-scheme: light;
 }
 
@@ -607,7 +612,7 @@ select {
   max-width: var(--reader-max);
   width: 100%;
   margin: 0 auto;
-  transition: opacity 900ms ease;
+  transition: opacity var(--chrome-recede-ms) var(--recede-ease);
 }
 
 .reader-top[data-receded='true'] {
@@ -719,7 +724,7 @@ select {
   bottom: 0;
   width: 5.5rem;
   z-index: 6;
-  transition: opacity 900ms ease;
+  transition: opacity var(--chrome-recede-ms) var(--recede-ease);
   cursor: ns-resize;
   touch-action: none;
   -webkit-user-select: none;
@@ -804,7 +809,7 @@ select {
   color: var(--ink);
   cursor: pointer;
   /* Soft-dim when recessed; Active snaps — wash mask carries the reveal. */
-  transition: opacity 450ms ease;
+  transition: opacity var(--ink-fade-ms) var(--recede-ease);
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -836,7 +841,7 @@ select {
   color: var(--gold);
   font-size: 0.95rem;
   margin-inline-start: 0.35rem;
-  transition: opacity 450ms ease;
+  transition: opacity var(--ink-fade-ms) var(--recede-ease);
 }
 
 .words {
@@ -898,7 +903,7 @@ select {
 .word-ink {
   /* Soft-dim when leaving a verse / becoming Upcoming. Active snaps — the
      letter wash carries the reveal (Android animatedInkAlpha snap-on-Active). */
-  transition: opacity 450ms ease;
+  transition: opacity var(--ink-fade-ms) var(--recede-ease);
   position: relative;
 }
 
@@ -979,7 +984,7 @@ select {
 
 .hafs-word[data-state='Upcoming'] .hafs-paper-cover {
   opacity: var(--upcoming-cover, 0.78);
-  transition: opacity 120ms ease;
+  transition: opacity var(--recess-ms) var(--recede-ease);
 }
 
 .hafs-word[data-state='Active'] .hafs-paper-cover,
@@ -1006,6 +1011,11 @@ select {
   font-size: calc(1.02rem * var(--font-scale, 1));
   line-height: 1.55;
   color: color-mix(in srgb, var(--ink) 66%, transparent);
+  transition: opacity var(--ink-fade-ms) var(--recede-ease);
+}
+
+.ayah-block[data-dimmed='true'] .ayah-translation {
+  opacity: var(--upcoming-alpha, 0.22);
 }
 
 .ayah-translation[data-search-hit='true'],
@@ -1053,7 +1063,7 @@ select {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition: opacity 900ms ease, color 180ms ease;
+  transition: opacity var(--chrome-recede-ms) var(--recede-ease), color 180ms ease;
 }
 
 @media (hover: hover) {
@@ -1086,7 +1096,7 @@ select {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 900ms ease, color 180ms ease;
+  transition: opacity var(--chrome-recede-ms) var(--recede-ease), color 180ms ease;
 }
 
 .player-bar .ctrl.speed {
@@ -1189,7 +1199,7 @@ select {
   z-index: 2;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
-  transition: opacity 900ms ease;
+  transition: opacity var(--chrome-recede-ms) var(--recede-ease);
 }
 
 .verse-ribbon[data-side='left'] {

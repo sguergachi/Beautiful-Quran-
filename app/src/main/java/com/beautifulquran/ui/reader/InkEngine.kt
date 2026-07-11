@@ -71,12 +71,12 @@ object InkEngine {
         val upcomingAlpha: Float = 0.22f,
         /** State tween between resting inks (Active snaps — see
          *  ReaderComponents.animatedInkAlpha for why). */
-        val inkFadeMs: Int = 450,
+        val inkFadeMs: Int = 400,
         /** Fade of the ﴿N﴾ ayah mark up to full when its verse gains focus. */
-        val ayahMarkFadeMs: Int = 450,
-        /** Softening applied when a verse leaves the lyric line and recedes
-         *  (Arabic-only paper cover; landing snaps). */
-        val recessMs: Int = 120,
+        val ayahMarkFadeMs: Int = 400,
+        /** Softening when a verse recesses or returns (Arabic-only paper cover).
+         *  Matched to [inkFadeMs] so every reading mode moves at the same pace. */
+        val recessMs: Int = 400,
         /** Letter-sweep duration clamps around the reciter's actual dwell. */
         val minSweepMs: Int = 140,
         val maxSweepMs: Int = 8_000,

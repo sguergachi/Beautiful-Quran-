@@ -119,13 +119,23 @@ Recitation-follow, selector jumps, return-to-ayah, and tall-verse word
 keep-in-view all go through it. Non-active ayahs recess only while audio is
 actually playing (`recitingActive`); at rest every ayah is Plain (full opacity).
 
+**Follow pause (Android parity):** lyric follow is paused only by a vertical
+hand drag past touch-slop or a wheel gesture (`followGesture.ts`) — never by
+`scroll` events from FocusEngine or `keepWordInView`. Programmatic verse
+advances (including the fade-lead bump and the real media-item join) must
+keep the active target anchored without clearing `followEnabled`.
+
+**Word tap → start there:** tapping a word calls `playFromWord` /
+`seekToWordAndPlay` with that word's timing `startMs` (no basmalah preface),
+matching Android `onWordClick` → `playFromWord`.
+
 ### 5.3 `InkEngine` (pure policy)
 
 Port exactly:
 
 - `State` { Plain, Upcoming, Active, Recited }
 - `word` / `wordState` / `inRepeatChain` / `sweepMs` / `startRevealed` / `prefaceState`
-- `Tuning` defaults (upcoming alpha 0.22, fade 450 ms, sweep clamps, feather 1.6, easing CPs)
+- `Tuning` defaults (upcoming alpha 0.22, ink/mark/recess fade 400 ms, sweep clamps, feather 1.6, easing CPs)
 
 Acceptance: `InkEngineTest` parity. Optional Ink Lab later (session-only
 tuning, same as Android).
@@ -159,6 +169,9 @@ mid-tier phones — measure first.
 
 - Same everyayah URLs / reciter slugs as Android `Reciter`.
 - Playlist model: one clip per ayah (+ basmalah preface where applicable).
+- **Word-level start:** `PlayerController.seekToWordAndPlay(ayah, positionMs)`
+  seeks within the loaded clip (or rebuilds from that ayah) and plays —
+  used by word taps. Mid-ayah starts never prepend the basmalah lead-in.
 - Poll `currentTime` at ~33 ms while playing; publish `ActiveWord` only on
   change (`distinctUntilChanged` equivalent).
 - **Prefetch / buffering (Android parity):** `AudioPrefetcher` read-aheads the
@@ -259,9 +272,10 @@ Ink wash uses the smootherstep mask from `fade.washMaskImage` (not a blunt
 3-stop wipe). Repeat orange is a second overlay that washes in and dissolves
 over `repeatFadeOutMs`.
 
-Motion: fade + slide only (≤ 420 ms), except chrome recede (900 ms) and
-far ayah jumps (up to 1000 ms via `FocusEngine.planJump`). The root-viewer
-ink bleed enter/exit pair is also 420 ms.
+Motion: fade + slide only (≤ 420 ms), except chrome recede (520 ms) and
+verse ink recess (400 ms), plus far ayah jumps (up to 1000 ms via
+`FocusEngine.planJump`). The root-viewer ink bleed enter/exit pair is also
+420 ms.
 
 Themes: Paper / Nightfall / Royal green — same tokens.
 

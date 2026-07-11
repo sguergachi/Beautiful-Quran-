@@ -23,7 +23,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
@@ -181,10 +180,14 @@ internal fun VerseBookmarkRibbon(
         modifier = modifier
             .width(STRIP_WIDTH)
             .onSizeChanged { stripSize = it }
-            .graphicsLayer { alpha = chromeAlpha() }
             .then(tapModifier),
     ) {
         Canvas(Modifier.fillMaxSize()) {
+            // Read chrome in the draw scope so LazyColumn items invalidate
+            // every fade frame (parent State updates must be observed here).
+            val chrome = chromeAlpha().coerceIn(0f, 1f)
+            if (chrome <= 0.001f) return@Canvas
+
             val h = size.height
             if (h <= 0f) return@Canvas
             val edgeInset = EDGE_INSET_DP.dp.toPx()
@@ -213,7 +216,7 @@ internal fun VerseBookmarkRibbon(
                 (nubLen + travel * progress).coerceAtMost(fullLen * 1.08f)
             }
             val showingRibbon = progress > 0.02f || bookmarked
-            val alpha = when {
+            val alpha = chrome * when {
                 showingRibbon && progress > 0.5f -> SOLID_ALPHA
                 showingRibbon -> SOLID_ALPHA * (0.55f + 0.45f * progress.coerceIn(0f, 1f))
                 focused -> NUB_FOCUSED_ALPHA

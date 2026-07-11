@@ -1,6 +1,7 @@
 package com.beautifulquran.ui.reader
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -64,7 +65,7 @@ fun BasmalahCalligraphy(
         animationSpec = if (inkState == InkEngine.State.Active) {
             snap()
         } else {
-            tween(InkEngine.tuning.inkFadeMs)
+            tween(InkEngine.tuning.inkFadeMs, easing = FastOutSlowInEasing)
         },
         label = "basmalahLyricInk",
     )

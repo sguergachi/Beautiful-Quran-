@@ -358,7 +358,7 @@ If the answer to any of these is no, reduce the scope.
 
 `ui/reader/InkEngine.kt` is a single object, per Option 2, with one amendment
 to the proposed shape: the review found that the four-state derivation is the
-easy part — the highlight's *feel* lives in the motion policy (450 ms
+easy part — the highlight's *feel* lives in the motion policy (400 ms
 tween-vs-snap rules, the start-revealed flicker rule, repeat wash timing, the
 1.6× feather), which was still scattered across five `remember*` helpers. So
 InkEngine owns that too, as data rather than as animation code:

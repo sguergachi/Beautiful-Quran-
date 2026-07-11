@@ -31,7 +31,8 @@ interface Props {
   fontScale: number
   /** Live in-surah English query (≥ 2 chars); highlights matching glosses. */
   searchQuery?: string | null
-  onPlayAyah: (ayah: number, fromWord?: boolean) => void
+  /** Tap a word to start recitation at that word's timing. */
+  onPlayWord: (ayah: number, wordPosition: number) => void
   onToggleBookmark: (ayah: number) => boolean
   onHoldWord: (ayah: number, position: number, arabic: string, translation: string) => void
 }
@@ -55,7 +56,7 @@ function AyahBlockInner({
   speed,
   fontScale,
   searchQuery = null,
-  onPlayAyah,
+  onPlayWord,
   onToggleBookmark,
   onHoldWord,
 }: Props) {
@@ -115,7 +116,7 @@ function AyahBlockInner({
                   ? activeWordRef
                   : undefined
               }
-              onPlay={() => onPlayAyah(ayah.number, true)}
+              onPlay={() => onPlayWord(ayah.number, w.position)}
               onHold={() =>
                 onHoldWord(ayah.number, w.position, w.arabic, w.translation)
               }
@@ -148,7 +149,7 @@ function AyahBlockInner({
                   ? activeWordRef
                   : undefined
               }
-              onPlay={() => onPlayAyah(ayah.number, true)}
+              onPlay={() => onPlayWord(ayah.number, w.position)}
               onHold={() =>
                 onHoldWord(ayah.number, w.position, w.arabic, w.translation)
               }

@@ -1,6 +1,7 @@
 package com.beautifulquran.ui.reader
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -113,7 +114,10 @@ private data class RenderedLineText(
 private fun rememberAyahMarkAlpha(focused: Boolean): State<Float> =
     animateFloatAsState(
         targetValue = if (focused) 1f else InkEngine.State.Upcoming.inkAlpha(),
-        animationSpec = tween(InkEngine.tuning.ayahMarkFadeMs),
+        animationSpec = tween(
+            InkEngine.tuning.ayahMarkFadeMs,
+            easing = FastOutSlowInEasing,
+        ),
         label = "ayahMarkAlpha",
     )
 
@@ -159,7 +163,7 @@ private fun animatedInkAlpha(state: InkEngine.State): State<Float> =
         animationSpec = if (state == InkEngine.State.Active) {
             snap<Float>()
         } else {
-            tween(InkEngine.tuning.inkFadeMs)
+            tween(InkEngine.tuning.inkFadeMs, easing = FastOutSlowInEasing)
         },
         label = "inkAlpha",
     )
@@ -628,11 +632,11 @@ private fun ResponsiveHafsAyah(
     val activeIsRepeat = activeIndex >= 0 && inks[activeIndex].repeat
     val upcomingCover = 1f - InkEngine.State.Upcoming.inkAlpha()
     // While recessed, the same upcoming paper cover sits on every word.
-    // Soften ON when leaving the lyric line; snap OFF when landing so unread
-    // ink is already at full cover in the same frame Upcoming covers apply.
+    // Tween both directions so play-start and pause breathe; Upcoming words
+    // keep a floor of [upcomingCover] so ayah handoff never flashes full ink.
     val recessCover = animateFloatAsState(
         targetValue = if (dimmed) upcomingCover else 0f,
-        animationSpec = if (dimmed) tween(120) else snap(),
+        animationSpec = tween(InkEngine.tuning.recessMs, easing = FastOutSlowInEasing),
         label = "recessCover",
     )
     val style = ArabicWordStyle.merge(
@@ -694,8 +698,13 @@ private fun ResponsiveHafsAyah(
                     // change unread ink; only the active word starts its bloom.
                     inks.forEachIndexed { index, ink ->
                         val coverAlpha = when {
+                            // Active word is revealed by InkReveal, not recess.
+                            ink.state == InkEngine.State.Active -> 0f
+                            // Upcoming keeps a dim floor during recess lift so
+                            // handoff never flashes full ink.
+                            ink.state == InkEngine.State.Upcoming ->
+                                maxOf(recess, upcomingCover)
                             recess > 0f -> recess
-                            ink.state == InkEngine.State.Upcoming -> upcomingCover
                             else -> 0f
                         }
                         if (coverAlpha <= 0f) return@forEachIndexed
@@ -722,7 +731,7 @@ private fun ResponsiveHafsAyah(
                     // while repeating — orange carries the motion, same as
                     // WordUnit. At progress 0 this matches UpcomingDim, so the
                     // first word hands off without a flash.
-                    if (activeIndex >= 0 && !activeIsRepeat && recess <= 0f) {
+                    if (activeIndex >= 0 && !activeIsRepeat) {
                         val range = rendered.wordRanges.getOrNull(activeIndex)
                         if (range != null) {
                             blooms += ShapedWordBloom.InkReveal(
@@ -736,19 +745,17 @@ private fun ResponsiveHafsAyah(
                     // Orange directional bloom: SrcIn-tint the shaped glyphs,
                     // then DstIn-wash — same motion as gloss mode's orange
                     // overlay, without re-shaping or painting neighbour rects.
-                    if (recess <= 0f) {
-                        repeatWashes.forEachIndexed { index, wash ->
-                            if (wash.alpha.value <= 0f) return@forEachIndexed
-                            val range = rendered.wordRanges.getOrNull(index)
-                                ?: return@forEachIndexed
-                            blooms += ShapedWordBloom.ColorReveal(
-                                range = range,
-                                progress = wash.progress.value,
-                                color = palette.repeatInkColor,
-                                restingAlpha = 0f,
-                                layerAlpha = wash.alpha.value,
-                            )
-                        }
+                    repeatWashes.forEachIndexed { index, wash ->
+                        if (wash.alpha.value <= 0f) return@forEachIndexed
+                        val range = rendered.wordRanges.getOrNull(index)
+                            ?: return@forEachIndexed
+                        blooms += ShapedWordBloom.ColorReveal(
+                            range = range,
+                            progress = wash.progress.value,
+                            color = palette.repeatInkColor,
+                            restingAlpha = 0f,
+                            layerAlpha = wash.alpha.value,
+                        )
                     }
                     blooms
                 },
@@ -898,6 +905,13 @@ fun AyahBlock(
     // Shared across gloss, English, and Arabic-only: mark sits at upcoming
     // ink while recessed, then fades up to full when this verse is in focus.
     val ayahMarkAlpha = rememberAyahMarkAlpha(focused = !dimmed)
+    // Translation recess matches word ink. Animate a 0..1 multiplier read
+    // only in graphicsLayer — never in composition (docs/PERFORMANCE.md).
+    val translationRecess = animateFloatAsState(
+        targetValue = if (dimmed) InkEngine.State.Upcoming.inkAlpha() else 1f,
+        animationSpec = tween(InkEngine.tuning.inkFadeMs, easing = FastOutSlowInEasing),
+        label = "translationRecess",
+    )
 
     // The ribbon is part of the verse block itself — same Box, same height —
     // so it never "follows" from a floating overlay. Text keeps the existing
@@ -998,8 +1012,6 @@ fun AyahBlock(
                 Spacer(Modifier.height(12.dp))
                 // Block alpha stays 1 while recessed (word-level dim); the
                 // translation still needs to recede with the verse.
-                val translationAlpha =
-                    if (dimmed) 0.66f * InkEngine.State.Upcoming.inkAlpha() else 0.66f
                 Text(
                     text = highlightMatches(
                         text = ayah.translation,
@@ -1011,9 +1023,10 @@ fun AyahBlock(
                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * (0.9f + 0.1f * fontScale),
                         lineHeight = 26.sp,
                     ),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = translationAlpha),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .graphicsLayer { alpha = translationRecess.value }
                         .quietClickable(onClick = onAyahClick),
                 )
             }
