@@ -49,6 +49,8 @@ export class ReaderFocusController {
   /** True while a Motion home-scroll is writing scrollTop. */
   private animating = false
   private activeControls: AnimationPlaybackControls | null = null
+  /** Current target forced out of content-visibility estimation for real layout. */
+  private measuredTarget: HTMLElement | null = null
 
   /** Cached ayah/basmalah geometry in content space — invalidated on resize. */
   private blockGeom = new Map<number, BlockGeom>()
@@ -59,6 +61,8 @@ export class ReaderFocusController {
 
   bind(scrollEl: HTMLElement | null, lastAyahNumber: number, topGuardPx = 0) {
     if (this.scrollEl !== scrollEl) {
+      this.measuredTarget?.removeAttribute('data-focus-target')
+      this.measuredTarget = null
       this.resizeObserver?.disconnect()
       this.resizeObserver = null
       this.scrollEl = scrollEl
@@ -390,9 +394,16 @@ export class ReaderFocusController {
   ): Promise<void> {
     const el = this.scrollEl
     if (!el || epoch !== this.focusEpoch) return
-    this.ensureCache()
-    const target = this.ayahEl(ayahNumber)
+    // Progressive rendering may not have mounted a selector/search target yet.
+    // Give React a few paints to materialize it, then measure the real block;
+    // silently treating a missing node as a completed focus loses the jump.
+    const target = await this.waitForAyahEl(ayahNumber, epoch)
     if (!target) return
+    this.materializeTargetLayout(target)
+    await this.nextPaint()
+    if (epoch !== this.focusEpoch || !this.scrollEl) return
+    this.invalidateLayout()
+    this.ensureCache()
 
     const viewport = el.clientHeight
     if (viewport <= 0) return
@@ -471,6 +482,36 @@ export class ReaderFocusController {
     // Recitation-follow: continuous re-aim (same path as hand-jump residual)
     // so the next verse lands smoothly even when intervening heights vary.
     await this.animateHomeOnto(ayahNumber, GLIDE_MS, epoch)
+  }
+
+  private async waitForAyahEl(
+    ayahNumber: number,
+    epoch: number,
+  ): Promise<HTMLElement | null> {
+    for (let paint = 0; paint < 12; paint++) {
+      if (epoch !== this.focusEpoch || !this.scrollEl) return null
+      const target = this.ayahEl(ayahNumber)
+      if (target) return target
+      await this.nextPaint()
+    }
+    return this.ayahEl(ayahNumber)
+  }
+
+  /**
+   * `content-visibility: auto` reports an intrinsic placeholder height for a
+   * far-offscreen ayah. Force only the requested target through real text
+   * layout so its adaptive anchor is based on its actual rendered height.
+   */
+  private materializeTargetLayout(target: HTMLElement) {
+    if (this.measuredTarget !== target) {
+      this.measuredTarget?.removeAttribute('data-focus-target')
+      this.measuredTarget = target
+      target.setAttribute('data-focus-target', 'true')
+    }
+  }
+
+  private nextPaint(): Promise<void> {
+    return new Promise((resolve) => requestAnimationFrame(() => resolve()))
   }
 
   /**

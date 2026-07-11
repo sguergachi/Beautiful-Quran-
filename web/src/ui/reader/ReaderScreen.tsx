@@ -94,6 +94,29 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const followWasEnabled = useRef(true)
   /** While a rail/search jump is in flight, pin focus UI to the commit target. */
   const pendingJumpAyah = useRef<number | null>(null)
+  const [mountRequest, setMountRequest] = useState<{
+    surahId: number
+    ayah: number
+  } | null>(null)
+  const requestedMountAyah =
+    mountRequest != null && mountRequest.surahId === content?.surah.id
+      ? mountRequest.ayah
+      : null
+
+  /** Ensure progressive rendering has a real block before focus measures it. */
+  const focusAyah = useCallback(
+    (
+      ayah: number,
+      options: { animate?: boolean; preRoll?: boolean } = {},
+    ) => {
+      const surahId = content?.surah.id
+      if (surahId != null && ayah > 0) {
+        setMountRequest({ surahId, ayah })
+      }
+      return focus.focus(ayah, options)
+    },
+    [content?.surah.id, focus],
+  )
 
   // Stable callbacks so memo(AyahBlock) can skip inactive verses on word ticks.
   const onKeepWordInView = useCallback((wordEl: HTMLElement) => {
@@ -142,6 +165,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     content?.surah.ayahCount ?? 0,
     mountAnchor,
     content?.surah.id,
+    requestedMountAyah,
   )
 
   const activeQuery = activeSearchQuery(searchActive, searchQuery)
@@ -221,7 +245,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       pendingJumpAyah.current = target
       setFocusedAyah(target)
       setFocusedPosition(target)
-      void focus.focus(target, { animate: true, preRoll: true }).finally(() => {
+      void focusAyah(target, { animate: true, preRoll: true }).finally(() => {
         setFocusedAyah(target)
         setFocusedPosition(target)
         pendingJumpAyah.current = null
@@ -245,7 +269,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     let cancelled = false
     const raf = requestAnimationFrame(() => {
       if (cancelled) return
-      void focus.focus(ayah, { animate: false, preRoll: false }).then(() => {
+      void focusAyah(ayah, { animate: false, preRoll: false }).then(() => {
         if (cancelled) return
         setFocusedAyah(focus.focusedAyah())
       })
@@ -432,7 +456,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     let cancelled = false
     const raf = requestAnimationFrame(() => {
       if (cancelled) return
-      void focus.focus(target, { animate: true, preRoll: justEnabled }).then(() => {
+      void focusAyah(target, { animate: true, preRoll: justEnabled }).then(() => {
         if (cancelled) return
         setShowReturn(false)
         setFocusedAyah(focus.focusedAyah())
@@ -466,7 +490,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       state.followEnabled && focusTarget != null
         ? focusTarget
         : focusedAyah
-    void focus.focus(pin, { animate: true, preRoll: false })
+    void focusAyah(pin, { animate: true, preRoll: false })
     // Intentionally keyed on layout-affecting settings only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -508,7 +532,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       ? appStore.seekToAyah(targetAyah)
       : Promise.resolve()
     void Promise.all([
-      focus.focus(targetAyah, { animate: true, preRoll: true }),
+      focusAyah(targetAyah, { animate: true, preRoll: true }),
       seekPromise,
     ]).finally(() => {
       // Keep the committed jump target — readout can briefly report the
