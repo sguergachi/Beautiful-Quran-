@@ -11,7 +11,8 @@ paper-stack UI (Home / Reader / Settings), cold-start entrance cover (closed
 mushaf + isti'adha text fade-in), directional ink wash, focus follow, bookmarks, root
 viewer, and a PWA shell. Production build is published to GitHub Pages at
 [`/app/`](https://sguergachi.github.io/Beautiful-Quran-/app/)
-(from `docs/app`). See `web/README.md` for run instructions. The sections
+(from `docs/app`, republished by CI on every `master` push that touches
+`web/`). See `web/README.md` for run instructions. The sections
 below remain the design record and quality bar.
 
 ---
@@ -361,11 +362,14 @@ the design docs — not shared UI code.
 
 ## 12. CI / delivery
 
-- Extend `.github/workflows/` (or add `web.yml`): `npm ci` + `vitest` on
-  every push that touches `web/`.
-- On `master`: build static site; deploy to Pages (or artifact). Keep
-  Android `assembleRelease` path unchanged.
-- Do not block Android CI on web failures once web exists — separate jobs.
+- `.github/workflows/web.yml`: `npm ci` + Vitest + `npm run build` on every
+  push/PR that touches `web/`.
+- On `master` only: after tests pass, run `npm run build:pages` and commit
+  the output to `docs/app`. GitHub Pages serves `master:/docs`, so that
+  commit is what updates
+  [`/app/`](https://sguergachi.github.io/Beautiful-Quran-/app/). Source-only
+  merges that skip this step leave the live reader stale.
+- Android `assembleRelease` stays in `build.yml` — web failures do not block it.
 
 ## 13. Quality gates (definition of done)
 

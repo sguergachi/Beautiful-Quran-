@@ -28,7 +28,7 @@ scripts/                Linux emulator setup / run helpers
 docs/                   Architecture, design language, performance, timings docs
 web/                    Browser port (Vite + React): Focus / Highlight / Ink + paper reader
 .github/workflows/build.yml   CI: tests on all branches; assembleRelease + publish APK on master only
-.github/workflows/web.yml     CI: Vitest + web production build when web/ changes
+.github/workflows/web.yml     CI: Vitest + web build when web/ changes; on master, republish docs/app (GitHub Pages)
 ```
 
 ## Build, test, run

@@ -10,6 +10,12 @@ https://sguergachi.github.io/Beautiful-Quran-/app/
 
 Linked from the project homepage as **Open web reader**.
 
+GitHub Pages serves `master:/docs`. The reader is the built tree under
+`docs/app`. On every `master` push that touches `web/`, `.github/workflows/web.yml`
+runs `npm run build:pages` and commits that output so the live site stays in
+sync — you do not need to republish by hand. Use `build:pages` locally only
+when you want to preview the Pages artifact before merging.
+
 ## Quick start
 
 ```bash
@@ -18,7 +24,7 @@ npm install
 npm run dev      # http://localhost:5173
 npm test         # engine unit tests (Vitest)
 npm run build    # static site → dist/
-npm run build:pages  # → ../docs/app for GitHub Pages
+npm run build:pages  # → ../docs/app (CI does this on master)
 ```
 
 Requires Node 20+. The committed `public/quran.db` (~27 MB) and fonts are
