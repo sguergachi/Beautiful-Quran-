@@ -5,6 +5,9 @@
  * joins do not stall on `src` assignment + network. [AudioPrefetcher] warms
  * upcoming clips into Cache API / blob URLs ahead of the standby element.
  *
+ * `isPlaying` is set on play *intent* (before canplay / `HTMLMediaElement.play`)
+ * so reader chrome can recede on the tap rather than after the buffer fills.
+ *
  * Polls position for HighlightEngine; publishes only on word boundaries upstream.
  */
 import {
@@ -73,6 +76,13 @@ export class PlayerController {
   /** Playlist index the standby element is prepared for, or -1. */
   private standbyIndex = -1
   private prepareToken = 0
+  /** Bumps on every playIndex entry so a superseded load aborts after awaits. */
+  private playToken = 0
+  /**
+   * When true, the active element's `pause` event must not clear isPlaying —
+   * used while swapping `src` during an in-flight playIndex (autoplay).
+   */
+  private suppressPauseSync = false
 
   constructor(prefetcher: AudioPrefetcher = new AudioPrefetcher()) {
     this.prefetcher = prefetcher
@@ -113,6 +123,7 @@ export class PlayerController {
     })
     audio.addEventListener('pause', () => {
       if (audio !== this.active) return
+      if (this.suppressPauseSync) return
       this.patch({ isPlaying: false })
     })
     // Mid-stream underrun (common on mobile Safari with remote progressive MP3).
@@ -366,10 +377,19 @@ export class PlayerController {
     if (this.index !== idx || np.ayah !== ayah) {
       await this.playIndex(idx, true)
     } else if (!this.state.isPlaying) {
+      this.patch({ isPlaying: true, error: null })
       try {
+        if (this.active.readyState < HAVE_FUTURE_DATA) {
+          this.setBuffering(true)
+          await this.waitForCanPlay(this.active)
+        }
+        if (!this.state.isPlaying) return
         await this.active.play()
+        if (!this.state.isPlaying) return
+        this.setBuffering(false)
         this.startTick()
       } catch (e) {
+        this.setBuffering(false)
         this.patch({
           error: e instanceof Error ? e.message : 'Playback blocked',
           isPlaying: false,
@@ -386,6 +406,7 @@ export class PlayerController {
       this.patch({ isPlaying: false })
       return
     }
+    const token = ++this.playToken
 
     // Fast path: standby already holds this index — swap and play immediately.
     if (
@@ -395,16 +416,20 @@ export class PlayerController {
     ) {
       this.swapToStandby()
       this.index = i
-      this.publishNowPlaying()
+      // Intent before await play() so chrome recess does not wait on the
+      // media element (and so a mid-await pause still sees isPlaying).
+      this.publishNowPlaying({ playing: true })
       this.active.loop = this.state.repeatMode === 'ayah'
       this.active.playbackRate = this.state.speed
       this.updateMediaSession()
       try {
         this.setBuffering(false)
         await this.active.play()
+        if (token !== this.playToken || !this.state.isPlaying) return
         this.startTick()
         this.schedulePrefetch()
       } catch (e) {
+        if (token !== this.playToken) return
         this.setBuffering(false)
         this.patch({
           error: e instanceof Error ? e.message : 'Playback blocked',
@@ -416,33 +441,60 @@ export class PlayerController {
 
     this.index = i
     const item = this.playlist[i]!
+    // Publish nowPlaying (+ optimistic isPlaying) before the blob fetch so
+    // reader chrome can recede on the tap, not after the network round-trip.
+    this.publishNowPlaying(autoplay ? { playing: true } : undefined)
+    this.updateMediaSession()
     // Show the spinner while we fetch a full blob — critical on Safari where
     // progressive remote buffering of the next ayah is unreliable.
     if (autoplay && !this.prefetcher.isWarm(item.url)) {
       this.setBuffering(true)
     }
     const blobSrc = await this.prefetcher.ensure(item.url)
+    if (token !== this.playToken) return
+    // User may have paused while warming.
+    if (autoplay && !this.state.isPlaying) {
+      this.setBuffering(false)
+      return
+    }
     const src = blobSrc ?? this.prefetcher.resolveSrc(item.url)
 
-    this.active.pause()
-    this.active.loop = this.state.repeatMode === 'ayah'
-    this.active.src = src
-    this.active.playbackRate = this.state.speed
-    this.active.load()
-    this.publishNowPlaying()
-    this.updateMediaSession()
+    // Only suppress the pause→isPlaying:false sync when we intend to keep
+    // playing after the src swap. Quiet loads (openSurah) must still clear it.
+    if (autoplay) this.suppressPauseSync = true
+    try {
+      this.active.pause()
+      this.active.loop = this.state.repeatMode === 'ayah'
+      this.active.src = src
+      this.active.playbackRate = this.state.speed
+      this.active.load()
+    } finally {
+      this.suppressPauseSync = false
+    }
+    this.patch({
+      durationMs: Math.round((this.active.duration || 0) * 1000),
+    })
     this.schedulePrefetch()
 
     if (autoplay) {
+      // Re-assert after the src swap — pause listener may have raced, and
+      // chrome must stay recessed through canplay.
+      this.patch({ isPlaying: true, error: null })
       try {
         if (this.active.readyState < HAVE_FUTURE_DATA) {
           this.setBuffering(true)
           await this.waitForCanPlay(this.active)
         }
+        if (token !== this.playToken || !this.state.isPlaying) {
+          this.setBuffering(false)
+          return
+        }
         await this.active.play()
+        if (token !== this.playToken || !this.state.isPlaying) return
         this.setBuffering(false)
         this.startTick()
       } catch (e) {
+        if (token !== this.playToken) return
         this.setBuffering(false)
         if (this.playlist[this.index]?.ayah === BASMALAH_PLAYLIST_AYAH) {
           void this.playIndex(this.index + 1)
@@ -458,7 +510,12 @@ export class PlayerController {
     }
   }
 
-  private publishNowPlaying() {
+  /**
+   * Publish the current playlist item as nowPlaying.
+   * When [opts.playing] is true, also set isPlaying immediately (play intent)
+   * so UI chrome does not wait on buffer / `HTMLMediaElement.play()`.
+   */
+  private publishNowPlaying(opts?: { playing?: boolean }) {
     const item = this.playlist[this.index]
     this.patch({
       nowPlaying: item
@@ -471,6 +528,7 @@ export class PlayerController {
       positionMs: 0,
       durationMs: Math.round((this.active.duration || 0) * 1000),
       error: null,
+      ...(opts?.playing ? { isPlaying: true } : {}),
     })
   }
 
@@ -518,45 +576,43 @@ export class PlayerController {
 
   async toggle() {
     if (!this.playlist.length) return
-    if (this.active.paused) {
-      try {
-        if (this.active.readyState < HAVE_FUTURE_DATA) {
-          this.setBuffering(true)
-          await this.waitForCanPlay(this.active)
-        }
-        await this.active.play()
-        this.setBuffering(false)
-        this.startTick()
-      } catch (e) {
-        this.setBuffering(false)
-        this.patch({
-          error: e instanceof Error ? e.message : 'Playback blocked',
-        })
-      }
-    } else {
-      this.active.pause()
-      this.setBuffering(false)
+    // Prefer play-intent state over the media element: optimistic isPlaying
+    // can be true while still paused/buffering, and a second tap must pause.
+    if (this.state.isPlaying) {
+      this.pause()
+      return
     }
+    await this.play()
   }
 
   pause() {
     this.active.pause()
     this.setBuffering(false)
+    // Explicit — do not wait for the 'pause' event (none fires if play() never
+    // started after an optimistic isPlaying).
+    this.patch({ isPlaying: false })
   }
 
   async play() {
     if (!this.playlist.length) return
+    // Recede chrome / flip the transport on the tap, before canplay.
+    this.patch({ isPlaying: true, error: null })
     try {
       if (this.active.readyState < HAVE_FUTURE_DATA) {
         this.setBuffering(true)
         await this.waitForCanPlay(this.active)
       }
+      if (!this.state.isPlaying) return
       await this.active.play()
+      if (!this.state.isPlaying) return
       this.setBuffering(false)
       this.startTick()
     } catch (e) {
       this.setBuffering(false)
-      this.patch({ error: e instanceof Error ? e.message : 'Playback blocked' })
+      this.patch({
+        isPlaying: false,
+        error: e instanceof Error ? e.message : 'Playback blocked',
+      })
     }
   }
 
@@ -652,6 +708,7 @@ export class PlayerController {
   }
 
   stop() {
+    this.playToken++
     this.active.pause()
     this.active.removeAttribute('src')
     this.clearStandby()
