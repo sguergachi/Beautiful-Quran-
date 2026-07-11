@@ -224,21 +224,21 @@ technique.
 
 | Mode | Approach | Hard constraint |
 |---|---|---|
-| Arabic + gloss | Per-word spans; directional `letterFadeIn` wash (CSS mask or per-word Canvas) | Timed word-by-word ink; never static highlight |
-| English lyric | Same wash, LTR | Same timings as Arabic |
+| Arabic + gloss | Per-word spans; Arabic glyphs stay full opaque ink with paper-cover bloom (`WordUnit` / `ink-paper-cover`); gloss/translit use `secondaryAlpha` | Timed word-by-word ink; **never** CSS opacity / glyph alpha on Arabic (overlapping marks look dirty) |
+| English lyric | Directional `letterFadeIn` wash via CSS mask + whole-word opacity | Same timings as Arabic; Latin has no mark-overlap issue |
 | Gloss / translit under Arabic | Whole-word opacity via `secondaryAlpha` (tracks sweep; never letter-reveal) | Same as Android `WordHighlight.secondaryAlpha` |
-| Arabic-only (Hafs) | One shaped paragraph; bloom clipped to word ranges (DOM Range / Canvas path) | No per-glyph style runs that break joining; no neighbour bleed; upcoming = opaque paper cover, not alpha |
+| Arabic-only (Hafs) | Per-word full-ink glyphs + paper-cover bloom (`HafsWord`) | No per-glyph style runs that break joining; no neighbour bleed; upcoming = opaque paper cover, not alpha |
 
 Product rule from `DESIGN.md` / `CONNECTED_ARABIC_RENDERING.md`: a renderer
 may change *mechanism* to protect shaping, but must not degrade to static
 color, whole-ayah highlight, or non-animated state change.
 
 **v1 priority:** gloss + English first (prove engines + sync + paper UI).
-Arabic-only uses per-word full-ink glyphs with a paper-cover bloom
-(`paperCoverMaskImage` / `HafsWord`) — same wash curve as gloss, without
-glyph alpha (semi-transparent Hafs marks look dirty). A single shaped
-paragraph with Range/Canvas clipping remains a later polish if joining
-artifacts appear.
+Arabic script (gloss `WordUnit` and Arabic-only `HafsWord`) keeps glyphs at
+full opaque ink and dims via a paper cover (`paperCoverMaskImage`) — same wash
+curve as English, without glyph alpha (semi-transparent Hafs marks look dirty
+at stroke intersections). A single shaped paragraph with Range/Canvas clipping
+remains a later polish if joining artifacts appear.
 
 Repeat orange wash: second overlay on the same wash curve; dissolve when
 the repeat chain releases (`InkEngine` + `REPEAT_HIGHLIGHTING.md`).
@@ -320,8 +320,9 @@ sans.
 - Bookmarks ribbon; settings persistence; continue listening.
 
 ### Phase 4 — Arabic-only + depth features
-- ✅ Arabic-only paper-cover bloom (`HafsWord` / `paperCoverMaskImage` —
-  same wash curve as gloss; glyphs stay full ink).
+- ✅ Arabic paper-cover bloom for gloss `WordUnit` and Arabic-only `HafsWord`
+  (`ink-paper-cover` / `paperCoverMaskImage` — glyphs stay full opaque ink;
+  never CSS opacity on overlapping Hafs marks).
 - Root Word Viewer (ink bleed) + morphology queries.
 - PWA installability; offline shell + DB + audio cache.
 - Optional Ink Lab (developer unlock).

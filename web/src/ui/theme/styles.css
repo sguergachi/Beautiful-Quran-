@@ -874,24 +874,36 @@ select {
   background: none;
   color: var(--ink);
   cursor: pointer;
-  /* Soft-dim when recessed; Active snaps — wash mask carries the reveal. */
-  transition: opacity var(--ink-fade-ms) var(--recede-ease);
   -webkit-tap-highlight-color: transparent;
 }
 
-.basmalah-calligraphy[data-state='Active'],
-.basmalah[data-state='Active'] {
-  transition: none;
+.basmalah-shell {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.basmalah-calligraphy[data-state='Upcoming'] .ink-paper-cover {
+  opacity: var(--upcoming-cover, 0.78);
+  transition: opacity var(--recess-ms) var(--recede-ease);
 }
 
 .basmalah-calligraphy svg {
   display: block;
   width: 100%;
   height: auto;
+  color: var(--ink);
 }
 
-.basmalah-calligraphy:hover {
-  opacity: 0.75 !important;
+/* Hover softens via paper cover strength, not element opacity (overlapping
+   SVG strokes must stay opaque). Skip Active — JS owns the cover there. */
+.basmalah-calligraphy:not([data-state='Active']):hover .basmalah-paper-cover {
+  opacity: 0.25;
+  transition: opacity 180ms ease;
+}
+
+.basmalah-calligraphy[data-state='Upcoming']:hover .basmalah-paper-cover {
+  opacity: calc(var(--upcoming-cover, 0.78) + 0.08);
 }
 
 .ayah-block {
@@ -962,10 +974,15 @@ select {
   font-size: calc(0.72rem * var(--font-scale, 1));
   color: var(--ink-muted);
   /* Opacity is driven by WordUnit (0.55 × secondaryAlpha) — do not set a
-     fixed opacity here or it compounds with the parent Upcoming dim. */
+     fixed opacity here or it compounds with English parent Upcoming dim. */
   font-style: italic;
 }
 
+/*
+ * English lyric only: whole-word opacity is fine (no overlapping marks).
+ * Arabic gloss words use `.word-arabic-ink` + paper cover instead — see
+ * CONNECTED_ARABIC_RENDERING.md (never glyph alpha on Quran script).
+ */
 .word-ink {
   /* Soft-dim when leaving a verse / becoming Upcoming. Active snaps — the
      letter wash carries the reveal (Android animatedInkAlpha snap-on-Active). */
@@ -986,6 +1003,15 @@ select {
   opacity: 1;
   /* Snap to full base ink; wash mask reveals from the Upcoming floor. */
   transition: none;
+}
+
+/* Arabic + gloss: glyphs stay full opaque ink; dim is a paper cover. */
+.word-arabic-ink {
+  position: relative;
+}
+
+.word-arabic-ink .word-arabic {
+  color: var(--ink);
 }
 
 .word-stack {
@@ -1036,7 +1062,12 @@ select {
   color: var(--ink);
 }
 
-.hafs-paper-cover {
+/*
+ * Shared paper cover for Arabic ink (HafsWord + WordUnit gloss Arabic).
+ * Glyphs stay opaque full ink; this rect softens them by covering with paper
+ * so overlapping marks never double-composite through alpha.
+ */
+.ink-paper-cover {
   position: absolute;
   /* Pad for Hafs mark/AA overhang — local to the word box, no neighbour bleed. */
   inset: -0.12em -0.06em;
@@ -1048,14 +1079,18 @@ select {
      over the completed word (post-handoff flicker). Recess soft-dim opts in. */
 }
 
-.hafs-word[data-state='Upcoming'] .hafs-paper-cover {
+.hafs-word[data-state='Upcoming'] .ink-paper-cover,
+.word-arabic-ink[data-state='Upcoming'] .ink-paper-cover {
   opacity: var(--upcoming-cover, 0.78);
   transition: opacity var(--recess-ms) var(--recede-ease);
 }
 
-.hafs-word[data-state='Active'] .hafs-paper-cover,
-.hafs-word[data-state='Recited'] .hafs-paper-cover,
-.hafs-word[data-state='Plain'] .hafs-paper-cover {
+.hafs-word[data-state='Active'] .ink-paper-cover,
+.hafs-word[data-state='Recited'] .ink-paper-cover,
+.hafs-word[data-state='Plain'] .ink-paper-cover,
+.word-arabic-ink[data-state='Active'] .ink-paper-cover,
+.word-arabic-ink[data-state='Recited'] .ink-paper-cover,
+.word-arabic-ink[data-state='Plain'] .ink-paper-cover {
   transition: none;
 }
 

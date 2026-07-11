@@ -273,7 +273,7 @@ export function HafsWord({
     >
       <span className="hafs-shell">
         <span className="hafs-glyph">{word.arabic}</span>
-        <span ref={coverRef} className="hafs-paper-cover" aria-hidden="true" />
+        <span ref={coverRef} className="ink-paper-cover" aria-hidden="true" />
         <span
           ref={overlayRef}
           className="hafs-repeat-overlay hafs-glyph"

@@ -16,8 +16,8 @@ import {
   sweepMs,
   TRANSLITERATION_COLOR_ALPHA,
 } from '../engine/ink'
-import { cubicBezierEase, washMaskImage } from '../engine/fade'
-import { applyMask } from './inkWash'
+import { cubicBezierEase, paperCoverMaskImage, washMaskImage } from '../engine/fade'
+import { applyMask, runWash } from './inkWash'
 
 interface Props {
   word: Word
@@ -39,19 +39,30 @@ interface Props {
 const HOLD_MS = 450
 const MOVE_CANCEL_PX = 10
 
+/** Snap-clear the paper cover — never CSS-transition a solid rect away. */
+function clearCover(cover: HTMLElement) {
+  cover.style.transition = 'none'
+  applyMask(cover, 'none')
+  cover.style.opacity = '0'
+}
+
 /**
  * Paint secondary gloss/translit alpha.
  *
- * Parent `.word-ink` already applies lyric opacity for Upcoming/Recited/Plain,
- * so children must not compound that dim. During Active the parent snaps to 1
- * and secondary lines track the sweep via `secondaryAlpha` (Android
+ * Arabic glyphs no longer dim via parent opacity (that made overlapping Hafs
+ * marks look dirty). Gloss/translit own their Upcoming floor here. During
+ * Active they track the sweep via `secondaryAlpha` (Android
  * WordHighlight.secondaryAlpha) — never popping to full the instant Active starts.
+ *
+ * English lyric mode still uses parent `.word-ink` opacity for Upcoming, so
+ * children must not compound that dim when `englishMode` is true.
  */
 function paintSecondary(
   gloss: HTMLElement | null,
   translit: HTMLElement | null,
   ink: { state: InkState; repeat: boolean },
   sweepProgress: number | null,
+  englishMode: boolean,
 ) {
   if (ink.state === InkState.Active && !ink.repeat && sweepProgress != null) {
     const alpha = secondaryAlpha(ink.state, ink.repeat, sweepProgress)
@@ -59,10 +70,19 @@ function paintSecondary(
     if (translit) translit.style.opacity = String(TRANSLITERATION_COLOR_ALPHA * alpha)
     return
   }
-  // Inherit parent lyric ink (Upcoming dim / Recited full). Translit keeps its
-  // 0.55 color strength; gloss stays at 1 relative to the parent.
-  if (gloss) gloss.style.opacity = ''
-  if (translit) translit.style.opacity = String(TRANSLITERATION_COLOR_ALPHA)
+
+  if (englishMode) {
+    // Inherit parent lyric ink (Upcoming dim / Recited full). Translit keeps its
+    // 0.55 color strength; gloss stays at 1 relative to the parent.
+    if (gloss) gloss.style.opacity = ''
+    if (translit) translit.style.opacity = String(TRANSLITERATION_COLOR_ALPHA)
+    return
+  }
+
+  // Arabic path: parent is full opacity; secondary lines carry Upcoming themselves.
+  const floor = ink.state === InkState.Upcoming ? getTuning().upcomingAlpha : 1
+  if (gloss) gloss.style.opacity = String(floor)
+  if (translit) translit.style.opacity = String(TRANSLITERATION_COLOR_ALPHA * floor)
 }
 
 export function WordUnit({
@@ -82,8 +102,9 @@ export function WordUnit({
 }: Props) {
   const ink = InkEngine.word(word.position, activeWord, isActiveAyah, dimmed)
   const localRootRef = useRef<HTMLSpanElement>(null)
-  /** Base glyph layer — Active wash targets this, not the whole unit (gloss). */
+  /** Base glyph layer — Active wash targets this (English) or the paper cover (Arabic). */
   const baseRef = useRef<HTMLSpanElement>(null)
+  const coverRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
   const glossRef = useRef<HTMLSpanElement>(null)
   const translitRef = useRef<HTMLSpanElement>(null)
@@ -98,6 +119,7 @@ export function WordUnit({
   const held = useRef(false)
   const tuning = getTuning()
   const baseClass = englishMode ? 'word-gloss' : 'word-arabic'
+  const upcomingCover = 1 - tuning.upcomingAlpha
 
   const clearHold = () => {
     if (holdTimer.current != null) {
@@ -107,11 +129,18 @@ export function WordUnit({
   }
 
   /*
-   * Directional ink wash on Active entry.
-   * useLayoutEffect so the progress-0 mask lands before paint — otherwise the
-   * word flashes full ink for a frame (CSS Active opacity) then snaps faint
-   * when the mask arrives. Matches Android: snap base alpha to 1, let the
-   * letter sweep carry the reveal from the Upcoming floor.
+   * Active-entry wash.
+   *
+   * Arabic: paper-cover bloom (Android shapedWordBloom / HafsWord). Glyphs stay
+   * opaque full ink; Upcoming/recess use a paper cover; Active pulls that cover
+   * back on the smootherstep curve. Never dims Arabic via glyph/element alpha —
+   * semi-transparent Hafs marks look dirty at stroke intersections.
+   *
+   * English: directional mask on the glyph (letterFadeIn). Latin has no
+   * overlapping mark problem, so opacity + mask stay fine.
+   *
+   * useLayoutEffect so progress-0 lands before paint — otherwise the word
+   * flashes full ink for a frame then snaps faint when the wash arrives.
    *
    * While repeating, the base layer stays untouched — orange carries the motion
    * (Android WordHighlight.baseLayer skips letterFadeIn when repeat).
@@ -120,8 +149,6 @@ export function WordUnit({
    * never letter-reveal, but they must not jump to full when Active starts.
    */
   useLayoutEffect(() => {
-    const el = baseRef.current
-    if (!el) return
     const prev = prevState.current
     const enteredActive = ink.state === InkState.Active && prev !== InkState.Active
     if (enteredActive) {
@@ -134,58 +161,113 @@ export function WordUnit({
     const rtl = !englishMode
     const t = getTuning()
     const resting = t.upcomingAlpha
+    const ease = {
+      x1: t.sweepEaseX1,
+      y1: t.sweepEaseY1,
+      x2: t.sweepEaseX2,
+      y2: t.sweepEaseY2,
+    }
+
+    // ── Arabic: paper cover (never glyph alpha) ──────────────────────────
+    if (!englishMode) {
+      const cover = coverRef.current
+      if (!cover) return
+
+      if (ink.state === InkState.Upcoming) {
+        applyMask(cover, 'none')
+        cover.style.transition = `opacity ${t.recessMs}ms cubic-bezier(0.4, 0, 0.2, 1)`
+        cover.style.opacity = String(1 - resting)
+        paintSecondary(glossRef.current, translitRef.current, ink, null, false)
+        return
+      }
+
+      if (ink.state !== InkState.Active) {
+        clearCover(cover)
+        paintSecondary(glossRef.current, translitRef.current, ink, null, false)
+        return
+      }
+
+      if (ink.repeat) {
+        clearCover(cover)
+        paintSecondary(glossRef.current, translitRef.current, ink, null, false)
+        return
+      }
+
+      if (revealedOnEntry.current) {
+        clearCover(cover)
+        paintSecondary(glossRef.current, translitRef.current, ink, 1, false)
+        return
+      }
+
+      if (!enteredActive) return
+
+      const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
+      cover.style.transition = 'none'
+      cover.style.opacity = '1'
+      applyMask(cover, paperCoverMaskImage(0, resting, true, t.washFeather))
+      paintSecondary(glossRef.current, translitRef.current, ink, 0, false)
+
+      return runWash(
+        duration,
+        ease,
+        cubicBezierEase,
+        (p, eased) => {
+          paintSecondary(glossRef.current, translitRef.current, ink, eased, false)
+          if (p >= 1) {
+            clearCover(cover)
+            paintSecondary(glossRef.current, translitRef.current, ink, 1, false)
+            return
+          }
+          applyMask(cover, paperCoverMaskImage(eased, resting, true, t.washFeather))
+        },
+        () => {
+          clearCover(cover)
+          paintSecondary(glossRef.current, translitRef.current, ink, 1, false)
+        },
+      )
+    }
+
+    // ── English: glyph mask + parent opacity ─────────────────────────────
+    const el = baseRef.current
+    if (!el) return
 
     if (ink.state !== InkState.Active) {
       applyMask(el, 'none')
-      paintSecondary(glossRef.current, translitRef.current, ink, null)
+      paintSecondary(glossRef.current, translitRef.current, ink, null, true)
       return
     }
 
-    // Repeat chain: orange overlay carries the motion (Android skips base wash).
     if (ink.repeat) {
       applyMask(el, 'none')
-      paintSecondary(glossRef.current, translitRef.current, ink, null)
+      paintSecondary(glossRef.current, translitRef.current, ink, null, true)
       return
     }
 
     if (revealedOnEntry.current) {
       applyMask(el, 'none')
-      // Already-read word lighting again — secondary at full (sweep starts revealed).
-      paintSecondary(glossRef.current, translitRef.current, ink, 1)
+      paintSecondary(glossRef.current, translitRef.current, ink, 1, true)
       return
     }
 
-    // Still Active from a prior entry whose rAF is running — do not restart
-    // (restarting mid-word is itself a flicker).
     if (!enteredActive) return
 
     const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
-    const start = performance.now()
-    // Progress 0 mask = Upcoming floor across the glyph. Applied before paint.
     applyMask(el, washMaskImage(0, resting, rtl, t.washFeather))
-    paintSecondary(glossRef.current, translitRef.current, ink, 0)
+    paintSecondary(glossRef.current, translitRef.current, ink, 0, true)
 
     let raf = 0
     let cancelled = false
+    const start = performance.now()
     const tick = (now: number) => {
       if (cancelled) return
       const p = Math.min(1, (now - start) / duration)
-      const eased = cubicBezierEase(
-        p,
-        t.sweepEaseX1,
-        t.sweepEaseY1,
-        t.sweepEaseX2,
-        t.sweepEaseY2,
-      )
+      const eased = cubicBezierEase(p, ease.x1, ease.y1, ease.x2, ease.y2)
       applyMask(el, washMaskImage(eased, resting, rtl, t.washFeather))
-      // Same eased progress as the letter wash — Android Animatable applies
-      // sweepEasing to sweep.value, which secondaryAlpha reads. Re-read refs
-      // each frame so gloss/translit toggled mid-sweep still track.
-      paintSecondary(glossRef.current, translitRef.current, ink, eased)
+      paintSecondary(glossRef.current, translitRef.current, ink, eased, true)
       if (p < 1) raf = requestAnimationFrame(tick)
       else {
         applyMask(el, 'none')
-        paintSecondary(glossRef.current, translitRef.current, ink, 1)
+        paintSecondary(glossRef.current, translitRef.current, ink, 1, true)
       }
     }
     raf = requestAnimationFrame(tick)
@@ -210,8 +292,9 @@ export function WordUnit({
       translitRef.current,
       ink,
       ink.state === InkState.Active && !ink.repeat ? 1 : null,
+      englishMode,
     )
-  }, [ink.state, ink.repeat, showGloss, showTransliteration, word.translation, word.transliteration])
+  }, [ink.state, ink.repeat, showGloss, showTransliteration, word.translation, word.transliteration, englishMode])
 
   // Orange repeat overlay: wash in on chain entry, dissolve on release.
   // Key only on `ink.repeat` (Android LaunchedEffect(repeat)) — advancing the
@@ -284,9 +367,9 @@ export function WordUnit({
   }, [ink.repeat, englishMode])
 
   const rtl = !englishMode
-  const style: CSSProperties = {
-    ['--upcoming-alpha' as string]: String(tuning.upcomingAlpha),
-  }
+  const style: CSSProperties = englishMode
+    ? { ['--upcoming-alpha' as string]: String(tuning.upcomingAlpha) }
+    : { ['--upcoming-cover' as string]: String(upcomingCover) }
 
   const label = englishMode ? word.translation || word.arabic : word.arabic
 
@@ -320,7 +403,7 @@ export function WordUnit({
         localRootRef.current = node
         if (externalRootRef) externalRootRef.current = node
       }}
-      className="word-unit word-ink"
+      className={englishMode ? 'word-unit word-ink' : 'word-unit word-arabic-ink'}
       data-state={ink.state}
       style={style}
       onClick={() => {
@@ -350,6 +433,10 @@ export function WordUnit({
         >
           {label}
         </span>
+        {/* Arabic only: opaque full-ink glyphs + paper cover (never glyph alpha). */}
+        {!englishMode ? (
+          <span ref={coverRef} className="ink-paper-cover" aria-hidden="true" />
+        ) : null}
         {/* Same typography as the base glyph — without word-arabic/word-gloss
             the orange layer inherited body size and read as tiny text. */}
         <span
@@ -362,8 +449,8 @@ export function WordUnit({
         </span>
       </span>
       {/* Gloss/translit are siblings of the glyph stack (not nested under the
-          wash mask). Parent `.word-ink` owns Upcoming dim; during Active their
-          opacity tracks secondaryAlpha with the letter sweep. */}
+          wash mask). Arabic path: they own Upcoming dim. English path: parent
+          `.word-ink` owns it. During Active both track secondaryAlpha. */}
       {!englishMode && showGloss && word.translation ? (
         <span
           ref={glossRef}
