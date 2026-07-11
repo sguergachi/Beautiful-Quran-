@@ -1,4 +1,4 @@
-import { toArabicIndic } from '../../util/digits'
+import { formatReaderDigits } from '../../util/digits'
 
 /**
  * Subtle mushaf page break — thin gold hairline with Western digits on the
@@ -12,7 +12,7 @@ export function PageBreak({
   page: number
   useArabicIndicDigits?: boolean
 }) {
-  const right = useArabicIndicDigits ? toArabicIndic(page) : String(page)
+  const right = formatReaderDigits(page, useArabicIndicDigits)
   return (
     <div className="page-break" role="separator" aria-label={`Page ${page}`}>
       <span className="page-break__num">{page}</span>
