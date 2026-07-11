@@ -1,0 +1,1 @@
+import{a as r}from"./index-CEd92t_h.js";function i(){"serviceWorker"in navigator&&window.setTimeout(()=>{navigator.serviceWorker.register(r("sw.js"),{scope:"/Beautiful-Quran-/app/"}).catch(()=>{})},0)}export{i as registerServiceWorker};
