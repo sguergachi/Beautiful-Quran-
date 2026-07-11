@@ -243,20 +243,27 @@ fun Modifier.shapedWordBloom(
                     }
                     val pad = PaperCoverPad.toPx()
                     lineBounds.forEach { bounds ->
-                        val w = bounds.width
+                        // The clip/draw rect already includes [pad] for glyph
+                        // overhang, so the wash must use that same geometry.
+                        // Otherwise an end glyph such as EB Garamond's “g”
+                        // sits outside the calculated width: its bowl reveals
+                        // while the right-swept descender remains faint until
+                        // progress snaps to 1.
+                        val washLeft = bounds.left - pad
+                        val w = bounds.width + pad * 2f
                         val edge = (w * feather).coerceAtLeast(1f)
                         val head = p * (w + edge)
                         val brush = if (rtl) {
                             Brush.horizontalGradient(
                                 colors = paperColors,
-                                startX = bounds.left + (w - head),
-                                endX = bounds.left + (w - head) + edge,
+                                startX = washLeft + (w - head),
+                                endX = washLeft + (w - head) + edge,
                             )
                         } else {
                             Brush.horizontalGradient(
                                 colors = paperColors,
-                                startX = bounds.left + head - edge,
-                                endX = bounds.left + head,
+                                startX = washLeft + head - edge,
+                                endX = washLeft + head,
                             )
                         }
                         clipRect(
@@ -267,8 +274,8 @@ fun Modifier.shapedWordBloom(
                         ) {
                             drawRect(
                                 brush = brush,
-                                topLeft = Offset(bounds.left - pad, bounds.top - pad),
-                                size = Size(bounds.width + pad * 2f, bounds.height + pad * 2f),
+                                topLeft = Offset(washLeft, bounds.top - pad),
+                                size = Size(w, bounds.height + pad * 2f),
                             )
                         }
                     }
