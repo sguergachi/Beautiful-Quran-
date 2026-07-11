@@ -229,10 +229,12 @@ horizontal page turn — draggable, fling-able, with page-turn audio
 - `settings/SettingsScreen` — reciter, reading mode, text size, display
   toggles, theme, attributions; developer mode unlocks the Timings Lab.
 
-Ink-bleed overlays (not paper-stack pages) sit above the stack via
-`InkRevealOverlay`: the notification-permission prompt, the
-[Root Word Viewer](ROOT_VIEWER.md) (default word long-press), and the
-[Timings Lab](TIMINGS_LAB.md) (developer mode only).
+Ink-bleed overlays soak **the sheet they belong to**, not a full-screen
+layer above the stack: the notification-permission prompt and the
+[Root Word Viewer](ROOT_VIEWER.md) (default word long-press) live on the
+reader sheet; the [Timings Lab](TIMINGS_LAB.md) (developer mode) stays
+stack-level because Settings can open it too. Shared primitive:
+`InkRevealOverlay`.
 
 On a cold start the whole stack sits behind the **entrance cover**
 (`entrance/EntranceCover` on Android; `web/src/ui/entrance/` on web) — the

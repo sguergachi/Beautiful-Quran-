@@ -401,11 +401,15 @@ private fun PaperStackApp(
         }
 
         if (selectedSurahId != 0) {
+            // While the root lexicon (or hold chooser) is open, lift this sheet
+            // above the cover so the ink wash stays on the paper it soaks —
+            // not trapped under the off-screen cover's higher stack z-index.
+            val readerBleedOpen = rootVisible || chooserVisible
             PaperPage(
                 layer = PaperLayer.Ayah,
                 stackPosition = page,
                 settingsLayer = settingsLayer,
-                modifier = Modifier.zIndex(1f),
+                modifier = Modifier.zIndex(if (readerBleedOpen) 3f else 1f),
             ) {
                 key(selectedSurahId, selectedStartAyah, jumpEpoch) {
                     ReaderScreen(
@@ -420,6 +424,58 @@ private fun PaperStackApp(
                         rootReturnVisible = rootReturnVisible,
                         keepStatusBarVisible = overlayBlocking,
                     )
+                }
+
+                // Root lexicon + hold chooser live ON this sheet — ink soaks
+                // the reader paper, not a full-screen layer above the stack.
+                // (Timings Lab stays stack-level: it can also open from Settings.)
+                val overlayColors = contrastingOverlayColorScheme(themeMode)
+                InkRevealOverlay(
+                    visible = chooserVisible,
+                    backgroundColor = overlayColors.background,
+                    modifier = Modifier.zIndex(3f),
+                ) {
+                    MaterialTheme(colorScheme = overlayColors, typography = MaterialTheme.typography) {
+                        CompositionLocalProvider(LocalQuranAccents provides TimingsLabAccents) {
+                            Box(Modifier.fillMaxSize()) {
+                                Box(Modifier.matchParentSize().absorbPointerEvents())
+                                WordHoldChooser(
+                                    onOpenRootViewer = {
+                                        val target = pendingWord ?: return@WordHoldChooser
+                                        pendingWord = null
+                                        openRootViewer(target.first, target.second, target.third)
+                                    },
+                                    onOpenTimingsLab = {
+                                        val target = pendingWord ?: return@WordHoldChooser
+                                        pendingWord = null
+                                        openTimingsLab(target.first, target.second, target.third)
+                                    },
+                                    onDismiss = {
+                                        chooserVisible = false
+                                        pendingWord = null
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+                InkRevealOverlay(
+                    visible = rootVisible,
+                    backgroundColor = overlayColors.background,
+                    modifier = Modifier.zIndex(4f),
+                ) {
+                    MaterialTheme(colorScheme = overlayColors, typography = MaterialTheme.typography) {
+                        CompositionLocalProvider(LocalQuranAccents provides TimingsLabAccents) {
+                            Box(Modifier.fillMaxSize()) {
+                                Box(Modifier.matchParentSize().absorbPointerEvents())
+                                RootViewerScreen(
+                                    viewModel = rootViewerViewModel,
+                                    onBack = ::closeRootViewer,
+                                    onJumpToOccurrence = ::jumpFromConcordance,
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -477,62 +533,11 @@ private fun PaperStackApp(
             }
         }
 
-        // Ink-bleed overlays share one contrasting palette so the bloom reads
-        // against the reader (Royal Green, or Nightfall under Royal Green).
-        val overlayColors = contrastingOverlayColorScheme(themeMode)
-
-        InkRevealOverlay(
-            visible = chooserVisible,
-            backgroundColor = overlayColors.background,
-            modifier = Modifier.zIndex(3f),
-        ) {
-            MaterialTheme(colorScheme = overlayColors, typography = MaterialTheme.typography) {
-                CompositionLocalProvider(LocalQuranAccents provides TimingsLabAccents) {
-                    Box(Modifier.fillMaxSize()) {
-                        Box(Modifier.matchParentSize().absorbPointerEvents())
-                        WordHoldChooser(
-                            onOpenRootViewer = {
-                                val target = pendingWord ?: return@WordHoldChooser
-                                pendingWord = null
-                                openRootViewer(target.first, target.second, target.third)
-                            },
-                            onOpenTimingsLab = {
-                                val target = pendingWord ?: return@WordHoldChooser
-                                pendingWord = null
-                                openTimingsLab(target.first, target.second, target.third)
-                            },
-                            onDismiss = {
-                                chooserVisible = false
-                                pendingWord = null
-                            },
-                        )
-                    }
-                }
-            }
-        }
-
-        InkRevealOverlay(
-            visible = rootVisible,
-            backgroundColor = overlayColors.background,
-            modifier = Modifier.zIndex(4f),
-        ) {
-            MaterialTheme(colorScheme = overlayColors, typography = MaterialTheme.typography) {
-                CompositionLocalProvider(LocalQuranAccents provides TimingsLabAccents) {
-                    Box(Modifier.fillMaxSize()) {
-                        Box(Modifier.matchParentSize().absorbPointerEvents())
-                        RootViewerScreen(
-                            viewModel = rootViewerViewModel,
-                            onBack = ::closeRootViewer,
-                            onJumpToOccurrence = ::jumpFromConcordance,
-                        )
-                    }
-                }
-            }
-        }
-
-        // The Lab blooms in as a contrasting ink spot over the reader — the
+        // The Lab blooms in as a contrasting ink spot over the stack — the
         // same ink-bleed language as the notification prompt — and closes by
-        // opening a hole back to the exact page it came from.
+        // opening a hole back to the exact page it came from. Hosted above
+        // the sheets because Settings can open it too (not only the reader).
+        val overlayColors = contrastingOverlayColorScheme(themeMode)
         InkRevealOverlay(
             visible = labVisible,
             backgroundColor = overlayColors.background,

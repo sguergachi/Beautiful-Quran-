@@ -228,7 +228,8 @@ Three sheets, hand-rolled paper stack (no router chrome):
 2. **Reader** — header + ayahs + icon player bar; centered ayah
    selector rail (hover-magnified dashes, gold focal tick);
 
-   return-to-ayah ornament; bookmark ribbon.
+   return-to-ayah roundel (gilt corolla, qalam arrow painted toward the
+   active verse); bookmark ribbon.
 3. **Settings** — reciter, reading mode, text size, display toggles, theme.
    Opens as a third sheet **over** the reader when a surah is open
    (`stackLayer` 0→1→2). All three sheets share one centered axis: the top
@@ -239,7 +240,9 @@ Three sheets, hand-rolled paper stack (no router chrome):
 Hard rules from `DESIGN.md` apply unchanged: no dialogs, cards, ripples,
 elevation, borders; hierarchy via spacing / size / ink alpha; ink-bleed
 overlays for root viewer (and later system prompts). The root viewer bleed
-uses the same contrasting workbench as Android (`contrastingOverlayColorScheme`):
+is hosted **inside the reader sheet** so the wash soaks that paper only —
+not a full-viewport layer over the under-paper or peeking deck. It uses the
+same contrasting workbench as Android (`contrastingOverlayColorScheme`):
 **Royal Green** over Paper / Nightfall, and **Nightfall** when the reader is
 already Royal Green. Dismiss chrome is an icon (×), not a text label. Enter
 blooms with an expanding circle clip; exit punches a hole open from the same
