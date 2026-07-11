@@ -251,6 +251,9 @@ class AppStore {
         loadProgress: 1,
       })
       player.setSpeed(this.state.settings.playbackSpeed)
+      // sql.js is main-thread only: warm one chapter per idle slice instead of
+      // freezing the opening ceremony with a single whole-Quran object scan.
+      void QuranRepository.preloadAllSurahContent(this.state.settings.lastSurah)
       // Only install the offline worker after a successful boot so a failed
       // first paint cannot pin a poisoned shell in the Cache API.
       void import('../swRegistration').then((m) => m.registerServiceWorker())

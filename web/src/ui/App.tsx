@@ -85,7 +85,13 @@ export function App() {
       {showStack && (
         <>
           <HomeScreen stackLayer={stack} />
-          <ReaderScreen stackLayer={stack} />
+          {/* Chapter boundaries get fresh focus/rail geometry. Carrying the
+              previous chapter's dial state into the first peel frame makes
+              the rail visibly jump before the initial focus settles. */}
+          <ReaderScreen
+            key={state.content?.surah.id ?? 'empty-reader'}
+            stackLayer={stack}
+          />
           <SettingsScreen stackLayer={stack} hasReader={hasReader} />
         </>
       )}
