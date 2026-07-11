@@ -6,6 +6,7 @@ import android.content.ContextWrapper
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -306,15 +307,16 @@ fun ReaderScreen(
 
     // While reciting, chrome recedes into the paper — the words and core
     // transport controls stay present. Read inside graphicsLayer blocks so
-    // the fade is draw-phase-only.
+    // the fade is draw-phase-only. Soft ease-out over [ChromeRecedeMs] so
+    // play-start feels like a breath, not a blink.
     val chromeAlpha = animateFloatAsState(
         targetValue = if (recitingActive) 0.08f else 1f,
-        animationSpec = tween(900),
+        animationSpec = tween(ChromeRecedeMs, easing = ChromeRecedeEasing),
         label = "chromeAlpha",
     )
     val topBarAlpha = animateFloatAsState(
         targetValue = if (recitingActive) 0f else 1f,
-        animationSpec = tween(900),
+        animationSpec = tween(ChromeRecedeMs, easing = ChromeRecedeEasing),
         label = "topBarAlpha",
     )
 
@@ -723,9 +725,7 @@ fun ReaderScreen(
             } else {
                 AyahSelectorSide.RIGHT
             }
-            val bookmarkChromeAlpha: () -> Float = {
-                if (recitingActive) 0f else chromeAlpha.value
-            }
+            val bookmarkChromeAlpha: () -> Float = { topBarAlpha.value }
             LazyColumn(
                 state = listState,
                 contentPadding = PaddingValues(top = padding.calculateTopPadding()),
@@ -921,7 +921,7 @@ fun ReaderScreen(
                 side = selectorSide,
                 currentAyah = railCurrentAyah,
                 currentPosition = railCurrentPosition,
-                chromeAlpha = { if (recitingActive) 0f else chromeAlpha.value },
+                chromeAlpha = { topBarAlpha.value },
                 interactive = !recitingActive,
                 onJumpToAyah = { requestedJumpAyah = it },
                 onExpandedChange = { ayahSelectorExpanded = it },
@@ -1036,6 +1036,12 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is ContextWrapper -> baseContext.findActivity()
     else -> null
 }
+
+/** Chrome / rail / bookmark fade while recitation starts — deliberate and slow. */
+private const val ChromeRecedeMs = 1400
+
+/** Soft ease-out: starts gently, settles without a late rush. */
+private val ChromeRecedeEasing = CubicBezierEasing(0.33f, 0f, 0.2f, 1f)
 
 /**
  * In-surah English search state: whether the top bar is in search mode, the

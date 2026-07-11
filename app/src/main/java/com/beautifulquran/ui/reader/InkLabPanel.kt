@@ -80,7 +80,7 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
             TuningSlider("Mark fade ms", t.ayahMarkFadeMs.toFloat(), 0f..1200f, integer = true) {
                 InkEngine.tuning = t.copy(ayahMarkFadeMs = it.roundToInt())
             }
-            TuningSlider("Recess ms", t.recessMs.toFloat(), 0f..600f, integer = true) {
+            TuningSlider("Recess ms", t.recessMs.toFloat(), 0f..1400f, integer = true) {
                 InkEngine.tuning = t.copy(recessMs = it.roundToInt())
             }
             TuningSlider("Min sweep ms", t.minSweepMs.toFloat(), 40f..600f, integer = true) {
