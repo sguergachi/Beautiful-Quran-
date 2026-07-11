@@ -411,8 +411,8 @@ private fun Modifier.wordUnitBehavior(
 /** The two-layer karaoke text every word unit renders: the base ink, plus an
  * orange overlay that sweeps in while the word belongs to a repeat chain and
  * dissolves back out once the chain releases. An optional [searchHitWash]
- * adds a second orange overlay driven by the same wash machinery (home
- * search-hit flash). */
+ * reuses that same overlay (matchParentSize + [repeatInkLayer]) for the home
+ * search-hit flash — never a second measured Text that would shift layout. */
 @Composable
 private fun HighlightLayeredText(
     text: String,
@@ -424,6 +424,12 @@ private fun HighlightLayeredText(
     searchHitWash: RepeatWash? = null,
 ) {
     val repeatInk = LocalQuranAccents.current.repeatInk
+    // Prefer a live repeat chain; otherwise the one-shot search-hit wash.
+    val orangeWash = when {
+        highlight.showRepeatLayer -> highlight.repeatWash
+        searchHitWash != null && searchHitWash.alpha.value > 0f -> searchHitWash
+        else -> null
+    }
     Box(modifier) {
         Text(
             text = text,
@@ -431,20 +437,16 @@ private fun HighlightLayeredText(
             color = color,
             modifier = highlight.baseLayer(rtl),
         )
-        if (highlight.showRepeatLayer) {
+        if (orangeWash != null) {
             Text(
                 text = text,
                 style = style,
                 color = repeatInk,
-                modifier = Modifier.repeatInkLayer(highlight.repeatWash, rtl),
-            )
-        }
-        if (searchHitWash != null) {
-            Text(
-                text = text,
-                style = style,
-                color = repeatInk,
-                modifier = Modifier.repeatInkLayer(searchHitWash, rtl),
+                // matchParentSize: overlay must not contribute to Box measure —
+                // composing a second Text was shifting FlowRow words.
+                modifier = Modifier
+                    .matchParentSize()
+                    .repeatInkLayer(orangeWash, rtl),
             )
         }
     }
@@ -466,8 +468,9 @@ fun WordUnit(
     showFlash: Boolean = false,
 ) {
     val highlight = rememberWordHighlight(ink, sweepMs)
-    val searchHitWash = rememberSearchHitWash(showFlash).takeIf { showFlash }
+    val searchHitWash = rememberSearchHitWash(showFlash)
     val repeatInk = LocalQuranAccents.current.repeatInk
+    val glossWeight = if (searchHit) FontWeight.Bold else null
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -488,7 +491,7 @@ fun WordUnit(
                     text = word.translation,
                     fontSize = 12.sp * fontScale,
                     lineHeight = 15.sp * fontScale,
-                    fontWeight = if (searchHit) FontWeight.Bold else null,
+                    fontWeight = glossWeight,
                     color = if (searchHit) {
                         LocalQuranAccents.current.gold
                     } else {
@@ -497,15 +500,17 @@ fun WordUnit(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.graphicsLayer { alpha = highlight.secondaryAlpha() },
                 )
-                if (searchHitWash != null) {
+                if (searchHitWash.alpha.value > 0f) {
                     Text(
                         text = word.translation,
                         fontSize = 12.sp * fontScale,
                         lineHeight = 15.sp * fontScale,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = glossWeight,
                         color = repeatInk,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.repeatInkLayer(searchHitWash, rtl = false),
+                        modifier = Modifier
+                            .matchParentSize()
+                            .repeatInkLayer(searchHitWash, rtl = false),
                     )
                 }
             }
@@ -567,7 +572,7 @@ fun EnglishWordUnit(
     showFlash: Boolean = false,
 ) {
     val highlight = rememberWordHighlight(ink, sweepMs)
-    val searchHitWash = rememberSearchHitWash(showFlash).takeIf { showFlash }
+    val searchHitWash = rememberSearchHitWash(showFlash)
     HighlightLayeredText(
         text = word.translation,
         highlight = highlight,

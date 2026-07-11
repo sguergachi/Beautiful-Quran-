@@ -116,7 +116,6 @@ export function WordUnit({
   const baseRef = useRef<HTMLSpanElement>(null)
   const coverRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
-  const flashRef = useRef<HTMLSpanElement>(null)
   const glossFlashRef = useRef<HTMLSpanElement>(null)
   const glossRef = useRef<HTMLSpanElement>(null)
   const translitRef = useRef<HTMLSpanElement>(null)
@@ -360,15 +359,16 @@ export function WordUnit({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ink.repeat, englishMode])
 
-  // Search-hit flash: same orange directional wash as the repeat overlay,
-  // wash in → dissolve × 2. Separate overlay so real repeat is untouched.
+  // Search-hit flash: drive the *same* orange overlay the repeat wash uses
+  // (wash in → dissolve × 2). No second DOM node — mounting an extra glyph
+  // layer was shifting layout when CSS lost to .word-arabic position:relative.
   useLayoutEffect(() => {
-    if (!searchFlash) return
+    if (!searchFlash || ink.repeat) return
     const cancels: Array<() => void> = []
-    if (flashRef.current) {
+    if (overlayRef.current) {
       cancels.push(
         runSearchHitDoubleWash(
-          flashRef.current,
+          overlayRef.current,
           !englishMode,
           SearchHitFlash.PULSES,
         ),
@@ -380,7 +380,7 @@ export function WordUnit({
       )
     }
     return () => cancels.forEach((c) => c())
-  }, [searchFlash, englishMode])
+  }, [searchFlash, englishMode, ink.repeat])
 
   const rtl = !englishMode
   const style: CSSProperties = englishMode
@@ -463,15 +463,6 @@ export function WordUnit({
         >
           {label}
         </span>
-        {searchFlash ? (
-          <span
-            ref={flashRef}
-            className={`word-search-flash-overlay ${baseClass}`}
-            aria-hidden="true"
-          >
-            {label}
-          </span>
-        ) : null}
       </span>
       {/* Gloss/translit are siblings of the glyph stack (not nested under the
           wash mask). Arabic path: they own Upcoming dim. English path: parent
@@ -485,15 +476,15 @@ export function WordUnit({
           >
             {word.translation}
           </span>
-          {searchFlash ? (
-            <span
-              ref={glossFlashRef}
-              className="word-search-flash-overlay word-gloss"
-              aria-hidden="true"
-            >
-              {word.translation}
-            </span>
-          ) : null}
+          {/* Always mounted (opacity 0) like the repeat overlay — no mount jitter. */}
+          <span
+            ref={glossFlashRef}
+            className="word-search-flash-overlay word-gloss"
+            aria-hidden="true"
+            style={{ opacity: 0 }}
+          >
+            {word.translation}
+          </span>
         </span>
       ) : null}
       {showTransliteration && word.transliteration ? (

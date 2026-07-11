@@ -639,43 +639,6 @@ select {
   color: color-mix(in srgb, var(--ink-muted) 70%, transparent);
 }
 
-/* Search-hit flash overlay — same box as the repeat orange layer.
-   Motion is driven by runSearchHitDoubleWash (directional mask + dissolve),
-   not CSS opacity keyframes. */
-.word-search-flash-overlay {
-  position: absolute;
-  left: 0;
-  top: 0;
-  pointer-events: none;
-  white-space: nowrap;
-  color: var(--repeat);
-  opacity: 0;
-}
-
-.word-search-flash-overlay.word-arabic,
-.word-search-flash-overlay.word-gloss {
-  color: var(--repeat);
-}
-
-.word-gloss-flash {
-  position: relative;
-}
-
-.word-gloss-flash .word-search-flash-overlay {
-  position: absolute;
-  inset: 0;
-  white-space: normal;
-}
-
-.hafs-search-flash-overlay {
-  position: absolute;
-  left: 0;
-  top: 0;
-  pointer-events: none;
-  color: var(--repeat);
-  opacity: 0;
-}
-
 .surah-row {
   width: 100%;
   display: grid;
@@ -1124,8 +1087,8 @@ select {
 }
 
 @media (hover: hover) {
-  .word-unit:hover .word-arabic:not(.word-repeat-overlay),
-  .word-unit:hover .word-gloss:not(.word-repeat-overlay) {
+  .word-unit:hover .word-arabic:not(.word-repeat-overlay):not(.word-search-flash-overlay),
+  .word-unit:hover .word-gloss:not(.word-repeat-overlay):not(.word-search-flash-overlay) {
     color: var(--accent);
   }
 }
@@ -1213,6 +1176,36 @@ select {
   color: var(--repeat);
 }
 
+/* Search-hit flash overlay — same box as the repeat orange layer.
+   Motion is driven by runSearchHitDoubleWash (directional mask + dissolve).
+   Kept here (after .word-arabic) so position:absolute beats the base glyph's
+   position:relative — an earlier rule let the flash join flow and shift text. */
+.word-search-flash-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  color: var(--repeat);
+  opacity: 0;
+}
+
+.word-search-flash-overlay.word-arabic,
+.word-search-flash-overlay.word-gloss {
+  position: absolute;
+  color: var(--repeat);
+}
+
+.word-gloss-flash {
+  position: relative;
+}
+
+.word-gloss-flash .word-search-flash-overlay {
+  position: absolute;
+  inset: 0;
+  white-space: normal;
+}
+
 .word-wash {
   /* mask-image set inline from washMaskImage() — smootherstep profile */
   -webkit-mask-size: 100% 100%;
@@ -1282,10 +1275,6 @@ select {
 
 /* Beat .hafs-glyph ink (and hover accent) on the shared overlay node. */
 .hafs-repeat-overlay.hafs-glyph {
-  color: var(--repeat);
-}
-
-.hafs-search-flash-overlay.hafs-glyph {
   color: var(--repeat);
 }
 
