@@ -21,6 +21,8 @@ export interface Ayah {
   number: number
   text: string
   translation: string
+  /** Madinah Mushaf page where this ayah's first word appears (0 = unknown). */
+  page: number
   words: Word[]
 }
 

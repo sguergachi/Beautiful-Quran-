@@ -2,13 +2,10 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { ActiveWord, Ayah } from '../data/models'
 import type { ReadingMode } from '../data/settings'
 import { ayahTranslationAlpha, inkAlpha, InkState } from '../engine/ink'
+import { toArabicIndic } from '../util/digits'
 import { WordUnit } from './WordUnit'
 import { HafsWord } from './HafsWord'
 import { VerseBookmarkRibbon } from './VerseBookmarkRibbon'
-
-function toArabicIndic(n: number): string {
-  return String(n).replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)]!)
-}
 
 interface Props {
   ayah: Ayah

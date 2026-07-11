@@ -195,6 +195,9 @@ image, so it is crisp at any density and nearly free to render.
   title mark. The one place allowed to be lavish is the closed book: the
   [entrance cover](#the-entrance) is bound leather, and binding is where a
   mushaf has always carried its gold. Nothing else on the sheet is decorated.
+  Mushaf **page breaks** are not ornament: a whisper-gold hairline with small
+  page numbers (Western left, Arabic-Indic right) marks Madinah page
+  boundaries in the continuous scroll — functional wayfinding only.
 
 ## The entrance
 
