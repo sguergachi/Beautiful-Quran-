@@ -45,7 +45,11 @@ covered by `HighlightEngineTest`:
 
 - **A word lights from its start until the next segment starts.** Small gaps
   between words *hold the previous word* rather than going dark, so the
-  highlight never flickers between words.
+  highlight never flickers between words. `ActiveInfo.holdEndMs` is that
+  handoff instant (next `startMs`, or this word's `endMs` for the last word);
+  the letter sweep is paced to `holdEndMs − startMs` so ink finishes as the
+  voice moves on — never clamped past the handoff (that left Arabic-only's
+  paper cover running into the next word).
 - **Boundaries are start-inclusive, end-exclusive.** At exactly `startMs` the
   next word is already lit.
 - **Nothing is lit before the first word starts** — this covers the basmalah
@@ -88,6 +92,7 @@ data class ActiveInfo(
     val position: Int,      // the lit word
     val startMs: Long,
     val endMs: Long,
+    val holdEndMs: Long,    // karaoke hold end (next start, or endMs if last)
     val isRepeat: Boolean,  // this word points back at an earlier position
     val highWater: Int,     // furthest word reached so far in this ayah
     val repeatStart: Int,   // first word of the current repeat chain

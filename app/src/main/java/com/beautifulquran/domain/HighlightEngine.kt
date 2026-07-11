@@ -26,6 +26,13 @@ object HighlightEngine {
         val position: Int,
         val startMs: Long,
         val endMs: Long,
+        /**
+         * When the karaoke hold ends: the next segment's [Segment.startMs], or
+         * [endMs] for the last word. The letter sweep must finish by this time
+         * — not merely by [endMs] — so a min-sweep clamp cannot leave the wash
+         * running into the next word (Arabic-only paper-cover flicker).
+         */
+        val holdEndMs: Long,
         val isRepeat: Boolean,
         val highWater: Int,
         /** First word of the current repeat chain: while the reciter is
@@ -49,10 +56,16 @@ object HighlightEngine {
             val idx = activeIndex(segments, positionMs) ?: return null
             val seg = segments[idx]
             val maxBefore = maxBeforeByIndex[idx]
+            val holdEndMs = if (idx + 1 < segments.size) {
+                segments[idx + 1].startMs
+            } else {
+                seg.endMs
+            }
             return ActiveInfo(
                 position = seg.position,
                 startMs = seg.startMs,
                 endMs = seg.endMs,
+                holdEndMs = holdEndMs.coerceAtLeast(seg.startMs),
                 isRepeat = seg.position <= maxBefore,
                 highWater = maxOf(maxBefore, seg.position),
                 repeatStart = repeatStartByIndex[idx],

@@ -458,7 +458,8 @@ class AppStore {
         activeWord = {
           ayah: np.ayah,
           wordPosition: info.position,
-          durationMs: info.endMs - info.startMs,
+          // Karaoke hold lifetime — sweep finishes as the next word lights.
+          durationMs: Math.max(0, info.holdEndMs - info.startMs),
           isRepeat: info.isRepeat,
           highWater: info.highWater,
           repeatStart: info.repeatStart,

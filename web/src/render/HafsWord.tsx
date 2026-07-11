@@ -33,6 +33,13 @@ interface Props {
 const HOLD_MS = 450
 const MOVE_CANCEL_PX = 10
 
+/** Snap-clear the paper cover — never CSS-transition a solid rect away. */
+function clearCover(cover: HTMLElement) {
+  cover.style.transition = 'none'
+  applyMask(cover, 'none')
+  cover.style.opacity = '0'
+}
+
 export function HafsWord({
   word,
   activeWord,
@@ -68,6 +75,13 @@ export function HafsWord({
    * Paper-cover bloom on Active entry (Android shapedWordBloom InkReveal).
    * useLayoutEffect so progress-0 cover lands before paint — matches Upcoming
    * cover strength, then peels directionally RTL.
+   *
+   * On Active → Recited/Plain: snap-clear the cover (transition:none). A CSS
+   * opacity fade with the mask already removed painted a solid paper rectangle
+   * over the completed word — the post-handoff flicker.
+   *
+   * Deps are state/position (not the ActiveWord object): mid-word identity
+   * churn must not cancel and restart the wash.
    */
   useLayoutEffect(() => {
     const cover = coverRef.current
@@ -92,26 +106,33 @@ export function HafsWord({
 
     if (ink.state === InkState.Upcoming) {
       applyMask(cover, 'none')
+      // Recess soft-dim: allow the CSS Upcoming transition to ease the cover on.
+      cover.style.transition = ''
       cover.style.opacity = String(1 - resting)
       return
     }
 
     if (ink.state !== InkState.Active) {
-      applyMask(cover, 'none')
-      cover.style.opacity = '0'
+      clearCover(cover)
+      return
+    }
+
+    // Repeat chain: orange overlay carries the motion (Android skips InkReveal).
+    if (ink.repeat) {
+      clearCover(cover)
       return
     }
 
     if (revealedOnEntry.current) {
-      applyMask(cover, 'none')
-      cover.style.opacity = '0'
+      clearCover(cover)
       return
     }
 
-    // Still Active from a prior entry — do not restart mid-word.
+    // Still Active after a layout echo (same word) — do not restart.
     if (!enteredActive) return
 
     const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
+    cover.style.transition = 'none'
     cover.style.opacity = '1'
     applyMask(cover, paperCoverMaskImage(0, resting, true, t.washFeather))
 
@@ -121,19 +142,18 @@ export function HafsWord({
       cubicBezierEase,
       (p, eased) => {
         if (p >= 1) {
-          applyMask(cover, 'none')
-          cover.style.opacity = '0'
+          clearCover(cover)
           return
         }
         applyMask(cover, paperCoverMaskImage(eased, resting, true, t.washFeather))
       },
       () => {
-        applyMask(cover, 'none')
-        cover.style.opacity = '0'
+        clearCover(cover)
       },
     )
+    // Duration/speed captured at Active entry only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.state, activeWord])
+  }, [ink.state, ink.repeat, activeWord?.wordPosition])
 
   // Orange repeat overlay: wash in on chain entry, dissolve on release.
   useLayoutEffect(() => {
@@ -191,7 +211,7 @@ export function HafsWord({
       applyMask(overlay, 'none')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.repeat, activeWord])
+  }, [ink.repeat, activeWord?.wordPosition])
 
   const onPointerDown = (e: PointerEvent) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return

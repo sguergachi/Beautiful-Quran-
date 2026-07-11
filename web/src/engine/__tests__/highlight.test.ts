@@ -131,6 +131,18 @@ describe('HighlightEngine', () => {
     expect(info.isRepeat).toBe(true)
   })
 
+  it('hold end is the next segment start so the sweep matches karaoke hold', () => {
+    const info = HighlightEngine.activeInfo(segments, 500)!
+    expect(info.position).toBe(1)
+    expect(info.endMs).toBe(960)
+    expect(info.holdEndMs).toBe(970)
+
+    const last = HighlightEngine.activeInfo(segments, 3000)!
+    expect(last.position).toBe(4)
+    expect(last.endMs).toBe(6210)
+    expect(last.holdEndMs).toBe(6210)
+  })
+
   it('PreparedTimings matches convenience activeInfo', () => {
     const prepared = HighlightEngine.PreparedTimings.prepare(withRepeat)
     for (const ms of [500, 2500, 3500, 4500, 5500, 99999]) {

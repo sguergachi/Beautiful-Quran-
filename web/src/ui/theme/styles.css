@@ -866,15 +866,19 @@ select {
   background: var(--paper);
   pointer-events: none;
   opacity: 0;
-  /* Soften ON when recessing; Active wash snaps (transition none below). */
-  transition: opacity 120ms ease;
+  /* No default transition: Active wash and Recited clear are JS snap-driven.
+     A CSS opacity fade after the mask is removed painted a solid paper rect
+     over the completed word (post-handoff flicker). Recess soft-dim opts in. */
 }
 
 .hafs-word[data-state='Upcoming'] .hafs-paper-cover {
   opacity: var(--upcoming-cover, 0.78);
+  transition: opacity 120ms ease;
 }
 
-.hafs-word[data-state='Active'] .hafs-paper-cover {
+.hafs-word[data-state='Active'] .hafs-paper-cover,
+.hafs-word[data-state='Recited'] .hafs-paper-cover,
+.hafs-word[data-state='Plain'] .hafs-paper-cover {
   transition: none;
 }
 
