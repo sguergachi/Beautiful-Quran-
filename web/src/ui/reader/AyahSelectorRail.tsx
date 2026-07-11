@@ -34,6 +34,8 @@ type Props = {
   currentAyah: number
   /** Fractional position (1…ayahCount) when available; falls back to currentAyah. */
   currentPosition?: number
+  /** Which sheet edge the overlay rail sits on. */
+  side: 'left' | 'right'
   receded: boolean
   /** Continuous scrub while dragging. */
   onScrub: (ayah: number) => void
@@ -81,6 +83,7 @@ export function AyahSelectorRail({
   ayahCount,
   currentAyah,
   currentPosition,
+  side,
   receded,
   onScrub,
   onJump,
@@ -177,7 +180,9 @@ export function AyahSelectorRail({
         Math.ceil(dial + (cssH - drawAnchorY) / TICK_SPACING_PX + 1),
       )
 
-      ctx.textAlign = 'left'
+      // Numbers hang toward the page (inner edge of the overlay rail).
+      const numbersTowardPage = side === 'left'
+      ctx.textAlign = numbersTowardPage ? 'left' : 'right'
       ctx.textBaseline = 'middle'
       ctx.font = '600 8.5px "EB Garamond", "Times New Roman", serif'
 
@@ -204,7 +209,6 @@ export function AyahSelectorRail({
           : withAlpha(ink, alpha)
         ctx.fill()
 
-        // Numbers hang off the right end of the bar (still centered family).
         if (isSelected || (major && focus > 0.35)) {
           const labelAlpha = isSelected
             ? 0.95 * arrival
@@ -213,11 +217,14 @@ export function AyahSelectorRail({
           ctx.font = isSelected
             ? '700 11px "EB Garamond", "Times New Roman", serif'
             : '600 8.5px "EB Garamond", "Times New Roman", serif'
-          ctx.fillText(String(ayah), midX + length / 2 + 6, y)
+          const labelX = numbersTowardPage
+            ? midX + length / 2 + 6
+            : midX - length / 2 - 6
+          ctx.fillText(String(ayah), labelX, y)
         }
       }
     }
-  }, [ayahCount])
+  }, [ayahCount, side])
 
   const schedulePaint = useCallback(() => {
     if (rafRef.current) return
@@ -345,6 +352,7 @@ export function AyahSelectorRail({
     <div
       ref={rootRef}
       className="ayah-rail"
+      data-side={side}
       data-receded={receded}
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}

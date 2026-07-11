@@ -231,6 +231,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       ayahCount={ayahCount}
       currentAyah={railAyah}
       currentPosition={railAyah}
+      side={side}
       receded={receded}
       onScrub={(ayah) => jumpToAyah(ayah, 'auto')}
       onJump={(ayah) => jumpToAyah(ayah, 'smooth')}
@@ -272,7 +273,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       </div>
 
       <div className="reader-body">
-        {side === 'left' ? rail : null}
+        {rail}
         <div className="reader-main">
           <div className="edge-fade">
             <div className="scroll" ref={scrollRef}>
@@ -412,7 +413,6 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
             </button>
           </div>
         </div>
-        {side === 'right' ? rail : null}
       </div>
 
       {state.player.error ? <p className="muted-error">{state.player.error}</p> : null}
