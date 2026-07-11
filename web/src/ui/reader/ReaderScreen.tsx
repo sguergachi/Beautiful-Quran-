@@ -34,6 +34,7 @@ import { buildReaderItems } from './readerItems'
 import { ReaderFocusController } from './ReaderFocusController'
 import { selectedPlaybackAyah } from './selectedPlaybackAyah'
 import { shouldPauseFollowOnDrag } from './followGesture'
+import { isRecitingSession } from './recitingActive'
 import { RootViewer } from '../root/RootViewer'
 import { SearchHitFlash, searchHitFlashTotalMs } from '../../engine/wordSearch'
 
@@ -42,9 +43,6 @@ function activeSearchQuery(active: boolean, query: string): string | null {
   const trimmed = query.trim()
   return active && trimmed.length >= 2 ? trimmed : null
 }
-
-/** Android `recitingActive` debounce — hold recess across brief pause blips. */
-const RECITING_RELEASE_MS = 350
 
 function Rosette() {
   return (
@@ -123,13 +121,13 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const isTop = content != null && stackLayer === READER_LAYER
   const peeking = content != null && stackLayer > READER_LAYER
   const active = isTop || peeking
-  const playingNow =
-    state.player.isPlaying &&
-    state.player.nowPlaying?.surahId === content?.surah.id
-  // Debounced like Android — hold recess across the brief isPlaying gap when
-  // the player swaps ayahs. Top bar + rail fully hide (topBarAlpha → 0);
-  // player peripherals stay at a whisper (chromeAlpha → 0.08).
-  const [recitingActive, setRecitingActive] = useState(playingNow)
+  // Instant recess — hold across ayah-join buffering, release on user pause
+  // in the same tick (no 350 ms debounce lag on the transport).
+  const recitingActive = isRecitingSession({
+    sameSurah: state.player.nowPlaying?.surahId === content?.surah.id,
+    isPlaying: state.player.isPlaying,
+    isBuffering: state.player.isBuffering,
+  })
   const receded = recitingActive && !searchActive
 
   const activeQuery = activeSearchQuery(searchActive, searchQuery)
@@ -151,16 +149,6 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     Math.max(0, searchIndex),
     Math.max(0, searchMatches.length - 1),
   )
-
-  // Hold recess across brief pause blips (ayah joins / repeat restarts).
-  useEffect(() => {
-    if (playingNow) {
-      setRecitingActive(true)
-      return
-    }
-    const t = window.setTimeout(() => setRecitingActive(false), RECITING_RELEASE_MS)
-    return () => clearTimeout(t)
-  }, [playingNow])
 
   // Reset search / collapsed title when the surah changes.
   useEffect(() => {
@@ -380,6 +368,8 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   // (verse, or chapter-top basmalah header while the lead-in plays).
   // Also re-homes when the media item advances — fade-lead may have already
   // bumped activeAyah, so nowPlaying.ayah is the boundary that must not miss.
+  // Defer the glide one frame so play/pause paint (icon + CSS recess) lands
+  // first and the Motion scroll does not contend for the same frame budget.
   useEffect(() => {
     if (!isTop || !content) return
     const target = playbackFocusTarget(state.activeAyah, state.activeBasmalah)
@@ -389,11 +379,20 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     }
     const justEnabled = !followWasEnabled.current
     followWasEnabled.current = true
-    void focus.focus(target, { animate: true, preRoll: justEnabled }).then(() => {
-      setShowReturn(false)
-      setFocusedAyah(focus.focusedAyah())
-      setActiveExceedsViewport(focus.exceedsViewport(state.activeAyah))
+    let cancelled = false
+    const raf = requestAnimationFrame(() => {
+      if (cancelled) return
+      void focus.focus(target, { animate: true, preRoll: justEnabled }).then(() => {
+        if (cancelled) return
+        setShowReturn(false)
+        setFocusedAyah(focus.focusedAyah())
+        setActiveExceedsViewport(focus.exceedsViewport(state.activeAyah))
+      })
     })
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(raf)
+    }
   }, [
     state.activeAyah,
     state.activeBasmalah,
@@ -504,10 +503,10 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     )
   }
 
-  // Recess non-active ayahs only while audio is actually playing. At rest
-  // (paused / stopped / loaded-but-idle) every ayah is Plain — full opacity.
-  const dimmedGlobal = recitingActive
-  const preface = prefaceState(state.activeBasmalah, dimmedGlobal && !state.activeBasmalah)
+  // Recess is paint-phase CSS on `.scroll[data-reciting]` — inactive ayahs keep
+  // dimmed=false so memo(AyahBlock) skips them on play/pause (Android: one ayah
+  // wakes). Karaoke ink still flows through isActiveAyah + activeWord.
+  const preface = prefaceState(state.activeBasmalah, false)
   const showBasmalah = surahOpensWithBasmalahPreface(content.surah.id)
   const ayahCount = content.surah.ayahCount
   const useArabicIndicDigits = state.settings.readingMode !== 'english_only'
@@ -668,7 +667,11 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       <div className="reader-body">
         <div className="reader-main">
           <div className="edge-fade">
-            <div className="scroll" ref={scrollRef}>
+            <div
+              className="scroll"
+              ref={scrollRef}
+              data-reciting={recitingActive || undefined}
+            >
               <header className="surah-header" ref={headerRef}>
                 <Rosette />
                 <h2>{content.surah.nameTransliteration}</h2>
@@ -683,12 +686,13 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                   id="ayah-0"
                   className="basmalah-block"
                   data-ayah="0"
+                  data-ayah-active={state.activeBasmalah || undefined}
                 >
                   <BasmalahCalligraphy
                     className="basmalah"
                     data-state={preface}
                     active={state.activeBasmalah}
-                    dimmed={dimmedGlobal && !state.activeBasmalah}
+                    dimmed={false}
                     onClick={() => void appStore.playAyah(1)}
                   />
                 </div>
@@ -706,9 +710,9 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                 }
                 const ayah = item.ayah
                 const isActive = state.activeAyah === ayah.number
-                const dimmed = dimmedGlobal && !isActive
-                // Karaoke ink only while audio is moving. At rest every ayah is
-                // Plain (full opacity) — including the verse that was playing.
+                // Karaoke ink only while audio is moving. Global recess is CSS
+                // on `.scroll[data-reciting]` — keep dimmed false so inactive
+                // ayahs do not reconcile on play/pause.
                 const inkActive = recitingActive && isActive
                 const aw =
                   inkActive && state.activeWord?.ayah === ayah.number
@@ -720,7 +724,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     ayah={ayah}
                     activeWord={aw}
                     isActiveAyah={inkActive}
-                    dimmed={dimmed}
+                    dimmed={false}
                     focused={focusedAyah === ayah.number}
                     keepActiveWordInView={keepWordInView && isActive}
                     onKeepWordInView={onKeepWordInView}
@@ -730,8 +734,8 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     showTranslation={state.settings.showTranslation}
                     bookmarked={bookmarkedAyahs.has(ayah.number)}
                     bookmarkSide={side === 'left' ? 'right' : 'left'}
-                    bookmarkChromeAlpha={receded ? 0 : 1}
-                    bookmarkInteractive={!receded}
+                    bookmarkChromeAlpha={1}
+                    bookmarkInteractive={true}
                     speed={state.settings.playbackSpeed}
                     fontScale={state.settings.fontScale}
                     onPlayWord={onPlayWord}
@@ -796,15 +800,20 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                 type="button"
                 className="play"
                 aria-label={
-                  state.player.isBuffering
+                  state.player.isBuffering && !state.player.isPlaying
                     ? 'Buffering'
                     : state.player.isPlaying
                       ? 'Pause'
                       : 'Play'
                 }
-                aria-busy={state.player.isBuffering || undefined}
+                aria-busy={
+                  (state.player.isBuffering && !state.player.isPlaying) || undefined
+                }
                 onClick={() => {
-                  if (state.player.isBuffering) return
+                  // Pause must always land immediately — even mid-buffer.
+                  // Only block a cold Play while a fetch is already in flight
+                  // without play intent (should be rare with optimistic isPlaying).
+                  if (state.player.isBuffering && !state.player.isPlaying) return
                   const thisSurahLoaded =
                     state.player.nowPlaying?.surahId === content.surah.id
                   const selected = selectedPlaybackAyah({
@@ -818,12 +827,15 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                   const pendingJump = pendingJumpAyah.current != null
                   if (!state.player.isPlaying) {
                     followWasEnabled.current = false
-                    appStore.setFollowEnabled(true)
                   }
-                  void appStore.playPause({ selectedAyah: selected, pendingJump })
+                  void appStore.playPause({
+                    selectedAyah: selected,
+                    pendingJump,
+                    enableFollow: !state.player.isPlaying,
+                  })
                 }}
               >
-                {state.player.isBuffering ? (
+                {state.player.isBuffering && !state.player.isPlaying ? (
                   <IconBuffering />
                 ) : state.player.isPlaying ? (
                   <IconPause />

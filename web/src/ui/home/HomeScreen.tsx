@@ -266,19 +266,21 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
             <button
               type="button"
               aria-label={
-                state.player.isBuffering
+                state.player.isBuffering && !state.player.isPlaying
                   ? 'Buffering'
                   : state.player.isPlaying
                     ? 'Pause'
                     : 'Play'
               }
-              aria-busy={state.player.isBuffering || undefined}
+              aria-busy={
+                (state.player.isBuffering && !state.player.isPlaying) || undefined
+              }
               onClick={() => {
-                if (state.player.isBuffering) return
+                if (state.player.isBuffering && !state.player.isPlaying) return
                 void appStore.playPause()
               }}
             >
-              {state.player.isBuffering ? (
+              {state.player.isBuffering && !state.player.isPlaying ? (
                 <IconBuffering />
               ) : state.player.isPlaying ? (
                 <IconPause />

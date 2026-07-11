@@ -210,18 +210,26 @@ export class PlayerController {
     })
   }
 
+  /**
+   * Position poll aligned to the display refresh (rAF) while playing so
+   * highlight / ink stay at ≥60 fps. Stopped on pause — no idle wakeups.
+   */
   private startTick() {
     this.stopTick()
     const loop = () => {
-      if (this.state.isPlaying) this.onTime()
-      this.tickTimer = window.setTimeout(loop, this.state.isPlaying ? 33 : 250)
+      if (!this.state.isPlaying) {
+        this.tickTimer = null
+        return
+      }
+      this.onTime()
+      this.tickTimer = window.requestAnimationFrame(loop)
     }
-    this.tickTimer = window.setTimeout(loop, 33)
+    this.tickTimer = window.requestAnimationFrame(loop)
   }
 
   private stopTick() {
     if (this.tickTimer != null) {
-      clearTimeout(this.tickTimer)
+      cancelAnimationFrame(this.tickTimer)
       this.tickTimer = null
     }
   }
@@ -577,7 +585,8 @@ export class PlayerController {
   async toggle() {
     if (!this.playlist.length) return
     // Prefer play-intent state over the media element: optimistic isPlaying
-    // can be true while still paused/buffering, and a second tap must pause.
+    // can be true while still paused/buffering, and a second tap must pause
+    // immediately (including mid-buffer).
     if (this.state.isPlaying) {
       this.pause()
       return
@@ -586,8 +595,12 @@ export class PlayerController {
   }
 
   pause() {
+    // Bump playToken so any in-flight playIndex / waitForCanPlay aborts without
+    // restarting audio after the user already paused.
+    this.playToken++
     this.active.pause()
     this.setBuffering(false)
+    this.stopTick()
     // Explicit — do not wait for the 'pause' event (none fires if play() never
     // started after an optimistic isPlaying).
     this.patch({ isPlaying: false })
@@ -595,20 +608,26 @@ export class PlayerController {
 
   async play() {
     if (!this.playlist.length) return
+    const token = ++this.playToken
     // Recede chrome / flip the transport on the tap, before canplay.
     this.patch({ isPlaying: true, error: null })
+    // Start the rAF position loop immediately so ink stays live even while
+    // the media element is still warming (optimistic play intent).
+    this.startTick()
     try {
       if (this.active.readyState < HAVE_FUTURE_DATA) {
         this.setBuffering(true)
         await this.waitForCanPlay(this.active)
       }
-      if (!this.state.isPlaying) return
+      if (token !== this.playToken || !this.state.isPlaying) return
       await this.active.play()
-      if (!this.state.isPlaying) return
+      if (token !== this.playToken || !this.state.isPlaying) return
       this.setBuffering(false)
       this.startTick()
     } catch (e) {
+      if (token !== this.playToken) return
       this.setBuffering(false)
+      this.stopTick()
       this.patch({
         isPlaying: false,
         error: e instanceof Error ? e.message : 'Playback blocked',
