@@ -15,8 +15,12 @@ export interface CoverLayout {
   innerInset: number
   outerRadius: number
   innerRadius: number
-  /** Corner khatam diameter (Android uses radius ≈ 0.70 × outer inset). */
+  /** Corner seal diameter (Android uses radius ≈ 0.70 × outer inset). */
   starSize: number
+  /** Centre line of the border band, measured in from each edge. */
+  bandCenter: number
+  /** Cross-section height of the border band between the two rules. */
+  bandHeight: number
   medallion: number
   titleAr: number
   titleEn: number
@@ -69,6 +73,11 @@ export function coverLayout(width: number, height: number): CoverLayout {
   // not pinpricks. Floor so small boards still read as seals.
   const starSize = clamp(outerInset * 1.42, unit * 2.6, outerInset * 1.65)
 
+  // The generated border frieze runs between the two rules; the seals sit
+  // on its corners (bandCenter) covering the miter joints.
+  const bandCenter = (outerInset + innerInset) / 2
+  const bandHeight = clamp((innerInset - outerInset) * 0.6, 4, 12)
+
   // Medallion: Android's ceremonial scale — 52% of board width, capped by
   // height (~30%) so the vertical stack (medal → titles → dua) keeps air,
   // and at 240px absolute (Android caps at 240dp).
@@ -115,6 +124,8 @@ export function coverLayout(width: number, height: number): CoverLayout {
     outerRadius,
     innerRadius,
     starSize,
+    bandCenter,
+    bandHeight,
     medallion,
     titleAr,
     titleEn,
@@ -143,6 +154,8 @@ export function coverLayoutCssVars(layout: CoverLayout): Record<string, string> 
     '--cover-outer-radius': px(layout.outerRadius),
     '--cover-inner-radius': px(layout.innerRadius),
     '--cover-star': px(layout.starSize),
+    '--cover-band-c': px(layout.bandCenter),
+    '--cover-band-h': px(layout.bandHeight),
     '--cover-medallion': px(layout.medallion),
     '--cover-title-ar': px(layout.titleAr),
     '--cover-title-en': px(layout.titleEn),
