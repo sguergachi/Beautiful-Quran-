@@ -1472,13 +1472,13 @@ select {
 
 .paper-field-slider {
   display: block;
-  padding-block: 0.95rem;
+  padding-block: 0.35rem 0.55rem;
 }
 
 .paper-slider {
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
+  gap: 0.55rem;
   width: 100%;
 }
 
@@ -1489,6 +1489,18 @@ select {
   gap: 1rem;
 }
 
+.paper-slider-label-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .paper-slider-value {
   color: var(--accent);
   font-variant-numeric: lining-nums;
@@ -1496,38 +1508,44 @@ select {
 }
 
 .paper-slider-control {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 44px;
+  /* Vertical padding = hit target; horizontal inset keeps the centered thumb on-canvas. */
+  padding-block: 0.85rem;
+  padding-inline: 0.625rem;
   touch-action: none;
   user-select: none;
+  -webkit-user-select: none;
 }
 
 .paper-slider-track {
-  position: relative;
   width: 100%;
-  height: 2px;
-  background: color-mix(in srgb, var(--ink) 14%, transparent);
+  /* ~Material3 4dp track, paper-soft inactive fill */
+  height: 4px;
+  border-radius: 999px;
+  background: var(--accent-container);
+  user-select: none;
 }
 
+/* Position/size come from Base UI inline styles — only paint here. */
 .paper-slider-indicator {
-  position: absolute;
-  inset-block: 0;
-  left: 0;
+  border-radius: 999px;
   background: var(--accent);
+  user-select: none;
 }
 
 .paper-slider-thumb {
-  position: absolute;
-  top: 50%;
-  width: 0.95rem;
-  height: 0.95rem;
-  margin-top: -0.475rem;
-  margin-left: -0.475rem;
+  box-sizing: border-box;
+  /* ~Material3 20dp thumb */
+  width: 1.25rem;
+  height: 1.25rem;
   border-radius: 50%;
   background: var(--accent);
   cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .paper-slider-thumb:focus-visible {
@@ -1537,6 +1555,14 @@ select {
 
 .paper-slider-thumb:active {
   cursor: grabbing;
+}
+
+.settings-attributions {
+  margin: 0;
+  color: color-mix(in srgb, var(--ink-muted) 88%, transparent);
+  line-height: 1.55;
+  white-space: pre-line;
+  font-size: 0.95rem;
 }
 
 .paper-input {

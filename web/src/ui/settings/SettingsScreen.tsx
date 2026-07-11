@@ -1,8 +1,28 @@
 import { appStore, useAppState } from '../../store/appStore'
-import type { ReadingMode, ThemeMode } from '../../data/settings'
+import {
+  FONT_SCALE_MAX,
+  FONT_SCALE_MIN,
+  FONT_SCALE_STEP,
+  type ReadingMode,
+  type ThemeMode,
+} from '../../data/settings'
 import type { PlayerState } from '../../playback/player'
 import { settingsLayerFor, type StackLayer } from '../paper/stack'
 import { PaperSelect, PaperSlider, PaperSwitch } from '../kit'
+
+const ATTRIBUTIONS = `Quran text (Uthmani script) and Saheeh International translation via the quran-json project, from Tanzil and Al Quran Cloud.
+
+Word-by-word translation and transliteration from the Quran.com dataset.
+
+Root, lemma, and morphological annotation from the Quranic Arabic Corpus (corpus.quran.com), © Kais Dukes.
+
+Word-level audio timing data © the quran-align project contributors, CC-BY 4.0.
+
+Recitation audio streamed from everyayah.com. All rights to the recitations belong to the respective reciters.
+
+Arabic typeface: KFGQPC HAFS Uthmanic Script © King Fahd Glorious Quran Printing Complex, Madinah.
+
+This app is free, ad-free, and collects no data.`
 
 export function SettingsScreen({
   stackLayer,
@@ -16,6 +36,7 @@ export function SettingsScreen({
   const layer = settingsLayerFor(hasReader)
   const isTop = stackLayer === layer
   const depth = Math.max(0, stackLayer - layer)
+  const showReadingToggles = s.readingMode === 'arabic_english'
 
   return (
     <div
@@ -40,7 +61,7 @@ export function SettingsScreen({
             value={String(s.reciterId)}
             options={state.reciters.map((r) => ({
               value: String(r.id),
-              label: `${r.name} (${r.style})`,
+              label: r.hasTimings ? r.name : `${r.name} (no word highlighting)`,
             }))}
             onChange={(v) => appStore.updateSettings({ reciterId: Number(v) })}
           />
@@ -61,50 +82,81 @@ export function SettingsScreen({
               appStore.updateSettings({ readingMode: v as ReadingMode })
             }
           />
-          <PaperSwitch
-            id="setting-gloss"
-            label="Word gloss"
-            checked={s.showWordGloss}
-            onChange={(checked) => appStore.updateSettings({ showWordGloss: checked })}
-          />
-          <PaperSwitch
-            id="setting-translit"
-            label="Transliteration"
-            checked={s.showTransliteration}
-            onChange={(checked) =>
-              appStore.updateSettings({ showTransliteration: checked })
-            }
-          />
-          <PaperSwitch
-            id="setting-translation"
-            label="Translation"
-            checked={s.showTranslation}
-            onChange={(checked) =>
-              appStore.updateSettings({ showTranslation: checked })
-            }
-          />
+        </section>
+
+        <section className="settings-section">
+          <h2>Text size</h2>
           <PaperSlider
             id="setting-font"
             label="Text size"
+            labelVisuallyHidden
             value={s.fontScale}
-            min={0.85}
-            max={1.4}
-            step={0.05}
-            format={(v) => `${Math.round(v * 100)}%`}
+            min={FONT_SCALE_MIN}
+            max={FONT_SCALE_MAX}
+            step={FONT_SCALE_STEP}
             onChange={(fontScale) => appStore.updateSettings({ fontScale })}
           />
+        </section>
+
+        {showReadingToggles ? (
+          <section className="settings-section">
+            <PaperSwitch
+              id="setting-gloss"
+              label="Word-by-word translation"
+              checked={s.showWordGloss}
+              onChange={(checked) => appStore.updateSettings({ showWordGloss: checked })}
+            />
+            <PaperSwitch
+              id="setting-translit"
+              label="Transliteration"
+              checked={s.showTransliteration}
+              onChange={(checked) =>
+                appStore.updateSettings({ showTransliteration: checked })
+              }
+            />
+            <PaperSwitch
+              id="setting-translation"
+              label="Ayah translation"
+              checked={s.showTranslation}
+              onChange={(checked) =>
+                appStore.updateSettings({ showTranslation: checked })
+              }
+            />
+          </section>
+        ) : null}
+
+        <section className="settings-section">
+          <h2>Ayah selector</h2>
           <PaperSelect
             id="setting-selector"
-            label="Selector side"
+            label="Side"
             value={s.ayahSelectorSide}
             options={[
-              { value: 'left', label: 'Left' },
-              { value: 'right', label: 'Right' },
+              { value: 'left', label: 'Left side' },
+              { value: 'right', label: 'Right side' },
             ]}
             onChange={(v) =>
               appStore.updateSettings({
                 ayahSelectorSide: v as 'left' | 'right',
               })
+            }
+          />
+        </section>
+
+        <section className="settings-section">
+          <h2>Theme</h2>
+          <PaperSelect
+            id="setting-theme"
+            label="Theme"
+            value={s.themeMode}
+            options={[
+              { value: 'system', label: 'System' },
+              { value: 'light', label: 'Paper' },
+              { value: 'dark', label: 'Nightfall' },
+              { value: 'royal_green', label: 'Royal green' },
+            ]}
+            onChange={(v) =>
+              appStore.updateSettings({ themeMode: v as ThemeMode })
             }
           />
         </section>
@@ -139,30 +191,8 @@ export function SettingsScreen({
         </section>
 
         <section className="settings-section">
-          <h2>Appearance</h2>
-          <PaperSelect
-            id="setting-theme"
-            label="Theme"
-            value={s.themeMode}
-            options={[
-              { value: 'system', label: 'System' },
-              { value: 'light', label: 'Paper' },
-              { value: 'dark', label: 'Nightfall' },
-              { value: 'royal_green', label: 'Royal green' },
-            ]}
-            onChange={(v) =>
-              appStore.updateSettings({ themeMode: v as ThemeMode })
-            }
-          />
-        </section>
-
-        <section className="settings-section">
-          <h2>About</h2>
-          <p className="muted" style={{ color: 'var(--ink-muted)', lineHeight: 1.55 }}>
-            One sheet of paper. Calm and pure. Butter smooth. Text and timings
-            ship with the page; only recitation audio streams. No accounts, no
-            analytics.
-          </p>
+          <h2>About & attributions</h2>
+          <p className="settings-attributions">{ATTRIBUTIONS}</p>
         </section>
       </div>
     </div>

@@ -2,6 +2,12 @@ export type ThemeMode = 'system' | 'light' | 'dark' | 'royal_green'
 export type ReadingMode = 'arabic_english' | 'english_only' | 'arabic_only'
 export type AyahSelectorSide = 'left' | 'right'
 
+/** Match Android SettingsScreen: 0.8f..1.6f with steps = 7 (8 snap points). */
+export const FONT_SCALE_MIN = 0.8
+export const FONT_SCALE_MAX = 1.6
+export const FONT_SCALE_STEPS = 7
+export const FONT_SCALE_STEP = (FONT_SCALE_MAX - FONT_SCALE_MIN) / FONT_SCALE_STEPS
+
 export interface Settings {
   reciterId: number
   fontScale: number
@@ -32,18 +38,31 @@ const DEFAULTS: Settings = {
 
 const KEY = 'beautiful-quran-settings'
 
+function clampFontScale(value: unknown): number {
+  const n = typeof value === 'number' && Number.isFinite(value) ? value : DEFAULTS.fontScale
+  return Math.min(FONT_SCALE_MAX, Math.max(FONT_SCALE_MIN, n))
+}
+
+export function normalizeSettings(partial: Partial<Settings> = {}): Settings {
+  return {
+    ...DEFAULTS,
+    ...partial,
+    fontScale: clampFontScale(partial.fontScale ?? DEFAULTS.fontScale),
+  }
+}
+
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return { ...DEFAULTS }
-    return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Settings>) }
+    return normalizeSettings(JSON.parse(raw) as Partial<Settings>)
   } catch {
     return { ...DEFAULTS }
   }
 }
 
 export function saveSettings(settings: Settings): void {
-  localStorage.setItem(KEY, JSON.stringify(settings))
+  localStorage.setItem(KEY, JSON.stringify(normalizeSettings(settings)))
 }
 
 export interface Bookmark {

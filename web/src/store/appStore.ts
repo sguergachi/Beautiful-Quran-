@@ -10,6 +10,7 @@ import { QuranRepository } from '../data/repository'
 import {
   loadBookmarks,
   loadSettings,
+  normalizeSettings,
   saveBookmarks,
   saveSettings,
   toggleBookmark,
@@ -255,7 +256,7 @@ class AppStore {
   }
 
   updateSettings(patch: Partial<Settings>) {
-    const settings = { ...this.state.settings, ...patch }
+    const settings = normalizeSettings({ ...this.state.settings, ...patch })
     saveSettings(settings)
     this.set({ settings })
     if (patch.playbackSpeed != null) player.setSpeed(patch.playbackSpeed)
