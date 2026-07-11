@@ -13,7 +13,7 @@
  * Bump CACHE whenever this contract changes. Activate deletes every other
  * cache name and reloads open clients so a poisoned shell cannot stick.
  */
-const CACHE = 'beautiful-quran-web-v6'
+const CACHE = 'beautiful-quran-web-v7'
 const BASE = self.registration.scope
 
 function isNavigationRequest(req, url) {

@@ -82,11 +82,11 @@ private const val TITLE_WASH_MS = 1_500
 private const val COVER_HOLD_MS = 1_200L
 
 /** The cover's hinge open. Deliberately slower than a page turn (460 ms):
- * a bound board is heavier than a sheet. Pivot on the left; negative
- * rotationY lifts the free edge toward the reader (opens "up"), swinging
- * right→left into the left side — not folding down into the page. */
+ * a bound board is heavier than a sheet. Pivot on the left; positive
+ * rotationY (Compose Y-up) brings the free edge toward the reader — opens
+ * out of the screen facing them, not into the page. */
 private const val OPEN_MS = 1_150
-private const val OPEN_DEGREES = -88f
+private const val OPEN_DEGREES = 88f
 
 /** Same decelerating settle as the paper stack's page turns. */
 private val CoverOpenEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
@@ -97,8 +97,8 @@ private val CoverOpenEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
  * concentric with the phone's screen radius so the cover feels cut for this
  * device, carrying the gilded khatam medallion and the title in the Hafs
  * hand. After a brief hold the board swings open on its left hinge: the
- * free edge lifts toward the reader and travels right→left into the left
- * side onto chapter selection. A tap anywhere, or back, opens it at once.
+ * free edge comes toward the reader (out of the screen) and travels
+ * right→left onto chapter selection. A tap anywhere, or back, opens it at once.
  *
  * Sits over the whole paper stack and leaves composition via [onFinished].
  * The status bar is hidden for the ceremony so the leather board reads as a
@@ -209,8 +209,8 @@ fun EntranceCover(
                 .fillMaxSize()
                 .graphicsLayer {
                     val t = turn.value
-                    // Left-edge hinge: free edge lifts toward the reader (up),
-                    // then into the left side — not down into the page.
+                    // Left-edge hinge: positive rotationY (Y-up) brings the
+                    // free edge toward the camera — opens out facing the reader.
                     transformOrigin = TransformOrigin(0f, 0.5f)
                     cameraDistance = 42f * density
                     rotationY = OPEN_DEGREES * t
