@@ -24,6 +24,10 @@ let surahsCache: Surah[] | null = null
 let recitersCache: Reciter[] | null = null
 let wordSearchIndex: WordSearchIndexEntry[] | null = null
 let wordSearchIndexPromise: Promise<WordSearchIndexEntry[]> | null = null
+/** Per-surah content — reopening a chapter must not re-scan sql.js. */
+const surahContentCache = new Map<number, SurahContent>()
+/** Per-reciter+surah timing segments (raw); PreparedTimings are built lazily. */
+const timingsCache = new Map<string, Map<number, Segment[]>>()
 
 export async function ensureReady(
   onProgress?: (p: LoadProgress) => void,
@@ -65,6 +69,9 @@ export function reciters(): Reciter[] {
 }
 
 export function surahContent(surahId: number): SurahContent {
+  const cached = surahContentCache.get(surahId)
+  if (cached) return cached
+
   const surah = surahs().find((s) => s.id === surahId)
   if (!surah) throw new Error(`Unknown surah ${surahId}`)
 
@@ -103,7 +110,9 @@ export function surahContent(surahId: number): SurahContent {
     },
   )
 
-  return { surah, ayahs }
+  const content = { surah, ayahs }
+  surahContentCache.set(surahId, content)
+  return content
 }
 
 export function parseSegments(raw: string): Segment[] {
@@ -126,6 +135,10 @@ export function parseSegments(raw: string): Segment[] {
 }
 
 export function timings(reciterId: number, surahId: number): Map<number, Segment[]> {
+  const key = `${reciterId}:${surahId}`
+  const cached = timingsCache.get(key)
+  if (cached) return cached
+
   const map = new Map<number, Segment[]>()
   queryAll(
     'SELECT ayah_number, segments FROM timings WHERE reciter_id = ? AND surah_id = ?',
@@ -135,6 +148,7 @@ export function timings(reciterId: number, surahId: number): Map<number, Segment
       return null
     },
   )
+  timingsCache.set(key, map)
   return map
 }
 
