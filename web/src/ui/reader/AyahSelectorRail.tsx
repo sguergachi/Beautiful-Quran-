@@ -37,9 +37,11 @@ type Props = {
   /** Which sheet edge the overlay rail sits on. */
   side: 'left' | 'right'
   receded: boolean
-  /** Continuous scrub while dragging. */
-  onScrub: (ayah: number) => void
-  /** Commit after release / click. */
+  /**
+   * Commit after release / click. The dial moves under the pointer while
+   * dragging, but the page does not — matching Android, only this callback
+   * should drive a FocusEngine jump onto the chosen ayah.
+   */
   onJump: (ayah: number) => void
 }
 
@@ -78,6 +80,10 @@ function withAlpha(color: string, alpha: number): string {
  * the rail center under the pointer, taper at the top and bottom edges, and
  * the focal ayah is the widest (gold). Unlike Android's edge-flush rail, every
  * bar is centered on the midline.
+ *
+ * Dragging only moves the dial. The page stays put until release, when
+ * [onJump] fires so the reader can run a FocusEngine pre-roll slide — same
+ * commit model as Android's `AyahSelectorRail`.
  */
 export function AyahSelectorRail({
   ayahCount,
@@ -85,7 +91,6 @@ export function AyahSelectorRail({
   currentPosition,
   side,
   receded,
-  onScrub,
   onJump,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
@@ -96,7 +101,6 @@ export function AyahSelectorRail({
   const draggingRef = useRef(false)
   const rafRef = useRef(0)
   const expandTargetRef = useRef(0)
-  const lastScrubAyahRef = useRef<number | null>(null)
   const readingPosRef = useRef(currentPosition ?? currentAyah)
   const [ariaAyah, setAriaAyah] = useState(currentAyah)
 
@@ -270,7 +274,8 @@ export function AyahSelectorRail({
     schedulePaint()
   }
 
-  const updateDialFromClientY = (clientY: number, scrub: boolean) => {
+  /** Move the dial under the pointer only — never scroll the page. */
+  const updateDialFromClientY = (clientY: number) => {
     const root = rootRef.current
     if (!root) return
     const rect = root.getBoundingClientRect()
@@ -282,10 +287,6 @@ export function AyahSelectorRail({
     const ayah = Math.min(ayahCount, Math.max(1, Math.round(dialRef.current)))
     setAriaAyah(ayah)
     schedulePaint()
-    if (scrub && ayah !== lastScrubAyahRef.current) {
-      lastScrubAyahRef.current = ayah
-      onScrub(ayah)
-    }
   }
 
   const onPointerEnter = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -295,13 +296,12 @@ export function AyahSelectorRail({
       dialRef.current = readingPosRef.current
     }
     setExpanded(true)
-    updateDialFromClientY(e.clientY, false)
+    updateDialFromClientY(e.clientY)
   }
 
   const onPointerLeave = () => {
     hoverRef.current = false
     if (!draggingRef.current) {
-      lastScrubAyahRef.current = null
       setAriaAyah(currentAyah)
       setExpanded(false)
     }
@@ -313,20 +313,15 @@ export function AyahSelectorRail({
     e.preventDefault()
     draggingRef.current = true
     hoverRef.current = true
-    lastScrubAyahRef.current = null
     e.currentTarget.setPointerCapture(e.pointerId)
     setExpanded(true)
-    updateDialFromClientY(e.clientY, true)
+    updateDialFromClientY(e.clientY)
   }
 
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (receded) return
-    if (draggingRef.current) {
-      updateDialFromClientY(e.clientY, true)
-      return
-    }
-    if (hoverRef.current) {
-      updateDialFromClientY(e.clientY, false)
+    if (draggingRef.current || hoverRef.current) {
+      updateDialFromClientY(e.clientY)
     }
   }
 
@@ -336,9 +331,9 @@ export function AyahSelectorRail({
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId)
     }
-    updateDialFromClientY(e.clientY, false)
+    updateDialFromClientY(e.clientY)
     const ayah = Math.min(ayahCount, Math.max(1, Math.round(dialRef.current)))
-    lastScrubAyahRef.current = null
+    // Hand-initiated jump — FocusEngine planJump + home-scroll, not a scrub.
     onJump(ayah)
     // Keep expanded while still hovering (mouse); collapse on touch lift.
     if (e.pointerType !== 'mouse' || !hoverRef.current) {

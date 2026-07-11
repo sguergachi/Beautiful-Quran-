@@ -241,7 +241,13 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     layoutReady.current = false
   }, [content?.surah.id])
 
-  const jumpToAyah = (ayah: number, behavior: ScrollBehavior = 'smooth') => {
+  /**
+   * Selector / hand jump — Android `requestedJumpAyah` path.
+   * Always uses FocusEngine `planJump` (preRoll) so near verses glide the
+   * full path and far verses teleport to a doorstep then home-scroll.
+   * The rail must not call this while dragging; only on commit.
+   */
+  const jumpToAyah = (ayah: number) => {
     if (!content) return
     const count = content.surah.ayahCount
     const targetAyah = Math.min(count, Math.max(1, Math.round(ayah)))
@@ -252,12 +258,10 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     setFocusedAyah(targetAyah)
     programmaticScroll.current = true
     void focusRef.current
-      .focus(targetAyah, {
-        animate: behavior !== 'auto' && behavior !== 'instant',
-        preRoll: true,
-      })
+      .focus(targetAyah, { animate: true, preRoll: true })
       .finally(() => {
         programmaticScroll.current = false
+        setFocusedAyah(focusRef.current.focusedAyah())
       })
   }
 
@@ -305,8 +309,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       currentPosition={railAyah}
       side={side}
       receded={receded}
-      onScrub={(ayah) => jumpToAyah(ayah, 'auto')}
-      onJump={(ayah) => jumpToAyah(ayah, 'smooth')}
+      onJump={jumpToAyah}
     />
   )
 
