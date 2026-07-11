@@ -1599,13 +1599,13 @@ select {
 }
 
 /* —— Entrance ceremony (closed mushaf) —— */
-/* Full-viewport host; the board itself matches the paper-sheet column. */
+/* Host fills the app-shell; the board matches the paper-sheet column. */
 .entrance {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 40;
   pointer-events: none;
-  /* Soft margins outside the sheet column (desktop) stay under-paper. */
+  overflow: hidden;
   background: transparent;
 }
 
@@ -1614,17 +1614,19 @@ select {
   position: absolute;
   top: 0;
   bottom: 0;
-  /* Match .sheet: full-bleed on small screens. */
-  left: 0;
-  right: 0;
+  /* Same column as .sheet: full-bleed when the viewport is narrower than
+     56rem, otherwise centered on --sheet-half. Always — not only ≥900px. */
+  left: max(0px, calc(50% - var(--sheet-half)));
+  right: max(0px, calc(50% - var(--sheet-half)));
   display: block;
   margin: 0;
   padding: 0;
   border: none;
   cursor: pointer;
-  /* Left-edge hinge: free edge lifts toward the reader, then into the left. */
+  /* Left-edge hinge. */
   transform-origin: left center;
   transform-style: preserve-3d;
+  backface-visibility: hidden;
   transition: opacity 550ms linear;
   -webkit-tap-highlight-color: transparent;
   color: #e8e2d5;
@@ -1643,18 +1645,21 @@ select {
   pointer-events: none;
 }
 
-/* Negative rotateY with left origin: free edge comes toward the camera (opens
- * "up" out of the page), not folding down into the sheet. */
+/*
+ * CSS 3D is Y-down / +Z toward the viewer. Negative rotateY with a left
+ * origin brings the free edge OUT toward the camera (opens facing you).
+ * Positive would fold the cover into the page — the bug we had on Pages.
+ */
 @keyframes entrance-cover-open {
   0% {
-    transform: perspective(1600px) rotateY(0deg);
+    transform: perspective(1400px) rotateY(0deg);
     opacity: 1;
   }
-  62% {
+  55% {
     opacity: 1;
   }
   100% {
-    transform: perspective(1600px) rotateY(-88deg);
+    transform: perspective(1400px) rotateY(-95deg);
     opacity: 0;
   }
 }
@@ -1709,9 +1714,23 @@ select {
 
 .entrance-corner {
   position: absolute;
+  box-sizing: content-box;
   width: 22px;
   height: 22px;
-  /* Sit on the inner rule's corners — fixed size, never stretched. */
+  aspect-ratio: 1 / 1;
+  flex-shrink: 0;
+  overflow: visible;
+  /* Sit on the inner rule's corners — fixed square, never stretched. */
+}
+
+.entrance-corner svg {
+  display: block;
+  width: 22px;
+  height: 22px;
+  max-width: 22px;
+  max-height: 22px;
+  aspect-ratio: 1 / 1;
+  flex-shrink: 0;
 }
 
 .entrance-corner--tl {
@@ -1846,14 +1865,6 @@ select {
 html[data-entrance='true'],
 html[data-entrance='true'] body {
   background: #031c15;
-}
-
-@media (min-width: 900px) {
-  /* Same centered 56rem column as .sheet — the cover is a board for the stack. */
-  .entrance-board {
-    left: max(0px, calc(50% - var(--sheet-half)));
-    right: max(0px, calc(50% - var(--sheet-half)));
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

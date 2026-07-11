@@ -124,7 +124,14 @@ function CornerKhatam({ className }: { className: string }) {
   const s = 8
   const a = s * 0.7071
   return (
-    <svg className={className} width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+    <svg
+      className={className}
+      width={22}
+      height={22}
+      viewBox="0 0 22 22"
+      preserveAspectRatio="xMidYMid meet"
+      aria-hidden="true"
+    >
       <g fill="none" stroke="#d9b44a" strokeWidth="1.1">
         <path
           d={`M ${c - a} ${c - a} L ${c + a} ${c - a} L ${c + a} ${c + a} L ${c - a} ${c + a} Z

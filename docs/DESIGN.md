@@ -214,14 +214,14 @@ has two moments:
    silhouette — the cover reads as cut for that screen, not a fixed square
    border floating inside it.
 2. **The opening.** After a brief hold on the settled cover, the board
-   swings open on its **left** hinge — the free edge lifts **toward the
-   reader** (opens "up", not down into the page) and travels right→left
-   into the left side of the screen — slower and heavier than a page
-   (1150 ms vs 460 ms), with the flip stems pitched slightly down
-   (`PageTurnSounds.playCoverOpen`), revealing the chapter list beneath.
-   (`rotationY` negative, origin at the left edge). On web the cover is sized
-   to the paper-sheet column (not the full viewport), with ornaments kept at
-   their natural aspect ratio.
+   swings open on its **left** hinge — the free edge comes **toward the
+   reader** (out of the screen, facing them — not into the page) and
+   travels right→left — slower and heavier than a page (1150 ms vs 460 ms),
+   with the flip stems pitched slightly down (`PageTurnSounds.playCoverOpen`),
+   revealing the chapter list beneath. Compose uses positive `rotationY`
+   (Y-up); CSS uses negative `rotateY` (Y-down) — opposite signs, same
+   outward open. On web the cover matches the paper-sheet column
+   (`--sheet-half`), with corner ornaments kept square.
 
 (The web entrance still includes a third moment — the isti'adha recited
 once from the chosen reciter's everyayah pack — before the cover opens;
