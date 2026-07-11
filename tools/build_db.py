@@ -14,7 +14,7 @@ Sources (all fetched over HTTPS, cached in tools/.cache):
                         sandbox without GitHub access); the app then falls back
                         to whole-ayah highlighting.
 
-Output: app/src/main/assets/quran.db
+Output: data/quran.db (the canonical asset consumed by Android and web builds)
 
 The word segmentation canon is the space-split of the Uthmani text; the WBW
 gloss and the timing data are mapped onto it by position and clamped when a
@@ -35,7 +35,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = Path(__file__).resolve().parent / ".cache"
-OUT = ROOT / "app" / "src" / "main" / "assets" / "quran.db"
+OUT = ROOT / "data" / "quran.db"
 OVERRIDES_DIR = Path(__file__).resolve().parent / "timing_overrides"
 
 QURAN_JSON_TGZ = "https://registry.npmjs.org/quran-json/-/quran-json-3.1.2.tgz"
