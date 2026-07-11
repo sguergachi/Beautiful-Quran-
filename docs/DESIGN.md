@@ -180,7 +180,9 @@ image, so it is crisp at any density and nearly free to render.
 - **Basmalah.** Every surah except Al-Fatihah (where it *is* ayah 1) and
   At-Tawbah (which has none) opens with the basmalah as traditional Naskh
   manuscript calligraphy beneath the chapter title — ink on the page, not a
-  numbered ayah and not ornament. The VectorDrawable
+  numbered ayah and not ornament. It is its **own list item** (above ayah 1)
+  so the focus engine can home, place, and return onto it the same way it
+  does for any verse while the lead-in plays. The VectorDrawable
   (`basmalah_naskh`) is adapted from Wikimedia Commons File:Basmala.svg
   (Baba66, CC BY-SA 3.0). It is an InkEngine **calligraphy render path**: an
   RTL `letterFadeIn` wash advances across the SVG on the lead-in clip's

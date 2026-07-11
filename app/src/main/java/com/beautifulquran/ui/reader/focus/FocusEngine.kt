@@ -27,12 +27,13 @@ import kotlin.math.roundToInt
  *
  * ## Chapter-top basmalah
  *
- * Surahs that open with a basmalah preface expose that calligraphy on the
- * surah header — the first LazyColumn item, above ayah 1. While the lead-in
- * clip plays, the focus target is [BASMALAH_PLAYLIST_AYAH] (0), not a verse.
- * [playbackFocusTarget] and [isChapterTopFocusTarget] make that sentinel a
- * first-class focus key; [anchorOffsetPx] pins chapter-top targets near the
- * content start so the opening stays in the top band while it is recited.
+ * Surahs that open with a basmalah preface expose that calligraphy as its **own
+ * LazyColumn item** above ayah 1 (not folded into the surah-header title block).
+ * While the lead-in clip plays, the focus target is [CHAPTER_TOP_FOCUS_AYAH]
+ * (playlist ayah 0). [playbackFocusTarget] resolves that sentinel; the
+ * controller then homes / places / returns onto it through the same
+ * [anchorOffsetPx] / [placement] path used for every verse — so return-to-verse
+ * and lyric-follow behave identically for the basmalah.
  */
 object FocusEngine {
     /**
@@ -44,14 +45,16 @@ object FocusEngine {
     /**
      * Resolve what the lyric-follow / return-to-verse path should home onto
      * given the current playback highlight. Basmalah lead-in wins over a null
-     * verse so the header stays the focus target while the preface plays.
+     * verse so the basmalah list item stays the focus target while the preface
+     * plays.
      */
     fun playbackFocusTarget(activeAyah: Int?, activeBasmalah: Boolean): Int? =
         if (activeBasmalah) CHAPTER_TOP_FOCUS_AYAH else activeAyah
 
-    /** True when [focusAyah] is the chapter-opening basmalah (header) target. */
+    /** True when [focusAyah] is the chapter-opening basmalah target. */
     fun isChapterTopFocusTarget(focusAyah: Int): Boolean =
         focusAyah == CHAPTER_TOP_FOCUS_AYAH
+
     /**
      * Breathing room above a verse that fits on screen, as a fraction of the
      * usable viewport. A fitting verse rests with its top this far down so its
@@ -235,23 +238,15 @@ object FocusEngine {
      *   (so a short final verse still lands with its whole body visible).
      * - **Taller than the screen** → pin its top near the content start so the
      *   reader starts at line one; word-level following then scrolls through it.
-     * - **Chapter-top basmalah** ([chapterTop] true) → always pin near the
-     *   content start. The preface lives on the surah header above ayah 1; a
-     *   verse-style 10% rest would push the opening down the page.
+     *
+     * The chapter-opening basmalah uses this same path: it is a short list item
+     * that fits, so it rests on the verse-style reading line.
      *
      * A [targetHeightPx] of 0 (height not yet measured) is treated as "tall" and
      * pinned to the top — the safe default that always shows the opening line.
      */
-    fun anchorOffsetPx(
-        viewportHeightPx: Int,
-        topGuardPx: Int,
-        targetHeightPx: Int,
-        chapterTop: Boolean = false,
-    ): Int {
+    fun anchorOffsetPx(viewportHeightPx: Int, topGuardPx: Int, targetHeightPx: Int): Int {
         val usable = usable(viewportHeightPx, topGuardPx)
-        if (chapterTop) {
-            return (topGuardPx + usable * TALL_TOP_MARGIN_FRACTION).roundToInt()
-        }
         val fits = targetHeightPx in 1..usable
         return if (fits) {
             val restingTop = topGuardPx + usable * FIT_TOP_MARGIN_FRACTION
@@ -275,24 +270,18 @@ object FocusEngine {
      * return-to-verse control and the rail need. When the verse is not currently
      * laid out, [TargetGeometry.isAboveWhenOffscreen] decides the direction.
      */
-    fun placement(
-        target: TargetGeometry,
-        viewportHeightPx: Int,
-        topGuardPx: Int,
-        chapterTop: Boolean = false,
-    ): FocusPlacement {
+    fun placement(target: TargetGeometry, viewportHeightPx: Int, topGuardPx: Int): FocusPlacement {
         if (!target.isLaidOut) {
             val zone = if (target.isAboveWhenOffscreen) FocusZone.ABOVE else FocusZone.BELOW
             return FocusPlacement(zone, distancePx = 0)
         }
-        val anchor = anchorOffsetPx(viewportHeightPx, topGuardPx, target.heightPx, chapterTop)
+        val anchor = anchorOffsetPx(viewportHeightPx, topGuardPx, target.heightPx)
         val distance = target.topPx - anchor
         val bottom = target.topPx + target.heightPx
         val usable = usable(viewportHeightPx, topGuardPx)
         val tolerance = (usable * IN_FOCUS_TOLERANCE_FRACTION).roundToInt()
 
-        val fitsFullyVisible = !chapterTop &&
-            target.heightPx in 1..usable &&
+        val fitsFullyVisible = target.heightPx in 1..usable &&
             target.topPx >= topGuardPx &&
             bottom <= viewportHeightPx
 

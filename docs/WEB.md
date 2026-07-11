@@ -107,15 +107,16 @@ Port exactly:
 - `planJump` / `jumpDurationMs` / `homeScrollStep` / `shouldTeleport`
 - `readoutPosition` + all geometry types (`TargetGeometry`, `JumpPlan`, …)
 - Chapter-top basmalah: `playbackFocusTarget` / `CHAPTER_TOP_FOCUS_AYAH` (0)
-  pins the surah header above ayah 1 while the lead-in plays
+  maps to a dedicated basmalah block above ayah 1 (same adaptive anchor /
+  placement path as any short verse — not the taller surah header)
 
 Acceptance: every case in `FocusEngineTest` ports. DOM controller is
 separate (`web/src/ui/reader/ReaderFocusController.ts` — sole writer to the
 reader `scrollTop`, using `getBoundingClientRect` + rAF `homeScrollStep`;
-resolves ayah 0 to `.surah-header` on preface chapters). Recitation-follow,
-selector jumps, return-to-ayah, and tall-verse word keep-in-view all go
-through it. Non-active ayahs recess only while audio is actually playing
-(`recitingActive`); at rest every ayah is Plain (full opacity).
+resolves ayah 0 to the `.basmalah-block` above ayah 1 on preface chapters).
+Recitation-follow, selector jumps, return-to-ayah, and tall-verse word
+keep-in-view all go through it. Non-active ayahs recess only while audio is
+actually playing (`recitingActive`); at rest every ayah is Plain (full opacity).
 
 ### 5.3 `InkEngine` (pure policy)
 
