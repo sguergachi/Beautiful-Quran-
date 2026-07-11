@@ -239,10 +239,11 @@ Translate `docs/PERFORMANCE.md` into web terms:
    while `isPlaying || isBuffering` for ayah joins). Pause works mid-buffer.
    Play intent flips `isPlaying` before `canplay`. Focus glide is deferred one
    frame so the icon + CSS recess paint first.
-7. **Sheet peel first.** `openSurah` starts the paper slide on the tap frame
-   (blank reader sheet), then loads content after the peel has painted.
-   `hasReaderOpen` treats `sheet === 'reader'` as reader-owned even while
-   `content` is still null — otherwise Settings briefly claims layer 1.
+7. **Content-bearing peel.** Home prepares chapter content on hover, focus, or
+   pointer-down; `openSurah` commits that cached content and the paper slide in
+   one state change. A cold programmatic open materializes content while the
+   current sheet remains visible. There is no intermediate reader-loading
+   sheet. Audio and whole-surah timings hydrate after the first reader frame.
    Long surahs progressive-mount a tight ayah window with scroll padding;
    parked reader sheets use `content-visibility: hidden`. Same-surah reopen
    peels without remount. Sheet glide is ~360ms so the transition is visible.
@@ -283,11 +284,12 @@ Three sheets, hand-rolled paper stack (no router chrome):
    truncated expand-in-place lists), `surah:ayah` references, continue-
    listening, floating playback control while a verse is loaded (chapter ·
    ayah label, transport, quiet Close that stops the session — Android
-   parity). Opening a word hit flashes that Arabic (and English gloss) word
+   parity). The control spans the full chapter sheet width while its ink and
+   transport remain centred. Opening a word hit flashes that Arabic (and English gloss) word
    twice with the orange repeat wash (directional wash in, dissolve out).
    Word search keeps the query in local home state (no global store fan-out),
-   warms a slim in-memory index after boot, and scans cooperatively with
-   cancellation so typing stays responsive.
+   builds its slim in-memory index on demand (never during chapter browsing),
+   and scans cooperatively with cancellation so typing stays responsive.
 2. **Reader** — header + ayahs + icon player bar; mushaf page breaks
    (whisper-gold hairline with Western + Arabic-Indic page numbers, Android
    `PageBreak` parity) between ayahs that start a new Madinah page; once the
