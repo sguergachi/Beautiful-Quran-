@@ -1050,14 +1050,17 @@ select {
   font-family: var(--font-body);
   font-size: 0.75rem;
   line-height: 1;
-  color: color-mix(in srgb, var(--gold) 68%, transparent);
+  /* Alpha on gold (Android gold.copy(alpha)), not color-mix with transparent —
+   * transparent is black, so a 20–68% mix reads as near-black and vanishes on
+   * Nightfall / Royal Green paper. */
+  color: rgb(from var(--gold) r g b / 0.68);
   flex-shrink: 0;
 }
 
 .page-break__line {
   flex: 1;
   height: 0.5px;
-  background: color-mix(in srgb, var(--gold) 20%, transparent);
+  background: rgb(from var(--gold) r g b / 0.2);
   min-width: 0;
 }
 
