@@ -647,18 +647,22 @@ select {
   flex-direction: column;
 }
 
+/*
+ * Sheet-edge overlay. Positioned against the reader sheet, not the verse
+ * column — so it cannot steal flex width or shift ayah centering.
+ */
 .ayah-rail {
-  /* Overlay — never takes layout width, so verses stay centered. */
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 6.5rem;
+  width: 5.5rem;
   z-index: 6;
   transition: opacity 900ms ease;
   cursor: ns-resize;
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
+  pointer-events: auto;
 }
 
 .ayah-rail[data-side='left'] {
@@ -1607,7 +1611,7 @@ select {
   }
 
   .ayah-rail {
-    width: 5.25rem;
+    width: 4.5rem;
   }
 
   .ayah-block {

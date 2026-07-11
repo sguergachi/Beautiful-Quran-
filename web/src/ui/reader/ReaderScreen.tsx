@@ -272,8 +272,10 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
         </button>
       </div>
 
+      {/* Overlay on the sheet edge — never a flex sibling of the verse column. */}
+      {rail}
+
       <div className="reader-body">
-        {rail}
         <div className="reader-main">
           <div className="edge-fade">
             <div className="scroll" ref={scrollRef}>
