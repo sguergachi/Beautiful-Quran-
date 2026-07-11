@@ -1653,8 +1653,28 @@ select {
   color: #e8e2d5;
   background: transparent;
   overflow: hidden;
-  container-type: inline-size;
-  container-name: entrance-board;
+  /* Fallback grid until ResizeObserver paints live --cover-* vars. */
+  --cover-unit: 8px;
+  --cover-outer-inset: 22px;
+  --cover-inner-inset: 34px;
+  --cover-outer-radius: 18px;
+  --cover-inner-radius: 12px;
+  --cover-star: 32px;
+  --cover-medallion: 168px;
+  --cover-title-ar: 28px;
+  --cover-title-en: 15px;
+  --cover-dua-ar: 16px;
+  --cover-dua-en: 11px;
+  --cover-hint: 11px;
+  --cover-load-label: 12px;
+  --cover-pad-x: 42px;
+  --cover-pad-y: 40px;
+  --cover-gap-medal: 24px;
+  --cover-gap-titles: 6px;
+  --cover-copy-max: 22rem;
+  --cover-air-top: 0.95;
+  --cover-air-mid: 0.6;
+  --cover-air-bot: 0.5;
 }
 
 .entrance-board:disabled {
@@ -1726,9 +1746,9 @@ select {
 
 .entrance-frame-outer {
   position: absolute;
-  inset: 16px;
+  inset: var(--cover-outer-inset);
   border: 2px solid #d9b44a;
-  border-radius: 10px;
+  border-radius: var(--cover-outer-radius);
   box-shadow:
     0 0 0 1px rgba(154, 123, 42, 0.35),
     inset 0 1px 0 rgba(237, 209, 136, 0.35);
@@ -1736,52 +1756,54 @@ select {
 
 .entrance-frame-inner {
   position: absolute;
-  inset: 26px;
+  inset: var(--cover-inner-inset);
   border: 1px solid rgba(217, 180, 74, 0.85);
-  border-radius: 6px;
+  border-radius: var(--cover-inner-radius);
 }
 
 .entrance-corner {
   position: absolute;
-  box-sizing: content-box;
-  width: 22px;
-  height: 22px;
+  box-sizing: border-box;
+  width: var(--cover-star);
+  height: var(--cover-star);
   aspect-ratio: 1 / 1;
   flex-shrink: 0;
   overflow: visible;
-  /* Sit on the inner rule's corners — fixed square, never stretched. */
+  /* Centered on the inner rule's corners — square seal, never stretched. */
 }
 
 .entrance-corner svg {
   display: block;
-  width: 22px;
-  height: 22px;
-  max-width: 22px;
-  max-height: 22px;
+  width: 100%;
+  height: 100%;
   aspect-ratio: 1 / 1;
-  flex-shrink: 0;
 }
 
 .entrance-corner--tl {
-  top: calc(26px - 11px);
-  left: calc(26px - 11px);
+  top: calc(var(--cover-inner-inset) - var(--cover-star) / 2);
+  left: calc(var(--cover-inner-inset) - var(--cover-star) / 2);
 }
 
 .entrance-corner--tr {
-  top: calc(26px - 11px);
-  right: calc(26px - 11px);
+  top: calc(var(--cover-inner-inset) - var(--cover-star) / 2);
+  right: calc(var(--cover-inner-inset) - var(--cover-star) / 2);
 }
 
 .entrance-corner--bl {
-  bottom: calc(26px - 11px);
-  left: calc(26px - 11px);
+  bottom: calc(var(--cover-inner-inset) - var(--cover-star) / 2);
+  left: calc(var(--cover-inner-inset) - var(--cover-star) / 2);
 }
 
 .entrance-corner--br {
-  bottom: calc(26px - 11px);
-  right: calc(26px - 11px);
+  bottom: calc(var(--cover-inner-inset) - var(--cover-star) / 2);
+  right: calc(var(--cover-inner-inset) - var(--cover-star) / 2);
 }
 
+/*
+ * Vertical cover grid: pad → top air → medallion → titles → mid air →
+ * dua/load → bot air → hint. Air weights and type sizes come from
+ * coverLayout() so phone and sheet-column boards stay in proportion.
+ */
 .entrance-content {
   position: relative;
   z-index: 1;
@@ -1789,29 +1811,37 @@ select {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: max(1.5rem, env(safe-area-inset-top, 0px)) 2.5rem
-    max(1.6rem, env(safe-area-inset-bottom, 0px));
+  padding: max(var(--cover-pad-y), env(safe-area-inset-top, 0px))
+    var(--cover-pad-x)
+    max(var(--cover-pad-y), env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }
 
-.entrance-top-space {
-  flex: 0.9;
+.entrance-air {
+  flex-grow: 1;
+  flex-shrink: 1;
+  flex-basis: 0;
+  min-height: 0;
+  width: 100%;
 }
 
-.entrance-mid-space {
-  flex: 0.55;
+.entrance-air--top {
+  flex-grow: var(--cover-air-top);
 }
 
-.entrance-bot-space {
-  flex: 0.5;
+.entrance-air--mid {
+  flex-grow: var(--cover-air-mid);
+}
+
+.entrance-air--bot {
+  flex-grow: var(--cover-air-bot);
 }
 
 .entrance-medallion {
   flex-shrink: 0;
-  /* Scale to the board (sheet) width — square, never squeezed. */
-  width: min(52%, 15rem);
+  width: var(--cover-medallion);
+  height: var(--cover-medallion);
   aspect-ratio: 1;
-  height: auto;
   display: block;
   filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.12)) drop-shadow(0 -1px 0 rgba(0, 0, 0, 0.35));
   animation: entrance-sheen 6.5s ease-in-out infinite alternate;
@@ -1828,11 +1858,21 @@ select {
   }
 }
 
+.entrance-titles {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: var(--cover-gap-medal);
+  gap: var(--cover-gap-titles);
+  width: min(100%, var(--cover-copy-max));
+}
+
 .entrance-title-ar {
-  margin: 1.75rem 0 0;
+  margin: 0;
   font-family: var(--font-arabic);
-  font-size: clamp(1.85rem, 8cqi, 2.5rem);
-  line-height: 1.6;
+  font-size: var(--cover-title-ar);
+  line-height: 1.55;
   text-align: center;
   color: #e8e2d5;
   background: linear-gradient(180deg, #edd188, #9a7b2a);
@@ -1843,9 +1883,9 @@ select {
 }
 
 .entrance-title-en {
-  margin: 0.25rem 0 0;
+  margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(1.05rem, 4.2cqi, 1.35rem);
+  font-size: var(--cover-title-en);
   letter-spacing: 0.2em;
   text-align: center;
   color: rgba(232, 226, 213, 0.58);
@@ -1853,19 +1893,20 @@ select {
 }
 
 .entrance-dua {
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.65rem;
-  max-width: 22rem;
+  gap: calc(var(--cover-unit) * 0.7);
+  width: min(100%, var(--cover-copy-max));
   transition: opacity 900ms ease;
 }
 
 .entrance-dua-ar {
   margin: 0;
   font-family: var(--font-arabic);
-  font-size: clamp(1.15rem, 5cqi, 1.5rem);
-  line-height: 1.9;
+  font-size: var(--cover-dua-ar);
+  line-height: 1.85;
   text-align: center;
   color: #e8e2d5;
   opacity: 0.12;
@@ -1874,17 +1915,18 @@ select {
 .entrance-dua-en {
   margin: 0;
   font-family: var(--font-body);
-  font-size: 0.95rem;
+  font-size: var(--cover-dua-en);
   font-style: italic;
   text-align: center;
   color: rgba(232, 226, 213, 0.55);
 }
 
 .entrance-hint {
+  flex-shrink: 0;
   margin: 0;
-  padding-bottom: 0.4rem;
+  padding-bottom: calc(var(--cover-unit) * 0.4);
   font-family: var(--font-body);
-  font-size: 0.72rem;
+  font-size: var(--cover-hint);
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: rgba(232, 226, 213, 0.34);
@@ -1893,17 +1935,18 @@ select {
 
 /* Load progress inked onto the cover — replaces the plain boot screen. */
 .entrance-load {
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.85rem;
-  width: min(16rem, 70%);
+  gap: calc(var(--cover-unit) * 0.85);
+  width: min(var(--cover-copy-max), 70%);
 }
 
 .entrance-load-label {
   margin: 0;
   font-family: var(--font-body);
-  font-size: 0.82rem;
+  font-size: var(--cover-load-label);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   text-align: center;
@@ -1946,7 +1989,7 @@ select {
   padding: 0.55rem 0.15rem;
   min-height: 44px;
   font-family: var(--font-body);
-  font-size: 0.78rem;
+  font-size: var(--cover-load-label);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: rgba(237, 209, 136, 0.85);

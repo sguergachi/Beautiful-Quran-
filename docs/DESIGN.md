@@ -225,9 +225,12 @@ has two moments:
 
 (The web entrance is also the loading screen: the cover is up from the first
 paint while `quran.db` streams in, with progress inked onto the leather; the
-hinge open waits until the book is ready. The web entrance still includes a
-third moment — the isti'adha recited once from the chosen reciter's everyayah
-pack — before the cover opens; Android does not.)
+hinge open waits until the book is ready. Frame insets, corner seals,
+medallion, and type are derived from the live board width × height via a
+48-unit modular grid (`coverLayout`) so ornaments stay pressed seals — not
+fixed pinpricks — across phone and sheet-column boards. The web entrance
+still includes a third moment — the isti'adha recited once from the chosen
+reciter's everyayah pack — before the cover opens; Android does not.)
 
 A tap anywhere (or back) opens the cover at once; the ceremony never holds a
 reader hostage, and it plays only once per session (`rememberSaveable`), so

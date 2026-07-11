@@ -3,9 +3,10 @@
  * Also the cold-start loading screen: the cover is up while quran.db loads,
  * with progress inked onto the leather; the open waits until the book is ready.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { washMaskImage } from '../../engine/fade'
 import { istiadhaAudioUrl, type Reciter } from '../../data/models'
+import { coverLayout, coverLayoutCssVars } from './coverLayout'
 import { reciteIstiadha, silentWash } from './istiadhaPlayer'
 
 const ISTIADHA_ARABIC = 'أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَٰنِ ٱلرَّجِيمِ'
@@ -129,31 +130,30 @@ function GildedMedallion() {
   )
 }
 
+/** Corner seal — viewBox-only; diameter comes from `--cover-star`. */
 function CornerKhatam({ className }: { className: string }) {
-  const c = 11
-  const s = 8
+  const c = 50
+  const s = 36
   const a = s * 0.7071
   return (
     <svg
       className={className}
-      width={22}
-      height={22}
-      viewBox="0 0 22 22"
+      viewBox="0 0 100 100"
       preserveAspectRatio="xMidYMid meet"
       aria-hidden="true"
     >
-      <g fill="none" stroke="#d9b44a" strokeWidth="1.1">
+      <g fill="none" stroke="#d9b44a" strokeWidth="4.2" strokeLinejoin="round">
         <path
           d={`M ${c - a} ${c - a} L ${c + a} ${c - a} L ${c + a} ${c + a} L ${c - a} ${c + a} Z
               M ${c} ${c - s} L ${c + s} ${c} L ${c} ${c + s} L ${c - s} ${c} Z`}
         />
       </g>
-      <circle cx={c} cy={c} r="1.4" fill="#edd188" />
+      <circle cx={c} cy={c} r="6.5" fill="#edd188" />
     </svg>
   )
 }
 
-/** Doubled gilt rule + corner stars — CSS rules so stars are never squeezed. */
+/** Doubled gilt rule + corner seals — sizes from the board layout grid. */
 function MushafCoverFrame() {
   return (
     <div className="entrance-frame" aria-hidden="true">
@@ -188,7 +188,11 @@ export function EntranceCover({
   const [opening, setOpening] = useState(false)
   const [captionOn, setCaptionOn] = useState(false)
   const [arrivalDone, setArrivalDone] = useState(false)
+  const [layoutVars, setLayoutVars] = useState<Record<string, string>>(() =>
+    coverLayoutCssVars(coverLayout(390, 844)),
+  )
 
+  const boardRef = useRef<HTMLDivElement>(null)
   const titleArRef = useRef<HTMLParagraphElement>(null)
   const titleEnRef = useRef<HTMLParagraphElement>(null)
   const duaRef = useRef<HTMLParagraphElement>(null)
@@ -208,6 +212,23 @@ export function EntranceCover({
   const showLoading = !ready && !error
   const showProgress =
     showLoading && loadProgress != null && loadProgress >= 0 && loadProgress < 1
+
+  // Modular cover grid from the live board size (width × height).
+  useLayoutEffect(() => {
+    const el = boardRef.current
+    if (!el) return
+    const apply = (w: number, h: number) => {
+      if (w < 2 || h < 2) return
+      setLayoutVars(coverLayoutCssVars(coverLayout(w, h)))
+    }
+    apply(el.clientWidth, el.clientHeight)
+    const ro = new ResizeObserver((entries) => {
+      const box = entries[0]?.contentRect
+      if (box) apply(box.width, box.height)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   const skipToOpening = useCallback(() => {
     if (!canOpen || phase === 'opening') return
@@ -372,8 +393,12 @@ export function EntranceCover({
       aria-busy={showLoading || undefined}
     >
       <div
+        ref={boardRef}
         className={`entrance-board${opening ? ' entrance-board--opening' : ''}`}
-        style={{ opacity: opening ? undefined : sheetAlpha || 1 }}
+        style={{
+          ...layoutVars,
+          opacity: opening ? undefined : sheetAlpha || 1,
+        }}
         role={canOpen && phase !== 'opening' ? 'button' : undefined}
         tabIndex={canOpen && phase !== 'opening' ? 0 : undefined}
         onClick={canOpen && phase !== 'opening' ? skipToOpening : undefined}
@@ -399,15 +424,17 @@ export function EntranceCover({
         <div className="entrance-weave" aria-hidden="true" />
         <MushafCoverFrame />
         <div className="entrance-content">
-          <div className="entrance-top-space" />
+          <div className="entrance-air entrance-air--top" />
           <GildedMedallion />
-          <p ref={titleArRef} className="entrance-title-ar" lang="ar" dir="rtl">
-            القرآن الكريم
-          </p>
-          <p ref={titleEnRef} className="entrance-title-en">
-            The Noble Quran
-          </p>
-          <div className="entrance-mid-space" />
+          <div className="entrance-titles">
+            <p ref={titleArRef} className="entrance-title-ar" lang="ar" dir="rtl">
+              القرآن الكريم
+            </p>
+            <p ref={titleEnRef} className="entrance-title-en">
+              The Noble Quran
+            </p>
+          </div>
+          <div className="entrance-air entrance-air--mid" />
           {error ? (
             <div className="entrance-load">
               <p className="entrance-load-label">{error}</p>
@@ -440,7 +467,7 @@ export function EntranceCover({
               <p className="entrance-dua-en">{ISTIADHA_ENGLISH}</p>
             </div>
           )}
-          <div className="entrance-bot-space" />
+          <div className="entrance-air entrance-air--bot" />
           {!showLoading && !error && (
             <p className="entrance-hint" style={{ opacity: captionOn ? 1 : 0 }}>
               Touch to open
