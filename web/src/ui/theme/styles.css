@@ -530,6 +530,189 @@ select {
   max-width: var(--home-max);
 }
 
+.search-section-label {
+  max-width: var(--home-max);
+  margin: 0.5rem auto 0.25rem;
+  padding: 0 var(--sheet-pad);
+  color: color-mix(in srgb, var(--ink-muted) 70%, transparent);
+  font-size: 0.92rem;
+  letter-spacing: 0.02em;
+}
+
+.search-empty {
+  max-width: var(--home-max);
+  margin: 1.5rem auto;
+  padding: 0 var(--sheet-pad);
+  color: color-mix(in srgb, var(--ink-muted) 55%, transparent);
+  font-size: 1.05rem;
+}
+
+.word-search-results {
+  max-width: var(--home-max);
+  margin: 0 auto;
+  padding: 0 0 2.5rem;
+}
+
+.word-search-section {
+  margin-top: 0.35rem;
+}
+
+.word-search-surah-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  padding: 1.1rem var(--sheet-pad) 0.35rem;
+}
+
+.word-search-surah-en {
+  flex: 1;
+  min-width: 0;
+  font-size: 1.02rem;
+  color: var(--ink);
+}
+
+.word-search-surah-count {
+  color: color-mix(in srgb, var(--gold) 75%, transparent);
+  font-size: 0.88rem;
+}
+
+.word-search-surah-ar {
+  font-family: var(--font-arabic);
+  font-size: 1.2rem;
+  color: color-mix(in srgb, var(--accent) 90%, transparent);
+}
+
+.word-search-hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.word-search-hit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  width: 100%;
+  padding: 0.7rem var(--sheet-pad);
+  text-align: start;
+  min-height: 44px;
+}
+
+@media (hover: hover) {
+  .word-search-hit:hover {
+    background: color-mix(in srgb, var(--ink) 3.5%, transparent);
+  }
+}
+
+.word-search-ref {
+  color: color-mix(in srgb, var(--ink-muted) 55%, transparent);
+  font-size: 0.85rem;
+}
+
+.word-search-ayah {
+  font-family: var(--font-arabic);
+  font-size: 1.25rem;
+  line-height: 1.7;
+  color: var(--ink);
+  text-align: end;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.word-search-mark {
+  background: none;
+  color: var(--gold);
+  font-weight: 500;
+}
+
+.word-search-gloss {
+  color: color-mix(in srgb, var(--ink-muted) 80%, transparent);
+  font-size: 0.95rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.word-search-more,
+.word-search-less {
+  display: block;
+  width: 100%;
+  padding: 0.75rem var(--sheet-pad);
+  text-align: start;
+  min-height: 44px;
+  font-size: 0.95rem;
+}
+
+.word-search-more {
+  color: color-mix(in srgb, var(--accent) 90%, transparent);
+}
+
+.word-search-less {
+  color: color-mix(in srgb, var(--ink-muted) 70%, transparent);
+}
+
+/* Search-hit flash overlay — same box as the repeat orange layer. */
+.word-search-flash-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  color: var(--repeat);
+  opacity: 0;
+}
+
+.word-search-flash-overlay.word-arabic,
+.word-search-flash-overlay.word-gloss {
+  color: var(--repeat);
+}
+
+.word-gloss-flash {
+  position: relative;
+}
+
+.word-gloss-flash .word-search-flash-overlay {
+  position: absolute;
+  inset: 0;
+  white-space: normal;
+}
+
+.hafs-search-flash-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  color: var(--repeat);
+  opacity: 0;
+}
+
+/* Quick fade-in / fade-out twice (~80ms / ~100ms each) — Android SearchHitFlash. */
+@keyframes search-hit-flash-pulse {
+  0% {
+    opacity: 0;
+  }
+  22% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.word-search-flash-overlay[data-pulse='true'],
+.hafs-search-flash-overlay[data-pulse='true'] {
+  animation: search-hit-flash-pulse 360ms ease-in-out forwards;
+}
+
 .surah-row {
   width: 100%;
   display: grid;
@@ -1129,6 +1312,10 @@ select {
 
 /* Beat .hafs-glyph ink (and hover accent) on the shared overlay node. */
 .hafs-repeat-overlay.hafs-glyph {
+  color: var(--repeat);
+}
+
+.hafs-search-flash-overlay.hafs-glyph {
   color: var(--repeat);
 }
 

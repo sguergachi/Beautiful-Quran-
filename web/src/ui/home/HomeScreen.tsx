@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react'
 import {
   IconBuffering,
   IconClose,
@@ -8,23 +9,54 @@ import {
 } from '../icons/PlaybackIcons'
 import { PaperInput } from '../kit'
 import { appStore, useAppState, COVER_LAYER, READER_LAYER } from '../../store/appStore'
+import { QuranRepository } from '../../data/repository'
+import {
+  ayahHighlightSpans,
+  filterSurahs,
+  sectionWordSearchHits,
+  shouldRunWordSearch,
+  WORD_SEARCH_PREVIEW_LIMIT,
+  type SurahWordSearchSection,
+  type WordSearchHit,
+} from '../../engine/wordSearch'
 import type { StackLayer } from '../paper/stack'
 
 export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const state = useAppState()
-  const q = state.search.trim().toLowerCase()
-  const filtered = !q
-    ? state.surahs
-    : state.surahs.filter(
-        (s) =>
-          s.nameTransliteration.toLowerCase().includes(q) ||
-          s.nameTranslation.toLowerCase().includes(q) ||
-          s.nameArabic.includes(state.search.trim()) ||
-          String(s.id) === q,
-      )
+  const searching = state.search.trim().length > 0
+  const { surahs: filtered, ayahTarget } = useMemo(
+    () => filterSurahs(state.surahs, state.search),
+    [state.surahs, state.search],
+  )
+
+  const [wordHits, setWordHits] = useState<WordSearchHit[]>([])
+  const [wordLoading, setWordLoading] = useState(false)
+  const [expandedSurahIds, setExpandedSurahIds] = useState<Set<number>>(
+    () => new Set(),
+  )
+
+  useEffect(() => {
+    setExpandedSurahIds(new Set())
+    if (!shouldRunWordSearch(state.search)) {
+      setWordHits([])
+      setWordLoading(false)
+      return
+    }
+    setWordLoading(true)
+    const handle = window.setTimeout(() => {
+      setWordHits(QuranRepository.searchWords(state.search))
+      setWordLoading(false)
+    }, 220)
+    return () => window.clearTimeout(handle)
+  }, [state.search])
+
+  const wordSections = useMemo(
+    () => sectionWordSearchHits(wordHits, expandedSurahIds),
+    [wordHits, expandedSurahIds],
+  )
 
   const continueSurah =
-    state.settings.lastSurah > 0
+    !searching && state.settings.lastSurah > 0
       ? state.surahs.find((s) => s.id === state.settings.lastSurah)
       : null
 
@@ -32,7 +64,6 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const isTop = stackLayer === COVER_LAYER
   const nowPlaying = state.player.nowPlaying
   const showFloat = nowPlaying != null && isTop
-  // Basmalah lead-in reports ayah 0; the float labels (and opens) ayah 1.
   const floatAyah = nowPlaying != null ? Math.max(1, nowPlaying.ayah) : 1
   const floatSurah =
     nowPlaying != null
@@ -50,6 +81,24 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
     }
     appStore.openSurah(nowPlaying.surahId, floatAyah)
   }
+
+  const toggleSection = (surahId: number) => {
+    setExpandedSurahIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(surahId)) next.delete(surahId)
+      else next.add(surahId)
+      return next
+    })
+  }
+
+  const showSurahMatches = searching && filtered.length > 0
+  const showWordSections =
+    searching && (wordSections.length > 0 || wordLoading)
+  const showEmpty =
+    searching &&
+    filtered.length === 0 &&
+    wordSections.length === 0 &&
+    !wordLoading
 
   return (
     <div
@@ -85,10 +134,10 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
             id="chapter-search"
             name="chapter-search"
             type="search"
-            placeholder="Search chapters…"
+            placeholder="Search surah, word, or 2:255"
             value={state.search}
             onValueChange={(v) => appStore.setSearch(v)}
-            aria-label="Search chapters"
+            aria-label="Search surah, word, or ayah reference"
           />
         </div>
 
@@ -122,13 +171,19 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
               </div>
             ) : null}
 
+            {showSurahMatches ? (
+              <p className="search-section-label">Surahs</p>
+            ) : null}
+
             <ul className="surah-list">
               {filtered.map((s) => (
                 <li key={s.id}>
                   <button
                     type="button"
                     className="surah-row"
-                    onClick={() => appStore.openSurah(s.id)}
+                    onClick={() =>
+                      appStore.openSurah(s.id, ayahTarget ?? 1)
+                    }
                   >
                     <span className="surah-num">{s.id}</span>
                     <span className="surah-names">
@@ -142,6 +197,35 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
                 </li>
               ))}
             </ul>
+
+            {showWordSections ? (
+              <div className="word-search-results">
+                <p className="search-section-label">
+                  {wordLoading && wordSections.length === 0
+                    ? 'Searching ayahs…'
+                    : 'In the Quran'}
+                </p>
+                {wordSections.map((section) => (
+                  <WordSearchSection
+                    key={section.surahId}
+                    section={section}
+                    query={state.search}
+                    onToggle={() => toggleSection(section.surahId)}
+                    onOpenHit={(hit) =>
+                      appStore.openSurah(
+                        hit.surahId,
+                        hit.ayahNumber,
+                        hit.position,
+                      )
+                    }
+                  />
+                ))}
+              </div>
+            ) : null}
+
+            {showEmpty ? (
+              <p className="search-empty">No matches</p>
+            ) : null}
           </div>
         </div>
       </div>
@@ -210,4 +294,80 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
       ) : null}
     </div>
   )
+}
+
+function WordSearchSection({
+  section,
+  query,
+  onToggle,
+  onOpenHit,
+}: {
+  section: SurahWordSearchSection
+  query: string
+  onToggle: () => void
+  onOpenHit: (hit: WordSearchHit) => void
+}) {
+  return (
+    <section className="word-search-section">
+      <header className="word-search-surah-header">
+        <span className="word-search-surah-en">
+          {section.surahNameTransliteration}
+        </span>
+        <span className="word-search-surah-count">{section.totalCount}</span>
+        <span className="word-search-surah-ar" lang="ar" dir="rtl">
+          {section.surahNameArabic}
+        </span>
+      </header>
+      <ul className="word-search-hits">
+        {section.hits.map((hit) => (
+          <li key={`${hit.ayahNumber}-${hit.position}`}>
+            <button
+              type="button"
+              className="word-search-hit"
+              onClick={() => onOpenHit(hit)}
+            >
+              <span className="word-search-ref">
+                {hit.surahId}:{hit.ayahNumber}
+              </span>
+              <span className="word-search-ayah" lang="ar" dir="rtl">
+                {ayahHighlightSpans(hit.ayahText, hit.position, hit.arabic).map(
+                  (span, i) =>
+                    span.highlighted ? (
+                      <mark key={i} className="word-search-mark">
+                        {span.text}
+                      </mark>
+                    ) : (
+                      <span key={i}>{span.text}</span>
+                    ),
+                )}
+              </span>
+              <span className="word-search-gloss">
+                {glossSnippet(hit, query)}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {section.hiddenCount > 0 ? (
+        <button type="button" className="word-search-more" onClick={onToggle}>
+          Show {section.hiddenCount} more in {section.surahNameTransliteration}
+        </button>
+      ) : section.expanded && section.totalCount > WORD_SEARCH_PREVIEW_LIMIT ? (
+        <button type="button" className="word-search-less" onClick={onToggle}>
+          Show less
+        </button>
+      ) : null}
+    </section>
+  )
+}
+
+function glossSnippet(hit: WordSearchHit, query: string): string {
+  const trimmed = query.trim()
+  if (hit.translation.toLowerCase().includes(trimmed.toLowerCase())) {
+    return hit.translation
+  }
+  if (hit.ayahTranslation.toLowerCase().includes(trimmed.toLowerCase())) {
+    return hit.ayahTranslation
+  }
+  return hit.translation || hit.ayahTranslation
 }

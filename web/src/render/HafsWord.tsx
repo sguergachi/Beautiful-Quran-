@@ -24,6 +24,8 @@ interface Props {
   isActiveAyah: boolean
   dimmed: boolean
   speed: number
+  /** When true, pulse the orange search-hit flash on this Arabic word. */
+  searchFlash?: boolean
   rootRef?: MutableRefObject<HTMLElement | null>
   onPlay: () => void
   onHold: () => void
@@ -46,6 +48,7 @@ export function HafsWord({
   isActiveAyah,
   dimmed,
   speed,
+  searchFlash = false,
   rootRef: externalRootRef,
   onPlay,
   onHold,
@@ -276,6 +279,15 @@ export function HafsWord({
         >
           {word.arabic}
         </span>
+        {searchFlash ? (
+          <span
+            className="hafs-search-flash-overlay hafs-glyph"
+            aria-hidden="true"
+            data-pulse="true"
+          >
+            {word.arabic}
+          </span>
+        ) : null}
       </span>
       {' '}
     </span>
