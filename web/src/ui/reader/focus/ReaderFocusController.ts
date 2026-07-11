@@ -1,6 +1,6 @@
 /**
  * DOM half of the focus engine — sole writer to the reader scroll container.
- * Pure maths stay in `engine/focus`; this class measures layout and scrolls.
+ * Pure maths stay in the sibling `FocusEngine`; this class measures layout and scrolls.
  *
  * Port of Android `ui/reader/focus/ReaderFocusController.kt` for a non-virtual
  * scroll element (all ayah blocks are in the DOM).
@@ -22,23 +22,14 @@ import {
   isChapterTopFocusTarget,
   type FocusPlacement,
   type TargetGeometry,
-} from '../../engine/focus'
-import { FAST_OUT_SLOW_IN } from '../motion/easing'
+} from './FocusEngine'
+import { FAST_OUT_SLOW_IN } from '../../motion/easing'
+import { wordBandDeltaPx } from './DomFocusMath'
 
-/**
- * Soft recitation-follow / verse-glide duration.
- * Slightly snappier than Android's 700 ms so next-verse feels responsive on
- * the web (especially mobile), while keeping the same FastOutSlowIn curve.
- */
-const GLIDE_MS = 520
+/** Android `ReaderFocusController.GLIDE_MS`. */
+const GLIDE_MS = 700
 /** Tall-verse word-band follow — snappier than a full verse glide. */
 const WORD_GLIDE_MS = 300
-/**
- * Hand-initiated jump durations from FocusEngine are scaled down a touch so
- * scroll-to-verse feels faster without changing the pure engine constants.
- */
-const JUMP_DURATION_SCALE = 0.82
-const JUMP_DURATION_FLOOR_MS = 200
 const ACTIVE_WORD_TOP_MARGIN_PX = 144
 const ACTIVE_WORD_BOTTOM_MARGIN_PX = 132
 
@@ -132,10 +123,7 @@ export class ReaderFocusController {
     if (!el) return { zone: FocusZone.IN_FOCUS, distancePx: 0 }
     const geom = this.geometryOf(ayahNumber)
     if (!geom) {
-      return {
-        zone: FocusZone.BELOW,
-        distancePx: 0,
-      }
+      return { zone: FocusZone.IN_FOCUS, distancePx: 0 }
     }
     return FocusEngine.placement(geom, el.clientHeight, this.topGuardPx)
   }
@@ -362,7 +350,7 @@ export class ReaderFocusController {
     if (!el) return 0
     const parentRect = el.getBoundingClientRect()
     const rect = wordEl.getBoundingClientRect()
-    return FocusEngine.wordBandDeltaPx(
+    return wordBandDeltaPx(
       rect.top - parentRect.top,
       rect.bottom - parentRect.top,
       el.clientHeight,
@@ -384,7 +372,7 @@ export class ReaderFocusController {
     if (!el) return 0
     const topPx = contentTop - el.scrollTop
     const bottomPx = contentBottom - el.scrollTop
-    return FocusEngine.wordBandDeltaPx(
+    return wordBandDeltaPx(
       topPx,
       bottomPx,
       el.clientHeight,
@@ -392,10 +380,6 @@ export class ReaderFocusController {
       ACTIVE_WORD_TOP_MARGIN_PX,
       ACTIVE_WORD_BOTTOM_MARGIN_PX,
     )
-  }
-
-  private jumpDurationMs(planMs: number): number {
-    return Math.max(JUMP_DURATION_FLOOR_MS, Math.round(planMs * JUMP_DURATION_SCALE))
   }
 
   private async focusLocked(
@@ -461,7 +445,7 @@ export class ReaderFocusController {
         }
         return
       }
-      await this.animateHomeOnto(ayahNumber, this.jumpDurationMs(plan.durationMs), epoch)
+      await this.animateHomeOnto(ayahNumber, plan.durationMs, epoch)
       return
     }
 

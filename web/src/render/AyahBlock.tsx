@@ -1,7 +1,8 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { ActiveWord, Ayah } from '../data/models'
 import type { ReadingMode } from '../data/settings'
-import { ayahTranslationAlpha } from '../engine/ink'
+import { InkEngine, InkState } from '../ui/reader/InkEngine'
+import { ayahTranslationAlpha } from '../ui/reader/WordHighlight'
 import { toArabicIndic } from '../util/digits'
 import { WordUnit } from './WordUnit'
 import { HafsWord } from './HafsWord'
@@ -65,6 +66,12 @@ function AyahBlockInner({
   // Ayah mark opacity is CSS-driven via `.scroll[data-reciting]` (paint-phase
   // recess) — no inline style so play/pause does not thrash every verse.
   const words = useMemo(() => ayah.words, [ayah.words])
+  // Derive ink policy once for the ayah, matching Android AyahBlock. The
+  // renderer branches consume these decisions and never reinterpret playback.
+  const activeSweepMs = InkEngine.sweepMs(activeWord, speed)
+  const inks = words.map((word) =>
+    InkEngine.word(word.position, activeWord, isActiveAyah, dimmed),
+  )
   const activeWordRef = useRef<HTMLElement | null>(null)
   const [hovered, setHovered] = useState(false)
   const query = searchQuery?.toLowerCase() ?? null
@@ -102,62 +109,56 @@ function AyahBlockInner({
 
       {arabicOnly ? (
         <p className="hafs-ayah" dir="rtl">
-          {words.map((w) => (
-            <HafsWord
-              key={w.position}
-              word={w}
-              activeWord={isActiveAyah ? activeWord : null}
-              isActiveAyah={isActiveAyah}
-              dimmed={dimmed}
-              speed={speed}
-              searchFlash={flashWordPosition === w.position}
-              rootRef={
-                isActiveAyah && activeWord?.wordPosition === w.position
-                  ? activeWordRef
-                  : undefined
-              }
-              onPlay={() => onPlayWord(ayah.number, w.position)}
-              onHold={() =>
-                onHoldWord(ayah.number, w.position, w.arabic, w.translation)
-              }
-              onContextMenu={(e) => {
-                e.preventDefault()
-                onHoldWord(ayah.number, w.position, w.arabic, w.translation)
-              }}
-            />
-          ))}
+          {words.map((w, index) => {
+            const ink = inks[index]!
+            return (
+              <HafsWord
+                key={w.position}
+                word={w}
+                ink={ink}
+                sweepMs={ink.state === InkState.Active ? activeSweepMs : null}
+                searchFlash={flashWordPosition === w.position}
+                rootRef={ink.state === InkState.Active ? activeWordRef : undefined}
+                onPlay={() => onPlayWord(ayah.number, w.position)}
+                onHold={() =>
+                  onHoldWord(ayah.number, w.position, w.arabic, w.translation)
+                }
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  onHoldWord(ayah.number, w.position, w.arabic, w.translation)
+                }}
+              />
+            )
+          })}
           <span className="ayah-mark">﴿{toArabicIndic(ayah.number)}﴾</span>
         </p>
       ) : (
         <div className="words" dir={englishOnly ? 'ltr' : 'rtl'} data-lyric={englishOnly ? 'english' : 'arabic'}>
-          {words.map((w) => (
-            <WordUnit
-              key={w.position}
-              word={w}
-              activeWord={isActiveAyah ? activeWord : null}
-              isActiveAyah={isActiveAyah}
-              dimmed={dimmed}
-              showGloss={!englishOnly && showWordGloss}
-              showTransliteration={showTransliteration}
-              englishMode={englishOnly}
-              searchHit={hits(w.translation)}
-              searchFlash={flashWordPosition === w.position}
-              speed={speed}
-              rootRef={
-                isActiveAyah && activeWord?.wordPosition === w.position
-                  ? activeWordRef
-                  : undefined
-              }
-              onPlay={() => onPlayWord(ayah.number, w.position)}
-              onHold={() =>
-                onHoldWord(ayah.number, w.position, w.arabic, w.translation)
-              }
-              onContextMenu={(e) => {
-                e.preventDefault()
-                onHoldWord(ayah.number, w.position, w.arabic, w.translation)
-              }}
-            />
-          ))}
+          {words.map((w, index) => {
+            const ink = inks[index]!
+            return (
+              <WordUnit
+                key={w.position}
+                word={w}
+                ink={ink}
+                sweepMs={ink.state === InkState.Active ? activeSweepMs : null}
+                showGloss={!englishOnly && showWordGloss}
+                showTransliteration={showTransliteration}
+                englishMode={englishOnly}
+                searchHit={hits(w.translation)}
+                searchFlash={flashWordPosition === w.position}
+                rootRef={ink.state === InkState.Active ? activeWordRef : undefined}
+                onPlay={() => onPlayWord(ayah.number, w.position)}
+                onHold={() =>
+                  onHoldWord(ayah.number, w.position, w.arabic, w.translation)
+                }
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  onHoldWord(ayah.number, w.position, w.arabic, w.translation)
+                }}
+              />
+            )
+          })}
           <span className="ayah-mark">﴿{toArabicIndic(ayah.number)}﴾</span>
         </div>
       )}
@@ -202,4 +203,3 @@ export const AyahBlock = memo(AyahBlockInner, (prev, next) => {
     prev.flashWordPosition === next.flashWordPosition
   )
 })
-

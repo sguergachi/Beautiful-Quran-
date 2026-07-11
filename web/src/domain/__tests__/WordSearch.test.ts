@@ -8,15 +8,11 @@ import {
   matchWordSearchAsync,
   normalizeArabicForSearch,
   parseAyahReference,
-  SearchHitFlash,
-  searchHitFlashCycleMs,
-  searchHitFlashTotalMs,
   sectionWordSearchHits,
   shouldRunWordSearch,
   type WordSearchIndexEntry,
   type WordSearchHit,
-} from '../wordSearch'
-import { getTuning } from '../ink'
+} from '../WordSearch'
 
 function entry(
   surahId: number,
@@ -206,15 +202,5 @@ describe('filterSurahs', () => {
       surahs: [surahs[1]],
       ayahTarget: 255,
     })
-  })
-})
-
-describe('SearchHitFlash', () => {
-  it('pulses reuse the ink-engine repeat wash timings', () => {
-    const tuning = getTuning()
-    const cycle = searchHitFlashCycleMs()
-    expect(SearchHitFlash.PULSES).toBe(2)
-    expect(cycle).toBe(tuning.repeatSweepMs + tuning.repeatFadeOutMs)
-    expect(searchHitFlashTotalMs()).toBe(cycle * SearchHitFlash.PULSES)
   })
 })

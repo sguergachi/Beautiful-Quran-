@@ -1,5 +1,0 @@
-export * from './highlight'
-export * from './focus'
-export * from './ink'
-export * from './fade'
-export * from './basmalah'

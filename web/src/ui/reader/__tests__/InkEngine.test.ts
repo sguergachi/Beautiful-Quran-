@@ -11,13 +11,10 @@ import {
   prefaceState,
   prefaceWashProgress,
   PREFACE_WASH_SETTLE_FRACTION,
-  wordFadeAlpha,
-  secondaryAlpha,
-  ayahTranslationAlpha,
   inkAlpha,
   getTuning,
-} from '../ink'
-import type { ActiveWord } from '../../data/models'
+} from '../InkEngine'
+import type { ActiveWord } from '../../../data/models'
 
 function active(
   wordPosition: number,
@@ -116,6 +113,7 @@ describe('InkEngine', () => {
     expect(sweepMs(active(1, 600), 1)).toBe(600)
     expect(sweepMs(active(1, 600), 2)).toBe(300)
     expect(sweepMs(active(1, 600), 0.5)).toBe(1200)
+    expect(sweepMs(active(1, 601), 1.5)).toBe(400)
   })
 
   it('sweep clamps to the tuned floor and ceiling', () => {
@@ -153,7 +151,7 @@ describe('InkEngine', () => {
   it('calligraphy wash follows the lead-in playback clock', () => {
     expect(prefaceWashProgress(0, 5000)).toBe(0)
     expect(prefaceWashProgress(100, 0)).toBe(0)
-    const settleAt = Math.round(5000 * PREFACE_WASH_SETTLE_FRACTION)
+    const settleAt = Math.trunc(5000 * PREFACE_WASH_SETTLE_FRACTION)
     expect(prefaceWashProgress(settleAt / 2, 5000)).toBeCloseTo(0.5, 2)
     expect(prefaceWashProgress(settleAt, 5000)).toBe(1)
     expect(prefaceWashProgress(5000, 5000)).toBe(1)
@@ -161,24 +159,4 @@ describe('InkEngine', () => {
     expect(settleAt).toBeLessThan(5000)
   })
 
-  it('wordFadeAlpha lerps upcoming to full with sweep progress', () => {
-    const upcoming = getTuning().upcomingAlpha
-    expect(wordFadeAlpha(0)).toBeCloseTo(upcoming, 5)
-    expect(wordFadeAlpha(1)).toBe(1)
-    expect(wordFadeAlpha(0.5)).toBeCloseTo(upcoming + (1 - upcoming) * 0.5, 5)
-  })
-
-  it('secondaryAlpha tracks the sweep only while active and not repeating', () => {
-    const upcoming = getTuning().upcomingAlpha
-    expect(secondaryAlpha(InkState.Active, false, 0)).toBeCloseTo(upcoming, 5)
-    expect(secondaryAlpha(InkState.Active, false, 1)).toBe(1)
-    expect(secondaryAlpha(InkState.Active, true, 0)).toBe(1)
-    expect(secondaryAlpha(InkState.Upcoming, false, 1)).toBe(upcoming)
-    expect(secondaryAlpha(InkState.Recited, false, 0)).toBe(1)
-  })
-
-  it('ayah translation recesses with upcoming ink when dimmed', () => {
-    expect(ayahTranslationAlpha(false)).toBeCloseTo(0.66, 5)
-    expect(ayahTranslationAlpha(true)).toBeCloseTo(0.66 * getTuning().upcomingAlpha, 5)
-  })
 })

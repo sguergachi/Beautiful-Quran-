@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { animate, type AnimationPlaybackControls } from 'motion'
-import { washMaskImage } from '../../engine/fade'
+import { washMaskImage } from '../theme/Fade'
 import { coverLayout, coverLayoutCssVars } from './coverLayout'
 
 const ISTIADHA_ARABIC = 'أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَٰنِ ٱلرَّجِيمِ'

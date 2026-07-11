@@ -18,7 +18,7 @@ import {
   WORD_SEARCH_PREVIEW_LIMIT,
   type SurahWordSearchSection,
   type WordSearchHit,
-} from '../../engine/wordSearch'
+} from '../../domain/WordSearch'
 import type { StackLayer } from '../paper/stack'
 
 export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {

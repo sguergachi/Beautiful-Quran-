@@ -3,6 +3,9 @@
  */
 
 /** smootherstep (6t⁵−15t⁴+10t³): zero first and second derivative at both ends. */
+export const INK_PROFILE_STOPS = 9
+export const INK_WASH_FEATHER = 1.6
+
 export function inkSmootherstep(t: number): number {
   const c = t < 0 ? 0 : t > 1 ? 1 : t
   return c * c * c * (c * (c * 6 - 15) + 10)
@@ -17,7 +20,7 @@ export function inkWashAlpha(
   progress: number,
   restingAlpha: number,
   rtl: boolean,
-  feather = 1.6,
+  feather = INK_WASH_FEATHER,
 ): number {
   const p = Math.min(1, Math.max(0, progress))
   if (p >= 1) return 1
@@ -47,8 +50,8 @@ export function washMaskImage(
   progress: number,
   restingAlpha: number,
   rtl: boolean,
-  feather = 1.6,
-  stopCount = 17,
+  feather = INK_WASH_FEATHER,
+  stopCount = INK_PROFILE_STOPS,
 ): string {
   const p = Math.min(1, Math.max(0, progress))
   if (p >= 1) return 'none'
@@ -71,8 +74,8 @@ export function paperCoverMaskImage(
   progress: number,
   restingAlpha: number,
   rtl: boolean,
-  feather = 1.6,
-  stopCount = 17,
+  feather = INK_WASH_FEATHER,
+  stopCount = INK_PROFILE_STOPS,
 ): string {
   const p = Math.min(1, Math.max(0, progress))
   if (p >= 1) return 'none'

@@ -1,10 +1,11 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { AyahBlock } from '../../render/AyahBlock'
 import { BasmalahCalligraphy } from '../../render/BasmalahCalligraphy'
-import { prefaceState } from '../../engine/ink'
-import { isAway, playbackFocusTarget, pointUp } from '../../engine/focus'
+import { getTuning, prefaceState } from './InkEngine'
+import { TRANSLITERATION_COLOR_ALPHA } from './WordHighlight'
+import { isAway, playbackFocusTarget, pointUp } from './focus/FocusEngine'
 import { ReturnToAyahButton } from './ReturnToAyahButton'
-import { surahOpensWithBasmalahPreface } from '../../engine/basmalah'
+import { surahOpensWithBasmalahPreface } from '../../domain/Basmalah'
 import {
   appStore,
   useAppState,
@@ -31,12 +32,12 @@ import { AyahSelectorRail } from './AyahSelectorRail'
 import { OrnateSurahTitle } from './OrnateSurahTitle'
 import { PageBreak } from './PageBreak'
 import { buildReaderItems } from './readerItems'
-import { ReaderFocusController } from './ReaderFocusController'
+import { ReaderFocusController } from './focus/ReaderFocusController'
 import { selectedPlaybackAyah } from './selectedPlaybackAyah'
 import { shouldPauseFollowOnDrag } from './followGesture'
 import { isRecitingSession } from './recitingActive'
 import { RootViewer } from '../root/RootViewer'
-import { SearchHitFlash, searchHitFlashTotalMs } from '../../engine/wordSearch'
+import { SearchHitFlash, searchHitFlashTotalMs } from './SearchHitFlash'
 
 /** Usable in-surah query — mirrors Android `SurahSearchState.activeQuery`. */
 function activeSearchQuery(active: boolean, query: string): string | null {
@@ -65,6 +66,7 @@ function Rosette() {
 
 export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const state = useAppState()
+  const inkTuning = getTuning()
   const content = state.content
   const scrollRef = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLElement>(null)
@@ -691,6 +693,13 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
               className="scroll"
               ref={scrollRef}
               data-reciting={recitingActive || undefined}
+              style={{
+                ['--upcoming-alpha' as string]: String(inkTuning.upcomingAlpha),
+                ['--ink-fade-ms' as string]: `${inkTuning.inkFadeMs}ms`,
+                ['--ayah-mark-fade-ms' as string]: `${inkTuning.ayahMarkFadeMs}ms`,
+                ['--recess-ms' as string]: `${inkTuning.recessMs}ms`,
+                ['--translit-alpha' as string]: String(TRANSLITERATION_COLOR_ALPHA),
+              }}
             >
               <header className="surah-header" ref={headerRef}>
                 <Rosette />

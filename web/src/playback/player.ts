@@ -16,7 +16,7 @@ import {
   type Reciter,
   type SurahContent,
 } from '../data/models'
-import { BASMALAH_PLAYLIST_AYAH, surahOpensWithBasmalahPreface } from '../engine/basmalah'
+import { BASMALAH_PLAYLIST_AYAH, surahOpensWithBasmalahPreface } from '../domain/Basmalah'
 import { AudioPrefetcher } from './audioPrefetch'
 import { peekPlaylistNextIndex } from './playlistNext'
 

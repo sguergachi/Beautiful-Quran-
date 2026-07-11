@@ -17,9 +17,14 @@ import {
   type Bookmark,
   type Settings,
 } from '../data/settings'
-import { HighlightEngine, PreparedTimings } from '../engine/highlight'
-import { BASMALAH_PLAYLIST_AYAH } from '../engine/basmalah'
+import { HighlightEngine, PreparedTimings } from '../domain/HighlightEngine'
+import { BASMALAH_PLAYLIST_AYAH } from '../domain/Basmalah'
+import { HighlightClock } from '../domain/HighlightClock'
 import { player, type PlayerState } from '../playback/player'
+import {
+  readerHighlightKey,
+  readerHighlightState,
+} from '../ui/reader/ReaderHighlightState'
 import {
   COVER_LAYER,
   READER_LAYER,
@@ -89,9 +94,6 @@ export interface AppState {
 
 type Listener = () => void
 
-/** Android `ReaderViewModel.FADE_LEAD_MS` — anticipatory next-ayah ink/focus. */
-const FADE_LEAD_MS = 500
-
 function deriveSheet(stackLayer: StackLayer, hasReader: boolean): Sheet {
   return sheetAtLayer(stackLayer, hasReader)
 }
@@ -101,6 +103,7 @@ class AppStore {
   private prepared = new Map<number, PreparedTimings>()
   private lastActiveKey = ''
   private lastEmitKey = ''
+  private readonly highlightClock = new HighlightClock()
 
   state: AppState = {
     ready: false,
@@ -618,52 +621,25 @@ class AppStore {
       return
     }
 
-    const activeBasmalah = np.ayah === BASMALAH_PLAYLIST_AYAH
-    let activeAyah: number | null = activeBasmalah ? null : np.ayah
-    if (
-      !activeBasmalah &&
-      ps.isPlaying &&
-      activeAyah != null &&
-      ps.durationMs > 0
-    ) {
-      const remaining = ps.durationMs - ps.positionMs
-      const ayahCount = this.state.content?.surah.ayahCount ?? 0
-      const range = ps.repeatRange
-      if (
-        remaining >= 0 &&
-        remaining <= FADE_LEAD_MS &&
-        activeAyah < ayahCount &&
-        !(range && activeAyah >= range.last)
-      ) {
-        activeAyah = activeAyah + 1
-      }
-    }
-
-    let activeWord: ActiveWord | null = null
-    if (!activeBasmalah && np.ayah > 0) {
-      const prepared = this.prepared.get(np.ayah)
-      const info = prepared?.activeInfo(ps.positionMs)
-      if (info) {
-        activeWord = {
-          ayah: np.ayah,
-          wordPosition: info.position,
-          // Karaoke hold lifetime — sweep finishes as the next word lights.
-          durationMs: Math.max(0, info.holdEndMs - info.startMs),
-          isRepeat: info.isRepeat,
-          highWater: info.highWater,
-          repeatStart: info.repeatStart,
-        }
-      }
-    }
-
-    const key = `${activeAyah}:${activeWord?.wordPosition ?? '-'}:${activeWord?.isRepeat ?? false}:${activeBasmalah}`
+    const mediaKey = `${np.surahId}:${np.ayah}:${np.reciterId}`
+    const positionMs = this.highlightClock.sample(mediaKey, ps.positionMs)
+    const next = readerHighlightState(
+      {
+        ayah: np.ayah,
+        positionMs,
+        durationMs: ps.durationMs,
+        isPlaying: ps.isPlaying,
+        ayahCount: this.state.content?.surah.ayahCount ?? 0,
+        repeatRange: ps.repeatRange,
+      },
+      this.prepared.get(np.ayah),
+    )
+    const key = readerHighlightKey(next)
     if (key === this.lastActiveKey) return
     this.lastActiveKey = key
     this.state = {
       ...this.state,
-      activeWord,
-      activeAyah,
-      activeBasmalah,
+      ...next,
     }
   }
 }

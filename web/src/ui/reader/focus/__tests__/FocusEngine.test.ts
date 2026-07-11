@@ -6,7 +6,7 @@ import {
   pointUp,
   type TargetGeometry,
   type ReadoutSnapshot,
-} from '../focus'
+} from '../FocusEngine'
 
 const viewport = 2000
 const guard = 0
@@ -184,6 +184,13 @@ describe('FocusEngine', () => {
     expect(FocusEngine.shouldTeleport(40, 5)).toBe(true)
   })
 
+  it('next verse across a page divider stays near — no teleport', () => {
+    expect(FocusEngine.shouldTeleport(2, 1)).toBe(false)
+    const plan = FocusEngine.planJump(10, 12, 1, 100)
+    expect(plan.doorstepIndex).toBeNull()
+    expect(plan.animatedItemSpan).toBe(2)
+  })
+
   it('near jump animates the full path with no doorstep', () => {
     const plan = FocusEngine.planJump(0, 4, 5, 200)
     expect(plan.doorstepIndex).toBeNull()
@@ -272,22 +279,4 @@ describe('FocusEngine', () => {
     expect(FocusEngine.homeScrollStep(0, 0.5, 0.2)).toBe(0)
   })
 
-  it('word band delta is zero when the word already sits in the band', () => {
-    expect(FocusEngine.wordBandDeltaPx(160, 190, 800, 0, 144, 132)).toBe(0)
-  })
-
-  it('word band delta scrolls up when the word is above the band', () => {
-    // Word top at 40, band top at 144 → need to scroll up by -104.
-    expect(FocusEngine.wordBandDeltaPx(40, 70, 800, 0, 144, 132)).toBe(40 - 144)
-  })
-
-  it('word band delta scrolls down when the word is below the band', () => {
-    // Viewport 800, bottom margin 132 → band bottom 668. Word bottom 720 → +52.
-    expect(FocusEngine.wordBandDeltaPx(690, 720, 800, 0, 144, 132)).toBe(720 - (800 - 132))
-  })
-
-  it('word band delta respects the top guard', () => {
-    // Guard 50 → band top 194. Word at 100 → scroll up by -94.
-    expect(FocusEngine.wordBandDeltaPx(100, 130, 800, 50, 144, 132)).toBe(100 - (50 + 144))
-  })
 })

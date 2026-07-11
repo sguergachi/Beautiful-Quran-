@@ -92,18 +92,7 @@ export interface ActiveWord {
   ayah: number
   wordPosition: number
   durationMs: number
-  isRepeat?: boolean
-  highWater?: number
-  repeatStart?: number
-}
-
-export function normalizeActiveWord(w: ActiveWord): Required<ActiveWord> {
-  return {
-    ayah: w.ayah,
-    wordPosition: w.wordPosition,
-    durationMs: w.durationMs,
-    isRepeat: w.isRepeat ?? false,
-    highWater: w.highWater ?? w.wordPosition,
-    repeatStart: w.repeatStart ?? w.wordPosition,
-  }
+  isRepeat: boolean
+  highWater: number
+  repeatStart: number
 }
