@@ -73,7 +73,6 @@ export interface AppState {
   activeAyah: number | null
   activeBasmalah: boolean
   hasTimings: boolean
-  chromeReceded: boolean
   rootViewer: RootViewerState | null
   /** True while the ink-bleed exit hole is animating; data stays until it ends. */
   rootViewerClosing: boolean
@@ -113,7 +112,6 @@ class AppStore {
     activeAyah: null,
     activeBasmalah: false,
     hasTimings: false,
-    chromeReceded: false,
     rootViewer: null,
     rootViewerClosing: false,
     followEnabled: true,
@@ -122,10 +120,12 @@ class AppStore {
   constructor() {
     player.subscribe((ps) => {
       const prev = this.state.player
-      this.state = { ...this.state, player: ps, chromeReceded: ps.isPlaying }
+      this.state = { ...this.state, player: ps }
       this.recomputeActive(ps)
 
       // Emit only on UI-visible changes — not every 33 ms position tick.
+      // Chrome recess is derived in ReaderScreen from debounced recitingActive
+      // (not raw isPlaying) so ayah joins do not flash the faded chrome.
       const emitKey = [
         ps.isPlaying,
         ps.isBuffering,
@@ -134,7 +134,6 @@ class AppStore {
         ps.repeatMode,
         ps.error ?? '',
         this.lastActiveKey,
-        this.state.chromeReceded,
       ].join('|')
       if (emitKey !== this.lastEmitKey) {
         this.lastEmitKey = emitKey
