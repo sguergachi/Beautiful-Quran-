@@ -140,6 +140,18 @@ export function prefaceWashProgress(positionMs: number, durationMs: number): num
   return Math.min(1, Math.max(0, positionMs / settleAt))
 }
 
+/**
+ * Advance the calligraphy wash without allowing a playlist clock reset to
+ * uncover ink that has already settled.
+ */
+export function advancePrefaceWashProgress(
+  previousProgress: number,
+  positionMs: number,
+  durationMs: number,
+): number {
+  return Math.max(previousProgress, prefaceWashProgress(positionMs, durationMs))
+}
+
 /** Fraction of the lead-in clip at which the SVG wash must be fully settled. */
 export const PREFACE_WASH_SETTLE_FRACTION = 0.88
 
@@ -158,6 +170,7 @@ export const InkEngine = {
   startRevealed,
   prefaceState,
   prefaceWashProgress,
+  advancePrefaceWashProgress,
   PREFACE_WASH_SETTLE_FRACTION,
   inkAlpha,
   resetTuning,

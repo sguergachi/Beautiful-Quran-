@@ -10,6 +10,7 @@ import {
   startRevealed,
   prefaceState,
   prefaceWashProgress,
+  advancePrefaceWashProgress,
   PREFACE_WASH_SETTLE_FRACTION,
   inkAlpha,
   getTuning,
@@ -157,6 +158,14 @@ describe('InkEngine', () => {
     expect(prefaceWashProgress(5000, 5000)).toBe(1)
     expect(prefaceWashProgress(settleAt + 1, 5000)).toBe(1)
     expect(settleAt).toBeLessThan(5000)
+  })
+
+  it('keeps a completed calligraphy wash settled across the playlist clock reset', () => {
+    const completed = advancePrefaceWashProgress(0, 4400, 5000)
+    expect(completed).toBe(1)
+
+    // Ayah 1 can take over before the active-preface React prop commits.
+    expect(advancePrefaceWashProgress(completed, 0, 7000)).toBe(1)
   })
 
 })
