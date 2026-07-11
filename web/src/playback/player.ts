@@ -1,5 +1,10 @@
 /**
- * Audio playback controller — HTMLAudioElement + Media Session.
+ * Audio playback controller — dual HTMLAudioElement + Media Session.
+ *
+ * One element plays the current ayah; the other preloads the next so verse
+ * joins do not stall on `src` assignment + network. [AudioPrefetcher] warms
+ * upcoming clips into Cache API / blob URLs ahead of the standby element.
+ *
  * Polls position for HighlightEngine; publishes only on word boundaries upstream.
  */
 import {
@@ -9,6 +14,8 @@ import {
   type SurahContent,
 } from '../data/models'
 import { BASMALAH_PLAYLIST_AYAH, surahOpensWithBasmalahPreface } from '../engine/basmalah'
+import { AudioPrefetcher } from './audioPrefetch'
+import { peekPlaylistNextIndex } from './playlistNext'
 
 export interface NowPlaying {
   surahId: number
@@ -40,8 +47,14 @@ const initial: PlayerState = {
   error: null,
 }
 
+/** HTMLMediaElement.HAVE_FUTURE_DATA — enough to start without an immediate stall. */
+const HAVE_FUTURE_DATA = 3
+
 export class PlayerController {
-  private audio = new Audio()
+  /** Active playback element (swaps with [standby] on ayah joins). */
+  private active: HTMLAudioElement
+  /** Preloaded next-ayah element. */
+  private standby: HTMLAudioElement
   private state: PlayerState = { ...initial }
   private listeners = new Set<Listener>()
   private playlist: { ayah: number; url: string }[] = []
@@ -50,18 +63,48 @@ export class PlayerController {
   private reciter: Reciter | null = null
   private content: SurahContent | null = null
   private tickTimer: number | null = null
+  private readonly prefetcher: AudioPrefetcher
+  /** Playlist index the standby element is prepared for, or -1. */
+  private standbyIndex = -1
+  private prepareToken = 0
 
-  constructor() {
-    this.audio.preload = 'auto'
+  constructor(prefetcher: AudioPrefetcher = new AudioPrefetcher()) {
+    this.prefetcher = prefetcher
+    this.active = this.createAudio()
+    this.standby = this.createAudio()
+    this.bindAudio(this.active)
+    this.bindAudio(this.standby)
+  }
+
+  private createAudio(): HTMLAudioElement {
+    const audio = new Audio()
+    audio.preload = 'auto'
     // iOS / mobile: keep playback in-page (no fullscreen takeover).
-    this.audio.setAttribute('playsinline', 'true')
-    this.audio.setAttribute('webkit-playsinline', 'true')
-    ;(this.audio as HTMLAudioElement & { playsInline?: boolean }).playsInline = true
-    this.audio.addEventListener('timeupdate', () => this.onTime())
-    this.audio.addEventListener('ended', () => void this.onEnded())
-    this.audio.addEventListener('play', () => this.patch({ isPlaying: true, error: null }))
-    this.audio.addEventListener('pause', () => this.patch({ isPlaying: false }))
-    this.audio.addEventListener('error', () => {
+    audio.setAttribute('playsinline', 'true')
+    audio.setAttribute('webkit-playsinline', 'true')
+    ;(audio as HTMLAudioElement & { playsInline?: boolean }).playsInline = true
+    return audio
+  }
+
+  private bindAudio(audio: HTMLAudioElement) {
+    audio.addEventListener('timeupdate', () => {
+      if (audio !== this.active) return
+      this.onTime()
+    })
+    audio.addEventListener('ended', () => {
+      if (audio !== this.active) return
+      void this.onEnded()
+    })
+    audio.addEventListener('play', () => {
+      if (audio !== this.active) return
+      this.patch({ isPlaying: true, error: null })
+    })
+    audio.addEventListener('pause', () => {
+      if (audio !== this.active) return
+      this.patch({ isPlaying: false })
+    })
+    audio.addEventListener('error', () => {
+      if (audio !== this.active) return
       // Basmalah clip missing → skip into ayah 1 (Android parity).
       if (this.playlist[this.index]?.ayah === BASMALAH_PLAYLIST_AYAH) {
         void this.playIndex(this.index + 1)
@@ -69,8 +112,15 @@ export class PlayerController {
       }
       this.patch({ error: 'Audio failed to load', isPlaying: false })
     })
-    this.audio.addEventListener('loadedmetadata', () => {
-      this.patch({ durationMs: Math.round((this.audio.duration || 0) * 1000) })
+    audio.addEventListener('loadedmetadata', () => {
+      if (audio !== this.active) return
+      this.patch({ durationMs: Math.round((audio.duration || 0) * 1000) })
+    })
+    // When the active clip has buffered enough, kick standby prep (covers the
+    // case where playIndex raced ahead of prefetch).
+    audio.addEventListener('canplaythrough', () => {
+      if (audio !== this.active) return
+      void this.prepareStandby()
     })
   }
 
@@ -85,7 +135,7 @@ export class PlayerController {
   }
 
   get positionMs(): number {
-    return Math.round(this.audio.currentTime * 1000)
+    return Math.round(this.active.currentTime * 1000)
   }
 
   private patch(partial: Partial<PlayerState>) {
@@ -96,7 +146,7 @@ export class PlayerController {
   private onTime() {
     this.patch({
       positionMs: this.positionMs,
-      durationMs: Math.round((this.audio.duration || 0) * 1000),
+      durationMs: Math.round((this.active.duration || 0) * 1000),
     })
   }
 
@@ -114,6 +164,80 @@ export class PlayerController {
       clearTimeout(this.tickTimer)
       this.tickTimer = null
     }
+  }
+
+  private playlistUrls(): string[] {
+    return this.playlist.map((p) => p.url)
+  }
+
+  private schedulePrefetch() {
+    const urls = this.playlistUrls()
+    this.prefetcher.readAhead(urls, this.index)
+    void this.prepareStandby()
+  }
+
+  /**
+   * Load the next playlist item into the standby element (blob URL when warm).
+   * Safe to call repeatedly; superseded work is ignored via [prepareToken].
+   */
+  private async prepareStandby(): Promise<void> {
+    const nextIndex = this.peekNextIndex({ forStandby: true })
+    if (nextIndex == null) {
+      this.clearStandby()
+      return
+    }
+    if (this.standbyIndex === nextIndex && this.standby.readyState >= HAVE_FUTURE_DATA) {
+      return
+    }
+
+    const token = ++this.prepareToken
+    const item = this.playlist[nextIndex]!
+    // Kick Cache API / memory warm; prefer blob src when ready.
+    const blobSrc = await this.prefetcher.ensure(item.url)
+    if (token !== this.prepareToken) return
+
+    const src = blobSrc ?? item.url
+    if (this.standbyIndex === nextIndex && this.standbySrcMatches(src)) {
+      return
+    }
+
+    this.standby.pause()
+    this.standby.loop = false
+    this.standby.src = src
+    this.standby.playbackRate = this.state.speed
+    this.standby.load()
+    this.standbyIndex = nextIndex
+  }
+
+  private standbySrcMatches(src: string): boolean {
+    // HTMLAudioElement.src is absolute; compare against resolved currentSrc/src.
+    const current = this.standby.currentSrc || this.standby.src
+    return current === src || current.endsWith(src) || src.endsWith(current)
+  }
+
+  private clearStandby() {
+    this.prepareToken++
+    this.standbyIndex = -1
+    this.standby.pause()
+    this.standby.removeAttribute('src')
+    this.standby.load()
+  }
+
+  /**
+   * Next playlist index after the current item, honouring surah/range wrap.
+   * Returns null when playback should stop, or when ayah-repeat is looping
+   * the current clip (standby should stay empty).
+   */
+  private peekNextIndex(opts: { forStandby?: boolean } = {}): number | null {
+    return peekPlaylistNextIndex(
+      this.playlist.map((p) => p.ayah),
+      this.index,
+      {
+        repeatMode: this.state.repeatMode,
+        repeatRange: this.state.repeatRange,
+        forStandby: opts.forStandby,
+      },
+    )
   }
 
   /**
@@ -138,6 +262,12 @@ export class PlayerController {
       }
     }
     this.index = 0
+    this.clearStandby()
+    // Warm the chapter on unmetered / non-data-saver connections; always
+    // read-ahead the first few ayahs so the opening join is buffered.
+    const urls = this.playlistUrls()
+    this.prefetcher.warmSurah(urls)
+    this.prefetcher.readAhead(urls, -1) // include index 0 as "next" from -1
     void this.playIndex(0, /*autoplay*/ false)
     this.updateMediaSession()
   }
@@ -159,26 +289,54 @@ export class PlayerController {
       this.patch({ isPlaying: false })
       return
     }
+
+    // Fast path: standby already holds this index — swap and play immediately.
+    if (autoplay && this.standbyIndex === i && this.standby.readyState >= HAVE_FUTURE_DATA) {
+      this.swapToStandby()
+      this.index = i
+      this.publishNowPlaying()
+      this.active.loop = this.state.repeatMode === 'ayah'
+      this.active.playbackRate = this.state.speed
+      this.updateMediaSession()
+      try {
+        await this.active.play()
+        this.startTick()
+        this.schedulePrefetch()
+      } catch (e) {
+        this.patch({
+          error: e instanceof Error ? e.message : 'Playback blocked',
+          isPlaying: false,
+        })
+      }
+      return
+    }
+
     this.index = i
     const item = this.playlist[i]!
-    this.audio.src = item.url
-    this.audio.playbackRate = this.state.speed
-    this.patch({
-      nowPlaying: {
-        surahId: this.surahId,
-        ayah: item.ayah,
-        reciterId: this.reciter?.id ?? 0,
-      },
-      positionMs: 0,
-      durationMs: 0,
-      error: null,
-    })
+    const blobSrc = await this.prefetcher.ensure(item.url)
+    const src = blobSrc ?? this.prefetcher.resolveSrc(item.url)
+
+    this.active.pause()
+    this.active.loop = this.state.repeatMode === 'ayah'
+    this.active.src = src
+    this.active.playbackRate = this.state.speed
+    this.active.load()
+    this.publishNowPlaying()
     this.updateMediaSession()
+    this.schedulePrefetch()
+
     if (autoplay) {
       try {
-        await this.audio.play()
+        if (this.active.readyState < HAVE_FUTURE_DATA) {
+          await this.waitForCanPlay(this.active)
+        }
+        await this.active.play()
         this.startTick()
       } catch (e) {
+        if (this.playlist[this.index]?.ayah === BASMALAH_PLAYLIST_AYAH) {
+          void this.playIndex(this.index + 1)
+          return
+        }
         this.patch({
           error: e instanceof Error ? e.message : 'Playback blocked',
           isPlaying: false,
@@ -187,11 +345,69 @@ export class PlayerController {
     }
   }
 
+  private publishNowPlaying() {
+    const item = this.playlist[this.index]
+    this.patch({
+      nowPlaying: item
+        ? {
+            surahId: this.surahId,
+            ayah: item.ayah,
+            reciterId: this.reciter?.id ?? 0,
+          }
+        : null,
+      positionMs: 0,
+      durationMs: Math.round((this.active.duration || 0) * 1000),
+      error: null,
+    })
+  }
+
+  /** Promote standby → active; former active becomes the new standby. */
+  private swapToStandby() {
+    const prev = this.active
+    this.active = this.standby
+    this.standby = prev
+    this.standbyIndex = -1
+    // Reset the retired element so it can take the following ayah.
+    this.standby.pause()
+    this.standby.removeAttribute('src')
+    this.standby.load()
+  }
+
+  /**
+   * Resolve when [audio] can start, or immediately if already buffered.
+   * Rejects on error / empty src.
+   */
+  private waitForCanPlay(audio: HTMLAudioElement, timeoutMs = 15_000): Promise<void> {
+    if (audio.readyState >= HAVE_FUTURE_DATA) return Promise.resolve()
+    return new Promise((resolve, reject) => {
+      let settled = false
+      const finish = (ok: boolean, err?: Error) => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(timer)
+        audio.removeEventListener('canplay', onCanPlay)
+        audio.removeEventListener('error', onError)
+        if (ok) resolve()
+        else reject(err ?? new Error('Audio failed to load'))
+      }
+      const onCanPlay = () => finish(true)
+      const onError = () => finish(false, new Error('Audio failed to load'))
+      const timer = window.setTimeout(
+        () => finish(false, new Error('Audio buffer timeout')),
+        timeoutMs,
+      )
+      audio.addEventListener('canplay', onCanPlay)
+      audio.addEventListener('error', onError)
+      // readyState may have advanced between the check and listener attach.
+      if (audio.readyState >= HAVE_FUTURE_DATA) finish(true)
+    })
+  }
+
   async toggle() {
     if (!this.playlist.length) return
-    if (this.audio.paused) {
+    if (this.active.paused) {
       try {
-        await this.audio.play()
+        await this.active.play()
         this.startTick()
       } catch (e) {
         this.patch({
@@ -199,18 +415,18 @@ export class PlayerController {
         })
       }
     } else {
-      this.audio.pause()
+      this.active.pause()
     }
   }
 
   pause() {
-    this.audio.pause()
+    this.active.pause()
   }
 
   async play() {
     if (!this.playlist.length) return
     try {
-      await this.audio.play()
+      await this.active.play()
       this.startTick()
     } catch (e) {
       this.patch({ error: e instanceof Error ? e.message : 'Playback blocked' })
@@ -218,22 +434,11 @@ export class PlayerController {
   }
 
   async next() {
-    const next = this.index + 1
-    if (next >= this.playlist.length) {
-      if (this.state.repeatMode === 'surah') {
-        await this.playIndex(0, true)
-        return
-      }
-      this.audio.pause()
+    // Media-session / UI next always advances (ayah-repeat only loops on ended).
+    const next = this.peekNextIndex({ forStandby: false })
+    if (next == null) {
+      this.active.pause()
       this.patch({ isPlaying: false })
-      return
-    }
-    // Range repeat: wrap at end of range.
-    const range = this.state.repeatRange
-    const cur = this.playlist[this.index]?.ayah
-    if (range && cur != null && cur >= range.last) {
-      const firstIdx = this.playlist.findIndex((p) => p.ayah === range.first)
-      await this.playIndex(Math.max(0, firstIdx), true)
       return
     }
     await this.playIndex(next, true)
@@ -241,13 +446,13 @@ export class PlayerController {
 
   async prev() {
     if (this.positionMs > 2000) {
-      this.audio.currentTime = 0
+      this.active.currentTime = 0
       this.onTime()
       return
     }
     const prev = this.index - 1
     if (prev < 0) {
-      this.audio.currentTime = 0
+      this.active.currentTime = 0
       this.onTime()
       return
     }
@@ -255,23 +460,27 @@ export class PlayerController {
   }
 
   seekMs(ms: number) {
-    this.audio.currentTime = Math.max(0, ms / 1000)
+    this.active.currentTime = Math.max(0, ms / 1000)
     this.onTime()
   }
 
   setSpeed(speed: number) {
-    this.audio.playbackRate = speed
+    this.active.playbackRate = speed
+    this.standby.playbackRate = speed
     this.patch({ speed })
   }
 
   setRepeatMode(mode: PlayerState['repeatMode'], range: PlayerState['repeatRange'] = null) {
     this.patch({ repeatMode: mode, repeatRange: range })
-    this.audio.loop = mode === 'ayah'
+    this.active.loop = mode === 'ayah'
+    // Standby target may change when entering/leaving range or surah repeat.
+    void this.prepareStandby()
   }
 
   stop() {
-    this.audio.pause()
-    this.audio.removeAttribute('src')
+    this.active.pause()
+    this.active.removeAttribute('src')
+    this.clearStandby()
     this.playlist = []
     this.index = 0
     this.stopTick()
@@ -280,8 +489,9 @@ export class PlayerController {
 
   private async onEnded() {
     if (this.state.repeatMode === 'ayah') {
-      this.audio.currentTime = 0
-      await this.audio.play()
+      // Prefer native loop; this is a fallback if loop was unset.
+      this.active.currentTime = 0
+      await this.active.play()
       return
     }
     await this.next()

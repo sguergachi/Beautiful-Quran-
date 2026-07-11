@@ -160,8 +160,12 @@ mid-tier phones — measure first.
 - Playlist model: one clip per ayah (+ basmalah preface where applicable).
 - Poll `currentTime` at ~33 ms while playing; publish `ActiveWord` only on
   change (`distinctUntilChanged` equivalent).
-- Cache audio blobs in Cache API with a size cap (aim for hundreds of MB,
-  not necessarily Android’s 1 GB).
+- **Prefetch / buffering (Android parity):** `AudioPrefetcher` read-aheads the
+  next few ayahs into a dedicated Cache API store (`beautiful-quran-audio-v1`)
+  and in-memory blob URLs; `PlayerController` keeps a standby `<audio>`
+  element loaded with the next clip so verse joins do not stall on `src`
+  assignment. Whole-surah warm runs when the connection is not data-saver /
+  slow-2g. Soft caps: ~24 blob URLs in memory, ~200 Cache API entries.
 - Media Session metadata + play/pause/seek actions for lock-screen / OS
   controls where the browser allows.
 
@@ -301,7 +305,8 @@ sans.
 ### Phase 5 — Parity polish / cut line
 - ✅ Search within surah (reader top-bar icons + match navigation), floating
   home playback control, Media Session.
-- Prefetch next ayahs into Cache API.
+- ✅ Prefetch next ayahs into Cache API + dual `<audio>` standby so verse
+  joins do not stall (see `web/src/playback/audioPrefetch.ts`).
 - Visual QA against Android screenshots (`docs/ss*.png`).
 - CI: Vitest on every PR; optional Playwright on `master`.
 

@@ -29,7 +29,7 @@ copied from the Android app assets — no separate data pipeline.
 ```
 src/engine/     pure TS ports of HighlightEngine, FocusEngine, InkEngine, fade math
 src/data/       WASM SQLite (sql.js) over quran.db + settings/bookmarks
-src/playback/   HTMLAudioElement + Media Session + 33 ms position tick
+src/playback/   Dual HTMLAudioElement + Cache API prefetch + Media Session + 33 ms tick
 src/render/     WordUnit / HafsWord / AyahBlock (directional ink + paper-cover bloom)
 src/ui/         paper stack: Home | Reader | Settings + entrance cover + root viewer
                 ReaderFocusController keeps the playing ayah on its anchor
@@ -54,7 +54,8 @@ Engines are DOM-free and unit-tested against the Android JVM suites. See
   Bump `CACHE` in `public/sw.js` when changing that contract.
 - `sql.js`’s browser build requests `sql-wasm-browser.wasm` (copied into
   `public/` on `npm install`). Shipping only `sql-wasm.wasm` 404s on Pages.
-- Audio streams from everyayah.com and can be cached by the browser.
+- Audio streams from everyayah.com; upcoming ayahs are prefetched into the
+  Cache API and a standby `<audio>` element so verse joins stay gapless.
 - Click a word to play from there; right-click / long-press opens the Root Word Viewer.
 - Themes: Paper / Nightfall / Royal green (Settings).
 - Form controls use [Base UI](https://base-ui.com) primitives (`Select`,
