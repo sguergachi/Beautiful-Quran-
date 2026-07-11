@@ -113,7 +113,10 @@ private data class RenderedLineText(
 private fun rememberAyahMarkAlpha(focused: Boolean): State<Float> =
     animateFloatAsState(
         targetValue = if (focused) 1f else InkEngine.State.Upcoming.inkAlpha(),
-        animationSpec = tween(InkEngine.tuning.ayahMarkFadeMs),
+        animationSpec = tween(
+            InkEngine.tuning.ayahMarkFadeMs,
+            easing = InkEngine.sweepEasing,
+        ),
         label = "ayahMarkAlpha",
     )
 
@@ -159,7 +162,7 @@ private fun animatedInkAlpha(state: InkEngine.State): State<Float> =
         animationSpec = if (state == InkEngine.State.Active) {
             snap<Float>()
         } else {
-            tween(InkEngine.tuning.inkFadeMs)
+            tween(InkEngine.tuning.inkFadeMs, easing = InkEngine.sweepEasing)
         },
         label = "inkAlpha",
     )
@@ -632,7 +635,11 @@ private fun ResponsiveHafsAyah(
     // ink is already at full cover in the same frame Upcoming covers apply.
     val recessCover = animateFloatAsState(
         targetValue = if (dimmed) upcomingCover else 0f,
-        animationSpec = if (dimmed) tween(120) else snap(),
+        animationSpec = if (dimmed) {
+            tween(InkEngine.tuning.recessMs, easing = InkEngine.sweepEasing)
+        } else {
+            snap()
+        },
         label = "recessCover",
     )
     val style = ArabicWordStyle.merge(
@@ -898,6 +905,13 @@ fun AyahBlock(
     // Shared across gloss, English, and Arabic-only: mark sits at upcoming
     // ink while recessed, then fades up to full when this verse is in focus.
     val ayahMarkAlpha = rememberAyahMarkAlpha(focused = !dimmed)
+    // Translation recess matches word ink — animate at the call site so the
+    // composable always invokes animateFloatAsState (not inside a branch).
+    val translationAlpha = animateFloatAsState(
+        targetValue = if (dimmed) 0.66f * InkEngine.State.Upcoming.inkAlpha() else 0.66f,
+        animationSpec = tween(InkEngine.tuning.inkFadeMs, easing = InkEngine.sweepEasing),
+        label = "translationAlpha",
+    )
 
     // The ribbon is part of the verse block itself — same Box, same height —
     // so it never "follows" from a floating overlay. Text keeps the existing
@@ -998,8 +1012,6 @@ fun AyahBlock(
                 Spacer(Modifier.height(12.dp))
                 // Block alpha stays 1 while recessed (word-level dim); the
                 // translation still needs to recede with the verse.
-                val translationAlpha =
-                    if (dimmed) 0.66f * InkEngine.State.Upcoming.inkAlpha() else 0.66f
                 Text(
                     text = highlightMatches(
                         text = ayah.translation,
@@ -1011,7 +1023,7 @@ fun AyahBlock(
                         fontSize = MaterialTheme.typography.bodyLarge.fontSize * (0.9f + 0.1f * fontScale),
                         lineHeight = 26.sp,
                     ),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = translationAlpha),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = translationAlpha.value),
                     modifier = Modifier
                         .fillMaxWidth()
                         .quietClickable(onClick = onAyahClick),

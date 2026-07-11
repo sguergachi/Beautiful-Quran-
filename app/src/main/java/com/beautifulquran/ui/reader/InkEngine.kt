@@ -70,13 +70,15 @@ object InkEngine {
         /** Resting ink of an upcoming / recessed word. */
         val upcomingAlpha: Float = 0.22f,
         /** State tween between resting inks (Active snaps — see
-         *  ReaderComponents.animatedInkAlpha for why). */
-        val inkFadeMs: Int = 450,
+         *  ReaderComponents.animatedInkAlpha for why). Slow enough that the
+         *  play-start Plain→Upcoming recess reads as a breath, not a blink. */
+        val inkFadeMs: Int = 700,
         /** Fade of the ﴿N﴾ ayah mark up to full when its verse gains focus. */
-        val ayahMarkFadeMs: Int = 450,
+        val ayahMarkFadeMs: Int = 700,
         /** Softening applied when a verse leaves the lyric line and recedes
-         *  (Arabic-only paper cover; landing snaps). */
-        val recessMs: Int = 120,
+         *  (Arabic-only paper cover; landing snaps). Matched to [inkFadeMs]
+         *  so every reading mode recesses at the same pace. */
+        val recessMs: Int = 700,
         /** Letter-sweep duration clamps around the reciter's actual dwell. */
         val minSweepMs: Int = 140,
         val maxSweepMs: Int = 8_000,

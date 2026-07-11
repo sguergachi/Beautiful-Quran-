@@ -64,7 +64,7 @@ fun BasmalahCalligraphy(
         animationSpec = if (inkState == InkEngine.State.Active) {
             snap()
         } else {
-            tween(InkEngine.tuning.inkFadeMs)
+            tween(InkEngine.tuning.inkFadeMs, easing = InkEngine.sweepEasing)
         },
         label = "basmalahLyricInk",
     )
