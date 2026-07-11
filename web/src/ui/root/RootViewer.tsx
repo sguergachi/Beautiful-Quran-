@@ -1,13 +1,45 @@
-import { appStore, useAppState } from '../../store/appStore'
+import { useEffect } from 'react'
+import { appStore, useAppState, type RootViewerState } from '../../store/appStore'
 import { IconClose } from '../icons/PlaybackIcons'
 
+/** Exit hole duration — keep in sync with `.ink-bleed[data-closing]` in styles.css. */
+const BLEED_OUT_MS = 420
+
+/**
+ * Root lexicon overlay. Enter blooms with CSS `bleed-in` (circle clip expands);
+ * exit punches a hole open via `bleed-out` — same enter/exit pair as Android
+ * `InkRevealOverlay` — and stays mounted until the hole animation finishes.
+ */
 export function RootViewer() {
   const state = useAppState()
   const rv = state.rootViewer
+  const closing = state.rootViewerClosing
+
+  // Safety net if animationend is skipped (background tab, reduced motion, etc.).
+  useEffect(() => {
+    if (!closing) return
+    const t = window.setTimeout(() => appStore.finishCloseRootViewer(), BLEED_OUT_MS + 80)
+    return () => window.clearTimeout(t)
+  }, [closing])
+
   if (!rv) return null
 
+  return <RootViewerBleed closing={closing} rv={rv} />
+}
+
+function RootViewerBleed({ closing, rv }: { closing: boolean; rv: RootViewerState }) {
   return (
-    <div className="ink-bleed" style={{ ['--ox' as string]: '50%', ['--oy' as string]: '35%' }}>
+    <div
+      className="ink-bleed"
+      data-closing={closing ? 'true' : undefined}
+      style={{ ['--ox' as string]: '50%', ['--oy' as string]: '35%' }}
+      onAnimationEnd={(e) => {
+        if (e.target !== e.currentTarget) return
+        if (closing && e.animationName === 'bleed-out') {
+          appStore.finishCloseRootViewer()
+        }
+      }}
+    >
       <div className="ink-bleed-inner">
         <div className="ink-bleed-chrome">
           <button

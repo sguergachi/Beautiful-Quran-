@@ -241,14 +241,18 @@ elevation, borders; hierarchy via spacing / size / ink alpha; ink-bleed
 overlays for root viewer (and later system prompts). The root viewer bleed
 uses the same contrasting workbench as Android (`contrastingOverlayColorScheme`):
 **Royal Green** over Paper / Nightfall, and **Nightfall** when the reader is
-already Royal Green. Dismiss chrome is an icon (×), not a text label.
+already Royal Green. Dismiss chrome is an icon (×), not a text label. Enter
+blooms with an expanding circle clip; exit punches a hole open from the same
+origin (Android `InkRevealOverlay` punchHole), keeping the overlay mounted
+until the hole finishes.
 
 Ink wash uses the smootherstep mask from `fade.washMaskImage` (not a blunt
 3-stop wipe). Repeat orange is a second overlay that washes in and dissolves
 over `repeatFadeOutMs`.
 
 Motion: fade + slide only (≤ 420 ms), except chrome recede (900 ms) and
-far ayah jumps (up to 1000 ms via `FocusEngine.planJump`).
+far ayah jumps (up to 1000 ms via `FocusEngine.planJump`). The root-viewer
+ink bleed enter/exit pair is also 420 ms.
 
 Themes: Paper / Nightfall / Royal green — same tokens.
 

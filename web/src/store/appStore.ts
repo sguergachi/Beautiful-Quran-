@@ -74,6 +74,8 @@ export interface AppState {
   hasTimings: boolean
   chromeReceded: boolean
   rootViewer: RootViewerState | null
+  /** True while the ink-bleed exit hole is animating; data stays until it ends. */
+  rootViewerClosing: boolean
   followEnabled: boolean
 }
 
@@ -111,6 +113,7 @@ class AppStore {
     hasTimings: false,
     chromeReceded: false,
     rootViewer: null,
+    rootViewerClosing: false,
     followEnabled: true,
   }
 
@@ -180,7 +183,8 @@ class AppStore {
 
   /** Peel one sheet back (Settings → Reader → Chapters). */
   goBack() {
-    if (this.state.rootViewer) {
+    // Match Android: only consume back while the bleed is open (not mid-exit).
+    if (this.state.rootViewer && !this.state.rootViewerClosing) {
       this.closeRootViewer()
       return
     }
@@ -304,7 +308,9 @@ class AppStore {
       activeAyah: null,
       activeBasmalah: false,
       followEnabled: true,
-      rootViewer: null,
+      // Keep the bleed mounted so the exit hole can finish (Android InkReveal).
+      rootViewer: this.state.rootViewer,
+      rootViewerClosing: this.state.rootViewer != null ? true : false,
     })
   }
 
@@ -377,14 +383,23 @@ class AppStore {
     this.set({ followEnabled })
   }
 
+  /** Begin the exit hole-punch; content stays until [finishCloseRootViewer]. */
   closeRootViewer() {
-    this.set({ rootViewer: null })
+    if (!this.state.rootViewer || this.state.rootViewerClosing) return
+    this.set({ rootViewerClosing: true })
+  }
+
+  /** Drop root-viewer state after the bleed-out animation completes. */
+  finishCloseRootViewer() {
+    if (!this.state.rootViewer) return
+    this.set({ rootViewer: null, rootViewerClosing: false })
   }
 
   openRootViewer(surahId: number, ayah: number, position: number, arabic: string, translation: string) {
     const morph = QuranRepository.wordMorphology(surahId, ayah, position)
     if (!morph || !morph.root) {
       this.set({
+        rootViewerClosing: false,
         rootViewer: {
           surahId,
           ayah,
@@ -403,6 +418,7 @@ class AppStore {
     }
     const summary = QuranRepository.rootSummary(morph.root)
     this.set({
+      rootViewerClosing: false,
       rootViewer: {
         surahId,
         ayah,
