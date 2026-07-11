@@ -1131,6 +1131,9 @@ select {
   height: calc(var(--word-arabic-size) * var(--word-arabic-line));
   /* Match .word-unit padding-top so the box lines up with the glyph row. */
   margin-block-start: 0.2rem;
+  /* Hafs' ornament sits low inside its reported line box. Lift only its paint;
+     the fixed Arabic-line box above continues to own row alignment. */
+  transform: translateY(-0.22em);
 }
 
 /* English lyric: proportional ornament on the prose baseline. */
