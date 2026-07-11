@@ -10,6 +10,7 @@ import com.beautifulquran.data.model.Reciter
 import com.beautifulquran.data.model.Segment
 import com.beautifulquran.data.model.SurahContent
 import com.beautifulquran.domain.BASMALAH_PLAYLIST_AYAH
+import com.beautifulquran.domain.HighlightClock
 import com.beautifulquran.domain.HighlightEngine
 import com.beautifulquran.domain.SURAH_FATIHA
 import com.beautifulquran.domain.surahOpensWithBasmalahPreface
@@ -130,7 +131,18 @@ class ReaderViewModel(
             } else {
                 flow<T?> {
                     while (true) {
-                        emit(sample(k))
+                        // At an ayah handoff the controller's item (and its
+                        // position, already near zero) advances a beat before
+                        // [player.state] — and therefore this flow's key —
+                        // catches up. Sampling the stale key against the new
+                        // item's position bounces the value backward for one
+                        // tick, which the renderer amplifies into the word
+                        // flicker. Skip incoherent ticks; the key switches
+                        // within milliseconds and samples fresh.
+                        val live = player.liveNowPlaying
+                        val coherent = live == null ||
+                            live.takeIf { it.surahId == surahId }?.let(key) == k
+                        if (coherent) emit(sample(k))
                         // Position is frozen while paused; poll gently.
                         delay(if (player.state.value.isPlaying) TICK_MS else PAUSED_TICK_MS)
                     }
@@ -140,13 +152,17 @@ class ReaderViewModel(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(1_000), null)
 
+    /** Never lets sampling jitter bounce the highlight backward across a word
+     * boundary — the source of the random full → faint → wash word flicker. */
+    private val highlightClock = HighlightClock()
+
     /** Emits the active word ~30x/sec while this surah is playing, but only
      * publishes on change, so the UI recomposes once per word. The highlight
      * holds while paused (like a lyrics player); it only clears when this
      * surah stops being the loaded one. */
     val activeWord: StateFlow<ActiveWord?> = pollingWhileLoaded(key = { it }) { np ->
         preparedTimings[np.ayah]
-            ?.activeInfo(player.positionMs)
+            ?.activeInfo(highlightClock.sample(np, player.positionMs))
             ?.let {
                 ActiveWord(
                     ayah = np.ayah,

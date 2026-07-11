@@ -72,6 +72,17 @@ class PlayerController(private val context: Context) {
     val positionMs: Long
         get() = controller?.currentPosition ?: 0L
 
+    /**
+     * [NowPlaying] parsed straight from the controller's current media item.
+     *
+     * [state] is fed by listener callbacks, so for a beat after an item
+     * transition it can disagree with [positionMs], which already reads the
+     * new item. Reading this together with [positionMs] gives the highlight
+     * poll a coherent (item, position) pair.
+     */
+    val liveNowPlaying: NowPlaying?
+        get() = controller?.currentMediaItem?.mediaId?.let(::parseMediaId)
+
     /** Duration of the ayah currently loaded, or 0 while it is still unknown
      * (buffering / not prepared). Media3 reports an unset duration as a large
      * sentinel, so anything non-positive is treated as "not yet known". */

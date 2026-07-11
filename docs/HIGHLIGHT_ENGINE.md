@@ -162,6 +162,14 @@ Key points, detailed in [PERFORMANCE.md](PERFORMANCE.md) and
 - The lit word's `startMs`/`endMs` drive the letter-by-letter fade in the UI,
   which interpolates at the display's full refresh rate independently of the
   poll.
+- The poll never feeds the engine a *backward* step it didn't mean. Two guards
+  in `ReaderViewModel` protect it: `HighlightClock` holds the position clock
+  when `MediaController.currentPosition` extrapolation corrects backward by
+  less than a real seek (small regressions crossing a word boundary bounced
+  the active word for one tick — a random full → faint → wash flicker on the
+  word being recited), and `pollingWhileLoaded` skips ticks where the
+  controller has already moved to the next ayah's item but the flow's key
+  hasn't caught up (the same bounce at ayah handoff).
 
 ## Testing
 
