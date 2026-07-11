@@ -12,6 +12,40 @@ const viewport = 2000
 const guard = 0
 
 describe('FocusEngine', () => {
+  it('playback focus target is basmalah while the lead-in is active', () => {
+    expect(FocusEngine.playbackFocusTarget(null, true)).toBe(FocusEngine.CHAPTER_TOP_FOCUS_AYAH)
+    expect(FocusEngine.playbackFocusTarget(3, true)).toBe(FocusEngine.CHAPTER_TOP_FOCUS_AYAH)
+    expect(FocusEngine.playbackFocusTarget(5, false)).toBe(5)
+    expect(FocusEngine.playbackFocusTarget(null, false)).toBeNull()
+  })
+
+  it('chapter-top focus target is the playlist basmalah sentinel', () => {
+    expect(FocusEngine.isChapterTopFocusTarget(0)).toBe(true)
+    expect(FocusEngine.isChapterTopFocusTarget(FocusEngine.CHAPTER_TOP_FOCUS_AYAH)).toBe(true)
+    expect(FocusEngine.isChapterTopFocusTarget(1)).toBe(false)
+  })
+
+  it('chapter-top anchor pins near the content start even for a short header', () => {
+    const shortHeader = 300
+    const chapterTop = FocusEngine.anchorOffsetPx(viewport, guard, shortHeader, true)
+    const verseRest = FocusEngine.anchorOffsetPx(viewport, guard, shortHeader, false)
+    expect(chapterTop).toBe(80)
+    expect(verseRest).toBe(200)
+    expect(chapterTop).toBeLessThan(verseRest)
+  })
+
+  it('chapter-top placement is in focus when the header sits on its pin', () => {
+    const anchor = FocusEngine.anchorOffsetPx(viewport, guard, 400, true)
+    const placement = FocusEngine.placement(
+      { topPx: anchor, heightPx: 400, isLaidOut: true, isAboveWhenOffscreen: false },
+      viewport,
+      guard,
+      true,
+    )
+    expect(placement.zone).toBe(FocusZone.IN_FOCUS)
+    expect(isAway(placement)).toBe(false)
+  })
+
   it('a short verse rests below the reading margin, fully visible', () => {
     const shortVerse = 300
     const anchor = FocusEngine.anchorOffsetPx(viewport, guard, shortVerse)

@@ -87,6 +87,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ReadingMode
+import com.beautifulquran.domain.BASMALAH_PLAYLIST_AYAH
+import com.beautifulquran.ui.reader.focus.FocusEngine
 import com.beautifulquran.ui.reader.focus.rememberReaderFocusController
 import com.beautifulquran.ui.theme.FloatingPaperControl
 import com.beautifulquran.ui.theme.IslamicReturnToAyahButton
@@ -247,12 +249,22 @@ fun ReaderScreen(
         }
     }
 
-    // Maps between ayah numbers (1-based) and their slot in the lazy item list,
-    // so the focus engine can resolve either direction cheaply.
-    val itemIndexOfAyah = remember(readerItems) {
+    // Maps between focus targets and their slot in the lazy item list, so the
+    // focus engine can resolve either direction cheaply. Ayah numbers are
+    // 1-based; [BASMALAH_PLAYLIST_AYAH] (0) maps to the surah header when this
+    // chapter opens with a basmalah preface — the chapter-top focus target.
+    val itemIndexOfAyah = remember(readerItems, surahId) {
         buildMap {
             readerItems.forEachIndexed { index, item ->
-                if (item is LazyItem.AyahItem) put(item.ayahIndex + 1, index)
+                when (item) {
+                    LazyItem.Header -> {
+                        if (surahOpensWithBasmalahPreface(surahId)) {
+                            put(BASMALAH_PLAYLIST_AYAH, index)
+                        }
+                    }
+                    is LazyItem.AyahItem -> put(item.ayahIndex + 1, index)
+                    is LazyItem.PageDivider -> Unit
+                }
             }
         }
     }
@@ -307,12 +319,17 @@ fun ReaderScreen(
     // Reading by hand pauses the follow mode via pointerInput.
 
     val statusBarTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
-    // Where the reciting verse sits relative to its ideal focus, and whether it
-    // is taller than the screen — the return-to-verse control reads the former,
-    // the word-level follow gate reads the latter. Both watch layoutInfo, so
-    // they recompute only when their answer actually changes.
-    val activeAyahPlacement = remember(activeAyah) {
-        derivedStateOf { focusController.placementOf(activeAyah) }
+    // Where the reciting focus target sits relative to its ideal focus, and
+    // whether it is taller than the screen — the return-to-verse control reads
+    // the former, the word-level follow gate reads the latter. Both watch
+    // layoutInfo, so they recompute only when their answer actually changes.
+    // During the basmalah lead-in the target is the chapter-top header (ayah 0).
+    val playbackFocusTarget = FocusEngine.playbackFocusTarget(
+        activeAyah = activeAyah,
+        activeBasmalah = isThisSurahPlaying && activeBasmalah == true,
+    )
+    val activeAyahPlacement = remember(playbackFocusTarget) {
+        derivedStateOf { focusController.placementOf(playbackFocusTarget) }
     }
     val activeVerseExceedsViewport = remember(activeAyah) {
         derivedStateOf { focusController.exceedsViewport(activeAyah) }
@@ -355,23 +372,25 @@ fun ReaderScreen(
             .coerceIn(1, ayahCount)
     }
 
-    // Lyric-style auto scroll: the focus engine keeps the active ayah anchored
-    // (its whole body if it fits, its top pinned if it is taller than the
-    // screen — word-level following then carries the eye through a tall verse).
-    // The very first scroll after follow turns back on (return-to-verse, or
-    // pressing play from a scrolled-away spot) is a deliberate jump, so it gets
-    // the pre-roll slide; boundary-to-boundary tracking after that stays smooth.
+    // Lyric-style auto scroll: the focus engine keeps the active target
+    // anchored — a verse's whole body if it fits, its top pinned if taller than
+    // the screen, or the surah-header basmalah while the chapter-opening
+    // lead-in plays. Word-level following then carries the eye through a tall
+    // verse. The very first scroll after follow turns back on (return-to-verse,
+    // or pressing play from a scrolled-away spot) is a deliberate jump, so it
+    // gets the pre-roll slide; boundary-to-boundary tracking after that stays
+    // smooth.
     var followWasEnabled by remember { mutableStateOf(followEnabled) }
-    LaunchedEffect(activeAyah, followEnabled) {
-        val ayah = activeAyah ?: return@LaunchedEffect
-        viewModel.onAyahBecameActive(ayah)
+    LaunchedEffect(playbackFocusTarget, followEnabled) {
+        val target = playbackFocusTarget ?: return@LaunchedEffect
+        if (target >= 1) viewModel.onAyahBecameActive(target)
         if (!followEnabled) {
             followWasEnabled = false
             return@LaunchedEffect
         }
         val justEnabled = !followWasEnabled
         followWasEnabled = true
-        focusController.focus(ayah, animate = true, preRoll = justEnabled)
+        focusController.focus(target, animate = true, preRoll = justEnabled)
     }
 
     // Opening from "Continue listening": settle on the saved ayah once.
@@ -407,7 +426,8 @@ fun ReaderScreen(
     SideEffect {
         if (layoutSignature == lastLayoutSignature) {
             stickyAyah = when {
-                followEnabled && activeAyah != null -> activeAyah
+                followEnabled && playbackFocusTarget != null &&
+                    !FocusEngine.isChapterTopFocusTarget(playbackFocusTarget) -> playbackFocusTarget
                 else -> scrolledAyah.value
             }.coerceIn(1, lastAyahNumber)
         }
@@ -419,7 +439,10 @@ fun ReaderScreen(
             lastLayoutSignature = layoutSignature
             return@LaunchedEffect
         }
-        val pin = stickyAyah.coerceIn(1, lastAyahNumber)
+        val pin = when {
+            followEnabled && playbackFocusTarget != null -> playbackFocusTarget
+            else -> stickyAyah.coerceIn(1, lastAyahNumber)
+        }
         // Two frames + a short beat so sibling ayahs finish remasuring before
         // we glide against the final geometry (otherwise the home lands on a
         // height that is still shifting).

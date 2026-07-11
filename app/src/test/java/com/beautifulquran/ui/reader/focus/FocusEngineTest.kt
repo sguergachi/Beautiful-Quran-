@@ -11,6 +11,57 @@ class FocusEngineTest {
     private val viewport = 2000
     private val guard = 0
 
+    // ---- chapter-top basmalah ----
+
+    @Test
+    fun `playback focus target is basmalah while the lead-in is active`() {
+        assertEquals(
+            FocusEngine.CHAPTER_TOP_FOCUS_AYAH,
+            FocusEngine.playbackFocusTarget(activeAyah = null, activeBasmalah = true),
+        )
+        assertEquals(
+            FocusEngine.CHAPTER_TOP_FOCUS_AYAH,
+            FocusEngine.playbackFocusTarget(activeAyah = 3, activeBasmalah = true),
+        )
+        assertEquals(5, FocusEngine.playbackFocusTarget(activeAyah = 5, activeBasmalah = false))
+        assertEquals(null, FocusEngine.playbackFocusTarget(activeAyah = null, activeBasmalah = false))
+    }
+
+    @Test
+    fun `chapter-top focus target is the playlist basmalah sentinel`() {
+        assertTrue(FocusEngine.isChapterTopFocusTarget(0))
+        assertTrue(FocusEngine.isChapterTopFocusTarget(FocusEngine.CHAPTER_TOP_FOCUS_AYAH))
+        assertFalse(FocusEngine.isChapterTopFocusTarget(1))
+    }
+
+    @Test
+    fun `chapter-top anchor pins near the content start even for a short header`() {
+        val shortHeader = 300
+        val chapterTop = FocusEngine.anchorOffsetPx(
+            viewport, guard, shortHeader, chapterTop = true,
+        )
+        val verseRest = FocusEngine.anchorOffsetPx(
+            viewport, guard, shortHeader, chapterTop = false,
+        )
+        // Tall-margin pin (4%), not the verse-style 10% rest.
+        assertEquals(80, chapterTop)
+        assertEquals(200, verseRest)
+        assertTrue(chapterTop < verseRest)
+    }
+
+    @Test
+    fun `chapter-top placement is in focus when the header sits on its pin`() {
+        val anchor = FocusEngine.anchorOffsetPx(viewport, guard, 400, chapterTop = true)
+        val placement = FocusEngine.placement(
+            TargetGeometry(topPx = anchor, heightPx = 400, isLaidOut = true, isAboveWhenOffscreen = false),
+            viewport,
+            guard,
+            chapterTop = true,
+        )
+        assertEquals(FocusZone.IN_FOCUS, placement.zone)
+        assertFalse(placement.isAway)
+    }
+
     // ---- anchorOffsetPx ----
 
     @Test

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AyahBlock } from '../../render/AyahBlock'
 import { BasmalahCalligraphy } from '../../render/BasmalahCalligraphy'
 import { prefaceState, InkState } from '../../engine'
-import { isAway } from '../../engine/focus'
+import { isAway, playbackFocusTarget } from '../../engine/focus'
 import { surahOpensWithBasmalahPreface } from '../../engine/basmalah'
 import {
   appStore,
@@ -98,14 +98,15 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     const el = scrollRef.current
     if (!el || !content || !isTop) return
     const focus = focusRef.current
+    const focusTarget = playbackFocusTarget(state.activeAyah, state.activeBasmalah)
 
     const update = () => {
       const next = focus.focusedAyah()
       setFocusedAyah((prev) => (prev === next ? prev : next))
       setActiveExceedsViewport(focus.exceedsViewport(state.activeAyah))
 
-      if (state.activeAyah != null && !state.followEnabled) {
-        setShowReturn(isAway(focus.placementOf(state.activeAyah)))
+      if (focusTarget != null && !state.followEnabled) {
+        setShowReturn(isAway(focus.placementOf(focusTarget)))
       } else {
         setShowReturn(false)
       }
@@ -126,13 +127,14 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     el.addEventListener('scroll', onScroll, { passive: true })
     update()
     return () => el.removeEventListener('scroll', onScroll)
-  }, [content?.surah.id, state.activeAyah, state.followEnabled, isTop])
+  }, [content?.surah.id, state.activeAyah, state.activeBasmalah, state.followEnabled, isTop])
 
-  // Lyric-style auto-scroll: keep the active ayah on its adaptive anchor.
+  // Lyric-style auto-scroll: keep the active target on its adaptive anchor
+  // (verse, or chapter-top basmalah header while the lead-in plays).
   useEffect(() => {
     if (!isTop || !content) return
-    const ayah = state.activeAyah
-    if (ayah == null || !state.followEnabled) {
+    const target = playbackFocusTarget(state.activeAyah, state.activeBasmalah)
+    if (target == null || !state.followEnabled) {
       if (!state.followEnabled) followWasEnabled.current = false
       return
     }
@@ -140,14 +142,14 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     followWasEnabled.current = true
     programmaticScroll.current = true
     void focusRef.current
-      .focus(ayah, { animate: true, preRoll: justEnabled })
+      .focus(target, { animate: true, preRoll: justEnabled })
       .finally(() => {
         programmaticScroll.current = false
         setShowReturn(false)
         setFocusedAyah(focusRef.current.focusedAyah())
-        setActiveExceedsViewport(focusRef.current.exceedsViewport(ayah))
+        setActiveExceedsViewport(focusRef.current.exceedsViewport(state.activeAyah))
       })
-  }, [state.activeAyah, state.followEnabled, isTop, content?.surah.id])
+  }, [state.activeAyah, state.activeBasmalah, state.followEnabled, isTop, content?.surah.id])
 
   // Display reflow (font / mode / gloss) — re-home the pinned verse.
   const layoutReady = useRef(false)
@@ -157,9 +159,10 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       layoutReady.current = true
       return
     }
+    const focusTarget = playbackFocusTarget(state.activeAyah, state.activeBasmalah)
     const pin =
-      state.followEnabled && state.activeAyah != null
-        ? state.activeAyah
+      state.followEnabled && focusTarget != null
+        ? focusTarget
         : focusedAyah
     programmaticScroll.current = true
     void focusRef.current.focus(pin, { animate: true, preRoll: false }).finally(() => {
@@ -273,7 +276,11 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
         <div className="reader-main">
           <div className="edge-fade">
             <div className="scroll" ref={scrollRef}>
-              <header className="surah-header">
+              <header
+                className="surah-header"
+                data-chapter-top={showBasmalah ? 'true' : undefined}
+                id={showBasmalah ? 'ayah-0' : undefined}
+              >
                 <Rosette />
                 <h2>{content.surah.nameTransliteration}</h2>
                 <p className="ar-title">{content.surah.nameArabic}</p>
@@ -332,7 +339,8 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
             </div>
           </div>
 
-          {showReturn && state.activeAyah ? (
+          {showReturn &&
+          playbackFocusTarget(state.activeAyah, state.activeBasmalah) != null ? (
             <button
               type="button"
               className="return-ayah"
