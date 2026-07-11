@@ -52,6 +52,7 @@ private val STRIP_WIDTH = 44.dp
 
 private const val EDGE_INSET_DP = 8f    // from the block's outer edge
 private const val RIBBON_WIDTH_DP = 11f
+private const val TOP_INSET_DP = 24f    // align the tip with the verse's first ink line
 private const val NUB_LENGTH_DP = 14f   // just the swallowtail tip peeking out
 private const val BOTTOM_GAP_DP = 48f   // leave air above the next verse's tip
 private const val NOTCH_DP = 5.5f
@@ -192,6 +193,7 @@ internal fun VerseBookmarkRibbon(
             if (h <= 0f) return@Canvas
             val edgeInset = EDGE_INSET_DP.dp.toPx()
             val ribbonW = RIBBON_WIDTH_DP.dp.toPx()
+            val topInset = TOP_INSET_DP.dp.toPx()
             val nubLen = NUB_LENGTH_DP.dp.toPx()
             val bottomGap = BOTTOM_GAP_DP.dp.toPx()
             val notch = NOTCH_DP.dp.toPx()
@@ -199,7 +201,8 @@ internal fun VerseBookmarkRibbon(
             val settleAmp = SETTLE_AMP_DP.dp.toPx()
             // Resting full length stops short of the block bottom so consecutive
             // saved ribbons (and the next verse's idle tip) never kiss.
-            val fullLen = (h - bottomGap).coerceAtLeast(nubLen)
+            val retractedTipY = topInset + nubLen
+            val fullLen = (h - bottomGap).coerceAtLeast(retractedTipY)
 
             fun ax(logicalX: Float): Float =
                 if (mirrored) size.width - logicalX else logicalX
@@ -210,10 +213,10 @@ internal fun VerseBookmarkRibbon(
 
             val progress = unfurl.value.coerceAtLeast(0f)
             val tipY = if (progress <= 0.001f) {
-                nubLen
+                retractedTipY
             } else {
-                val travel = (fullLen - nubLen).coerceAtLeast(1f)
-                (nubLen + travel * progress).coerceAtMost(fullLen * 1.08f)
+                val travel = (fullLen - retractedTipY).coerceAtLeast(1f)
+                (retractedTipY + travel * progress).coerceAtMost(fullLen * 1.08f)
             }
             val showingRibbon = progress > 0.02f || bookmarked
             val alpha = chrome * when {
@@ -244,8 +247,8 @@ internal fun VerseBookmarkRibbon(
             // Always a swallowtail tip — idle "nub" is just that tip, short and
             // faded; a saved mark is the same shape grown to the block bottom.
             val path = Path().apply {
-                val top = 0f
-                val bot = tipY.coerceAtLeast(nubLen * 0.6f)
+                val top = topInset
+                val bot = tipY.coerceAtLeast(topInset + nubLen * 0.6f)
                 val span = (bot - top).coerceAtLeast(1f)
                 val notchDepth = minOf(notch, span * 0.45f)
                 val steps = (span / 3f).toInt().coerceIn(6, 64)
@@ -266,7 +269,7 @@ internal fun VerseBookmarkRibbon(
                 0f to ruby,
                 0.55f to ruby,
                 1f to ruby.copy(alpha = 0.82f),
-                startY = 0f,
+                startY = topInset,
                 endY = tipY.coerceAtLeast(1f),
             )
             drawPath(path, fill, alpha = alpha)
