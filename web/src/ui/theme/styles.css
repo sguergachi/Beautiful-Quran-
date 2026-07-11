@@ -2542,10 +2542,12 @@ select {
   flex-direction: column;
   align-items: center;
   gap: 0.1rem;
-  /* The positioned insets make this exactly as wide as its owning sheet.
-     An explicit 100% width can over-constrain the absolute box while the
-     desktop sheet's left/right edges animate, letting it paint past the paper. */
-  width: auto;
+  /* Match the centered content column above (`.sheet-frame`), rather than
+     stretching across the wider desktop paper sheet. Auto inline margins
+     center the fixed-width absolute box without consuming its transform,
+     which remains available for the entrance animation. */
+  width: min(100%, 52rem);
+  margin-inline: auto;
   padding: 0.45rem var(--sheet-pad) 0.35rem;
   background: var(--paper);
   animation: floating-play-in 280ms ease;
