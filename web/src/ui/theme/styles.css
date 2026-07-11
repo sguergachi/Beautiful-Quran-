@@ -269,21 +269,14 @@ select {
 }
 
 .sheet-edge-back:focus-visible {
-  outline: none;
-  background: linear-gradient(
-    to right,
-    color-mix(in srgb, var(--accent) 18%, transparent),
-    transparent
-  );
+  outline: 1px solid var(--accent);
+  outline-offset: -3px;
+  background: transparent;
 }
 
 @media (hover: hover) {
   .sheet-edge-back:hover {
-    background: linear-gradient(
-      to right,
-      color-mix(in srgb, var(--ink) 8%, transparent),
-      transparent
-    );
+    background: transparent;
   }
 }
 
@@ -2394,14 +2387,8 @@ select {
 
 @media (min-width: 900px) {
   .app-shell {
-    /* Soft page margins on wide screens — still one sheet, not a card */
-    background: color-mix(in srgb, var(--paper) 92%, var(--ink));
-    /* Soft under-paper so peeks read as sheets, not empty void */
-    background-image: linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--ink) 6%, var(--paper)) 0%,
-      var(--paper) 12%
-    );
+    /* Flat under-paper on wide screens — no gradient wash, no elevation. */
+    background: var(--paper);
     --peek-step: clamp(28px, 3.5vw, 44px);
   }
 
@@ -2412,6 +2399,7 @@ select {
   /*
    * Wide screens: center a 56rem column via left/right (no translateX(-50%)).
    * Equal L/R peeks keep the deck centered; phones stay full-bleed above.
+   * Sheets stay flat — no box-shadow between peeks (paper metaphor: no elevation).
    */
   .sheet,
   .sheet[data-depth='0'][data-active='true'] {
@@ -2423,7 +2411,7 @@ select {
   .app-shell[data-stack='1'] .sheet[data-depth='0'][data-active='true'] {
     left: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
     right: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
-    box-shadow: -12px 0 32px color-mix(in srgb, var(--ink) 14%, transparent);
+    box-shadow: none;
   }
 
   .app-shell[data-stack='2'] .sheet[data-depth='0'][data-active='true'] {
@@ -2435,7 +2423,7 @@ select {
       calc(var(--peek-step) * 2),
       calc(50% - var(--sheet-half) + var(--peek-step) * 2)
     );
-    box-shadow: -12px 0 32px color-mix(in srgb, var(--ink) 14%, transparent);
+    box-shadow: none;
   }
 
   .app-shell[data-stack='1'] .sheet[data-depth='1'] {
