@@ -227,6 +227,13 @@ three moments:
    matches the paper-sheet column (`--sheet-half`), with corner ornaments
    kept square.
 
+(The web entrance is also the loading screen: the cover is up from the first
+paint while `quran.db` streams in, with progress inked onto the leather; the
+du'a wash and hinge open wait until the book is ready. Frame insets, corner
+seals, medallion, and type are derived from the live board width × height via
+a 48-unit modular grid (`coverLayout`) so ornaments stay pressed seals — not
+fixed pinpricks — across phone and sheet-column boards.)
+
 A tap anywhere (or back) opens the cover at once; the ceremony never holds a
 reader hostage, and it plays only once per session (`rememberSaveable`), so
 rotations and process restores land straight on the sheets. The title letter
