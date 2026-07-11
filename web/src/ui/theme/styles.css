@@ -1154,7 +1154,10 @@ select {
 .word-stack {
   position: relative;
   display: inline-block;
+  /* Layout/style contain for paint isolation — must not clip the paper-cover
+     bleed that hangs past the glyph box (Hafs mark / AA overhang). */
   contain: layout style;
+  overflow: visible;
 }
 
 /* Orange second fade — same box/typography as the base glyph it covers.
@@ -1240,11 +1243,17 @@ select {
  */
 .ink-paper-cover {
   position: absolute;
-  /* Pad for Hafs mark/AA overhang — local to the word box, no neighbour bleed. */
-  inset: -0.12em -0.06em;
+  /*
+   * Bleed past the layout box so Hafs marks / AA overhangs do not peek at
+   * full ink (Android PaperCoverPad — white/bright corner fringe). Horizontal
+   * was especially tight at -0.06em; superscripts and end-of-word strokes need
+   * more. Keep modest vs neighbour words (old 18dp rects bled across gaps).
+   */
+  inset: -0.42em -0.28em -0.22em -0.28em;
   background: var(--paper);
   pointer-events: none;
   opacity: 0;
+  z-index: 1;
   /* No default transition: Active wash and Recited clear are JS snap-driven.
      A CSS opacity fade after the mask is removed painted a solid paper rect
      over the completed word (post-handoff flicker). Recess soft-dim opts in. */
