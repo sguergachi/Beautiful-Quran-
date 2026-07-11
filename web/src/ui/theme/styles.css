@@ -25,8 +25,8 @@
   --home-max: 40rem;
   --ease-sheet: cubic-bezier(0.22, 0.61, 0.36, 1);
   --upcoming-alpha: 0.22;
-  /* Play-start recess — even ease-in-out, matched to Android. */
-  --chrome-recede-ms: 520ms;
+  /* Play/pause chrome snap — immediate on web (Android still eases 520 ms). */
+  --chrome-recede-ms: 0ms;
   --ink-fade-ms: 400ms;
   --recess-ms: 400ms;
   --recede-ease: cubic-bezier(0.4, 0, 0.2, 1);
