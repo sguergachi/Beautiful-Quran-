@@ -10,6 +10,10 @@ on:
       - 'web/**'
       - '.github/workflows/web.yml'
 
+# Master publishes the built reader into docs/app (GitHub Pages source).
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -28,3 +32,41 @@ jobs:
       - run: npm run build
       - name: Verify quran.db asset
         run: test -f public/quran.db && test -s public/quran.db
+
+  # GitHub Pages serves master:/docs. The live reader is the committed build
+  # under docs/app — source changes in web/ do not update the site until this
+  # job runs build:pages and pushes the artifact. Without it, merges that only
+  # touch web/ leave https://sguergachi.github.io/Beautiful-Quran-/app/ stale.
+  publish-pages:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Fetch full history so the follow-up push can fast-forward if another
+          # master commit landed while this job was building.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install and build Pages app
+        working-directory: web
+        run: |
+          npm ci
+          npm run build:pages
+      - name: Commit docs/app for GitHub Pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/app
+          if git diff --staged --quiet; then
+            echo "docs/app already up to date — nothing to publish"
+            exit 0
+          fi
+          git commit -m "Publish web app to docs/app for GitHub Pages"
+          # Rebase onto latest master in case another push landed during the build.
+          git pull --rebase origin master
+          git push origin HEAD:master
