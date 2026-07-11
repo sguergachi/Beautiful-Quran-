@@ -255,26 +255,19 @@ export function WordUnit({
     applyMask(el, washMaskImage(0, resting, rtl, t.washFeather))
     paintSecondary(glossRef.current, translitRef.current, ink, 0, true)
 
-    let raf = 0
-    let cancelled = false
-    const start = performance.now()
-    const tick = (now: number) => {
-      if (cancelled) return
-      const p = Math.min(1, (now - start) / duration)
-      const eased = cubicBezierEase(p, ease.x1, ease.y1, ease.x2, ease.y2)
-      applyMask(el, washMaskImage(eased, resting, rtl, t.washFeather))
-      paintSecondary(glossRef.current, translitRef.current, ink, eased, true)
-      if (p < 1) raf = requestAnimationFrame(tick)
-      else {
+    return runWash(
+      duration,
+      ease,
+      cubicBezierEase,
+      (_p, eased) => {
+        applyMask(el, washMaskImage(eased, resting, rtl, t.washFeather))
+        paintSecondary(glossRef.current, translitRef.current, ink, eased, true)
+      },
+      () => {
         applyMask(el, 'none')
         paintSecondary(glossRef.current, translitRef.current, ink, 1, true)
-      }
-    }
-    raf = requestAnimationFrame(tick)
-    return () => {
-      cancelled = true
-      cancelAnimationFrame(raf)
-    }
+      },
+    )
     // speed/duration captured at Active entry only — mid-word setting changes
     // must not cancel and restart the sweep (that is itself a flicker).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -309,59 +302,48 @@ export function WordUnit({
     const rtl = !englishMode
     const t = getTuning()
 
-    let raf = 0
-    let cancelled = false
+    const ease = {
+      x1: t.sweepEaseX1,
+      y1: t.sweepEaseY1,
+      x2: t.sweepEaseX2,
+      y2: t.sweepEaseY2,
+    }
     if (enteredRepeat) {
       const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
-      const start = performance.now()
       overlay.style.opacity = '1'
       applyMask(overlay, washMaskImage(0, 0, rtl, t.washFeather))
-      const tick = (now: number) => {
-        if (cancelled) return
-        const p = Math.min(1, (now - start) / duration)
-        const eased = cubicBezierEase(
-          p,
-          t.sweepEaseX1,
-          t.sweepEaseY1,
-          t.sweepEaseX2,
-          t.sweepEaseY2,
-        )
-        applyMask(overlay, washMaskImage(eased, 0, rtl, t.washFeather))
-        if (p < 1) raf = requestAnimationFrame(tick)
-        else applyMask(overlay, 'none')
-      }
-      raf = requestAnimationFrame(tick)
-    } else if (leftRepeat) {
+      return runWash(
+        duration,
+        ease,
+        cubicBezierEase,
+        (_p, eased) => {
+          applyMask(overlay, washMaskImage(eased, 0, rtl, t.washFeather))
+        },
+        () => applyMask(overlay, 'none'),
+      )
+    }
+    if (leftRepeat) {
       const duration = t.repeatFadeOutMs
-      const start = performance.now()
       applyMask(overlay, 'none')
-      const tick = (now: number) => {
-        if (cancelled) return
-        const p = Math.min(1, (now - start) / duration)
-        // Android: tween(repeatFadeOutMs, easing = sweepEasing)
-        const eased = cubicBezierEase(
-          p,
-          t.sweepEaseX1,
-          t.sweepEaseY1,
-          t.sweepEaseX2,
-          t.sweepEaseY2,
-        )
-        overlay.style.opacity = String(1 - eased)
-        if (p < 1) raf = requestAnimationFrame(tick)
-        else overlay.style.opacity = '0'
-      }
-      raf = requestAnimationFrame(tick)
-    } else if (ink.repeat) {
+      return runWash(
+        duration,
+        ease,
+        cubicBezierEase,
+        (_p, eased) => {
+          overlay.style.opacity = String(1 - eased)
+        },
+        () => {
+          overlay.style.opacity = '0'
+        },
+      )
+    }
+    if (ink.repeat) {
       // Still in chain from a prior entry — hold full orange, do not restart.
       overlay.style.opacity = '1'
       applyMask(overlay, 'none')
     } else {
       overlay.style.opacity = '0'
       applyMask(overlay, 'none')
-    }
-    return () => {
-      cancelled = true
-      cancelAnimationFrame(raf)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ink.repeat, englishMode])
