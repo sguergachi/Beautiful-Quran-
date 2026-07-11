@@ -5,6 +5,7 @@ import {
   filterSurahs,
   isWordSearchQuery,
   matchWordSearch,
+  matchWordSearchAsync,
   normalizeArabicForSearch,
   parseAyahReference,
   SearchHitFlash,
@@ -80,6 +81,28 @@ describe('matchWordSearch', () => {
     expect(matchWordSearch(index, 'a')).toEqual([])
     expect(isWordSearchQuery('a')).toBe(false)
     expect(isWordSearchQuery('ab')).toBe(true)
+  })
+
+  it('async match equals sync and stops early when cancelled mid-scan', async () => {
+    const sync = matchWordSearch(index, 'merciful')
+    expect(await matchWordSearchAsync(index, 'merciful')).toEqual(sync)
+
+    const big: WordSearchIndexEntry[] = []
+    for (let i = 0; i < 9_000; i++) {
+      big.push(entry(1, 1, i + 1, 'و', 'and', 'wa'))
+    }
+    // Plant a late hit after the first yield boundary (CHUNK = 4000).
+    big[5_000] = entry(2, 1, 1, 'ر', 'merciful', 'rahim')
+    let yielded = false
+    const hits = await matchWordSearchAsync(big, 'merciful', 400, () => {
+      if (!yielded) {
+        yielded = true
+        return false
+      }
+      return true
+    })
+    // Cancelled at the second yield — never reaches the planted hit.
+    expect(hits.some((h) => h.translation === 'merciful')).toBe(false)
   })
 })
 

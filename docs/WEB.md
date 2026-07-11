@@ -277,6 +277,9 @@ Three sheets, hand-rolled paper stack (no router chrome):
    ayah label, transport, quiet Close that stops the session — Android
    parity). Opening a word hit flashes that Arabic (and English gloss) word
    twice with the orange repeat wash (directional wash in, dissolve out).
+   Word search keeps the query in local home state (no global store fan-out),
+   warms a slim in-memory index after boot, and scans cooperatively with
+   cancellation so typing stays responsive.
 2. **Reader** — header + ayahs + icon player bar; mushaf page breaks
    (whisper-gold hairline with Western + Arabic-Indic page numbers, Android
    `PageBreak` parity) between ayahs that start a new Madinah page; once the

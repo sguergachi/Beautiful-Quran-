@@ -71,7 +71,6 @@ export interface AppState {
   settings: Settings
   bookmarks: Bookmark[]
   content: SurahContent | null
-  search: string
   player: PlayerState
   activeWord: ActiveWord | null
   activeAyah: number | null
@@ -115,7 +114,6 @@ class AppStore {
     settings: loadSettings(),
     bookmarks: loadBookmarks(),
     content: null,
-    search: '',
     player: player.getState(),
     activeWord: null,
     activeAyah: null,
@@ -244,6 +242,9 @@ class AppStore {
         loadProgress: 1,
       })
       player.setSpeed(this.state.settings.playbackSpeed)
+      // Warm the Quran-wide word index while the cover is still up so the
+      // first typed query does not hitch on a cold sql.js scan.
+      void QuranRepository.warmWordSearchIndex()
       // Only install the offline worker after a successful boot so a failed
       // first paint cannot pin a poisoned shell in the Cache API.
       void import('../swRegistration').then((m) => m.registerServiceWorker())
@@ -260,10 +261,6 @@ class AppStore {
     if (sheet === 'home') this.setStackLayer(COVER_LAYER)
     else if (sheet === 'reader') this.setStackLayer(READER_LAYER)
     else this.setStackLayer(settingsLayerFor(this.hasReader()))
-  }
-
-  setSearch(search: string) {
-    this.set({ search })
   }
 
   updateSettings(patch: Partial<Settings>) {
