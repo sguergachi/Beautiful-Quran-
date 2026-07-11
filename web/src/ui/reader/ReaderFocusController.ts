@@ -104,9 +104,12 @@ export class ReaderFocusController {
     let reading: HTMLElement | null = null
     let readingTop = 0
     let readingHeight = 0
+    // 1px slack: after home-scroll, the target can sit a subpixel below the
+    // reading line; without slack, readout would stick on the previous ayah.
+    const lineSlackPx = 1
     for (const block of blocks) {
       const top = block.getBoundingClientRect().top - parentTop
-      if (top <= line) {
+      if (top <= line + lineSlackPx) {
         reading = block
         readingTop = top
         readingHeight = block.offsetHeight
@@ -191,11 +194,22 @@ export class ReaderFocusController {
     const el = this.scrollEl
     const target = this.ayahEl(ayahNumber)
     if (!el || !target) return null
+    return this.geometryOfBlock(target)
+  }
+
+  /**
+   * Live viewport-relative geometry. Keep subpixel precision — rounding here
+   * made home-scroll land a hair below the reading line, so readout then
+   * reported the previous ayah after a rail jump.
+   */
+  private geometryOfBlock(target: HTMLElement): TargetGeometry | null {
+    const el = this.scrollEl
+    if (!el) return null
     const parentRect = el.getBoundingClientRect()
     const rect = target.getBoundingClientRect()
     return {
-      topPx: Math.round(rect.top - parentRect.top),
-      heightPx: Math.round(rect.height),
+      topPx: rect.top - parentRect.top,
+      heightPx: rect.height,
       isLaidOut: true,
       isAboveWhenOffscreen: false,
     }
@@ -205,24 +219,30 @@ export class ReaderFocusController {
     const el = this.scrollEl
     if (!el) return 0
     const geom = this.geometryOf(ayahNumber)
-    if (!geom) {
-      // Estimate from offsetTop when not yet painted in view.
-      const target = this.ayahEl(ayahNumber)
-      if (!target) return 0
-      const approxTop = target.offsetTop - el.scrollTop
-      const anchor = FocusEngine.anchorOffsetPx(
-        el.clientHeight,
-        this.topGuardPx,
-        target.offsetHeight,
-      )
-      return approxTop - anchor
-    }
+    if (!geom) return 0
     const anchor = FocusEngine.anchorOffsetPx(
       el.clientHeight,
       this.topGuardPx,
       geom.heightPx,
     )
     return FocusEngine.glideDeltaPx(geom, anchor)
+  }
+
+  /** Instantly place [block] on its adaptive anchor via live rects (not offsetTop). */
+  private snapBlockOntoAnchor(block: HTMLElement) {
+    const el = this.scrollEl
+    if (!el) return
+    const geom = this.geometryOfBlock(block)
+    if (!geom) return
+    const anchor = FocusEngine.anchorOffsetPx(
+      el.clientHeight,
+      this.topGuardPx,
+      geom.heightPx,
+    )
+    const delta = FocusEngine.glideDeltaPx(geom, anchor)
+    if (Math.abs(delta) >= 0.5) {
+      el.scrollTop = Math.max(0, el.scrollTop + delta)
+    }
   }
 
   private wordBandDelta(wordEl: HTMLElement): number {
@@ -284,14 +304,7 @@ export class ReaderFocusController {
       const plan = FocusEngine.planJump(fromIndex, toIndex, visibleCount, blocks.length)
       if (plan.doorstepIndex != null && epoch === this.focusEpoch) {
         const door = blocks[plan.doorstepIndex]
-        if (door) {
-          const anchor = FocusEngine.anchorOffsetPx(
-            viewport,
-            this.topGuardPx,
-            door.offsetHeight,
-          )
-          el.scrollTop = Math.max(0, door.offsetTop - anchor)
-        }
+        if (door) this.snapBlockOntoAnchor(door)
       }
       if (!animate) {
         const delta = this.remainingPxToAnchor(ayahNumber)
@@ -313,14 +326,7 @@ export class ReaderFocusController {
           ? Math.max(0, toIndex - visibleCount)
           : Math.min(blocks.length - 1, toIndex + visibleCount)
       const door = blocks[doorstepIndex]
-      if (door) {
-        const anchor = FocusEngine.anchorOffsetPx(
-          viewport,
-          this.topGuardPx,
-          door.offsetHeight,
-        )
-        el.scrollTop = Math.max(0, door.offsetTop - anchor)
-      }
+      if (door) this.snapBlockOntoAnchor(door)
     }
 
     if (epoch !== this.focusEpoch) return

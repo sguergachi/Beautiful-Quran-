@@ -254,7 +254,8 @@ Three sheets, hand-rolled paper stack (no router chrome):
    header scrolls off, a compact ornate title (Arabic + chapter ·
    transliteration) reappears in the top bar; ayah selector rail
    (hover-magnified dashes, gold focal tick; centered on desktop, Android-
-   style edge-flush on mobile ≤640px so bars grow from the screen edge);
+   style edge-flush on mobile ≤640px so bars grow from the screen edge;
+   wheel scrub by tick spacing so the visible label is the commit target);
    return-to-ayah roundel (gilt corolla, qalam arrow painted toward the
    active verse); bookmark ribbon.
 3. **Settings** — reciter, reading mode, text size, display toggles, theme.
@@ -313,8 +314,8 @@ sans.
 
 ### Phase 3 — Focus + paper stack polish
 - ✅ `ReaderFocusController` (doorstep + `homeScrollStep`, recitation-follow,
-  centered hover-magnify ayah selector rail (edge-flush on mobile), return-to-ayah, tall-verse word
-  keep-in-view).
+  centered hover-magnify ayah selector rail with tick-spaced wheel scrub
+  (edge-flush on mobile), return-to-ayah, tall-verse word keep-in-view).
 - ✅ Recess/dim only while playing; full Plain ink when paused or idle.
 - Sheet transitions + page-turn feel (audio optional).
 - Bookmarks ribbon; settings persistence; continue listening.
