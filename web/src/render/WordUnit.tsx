@@ -19,6 +19,7 @@ interface Props {
   showGloss: boolean
   showTransliteration: boolean
   englishMode?: boolean
+  searchHit?: boolean
   speed: number
   /** Optional external ref so the ayah can keep the active word in view. */
   rootRef?: MutableRefObject<HTMLElement | null>
@@ -38,6 +39,7 @@ export function WordUnit({
   showGloss,
   showTransliteration,
   englishMode = false,
+  searchHit = false,
   speed,
   rootRef: externalRootRef,
   onPlay,
@@ -251,7 +253,12 @@ export function WordUnit({
       }}
     >
       <span className="word-stack" dir={rtl ? 'rtl' : 'ltr'}>
-        <span className={englishMode ? 'word-gloss' : 'word-arabic'}>{label}</span>
+        <span
+          className={englishMode ? 'word-gloss' : 'word-arabic'}
+          data-search-hit={englishMode && searchHit ? 'true' : undefined}
+        >
+          {label}
+        </span>
         <span
           ref={overlayRef}
           className="word-repeat-overlay"
@@ -265,7 +272,12 @@ export function WordUnit({
           second opacity here (Android fades each sibling once; compounding
           left word-for-word English at ~0.05 and nearly invisible). */}
       {!englishMode && showGloss && word.translation ? (
-        <span className="word-gloss">{word.translation}</span>
+        <span
+          className="word-gloss"
+          data-search-hit={searchHit ? 'true' : undefined}
+        >
+          {word.translation}
+        </span>
       ) : null}
       {showTransliteration && word.transliteration ? (
         <span className="word-translit">{word.transliteration}</span>

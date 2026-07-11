@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from 'react'
 import { Input } from '@base-ui/react/input'
 
 type Props = {
@@ -9,6 +10,8 @@ type Props = {
   onValueChange: (value: string) => void
   'aria-label'?: string
   className?: string
+  autoFocus?: boolean
+  onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void
 }
 
 /** Paper-styled Base UI Input — underline field, no box chrome. */
@@ -20,6 +23,8 @@ export function PaperInput({
   value,
   onValueChange,
   className,
+  autoFocus,
+  onKeyDown,
   'aria-label': ariaLabel,
 }: Props) {
   return (
@@ -30,8 +35,10 @@ export function PaperInput({
       placeholder={placeholder}
       value={value}
       aria-label={ariaLabel}
+      autoFocus={autoFocus}
       className={['paper-input', className].filter(Boolean).join(' ')}
       onValueChange={(next) => onValueChange(next)}
+      onKeyDown={onKeyDown}
     />
   )
 }
