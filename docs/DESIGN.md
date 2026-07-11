@@ -224,8 +224,11 @@ three moments:
    slightly down (`PageTurnSounds.playCoverOpen`), revealing the chapter
    list beneath. Both platforms use a negative Y rotation for the outward
    open (`rotationY(-95°)` on Android, `rotateY(-95deg)` on web) — positive
-   folds the free edge into the page. On web the cover matches the
-   paper-sheet column (`--sheet-half`), with corner ornaments kept square.
+   folds the free edge into the page. Android keeps a close
+   `cameraDistance` (8× density) so the free edge foreshortens toward the
+   reader; a far camera flattens the swing into a 2D squash. On web the cover
+   matches the paper-sheet column (`--sheet-half`), with corner ornaments
+   kept square.
 
 (The web entrance is also the loading screen: the cover is up from the first
 paint while `quran.db` streams in, with progress inked onto the leather; the
