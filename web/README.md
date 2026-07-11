@@ -60,10 +60,11 @@ Engines are DOM-free and unit-tested against the Android JVM suites. See
   Bump `CACHE` in `public/sw.js` when changing that contract.
 - `sql.js`’s browser build requests `sql-wasm-browser.wasm` (copied into
   `public/` on `npm install`). Shipping only `sql-wasm.wasm` 404s on Pages.
-- Audio streams from everyayah.com; upcoming ayahs are prefetched (parallel
-  Cache API + blob URLs, ~8 ahead) and a standby `<audio>` is loaded from a
-  local blob so verse joins stay gapless — especially on mobile Safari. The
-  play button shows a spinner while buffering.
+- Audio streams from everyayah.com; upcoming ayahs are prefetched in parallel
+  (~8 ahead). Desktop browsers promote a blob-backed standby `<audio>` at verse
+  joins. iOS uses one persistent element with cache-warmed HTTPS sources to
+  avoid WebKit's multi-element/blob playback stalls. The play button shows a
+  spinner while buffering.
 - Click a word to play from there; right-click / long-press opens the Root Word Viewer.
 - Themes: Paper / Nightfall / Royal green (Settings).
 - Form controls use [Base UI](https://base-ui.com) primitives (`Select`,

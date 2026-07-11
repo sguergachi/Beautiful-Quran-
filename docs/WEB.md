@@ -205,13 +205,17 @@ mid-tier phones — measure first.
 - **Prefetch / buffering (Android parity):** `AudioPrefetcher` read-aheads the
   next ~8 ayahs into a dedicated Cache API store (`beautiful-quran-audio-v1`)
   with parallel fetches (concurrency 3) and in-memory blob URLs; pinned blobs
-  for the playhead window are never LRU-evicted mid-join. `PlayerController`
-  keeps a standby `<audio>` loaded from a **blob** (Safari will not deeply
-  buffer a remote second element) and exposes `isBuffering` so the play button
-  shows a spinner while fetching / underrunning. `isPlaying` flips on play
-  intent (before canplay) so chrome recess starts on the tap. Whole-surah warm
-  runs when the connection is not data-saver / slow-2g. Soft caps: ~40 blob
-  URLs in memory, ~200 Cache API entries.
+  for the playhead window are never LRU-evicted mid-join. Desktop browsers keep
+  a standby `<audio>` loaded from a **blob**. iOS instead keeps one persistent
+  media element and changes its original HTTPS source at verse joins; this
+  follows WebKit's single-stream constraint and avoids its fragile blob-media
+  promotion path. `PlayerController` exposes `isBuffering` so the play button
+  can show the join. A playback-clock watchdog remains as a last-resort guard
+  for iOS Safari's silent freeze mode (no `waiting` / `stalled` event).
+  The play control shows a spinner while fetching / underrunning. `isPlaying`
+  flips on play intent (before canplay) so chrome recess starts on the tap.
+  Whole-surah warm runs when the connection is not data-saver / slow-2g. Soft
+  caps: ~40 blob URLs in memory, ~200 Cache API entries.
 - Media Session metadata + play/pause/seek actions for lock-screen / OS
   controls where the browser allows.
 
@@ -391,8 +395,9 @@ sans.
 ### Phase 5 — Parity polish / cut line
 - ✅ Search within surah (reader top-bar icons + match navigation), floating
   home playback control, Media Session.
-- ✅ Prefetch next ayahs into Cache API + dual `<audio>` standby so verse
-  joins do not stall (see `web/src/playback/audioPrefetch.ts`).
+- ✅ Prefetch next ayahs into Cache API; desktop uses a dual-`<audio>` standby,
+  while iOS keeps one HTTPS-backed media element to avoid WebKit stalls (see
+  `web/src/playback/audioPrefetch.ts`).
 - ✅ Collapsed surah title in the reader top bar once the opening header
   scrolls off (Android `OrnateSurahTitle` parity — Arabic + chapter ·
   transliteration, flanked by gilded flourishes).
