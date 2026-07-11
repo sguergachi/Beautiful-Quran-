@@ -102,6 +102,7 @@ describe('AudioPrefetcher', () => {
       },
       openCache: async () => cache,
       readAheadCount: 3,
+      concurrency: 1,
     })
 
     const urls = [
@@ -119,7 +120,38 @@ describe('AudioPrefetcher', () => {
       'https://example.com/c.mp3',
       'https://example.com/d.mp3',
     ])
-    expect(READ_AHEAD_COUNT).toBeGreaterThanOrEqual(3)
+    expect(READ_AHEAD_COUNT).toBeGreaterThanOrEqual(8)
+  })
+
+  it('readAhead fetches in parallel up to concurrency', async () => {
+    stubObjectUrls()
+    const { cache } = memoryCache()
+    let inFlight = 0
+    let maxInFlight = 0
+    const prefetcher = new AudioPrefetcher({
+      fetch: async (url) => {
+        inFlight++
+        maxInFlight = Math.max(maxInFlight, inFlight)
+        await new Promise((r) => setTimeout(r, 20))
+        inFlight--
+        return okResponse(String(url))
+      },
+      openCache: async () => cache,
+      readAheadCount: 4,
+      concurrency: 3,
+    })
+
+    const urls = [
+      'https://example.com/a.mp3',
+      'https://example.com/b.mp3',
+      'https://example.com/c.mp3',
+      'https://example.com/d.mp3',
+      'https://example.com/e.mp3',
+    ]
+    prefetcher.readAhead(urls, 0)
+    await vi.waitFor(() => expect(prefetcher.memorySize).toBe(4))
+    expect(maxInFlight).toBeGreaterThan(1)
+    expect(maxInFlight).toBeLessThanOrEqual(3)
   })
 
   it('warmSurah skips when saveData is set', async () => {
@@ -148,6 +180,7 @@ describe('AudioPrefetcher', () => {
       },
       openCache: async () => cache,
       connection: () => ({ saveData: false, effectiveType: '4g' }),
+      concurrency: 1,
     })
 
     prefetcher.warmSurah(['https://example.com/a.mp3', 'https://example.com/b.mp3'])
@@ -191,5 +224,30 @@ describe('AudioPrefetcher', () => {
     expect(prefetcher.isWarm('https://example.com/1.mp3')).toBe(false)
     expect(prefetcher.isWarm('https://example.com/2.mp3')).toBe(true)
     expect(prefetcher.isWarm('https://example.com/3.mp3')).toBe(true)
+  })
+
+  it('does not evict pinned blob URLs past the memory cap', async () => {
+    stubObjectUrls()
+    const { cache } = memoryCache()
+    const prefetcher = new AudioPrefetcher({
+      fetch: async (url) => okResponse(String(url)),
+      openCache: async () => cache,
+      memoryCap: 2,
+    })
+
+    prefetcher.setPinned([
+      'https://example.com/1.mp3',
+      'https://example.com/2.mp3',
+    ])
+    await prefetcher.ensure('https://example.com/1.mp3')
+    await prefetcher.ensure('https://example.com/2.mp3')
+    await prefetcher.ensure('https://example.com/3.mp3')
+
+    // Pinned entries stay; unpinned #3 may stay too if nothing else to evict
+    // once only unpinned candidates exist — here #3 is newest unpinned and
+    // #1/#2 are pinned, so size can exceed the soft cap.
+    expect(prefetcher.isWarm('https://example.com/1.mp3')).toBe(true)
+    expect(prefetcher.isWarm('https://example.com/2.mp3')).toBe(true)
+    expect(prefetcher.memorySize).toBeGreaterThanOrEqual(2)
   })
 })

@@ -1181,6 +1181,17 @@ select {
   display: block;
 }
 
+@keyframes ink-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.icon-buffering {
+  animation: ink-spin 0.85s linear infinite;
+  transform-origin: 50% 50%;
+}
+
 @media (hover: hover) {
   .player-bar .ctrl:hover {
     color: var(--accent);

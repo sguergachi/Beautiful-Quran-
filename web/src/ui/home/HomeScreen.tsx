@@ -1,4 +1,5 @@
 import {
+  IconBuffering,
   IconClose,
   IconNext,
   IconPause,
@@ -180,10 +181,26 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
             </button>
             <button
               type="button"
-              aria-label={state.player.isPlaying ? 'Pause' : 'Play'}
-              onClick={() => void appStore.playPause()}
+              aria-label={
+                state.player.isBuffering
+                  ? 'Buffering'
+                  : state.player.isPlaying
+                    ? 'Pause'
+                    : 'Play'
+              }
+              aria-busy={state.player.isBuffering || undefined}
+              onClick={() => {
+                if (state.player.isBuffering) return
+                void appStore.playPause()
+              }}
             >
-              {state.player.isPlaying ? <IconPause /> : <IconPlay />}
+              {state.player.isBuffering ? (
+                <IconBuffering />
+              ) : state.player.isPlaying ? (
+                <IconPause />
+              ) : (
+                <IconPlay />
+              )}
             </button>
             <button type="button" aria-label="Next ayah" onClick={() => void appStore.next()}>
               <IconNext />

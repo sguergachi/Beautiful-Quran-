@@ -128,6 +128,7 @@ class AppStore {
       // Emit only on UI-visible changes — not every 33 ms position tick.
       const emitKey = [
         ps.isPlaying,
+        ps.isBuffering,
         ps.nowPlaying?.surahId,
         ps.nowPlaying?.ayah,
         ps.repeatMode,
@@ -145,6 +146,7 @@ class AppStore {
         prev.nowPlaying?.surahId !== ps.nowPlaying?.surahId ||
         prev.nowPlaying?.ayah !== ps.nowPlaying?.ayah ||
         prev.isPlaying !== ps.isPlaying ||
+        prev.isBuffering !== ps.isBuffering ||
         prev.repeatMode !== ps.repeatMode ||
         prev.error !== ps.error
       ) {

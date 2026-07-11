@@ -26,6 +26,8 @@ export interface NowPlaying {
 export interface PlayerState {
   nowPlaying: NowPlaying | null
   isPlaying: boolean
+  /** True while fetching / waiting for enough audio to play (Android parity). */
+  isBuffering: boolean
   positionMs: number
   durationMs: number
   speed: number
@@ -39,6 +41,7 @@ type Listener = (state: PlayerState) => void
 const initial: PlayerState = {
   nowPlaying: null,
   isPlaying: false,
+  isBuffering: false,
   positionMs: 0,
   durationMs: 0,
   speed: 1,
@@ -49,6 +52,9 @@ const initial: PlayerState = {
 
 /** HTMLMediaElement.HAVE_FUTURE_DATA — enough to start without an immediate stall. */
 const HAVE_FUTURE_DATA = 3
+
+/** How soon before ayah end we insist the next blob is warm (Safari joins). */
+const JOIN_PREP_REMAINING_S = 4
 
 export class PlayerController {
   /** Active playback element (swaps with [standby] on ayah joins). */
@@ -90,6 +96,7 @@ export class PlayerController {
     audio.addEventListener('timeupdate', () => {
       if (audio !== this.active) return
       this.onTime()
+      this.maybePrepJoin()
     })
     audio.addEventListener('ended', () => {
       if (audio !== this.active) return
@@ -99,12 +106,27 @@ export class PlayerController {
       if (audio !== this.active) return
       this.patch({ isPlaying: true, error: null })
     })
+    audio.addEventListener('playing', () => {
+      if (audio !== this.active) return
+      this.setBuffering(false)
+      this.patch({ isPlaying: true, error: null })
+    })
     audio.addEventListener('pause', () => {
       if (audio !== this.active) return
       this.patch({ isPlaying: false })
     })
+    // Mid-stream underrun (common on mobile Safari with remote progressive MP3).
+    audio.addEventListener('waiting', () => {
+      if (audio !== this.active) return
+      this.setBuffering(true)
+    })
+    audio.addEventListener('stalled', () => {
+      if (audio !== this.active) return
+      this.setBuffering(true)
+    })
     audio.addEventListener('error', () => {
       if (audio !== this.active) return
+      this.setBuffering(false)
       // Basmalah clip missing → skip into ayah 1 (Android parity).
       if (this.playlist[this.index]?.ayah === BASMALAH_PLAYLIST_AYAH) {
         void this.playIndex(this.index + 1)
@@ -120,6 +142,33 @@ export class PlayerController {
     // case where playIndex raced ahead of prefetch).
     audio.addEventListener('canplaythrough', () => {
       if (audio !== this.active) return
+      this.setBuffering(false)
+      void this.prepareStandby()
+    })
+  }
+
+  private setBuffering(isBuffering: boolean) {
+    if (this.state.isBuffering === isBuffering) return
+    this.patch({ isBuffering })
+  }
+
+  /**
+   * In the last few seconds of an ayah, insist the next clip is a warm blob
+   * (Safari will not deeply buffer a remote standby element).
+   */
+  private maybePrepJoin() {
+    const duration = this.active.duration
+    if (!Number.isFinite(duration) || duration <= 0) return
+    const remaining = duration - this.active.currentTime
+    if (remaining > JOIN_PREP_REMAINING_S) return
+    const nextIndex = this.peekNextIndex({ forStandby: true })
+    if (nextIndex == null) return
+    const url = this.playlist[nextIndex]?.url
+    if (!url || this.prefetcher.isWarm(url)) {
+      void this.prepareStandby()
+      return
+    }
+    void this.prefetcher.ensure(url).then(() => {
       void this.prepareStandby()
     })
   }
@@ -192,18 +241,19 @@ export class PlayerController {
 
     const token = ++this.prepareToken
     const item = this.playlist[nextIndex]!
-    // Kick Cache API / memory warm; prefer blob src when ready.
+    // Wait for a full blob — assigning a remote URL to standby is a no-op on
+    // many iOS Safari builds (they won't buffer a second element).
     const blobSrc = await this.prefetcher.ensure(item.url)
     if (token !== this.prepareToken) return
+    if (!blobSrc) return
 
-    const src = blobSrc ?? item.url
-    if (this.standbyIndex === nextIndex && this.standbySrcMatches(src)) {
+    if (this.standbyIndex === nextIndex && this.standbySrcMatches(blobSrc)) {
       return
     }
 
     this.standby.pause()
     this.standby.loop = false
-    this.standby.src = src
+    this.standby.src = blobSrc
     this.standby.playbackRate = this.state.speed
     this.standby.load()
     this.standbyIndex = nextIndex
@@ -332,12 +382,17 @@ export class PlayerController {
 
   private async playIndex(i: number, autoplay = true) {
     if (i < 0 || i >= this.playlist.length) {
+      this.setBuffering(false)
       this.patch({ isPlaying: false })
       return
     }
 
     // Fast path: standby already holds this index — swap and play immediately.
-    if (autoplay && this.standbyIndex === i && this.standby.readyState >= HAVE_FUTURE_DATA) {
+    if (
+      autoplay &&
+      this.standbyIndex === i &&
+      this.standby.readyState >= HAVE_FUTURE_DATA
+    ) {
       this.swapToStandby()
       this.index = i
       this.publishNowPlaying()
@@ -345,10 +400,12 @@ export class PlayerController {
       this.active.playbackRate = this.state.speed
       this.updateMediaSession()
       try {
+        this.setBuffering(false)
         await this.active.play()
         this.startTick()
         this.schedulePrefetch()
       } catch (e) {
+        this.setBuffering(false)
         this.patch({
           error: e instanceof Error ? e.message : 'Playback blocked',
           isPlaying: false,
@@ -359,6 +416,11 @@ export class PlayerController {
 
     this.index = i
     const item = this.playlist[i]!
+    // Show the spinner while we fetch a full blob — critical on Safari where
+    // progressive remote buffering of the next ayah is unreliable.
+    if (autoplay && !this.prefetcher.isWarm(item.url)) {
+      this.setBuffering(true)
+    }
     const blobSrc = await this.prefetcher.ensure(item.url)
     const src = blobSrc ?? this.prefetcher.resolveSrc(item.url)
 
@@ -374,11 +436,14 @@ export class PlayerController {
     if (autoplay) {
       try {
         if (this.active.readyState < HAVE_FUTURE_DATA) {
+          this.setBuffering(true)
           await this.waitForCanPlay(this.active)
         }
         await this.active.play()
+        this.setBuffering(false)
         this.startTick()
       } catch (e) {
+        this.setBuffering(false)
         if (this.playlist[this.index]?.ayah === BASMALAH_PLAYLIST_AYAH) {
           void this.playIndex(this.index + 1)
           return
@@ -388,6 +453,8 @@ export class PlayerController {
           isPlaying: false,
         })
       }
+    } else {
+      this.setBuffering(false)
     }
   }
 
@@ -453,28 +520,42 @@ export class PlayerController {
     if (!this.playlist.length) return
     if (this.active.paused) {
       try {
+        if (this.active.readyState < HAVE_FUTURE_DATA) {
+          this.setBuffering(true)
+          await this.waitForCanPlay(this.active)
+        }
         await this.active.play()
+        this.setBuffering(false)
         this.startTick()
       } catch (e) {
+        this.setBuffering(false)
         this.patch({
           error: e instanceof Error ? e.message : 'Playback blocked',
         })
       }
     } else {
       this.active.pause()
+      this.setBuffering(false)
     }
   }
 
   pause() {
     this.active.pause()
+    this.setBuffering(false)
   }
 
   async play() {
     if (!this.playlist.length) return
     try {
+      if (this.active.readyState < HAVE_FUTURE_DATA) {
+        this.setBuffering(true)
+        await this.waitForCanPlay(this.active)
+      }
       await this.active.play()
+      this.setBuffering(false)
       this.startTick()
     } catch (e) {
+      this.setBuffering(false)
       this.patch({ error: e instanceof Error ? e.message : 'Playback blocked' })
     }
   }
@@ -540,7 +621,20 @@ export class PlayerController {
       await this.active.play()
       return
     }
-    await this.next()
+    const next = this.peekNextIndex({ forStandby: false })
+    if (next == null) {
+      this.setBuffering(false)
+      this.active.pause()
+      this.patch({ isPlaying: false })
+      return
+    }
+    // If the next ayah is not a warm blob yet, keep the play button spinning
+    // rather than going silent at the verse boundary (Safari mobile).
+    const nextUrl = this.playlist[next]?.url
+    if (nextUrl && !this.prefetcher.isWarm(nextUrl)) {
+      this.setBuffering(true)
+    }
+    await this.playIndex(next, true)
   }
 
   private updateMediaSession() {
