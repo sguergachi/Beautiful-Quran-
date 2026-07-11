@@ -88,6 +88,7 @@ build_quran_db_if_missing() {
 }
 
 main() {
+  require_android_java_21
   require_file "$EMULATOR" "Android emulator not found. Run scripts/setup_android_emulator.sh first."
   require_file "$ADB" "adb not found. Run scripts/setup_android_emulator.sh first."
 
