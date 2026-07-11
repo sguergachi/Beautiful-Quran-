@@ -296,7 +296,8 @@ sans.
 - Optional Ink Lab (developer unlock).
 
 ### Phase 5 — Parity polish / cut line
-- Search within surah, floating home playback control, Media Session.
+- ✅ Search within surah (reader top-bar icons + match navigation), floating
+  home playback control, Media Session.
 - Prefetch next ayahs into Cache API.
 - Visual QA against Android screenshots (`docs/ss*.png`).
 - CI: Vitest on every PR; optional Playwright on `master`.

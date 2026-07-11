@@ -28,6 +28,8 @@ interface Props {
   bookmarkInteractive?: boolean
   speed: number
   fontScale: number
+  /** Live in-surah English query (≥ 2 chars); highlights matching glosses. */
+  searchQuery?: string | null
   onPlayAyah: (ayah: number, fromWord?: boolean) => void
   onToggleBookmark: (ayah: number) => boolean
   onHoldWord: (ayah: number, position: number, arabic: string, translation: string) => void
@@ -51,6 +53,7 @@ function AyahBlockInner({
   bookmarkInteractive = true,
   speed,
   fontScale,
+  searchQuery = null,
   onPlayAyah,
   onToggleBookmark,
   onHoldWord,
@@ -64,6 +67,11 @@ function AyahBlockInner({
   const words = useMemo(() => ayah.words, [ayah.words])
   const activeWordRef = useRef<HTMLElement | null>(null)
   const [hovered, setHovered] = useState(false)
+  const query = searchQuery?.toLowerCase() ?? null
+  const translationHit =
+    query != null && ayah.translation.toLowerCase().includes(query)
+  const hits = (translation: string) =>
+    query != null && translation.toLowerCase().includes(query)
 
   useEffect(() => {
     if (!keepActiveWordInView || !onKeepWordInView) return
@@ -132,6 +140,7 @@ function AyahBlockInner({
               showGloss={!englishOnly && showWordGloss}
               showTransliteration={showTransliteration}
               englishMode={englishOnly}
+              searchHit={hits(w.translation)}
               speed={speed}
               rootRef={
                 isActiveAyah && activeWord?.wordPosition === w.position
@@ -155,7 +164,12 @@ function AyahBlockInner({
       )}
 
       {showTranslation && !englishOnly && ayah.translation ? (
-        <p className="ayah-translation">{ayah.translation}</p>
+        <p
+          className="ayah-translation"
+          data-search-hit={translationHit ? 'true' : undefined}
+        >
+          {ayah.translation}
+        </p>
       ) : null}
     </article>
   )
