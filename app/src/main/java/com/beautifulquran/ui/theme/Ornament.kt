@@ -276,8 +276,9 @@ fun MushafCoverFrame(
                 ),
             )
         }
-        // Corner stars sit on the inner rule's corners, one khatam each.
-        val starR = 11.dp.toPx()
+        // Corner stars sit on the inner rule's corners, sized with the
+        // frame margin so they read as pressed seals rather than pinpricks.
+        val starR = geometry.starRadiusPx
         val corners = listOf(
             Offset(innerInset, innerInset),
             Offset(size.width - innerInset, innerInset),
@@ -295,7 +296,7 @@ fun MushafCoverFrame(
         drawPath(outer, gold, style = rule)
         drawPath(inner, gold, style = hairline)
         drawPath(stars, gold, style = hairline)
-        corners.forEach { drawCircle(gold, radius = 2.dp.toPx(), center = it) }
+        corners.forEach { drawCircle(gold, radius = starR * 0.16f, center = it) }
     }
 }
 
