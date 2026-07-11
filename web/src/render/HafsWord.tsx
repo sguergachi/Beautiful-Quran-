@@ -19,7 +19,8 @@ import { cubicBezierEase } from '../engine/fade'
 import {
   applyMask,
   cachedPaperCoverMask,
-  cachedWashMask,
+  runRepeatFadeOut,
+  runRepeatWashIn,
   runSearchHitDoubleWash,
   runWash,
 } from './inkWash'
@@ -65,6 +66,7 @@ export function HafsWord({
   const localRootRef = useRef<HTMLSpanElement>(null)
   const coverRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
+  const flashRef = useRef<HTMLSpanElement>(null)
   const prevState = useRef(ink.state)
   const revealedOnEntry = useRef(false)
   // false so a word that mounts already in the chain still washes orange in.
@@ -176,42 +178,13 @@ export function HafsWord({
     const enteredRepeat = ink.repeat && !was
     const leftRepeat = !ink.repeat && was
     prevRepeat.current = ink.repeat
-    const t = getTuning()
-    const ease = {
-      x1: t.sweepEaseX1,
-      y1: t.sweepEaseY1,
-      x2: t.sweepEaseX2,
-      y2: t.sweepEaseY2,
-    }
 
     if (enteredRepeat) {
-      const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
-      overlay.style.opacity = '1'
-      applyMask(overlay, cachedWashMask(0, 0, true, t.washFeather))
-      return runWash(
-        duration,
-        ease,
-        cubicBezierEase,
-        (_p, eased) => {
-          applyMask(overlay, cachedWashMask(eased, 0, true, t.washFeather))
-        },
-        () => applyMask(overlay, 'none'),
-      )
+      const duration = sweepMs(activeWord, speed) ?? getTuning().repeatSweepMs
+      return runRepeatWashIn(overlay, true, duration)
     }
     if (leftRepeat) {
-      const duration = t.repeatFadeOutMs
-      applyMask(overlay, 'none')
-      return runWash(
-        duration,
-        ease,
-        cubicBezierEase,
-        (_p, eased) => {
-          overlay.style.opacity = String(1 - eased)
-        },
-        () => {
-          overlay.style.opacity = '0'
-        },
-      )
+      return runRepeatFadeOut(overlay)
     }
     if (ink.repeat) {
       overlay.style.opacity = '1'
@@ -223,11 +196,11 @@ export function HafsWord({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ink.repeat])
 
-  // Search-hit flash: same orange overlay + wash as the repeat chain.
+  // Search-hit pulse: same ink-engine wash helpers on a dedicated twin overlay.
   useLayoutEffect(() => {
-    if (!searchFlash || ink.repeat || !overlayRef.current) return
-    return runSearchHitDoubleWash(overlayRef.current, true, SearchHitFlash.PULSES)
-  }, [searchFlash, ink.repeat])
+    if (!searchFlash || !flashRef.current) return
+    return runSearchHitDoubleWash(flashRef.current, true, SearchHitFlash.PULSES)
+  }, [searchFlash])
 
   const onPointerDown = (e: PointerEvent) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return
@@ -286,6 +259,14 @@ export function HafsWord({
         <span ref={coverRef} className="ink-paper-cover" aria-hidden="true" />
         <span
           ref={overlayRef}
+          className="hafs-repeat-overlay hafs-glyph"
+          aria-hidden="true"
+          style={{ opacity: 0 }}
+        >
+          {word.arabic}
+        </span>
+        <span
+          ref={flashRef}
           className="hafs-repeat-overlay hafs-glyph"
           aria-hidden="true"
           style={{ opacity: 0 }}
