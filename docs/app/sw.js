@@ -63,7 +63,11 @@ self.addEventListener('activate', (event) => {
     (async () => {
       const keys = await caches.keys()
       const hadStale = keys.some((k) => k !== CACHE)
-      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+      const deletes = []
+      for (const k of keys) {
+        if (k !== CACHE) deletes.push(caches.delete(k))
+      }
+      await Promise.all(deletes)
 
       // Older workers may have stored index.html under this or prior names.
       // Strip any HTML out of the current cache so it can never be replayed.
