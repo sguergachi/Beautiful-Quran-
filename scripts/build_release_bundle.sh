@@ -18,7 +18,7 @@ if [[ ! -f "$REPO_ROOT/release.keystore" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$REPO_ROOT/app/src/main/assets/quran.db" ]]; then
+if [[ ! -f "$REPO_ROOT/data/quran.db" ]]; then
   (cd "$REPO_ROOT" && python3 tools/build_db.py)
 fi
 

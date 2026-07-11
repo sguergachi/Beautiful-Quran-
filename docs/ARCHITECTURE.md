@@ -12,7 +12,7 @@ feature — words lighting up in time with the reciter — is driven by a
 ```
 tools/build_db.py  (build time, runs in CI)
    quran-json (npm) ─┐
-   WBW gloss (npm)  ─┼─► validate, align, pack ─► app/src/main/assets/quran.db
+   WBW gloss (npm)  ─┼─► validate, align, pack ─► data/quran.db
    quran-align zip  ─┤
    QAC morphology   ─┘   (roots / lemma / POS — see ROOT_VIEWER.md)
                                                         │
@@ -271,7 +271,7 @@ current ayah in the new voice when it changes on the settings sheet.
 ## Build & delivery
 
 CI (`.github/workflows/build.yml`) on every push: verify the committed
-`app/src/main/assets/quran.db` asset → unit tests. On `master` only, it
+`data/quran.db` asset → unit tests. On `master` only, it
 continues with **assembleRelease** (R8-minified, resource-shrunk; see
 docs/PERFORMANCE.md) → upload artifact → publish the APK to the rolling
 `latest` GitHub release. Release builds are signed with the repo's debug

@@ -11,8 +11,8 @@ paper-stack UI (Home / Reader / Settings), cold-start entrance cover (closed
 mushaf + isti'adha text fade-in), directional ink wash, focus follow, bookmarks, root
 viewer, and a PWA shell. Production build is published to GitHub Pages at
 [`/app/`](https://sguergachi.github.io/Beautiful-Quran-/app/)
-(from `docs/app`, republished by CI on every `master` push that touches
-`web/`). See `web/README.md` for run instructions. The sections
+(as an immutable Pages artifact built by CI from `master`). See
+`web/README.md` for run instructions. The sections
 below remain the design record and quality bar.
 
 ---
@@ -32,7 +32,7 @@ and ink — offline-first, no accounts, no backend.
 | Ink policy | `ui/reader/InkEngine.kt` + `InkEngineTest` | `web/src/ui/reader/InkEngine.ts`; render policy stays outside the engine |
 | Draw primitives | `ui/theme/Fade.kt` (`letterFadeIn`, `shapedWordBloom`, `inkSmootherstep`) | Port math; reimplement wash with CSS mask / Canvas |
 | Marketing ink demo | `docs/ink-fade.js`, `docs/reveal.js` | **Prototype only** — whole-word opacity, not product-grade directional wash |
-| Data | `app/src/main/assets/quran.db` (27 MB, committed) | Same DB; load via WASM SQLite |
+| Data | `data/quran.db` (27 MB, committed) | Same DB; load via WASM SQLite |
 | Design law | `docs/DESIGN.md` | Identical rules on web |
 | Perf law | `docs/PERFORMANCE.md` | Same frame-budget mindset |
 
@@ -218,11 +218,12 @@ mid-tier phones — measure first.
   for iOS Safari's silent freeze mode (no `waiting` / `stalled` event).
   EveryAyah MP3s include reciter-dependent encoded quiet at both edges (often
   hundreds of milliseconds, occasionally close to a second). The player
-  decodes only the warm current/next clips, detects their audible RMS bounds,
-  advances at the padded audible end, and starts the next clip at its padded
-  audible beginning. This preserves a small natural breath without stacking
-  two files' padding into a perceptible join; failed/unsupported analysis falls
-  back to the ordinary `ended` path.
+  decodes only the warm current/next clips and detects their audible RMS bounds.
+  At a join, the outgoing padded tail receives a short equal-power fade-out;
+  the next clip begins at its padded audible start with the complementary
+  fade-in. The envelope preserves the reciter's release instead of hard-cutting
+  it, without stacking two files' padding into a perceptible pause.
+  Failed/unsupported analysis falls back to the ordinary `ended` path.
   The play control shows a spinner while fetching / underrunning. `isPlaying`
   flips on play intent (before canplay) so chrome recess starts on the tap.
   Whole-surah warm runs when the connection is not data-saver / slow-2g. Soft
@@ -479,13 +480,10 @@ the design docs — not shared UI code.
 
 - `.github/workflows/web.yml`: `npm ci` + Vitest + `npm run build` on every
   push/PR that touches `web/`.
-- On `master` only: after tests pass, run `npm run build:pages` and commit
-  the output to `docs/app`. GitHub Pages serves `master:/docs`, so that
-  commit is what updates
-  [`/app/`](https://sguergachi.github.io/Beautiful-Quran-/app/). Source-only
-  merges that skip this step leave the live reader stale. The publish step
-  retries (rebuild + rebase) when concurrent master pushes race on hashed
-  `docs/app` assets.
+- On `master` only: after tests pass, stage the marketing site from `docs/`,
+  run `npm run build:pages` into `_site/app`, and deploy `_site` through the
+  GitHub Pages artifact actions. Generated reader files never enter Git
+  history and concurrent master builds are serialized by workflow concurrency.
 - Android `assembleRelease` stays in `build.yml` — web failures do not block it.
 
 ## 13. Quality gates (definition of done)

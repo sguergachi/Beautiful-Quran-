@@ -1,0 +1,323 @@
+package com.beautifulquran.ui.theme
+
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import com.beautifulquran.ui.entrance.CoverFrameGeometry
+import com.beautifulquran.ui.theme.ornament.BorderSpec
+import com.beautifulquran.ui.theme.ornament.FieldSpec
+import com.beautifulquran.ui.theme.ornament.RosetteSpec
+import com.beautifulquran.ui.theme.ornament.StrokeWeight
+import kotlin.math.ceil
+import kotlin.math.min
+
+/*
+ * Renderers for the generated cover ornament (ui/theme/ornament/
+ * OrnamentGenerator.kt). Same material language as Ornament.kt — embossed
+ * relief first, shifting gold leaf on the face — but the geometry arrives
+ * from the generator instead of being hard-coded, and every stroke inks
+ * itself in as the build progress advances, so the cover is drawn before
+ * the reader's eyes rather than appearing stamped.
+ *
+ * All geometry is cached per size (drawWithCache); build and sheen values
+ * are read only inside the draw phase, so the ceremony animates without
+ * recomposing anything.
+ */
+
+/** A generated stroke ready to draw: full path, its measure for partial
+ *  inking, and a scratch path reused each frame while the stroke grows. */
+private class StrokeRender(
+    val full: Path,
+    val width: Float,
+    val birth: Float,
+    val span: Float,
+) {
+    val measure = PathMeasure().also { it.setPath(full, false) }
+    val length = measure.length
+    val partial = Path()
+}
+
+private class DotRender(val center: Offset, val radius: Float, val birth: Float)
+
+/** Rosette geometry scaled to a pixel diameter, centred on (0, 0). */
+private class RosettePaths(spec: RosetteSpec, val diameter: Float, ruleWidth: Float, hairWidth: Float) {
+    val strokes: List<StrokeRender> = spec.strokes.map { s ->
+        val path = Path()
+        s.points.forEachIndexed { i, p ->
+            val x = ((p.x - 0.5) * diameter).toFloat()
+            val y = ((p.y - 0.5) * diameter).toFloat()
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        if (s.closed) path.close()
+        val width = if (s.weight == StrokeWeight.Rule) ruleWidth else hairWidth
+        StrokeRender(path, width, s.birth.toFloat(), s.span.toFloat())
+    }
+    val dots: List<DotRender> = spec.dots.map {
+        DotRender(
+            Offset(((it.x - 0.5) * diameter).toFloat(), ((it.y - 0.5) * diameter).toFloat()),
+            (it.radius * diameter).toFloat(),
+            it.birth.toFloat(),
+        )
+    }
+}
+
+/** Draws [paths] at [center]; strokes grow along their length with the
+ *  build [progress], each inside its own [birth, birth+span] window. */
+private fun DrawScope.drawRosette(
+    paths: RosettePaths,
+    center: Offset,
+    gold: androidx.compose.ui.graphics.Brush,
+    embossDark: Color,
+    embossLight: Color,
+    progress: Float,
+) {
+    translate(center.x, center.y) {
+        for (s in paths.strokes) {
+            val f = ((progress - s.birth) / s.span).coerceIn(0f, 1f)
+            if (f <= 0f) continue
+            val path = if (f >= 1f) {
+                s.full
+            } else {
+                s.partial.reset()
+                s.measure.getSegment(0f, s.length * f, s.partial, true)
+                s.partial
+            }
+            val stroke = Stroke(width = s.width, cap = StrokeCap.Round, join = StrokeJoin.Round)
+            translate(0.8f, 0.8f) { drawPath(path, embossDark, style = stroke) }
+            translate(-0.8f, -0.8f) { drawPath(path, embossLight, style = stroke) }
+            drawPath(path, gold, style = stroke)
+        }
+        for (d in paths.dots) {
+            val f = ((progress - d.birth) / 0.06f).coerceIn(0f, 1f)
+            if (f <= 0f) continue
+            drawCircle(gold, radius = d.radius * f, center = d.center)
+        }
+    }
+}
+
+/**
+ * The generated medallion — this launch's own star composition at the
+ * ceremonial centre of the cover. [build] 0..1 inks it in stroke by stroke;
+ * [sheen] tilts the leaf, both read only at draw time.
+ */
+@Composable
+fun GeneratedMedallion(
+    spec: RosetteSpec,
+    size: Dp,
+    brightGold: Color,
+    deepGold: Color,
+    embossDark: Color,
+    embossLight: Color,
+    sheen: State<Float>,
+    build: State<Float>,
+    modifier: Modifier = Modifier,
+) {
+    Spacer(
+        modifier
+            .size(size)
+            .drawWithCache {
+                val d = min(this.size.width, this.size.height)
+                val paths = RosettePaths(
+                    spec,
+                    d,
+                    ruleWidth = (d * 0.011f).coerceAtLeast(1f),
+                    hairWidth = (d * 0.005f).coerceAtLeast(1f),
+                )
+                onDrawBehind {
+                    val gold = goldBrush(brightGold, deepGold, sheen.value.coerceIn(0f, 1f))
+                    drawRosette(
+                        paths,
+                        Offset(this.size.width / 2f, this.size.height / 2f),
+                        gold,
+                        embossDark,
+                        embossLight,
+                        build.value,
+                    )
+                }
+            },
+    )
+}
+
+/** Centre of the border band's cross-section, from the frame geometry. */
+private fun bandCenter(geometry: CoverFrameGeometry): Float =
+    (geometry.outerInsetPx + geometry.innerInsetPx) / 2f
+
+/**
+ * The four corner seals — small stars of the medallion's family, stamped
+ * over the border band's corner joints the way bindings have always hidden
+ * the miter. Fills the cover; positions come from [geometry].
+ */
+@Composable
+fun GeneratedCornerSeals(
+    spec: RosetteSpec,
+    geometry: CoverFrameGeometry,
+    brightGold: Color,
+    deepGold: Color,
+    embossDark: Color,
+    embossLight: Color,
+    sheen: State<Float>,
+    build: State<Float>,
+    modifier: Modifier = Modifier,
+) {
+    Spacer(
+        modifier
+            .fillMaxSize()
+            .drawWithCache {
+                val d = geometry.starRadiusPx * 2f
+                val paths = RosettePaths(
+                    spec,
+                    d,
+                    ruleWidth = 1.dp.toPx(),
+                    hairWidth = 1.dp.toPx(),
+                )
+                val c = bandCenter(geometry)
+                val corners = listOf(
+                    Offset(c, c),
+                    Offset(size.width - c, c),
+                    Offset(c, size.height - c),
+                    Offset(size.width - c, size.height - c),
+                )
+                onDrawBehind {
+                    val gold = goldBrush(brightGold, deepGold, sheen.value.coerceIn(0f, 1f))
+                    for (corner in corners) {
+                        drawRosette(paths, corner, gold, embossDark, embossLight, build.value)
+                    }
+                }
+            },
+    )
+}
+
+/** The border fades up between 40% and 75% of the build. */
+private fun borderAlpha(build: Float): Float = ((build - 0.40f) / 0.35f).coerceIn(0f, 1f)
+
+/**
+ * The generated border frieze: the band pattern tiled along all four sides
+ * between the two gilt rules, out from each side's midpoint so the pattern
+ * sits symmetric on the cover; the loose ends at the corners disappear
+ * under the seals. Washes in as the build passes the medallion's crescendo.
+ */
+@Composable
+fun GeneratedBorderBand(
+    spec: BorderSpec,
+    geometry: CoverFrameGeometry,
+    brightGold: Color,
+    deepGold: Color,
+    embossDark: Color,
+    embossLight: Color,
+    sheen: State<Float>,
+    build: State<Float>,
+    modifier: Modifier = Modifier,
+) {
+    Spacer(
+        modifier
+            .fillMaxSize()
+            .drawWithCache {
+                val bandH = ((geometry.innerInsetPx - geometry.outerInsetPx) * 0.60f)
+                    .coerceIn(4.dp.toPx(), 12.dp.toPx())
+                val c = bandCenter(geometry)
+                val w = size.width
+                val h = size.height
+                val periodPx = (spec.period * bandH).toFloat()
+
+                // (u along the side, v across the band) → screen, per side;
+                // v mirrored on the far sides so the pattern faces inward.
+                val sides = listOf<Pair<Float, (Float, Float) -> Offset>>(
+                    w to { u, v -> Offset(u, c + (v - 0.5f) * bandH) },
+                    w to { u, v -> Offset(u, h - c - (v - 0.5f) * bandH) },
+                    h to { u, v -> Offset(c + (v - 0.5f) * bandH, u) },
+                    h to { u, v -> Offset(w - c - (v - 0.5f) * bandH, u) },
+                )
+
+                val band = Path()
+                val dotCenters = ArrayList<Pair<Offset, Float>>()
+                for ((sideLen, place) in sides) {
+                    val tiles = ceil((sideLen / 2f) / periodPx).toInt()
+                    for (k in -tiles until tiles) {
+                        val u0 = sideLen / 2f + k * periodPx
+                        for (s in spec.strokes) {
+                            s.points.forEachIndexed { i, p ->
+                                val pt = place(u0 + (p.x * bandH).toFloat(), p.y.toFloat())
+                                if (i == 0) band.moveTo(pt.x, pt.y) else band.lineTo(pt.x, pt.y)
+                            }
+                            if (s.closed) band.close()
+                        }
+                        for (d in spec.dots) {
+                            dotCenters.add(
+                                place(u0 + (d.x * bandH).toFloat(), d.y.toFloat()) to
+                                    (d.radius * bandH).toFloat(),
+                            )
+                        }
+                    }
+                }
+                val stroke = Stroke(width = 1.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+
+                onDrawBehind {
+                    val a = borderAlpha(build.value)
+                    if (a <= 0f) return@onDrawBehind
+                    val gold = goldBrush(brightGold, deepGold, sheen.value.coerceIn(0f, 1f))
+                    translate(0.6f, 0.6f) { drawPath(band, embossDark, style = stroke, alpha = a * 0.7f) }
+                    translate(-0.6f, -0.6f) { drawPath(band, embossLight, style = stroke, alpha = a * 0.7f) }
+                    drawPath(band, gold, style = stroke, alpha = a)
+                    for ((center, r) in dotCenters) drawCircle(gold, radius = r, center = center, alpha = a)
+                }
+            },
+    )
+}
+
+/**
+ * The generated leather field: this launch's Hankin star pattern tiled
+ * across the cover at whisper ink, replacing the fixed star-and-cross
+ * weave. Washes in over the first half of the build. Geometry is built
+ * once per size; the wash only re-draws.
+ */
+fun Modifier.generatedFieldWeave(
+    field: FieldSpec,
+    ink: Color,
+    embossLight: Color,
+    build: State<Float>,
+): Modifier = drawWithCache {
+    val pxPerUnit = (field.cellWidthDp.toFloat().dp.toPx()) / field.cellW.toFloat()
+    val cellW = (field.cellW * pxPerUnit).toFloat()
+    val cellH = (field.cellH * pxPerUnit).toFloat()
+    val weave = Path()
+    var y = -cellH
+    while (y < size.height + cellH) {
+        var x = -cellW
+        while (x < size.width + cellW) {
+            for (s in field.strokes) {
+                s.points.forEachIndexed { i, p ->
+                    val px = x + (p.x * pxPerUnit).toFloat()
+                    val py = y + (p.y * pxPerUnit).toFloat()
+                    if (i == 0) weave.moveTo(px, py) else weave.lineTo(px, py)
+                }
+                if (s.closed) weave.close()
+            }
+            x += cellW
+        }
+        y += cellH
+    }
+    val stroke = Stroke(width = 1.dp.toPx())
+    onDrawBehind {
+        val a = (build.value / 0.55f).coerceIn(0f, 1f)
+        if (a <= 0f) return@onDrawBehind
+        translate(-0.6f, -0.6f) {
+            drawPath(weave, embossLight.copy(alpha = embossLight.alpha * a), style = stroke)
+        }
+        drawPath(weave, ink.copy(alpha = ink.alpha * a), style = stroke)
+    }
+}

@@ -77,6 +77,13 @@ android {
         noCompress += "ttf"
         noCompress += "xz"
     }
+    sourceSets.named("main") {
+        // preBuild owns generation; a concrete path keeps Android Studio's
+        // source-set model deterministic while the task dependency stays explicit.
+        assets.directories.add(
+            layout.buildDirectory.dir("generated/quranAssets").get().asFile.absolutePath,
+        )
+    }
     lint {
         // Media3's @UnstableApi opt-in trips lintVital on release builds; the
         // full lint task still reports it. CI ships release APKs, so keep
@@ -91,12 +98,15 @@ kotlin {
     }
 }
 
-val checkQuranDbAsset by tasks.registering {
-    val dbAsset = layout.projectDirectory.file("src/main/assets/quran.db")
+val syncQuranDbAsset by tasks.registering(Sync::class) {
+    val dbAsset = rootProject.layout.projectDirectory.file("data/quran.db")
+    from(dbAsset)
+    into(layout.buildDirectory.dir("generated/quranAssets"))
+
     doLast {
         if (!dbAsset.asFile.isFile) {
             throw GradleException(
-                "Missing bundled Quran database: ${dbAsset.asFile}. " +
+                "Missing canonical Quran database: ${dbAsset.asFile}. " +
                     "Run `python3 tools/build_db.py` from the repo root before building locally.",
             )
         }
@@ -104,7 +114,7 @@ val checkQuranDbAsset by tasks.registering {
 }
 
 tasks.named("preBuild") {
-    dependsOn(checkQuranDbAsset)
+    dependsOn(syncQuranDbAsset)
 }
 
 dependencies {

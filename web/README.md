@@ -10,11 +10,9 @@ https://sguergachi.github.io/Beautiful-Quran-/app/
 
 Linked from the project homepage as **Open web reader**.
 
-GitHub Pages serves `master:/docs`. The reader is the built tree under
-`docs/app`. On every `master` push that touches `web/`, `.github/workflows/web.yml`
-runs `npm run build:pages` and commits that output so the live site stays in
-sync — you do not need to republish by hand. Use `build:pages` locally only
-when you want to preview the Pages artifact before merging.
+GitHub Actions stages the marketing content from `docs/` and builds the reader
+under `/app/`, then deploys the combined tree as a GitHub Pages artifact. Build
+output is never committed back to `master`.
 
 ## Quick start
 
@@ -24,11 +22,12 @@ npm install
 npm run dev      # http://localhost:5173
 npm test         # engine unit tests (Vitest)
 npm run build    # static site → dist/
-npm run build:pages  # → ../docs/app (CI does this on master)
+npm run build:pages  # → ../_site/app (CI does this on master)
 ```
 
-Requires Node 20+. The committed `public/quran.db` (~27 MB) and fonts are
-copied from the Android app assets — no separate data pipeline.
+Requires Node 20+. `npm run dev` and `npm run build` copy the canonical
+`../data/quran.db` into the generated web assets. The database is committed
+once and shared with Android; there is no second data pipeline.
 
 ## Architecture
 
@@ -64,8 +63,8 @@ Engines are DOM-free and unit-tested against the Android JVM suites. See
   (~8 ahead). Desktop browsers promote a blob-backed standby `<audio>` at verse
   joins. iOS uses one persistent element with cache-warmed HTTPS sources to
   avoid WebKit's multi-element/blob playback stalls. Warm current/next clips
-  are decoded for their audible bounds so reciter-dependent MP3 edge padding
-  does not become an audible pause at every verse join; unsupported analysis
+  are decoded for their audible bounds; a short equal-power fade-out/fade-in
+  joins the padded edges without a pause or a hard cut. Unsupported analysis
   falls back to the normal media-element ending. The play button shows a
   spinner while buffering.
 - Click a word to play from there; right-click / long-press opens the Root Word Viewer.

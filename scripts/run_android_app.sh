@@ -79,7 +79,7 @@ wait_for_boot() {
 }
 
 build_quran_db_if_missing() {
-  if [[ -f "$REPO_ROOT/app/src/main/assets/quran.db" ]]; then
+  if [[ -f "$REPO_ROOT/data/quran.db" ]]; then
     return
   fi
 
