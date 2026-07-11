@@ -1860,9 +1860,9 @@ select {
   }
 
   /*
-   * Keep the same drawing width as desktop. The old 4.5rem rail clipped
-   * expanded ayah numbers (especially 2–3 digit labels) against the canvas
-   * edge; layout bias in AyahSelectorRail also guards narrower widths.
+   * Same drawing width as desktop. Mobile paints Android-style edge-flush
+   * ticks (data-flush) so bars grow from the screen edge; the width still
+   * needs room for inward-hanging ayah numbers.
    */
   .ayah-rail {
     width: 5.5rem;

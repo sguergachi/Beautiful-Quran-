@@ -1,9 +1,12 @@
 /**
- * Pure geometry for the web ayah selector rail — a centered cousin of
- * Android's `AyahSelectorRail`. Bars bloom from a horizontal midline (flush
- * to an edge only when a narrow rail would otherwise clip ayah numbers);
- * focus falls off with distance from the hovered / selected ayah.
+ * Pure geometry for the web ayah selector rail — a cousin of Android's
+ * `AyahSelectorRail`. Desktop blooms bars from a centered midline; mobile
+ * (≤640px) grows them flush from the screen edge like Android, with numbers
+ * hanging inward. Focus falls off with distance from the hovered / selected ayah.
  */
+
+/** Matches the `@media (max-width: 640px)` rail breakpoint in styles.css. */
+export const MOBILE_RAIL_MEDIA = '(max-width: 640px)'
 
 /** Collapsed stack size: grows with surah length, sqrt-mapped like Android. */
 export function symbolicAyahBarCount(ayahCount: number): number {
@@ -60,7 +63,7 @@ export function trackYFromDial(
 ): number {
   if (ayahCount <= 1) return height * (topFrac + (1 - topFrac - bottomFrac) / 2)
   const span = 1 - topFrac - bottomFrac
-  const t = ((dial - 1) / (ayahCount - 1))
+  const t = (dial - 1) / (ayahCount - 1)
   return height * (topFrac + Math.min(1, Math.max(0, t)) * span)
 }
 
@@ -97,9 +100,16 @@ const MIN_BAR_LEN = 8
 const LABEL_GAP = 6
 const EDGE_PAD = 2
 
+/** Desktop: centered midline. Mobile: Android-style edge flush. */
+export type RailGrowFrom = 'center' | 'edge'
+
 export type RailExpandedLayout = {
-  /** Horizontal center of each tick bar. */
-  midX: number
+  growFrom: RailGrowFrom
+  /**
+   * `center`: horizontal center of each bar.
+   * `edge`: outer screen-edge X (0 for left, railWidth for right).
+   */
+  originX: number
   maxBarLen: number
   majorBonus: number
   /** Gap between the inner bar end and the ayah number. */
@@ -109,15 +119,16 @@ export type RailExpandedLayout = {
 /**
  * Horizontal layout for expanded rail ticks + labels.
  *
- * Prefers a centered midline (the web rail's signature). When the canvas is
- * too narrow for the peak tick plus the ayah number — common on mobile —
- * biases the midline toward the outer edge so labels hang fully inside the
- * canvas, and only then shortens bars as a last resort.
+ * - `center` (desktop): prefers a centered midline; biases toward the outer
+ *   edge only when the canvas would otherwise clip the ayah number.
+ * - `edge` (mobile): Android parity — bars grow from the screen edge, numbers
+ *   hang inward. Shortens bars only when the rail cannot fit peak + label.
  */
 export function railExpandedLayout(
   railWidth: number,
   side: 'left' | 'right',
   labelWidth: number,
+  growFrom: RailGrowFrom = 'center',
 ): RailExpandedLayout {
   const width = Math.max(1, railWidth)
   const labelBudget = LABEL_GAP + Math.max(0, labelWidth) + EDGE_PAD
@@ -135,18 +146,100 @@ export function railExpandedLayout(
     majorBonus = Math.max(0, peakLen - maxBarLen)
   }
 
+  if (growFrom === 'edge') {
+    return {
+      growFrom: 'edge',
+      originX: side === 'left' ? 0 : width,
+      maxBarLen,
+      majorBonus,
+      labelGap: LABEL_GAP,
+    }
+  }
+
   const half = peakLen / 2
   const centered = width / 2
 
   if (side === 'left') {
     // Numbers hang to the right (toward the page).
     const maxMid = width - half - labelBudget
-    const midX = Math.min(centered, maxMid)
-    return { midX, maxBarLen, majorBonus, labelGap: LABEL_GAP }
+    return {
+      growFrom: 'center',
+      originX: Math.min(centered, maxMid),
+      maxBarLen,
+      majorBonus,
+      labelGap: LABEL_GAP,
+    }
   }
 
   // Right rail: numbers hang to the left.
   const minMid = half + labelBudget
-  const midX = Math.max(centered, minMid)
-  return { midX, maxBarLen, majorBonus, labelGap: LABEL_GAP }
+  return {
+    growFrom: 'center',
+    originX: Math.max(centered, minMid),
+    maxBarLen,
+    majorBonus,
+    labelGap: LABEL_GAP,
+  }
+}
+
+/** Left edge + width of an expanded tick bar. */
+export function railTickBarRect(
+  layout: RailExpandedLayout,
+  side: 'left' | 'right',
+  length: number,
+  thickness: number,
+): { x: number; width: number } {
+  if (layout.growFrom === 'center') {
+    return { x: layout.originX - length / 2, width: length }
+  }
+  // Hide the outer rounded cap behind the screen edge (Android).
+  const full = length + thickness
+  if (side === 'left') {
+    return { x: layout.originX - thickness, width: full }
+  }
+  return { x: layout.originX - length, width: full }
+}
+
+/**
+ * X anchor for an ayah label. Pair with `textAlign: left` on the left rail
+ * and `textAlign: right` on the right rail.
+ */
+export function railTickLabelX(
+  layout: RailExpandedLayout,
+  side: 'left' | 'right',
+  length: number,
+): number {
+  if (layout.growFrom === 'center') {
+    return side === 'left'
+      ? layout.originX + length / 2 + layout.labelGap
+      : layout.originX - length / 2 - layout.labelGap
+  }
+  return side === 'left'
+    ? layout.originX + length + layout.labelGap
+    : layout.originX - length - layout.labelGap
+}
+
+/**
+ * Collapsed stack bar rect. Edge mode hides the outer rounded cap behind the
+ * screen edge and slips outer bars off first on expand (Android parity).
+ */
+export function railCollapsedBarRect(
+  railWidth: number,
+  side: 'left' | 'right',
+  growFrom: RailGrowFrom,
+  barW: number,
+  barH: number,
+  exit: number,
+): { x: number; width: number } {
+  if (growFrom === 'center') {
+    const midX = railWidth * 0.5
+    return { x: midX - barW / 2, width: barW }
+  }
+  // Extra width so the rounded outer cap sits past the edge; slip on exit.
+  const fullW = barW + barH
+  const slip = (1 - exit) * 4
+  if (side === 'left') {
+    return { x: -barH - slip, width: fullW }
+  }
+  return { x: railWidth - barW + slip, width: fullW }
 }

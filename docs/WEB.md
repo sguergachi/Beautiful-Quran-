@@ -244,10 +244,9 @@ Three sheets, hand-rolled paper stack (no router chrome):
 1. **Home** — surah list, search, continue-listening, floating playback
    control while a verse is loaded (chapter · ayah label, transport, quiet
    Close that stops the session — Android parity).
-2. **Reader** — header + ayahs + icon player bar; centered ayah
-   selector rail (hover-magnified dashes, gold focal tick; on narrow
-   mobile widths the midline biases outward so ayah numbers stay inside
-   the canvas);
+2. **Reader** — header + ayahs + icon player bar; ayah selector rail
+   (hover-magnified dashes, gold focal tick; centered on desktop, Android-
+   style edge-flush on mobile ≤640px so bars grow from the screen edge);
 
    return-to-ayah roundel (gilt corolla, qalam arrow painted toward the
    active verse); bookmark ribbon.
@@ -307,7 +306,7 @@ sans.
 
 ### Phase 3 — Focus + paper stack polish
 - ✅ `ReaderFocusController` (doorstep + `homeScrollStep`, recitation-follow,
-  centered hover-magnify ayah selector rail, return-to-ayah, tall-verse word
+  centered hover-magnify ayah selector rail (edge-flush on mobile), return-to-ayah, tall-verse word
   keep-in-view).
 - ✅ Recess/dim only while playing; full Plain ink when paused or idle.
 - Sheet transitions + page-turn feel (audio optional).

@@ -4,7 +4,10 @@ import {
   dialFromTrackY,
   focusRadiusForHeight,
   isMajorAyah,
+  railCollapsedBarRect,
   railExpandedLayout,
+  railTickBarRect,
+  railTickLabelX,
   rubberBandDialPosition,
   symbolicAyahBarCount,
   tickFocus,
@@ -86,57 +89,85 @@ describe('isMajorAyah / focusRadiusForHeight', () => {
 })
 
 describe('railExpandedLayout', () => {
-  const labelGap = 6
   const edgePad = 2
 
   function labelFits(
     railWidth: number,
     side: 'left' | 'right',
     labelWidth: number,
+    growFrom: 'center' | 'edge',
   ): boolean {
-    const { midX, maxBarLen, majorBonus, labelGap: gap } = railExpandedLayout(
-      railWidth,
-      side,
-      labelWidth,
-    )
-    const peak = maxBarLen + majorBonus
+    const layout = railExpandedLayout(railWidth, side, labelWidth, growFrom)
+    const peak = layout.maxBarLen + layout.majorBonus
+    const labelX = railTickLabelX(layout, side, peak)
     if (side === 'left') {
-      const labelEnd = midX + peak / 2 + gap + labelWidth
-      return labelEnd <= railWidth - edgePad + 0.01
+      return labelX + labelWidth <= railWidth - edgePad + 0.01
     }
-    const labelStart = midX - peak / 2 - gap - labelWidth
-    return labelStart >= edgePad - 0.01
+    return labelX - labelWidth >= edgePad - 0.01
   }
 
   it('keeps the midline centered when the rail is wide enough', () => {
-    const layout = railExpandedLayout(120, 'left', 20)
-    expect(layout.midX).toBeCloseTo(60, 5)
+    const layout = railExpandedLayout(120, 'left', 20, 'center')
+    expect(layout.growFrom).toBe('center')
+    expect(layout.originX).toBeCloseTo(60, 5)
     expect(layout.maxBarLen).toBe(44)
     expect(layout.majorBonus).toBe(6)
-    expect(layout.labelGap).toBe(labelGap)
   })
 
-  it('biases toward the outer edge on a narrow mobile rail', () => {
-    const left = railExpandedLayout(72, 'left', 20)
-    expect(left.midX).toBeLessThan(36)
-    expect(labelFits(72, 'left', 20)).toBe(true)
+  it('biases toward the outer edge on a narrow centered rail', () => {
+    const left = railExpandedLayout(72, 'left', 20, 'center')
+    expect(left.originX).toBeLessThan(36)
+    expect(labelFits(72, 'left', 20, 'center')).toBe(true)
 
-    const right = railExpandedLayout(72, 'right', 20)
-    expect(right.midX).toBeGreaterThan(36)
-    expect(labelFits(72, 'right', 20)).toBe(true)
+    const right = railExpandedLayout(72, 'right', 20, 'center')
+    expect(right.originX).toBeGreaterThan(36)
+    expect(labelFits(72, 'right', 20, 'center')).toBe(true)
   })
 
-  it('fits 3-digit labels inside a 5.5rem (~88px) rail', () => {
-    expect(labelFits(88, 'left', 22)).toBe(true)
-    expect(labelFits(88, 'right', 22)).toBe(true)
-    const layout = railExpandedLayout(88, 'left', 22)
-    expect(layout.maxBarLen + layout.majorBonus).toBeGreaterThanOrEqual(44)
+  it('anchors flush to the screen edge in edge mode (Android parity)', () => {
+    const left = railExpandedLayout(88, 'left', 22, 'edge')
+    expect(left.growFrom).toBe('edge')
+    expect(left.originX).toBe(0)
+    expect(labelFits(88, 'left', 22, 'edge')).toBe(true)
+
+    const right = railExpandedLayout(88, 'right', 22, 'edge')
+    expect(right.originX).toBe(88)
+    expect(labelFits(88, 'right', 22, 'edge')).toBe(true)
+  })
+
+  it('hides the outer rounded cap behind the edge in edge mode', () => {
+    const left = railExpandedLayout(88, 'left', 20, 'edge')
+    const bar = railTickBarRect(left, 'left', 44, 3)
+    expect(bar.x).toBeLessThan(0)
+    expect(bar.x + bar.width).toBeCloseTo(44, 5)
+
+    const right = railExpandedLayout(88, 'right', 20, 'edge')
+    const rightBar = railTickBarRect(right, 'right', 44, 3)
+    expect(rightBar.x + rightBar.width).toBeGreaterThan(88)
+    expect(rightBar.x).toBeCloseTo(88 - 44, 5)
   })
 
   it('shortens bars only when even edge-anchoring cannot fit the label', () => {
-    // 40px cannot hold a 50px peak tick + label; peak must shrink.
-    const layout = railExpandedLayout(40, 'left', 14)
+    const layout = railExpandedLayout(40, 'left', 14, 'edge')
     expect(layout.maxBarLen + layout.majorBonus).toBeLessThan(50)
-    expect(labelFits(40, 'left', 14)).toBe(true)
+    expect(labelFits(40, 'left', 14, 'edge')).toBe(true)
+  })
+})
+
+describe('railCollapsedBarRect', () => {
+  it('centers collapsed dashes on desktop', () => {
+    const rect = railCollapsedBarRect(80, 'left', 'center', 10, 1.5, 1)
+    expect(rect.x).toBeCloseTo(35, 5)
+    expect(rect.width).toBe(10)
+  })
+
+  it('flushes collapsed dashes to the screen edge on mobile', () => {
+    const left = railCollapsedBarRect(80, 'left', 'edge', 10, 1.5, 1)
+    expect(left.x).toBeLessThan(0)
+    expect(left.x + left.width).toBeCloseTo(10, 5)
+
+    const right = railCollapsedBarRect(80, 'right', 'edge', 10, 1.5, 1)
+    expect(right.x).toBeCloseTo(70, 5)
+    expect(right.x + right.width).toBeGreaterThan(80)
   })
 })

@@ -9,12 +9,17 @@ import {
   dialFromTrackY,
   focusRadiusForHeight,
   isMajorAyah,
+  MOBILE_RAIL_MEDIA,
+  railCollapsedBarRect,
   railExpandedLayout,
+  railTickBarRect,
+  railTickLabelX,
   rubberBandDialPosition,
   symbolicAyahBarCount,
   tickFocus,
   tickLength,
   trackYFromDial,
+  type RailGrowFrom,
 } from './ayahRailMath'
 
 const TOP_FRAC = 0.08
@@ -71,15 +76,24 @@ function withAlpha(color: string, alpha: number): string {
   return `color-mix(in srgb, ${color} ${Math.round(a * 100)}%, transparent)`
 }
 
+function railGrowFrom(): RailGrowFrom {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return 'center'
+  }
+  return window.matchMedia(MOBILE_RAIL_MEDIA).matches ? 'edge' : 'center'
+}
+
 /**
- * Centered ayah scrub rail for the web reader.
+ * Ayah scrub rail for the web reader.
  *
  * Collapsed: a symbolic stack of dashes tracking reading progress.
- * Hover / press: blooms into a magnification dial — bars grow widthwise from
- * the rail midline under the pointer, taper at the top and bottom edges, and
- * the focal ayah is the widest (gold). On a wide rail the midline stays
- * centered; on a narrow mobile rail it biases toward the outer edge so ayah
- * numbers hang fully inside the canvas instead of clipping.
+ * Hover / press: blooms into a magnification dial — bars grow widthwise under
+ * the pointer, taper at the top and bottom edges, and the focal ayah is the
+ * widest (gold).
+ *
+ * Desktop keeps a centered midline. Mobile (≤640px) matches Android: bars
+ * grow flush from the screen edge with the outer rounded cap hidden, and
+ * ayah numbers hang inward toward the page.
  *
  * Dragging only moves the dial. The page stays put until release, when
  * [onJump] fires so the reader can run a FocusEngine pre-roll slide — same
@@ -117,6 +131,9 @@ export function AyahSelectorRail({
     const root = rootRef.current
     if (!canvas || !root) return
 
+    const growFrom = railGrowFrom()
+    root.dataset.flush = growFrom === 'edge' ? 'true' : 'false'
+
     const dpr = window.devicePixelRatio || 1
     const cssW = root.clientWidth
     const cssH = root.clientHeight
@@ -138,7 +155,6 @@ export function AyahSelectorRail({
     const gold = readCssColor(root, '--gold', '#c9a227')
     const expand = expandRef.current
     const collapsedAlpha = 1 - expand
-    const collapsedMidX = cssW * 0.5
     const centerY = cssH * 0.5
 
     const collapsedCount = symbolicAyahBarCount(ayahCount)
@@ -161,15 +177,9 @@ export function AyahSelectorRail({
         const focus = Math.min(1, Math.max(0, 1 - Math.abs(index - collapsedActive)))
         const barW = COLLAPSED_BAR_W * (0.7 + 0.45 * focus)
         const alpha = (0.18 + 0.72 * focus) * exit
+        const rect = railCollapsedBarRect(cssW, side, growFrom, barW, COLLAPSED_BAR_H, exit)
         ctx.beginPath()
-        roundRect(
-          ctx,
-          collapsedMidX - barW / 2,
-          y - COLLAPSED_BAR_H / 2,
-          barW,
-          COLLAPSED_BAR_H,
-          COLLAPSED_BAR_H,
-        )
+        roundRect(ctx, rect.x, y - COLLAPSED_BAR_H / 2, rect.width, COLLAPSED_BAR_H, COLLAPSED_BAR_H)
         ctx.fillStyle = withAlpha(ink, alpha)
         ctx.fill()
       }
@@ -195,8 +205,8 @@ export function AyahSelectorRail({
       // so numbers never clip against the canvas edge on narrow mobile rails.
       ctx.font = '700 11px "EB Garamond", "Times New Roman", serif'
       const labelWidth = ctx.measureText(String(ayahCount)).width
-      const layout = railExpandedLayout(cssW, side, labelWidth)
-      const { midX, maxBarLen, majorBonus, labelGap } = layout
+      const layout = railExpandedLayout(cssW, side, labelWidth, growFrom)
+      const { maxBarLen, majorBonus } = layout
 
       // Numbers hang toward the page (inner edge of the overlay rail).
       const numbersTowardPage = side === 'left'
@@ -219,9 +229,10 @@ export function AyahSelectorRail({
         const thickness = MIN_THICKNESS + (MAX_THICKNESS - MIN_THICKNESS) * focus
         const alpha = (0.1 + 0.62 * focus) * arrival * edgeFade
         const isSelected = ayah === selectedAyah
+        const bar = railTickBarRect(layout, side, length, thickness)
 
         ctx.beginPath()
-        roundRect(ctx, midX - length / 2, y - thickness / 2, length, thickness, thickness)
+        roundRect(ctx, bar.x, y - thickness / 2, bar.width, thickness, thickness)
         ctx.fillStyle = isSelected
           ? withAlpha(gold, 0.96 * arrival)
           : withAlpha(ink, alpha)
@@ -235,10 +246,7 @@ export function AyahSelectorRail({
           ctx.font = isSelected
             ? '700 11px "EB Garamond", "Times New Roman", serif'
             : '600 8.5px "EB Garamond", "Times New Roman", serif'
-          const labelX = numbersTowardPage
-            ? midX + length / 2 + labelGap
-            : midX - length / 2 - labelGap
-          ctx.fillText(String(ayah), labelX, y)
+          ctx.fillText(String(ayah), railTickLabelX(layout, side, length), y)
         }
       }
     }
@@ -277,8 +285,12 @@ export function AyahSelectorRail({
   useEffect(() => {
     const onResize = () => schedulePaint()
     window.addEventListener('resize', onResize)
+    const mq = window.matchMedia(MOBILE_RAIL_MEDIA)
+    const onMq = () => schedulePaint()
+    mq.addEventListener('change', onMq)
     return () => {
       window.removeEventListener('resize', onResize)
+      mq.removeEventListener('change', onMq)
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
     }
   }, [schedulePaint])
