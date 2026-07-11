@@ -212,7 +212,9 @@ object FocusEngine {
      * controller should teleport to a doorstep first and glide the last stretch.
      *
      * Prefer [planJump] for hand-initiated jumps — this remains for the
-     * non-preRoll recitation-follow path, which still uses a simple doorstep.
+     * non-preRoll recitation-follow path, which still uses a simple doorstep
+     * before its continuous home-scroll. A next-verse hop across a page
+     * divider (delta ≈ 2) must stay below this threshold so it animates.
      */
     fun shouldTeleport(targetIndexDelta: Int, visibleItemCount: Int): Boolean =
         abs(targetIndexDelta) > visibleItemCount + NEAR_EXTRA_ITEMS

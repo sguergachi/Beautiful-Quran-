@@ -217,6 +217,24 @@ class FocusEngineTest {
         assertTrue(FocusEngine.shouldTeleport(targetIndexDelta = 40, visibleItemCount = 5))
     }
 
+    @Test
+    fun `next verse across a page divider stays near — no teleport`() {
+        // LazyColumn layout: … ayah N, PageDivider, ayah N+1 …
+        // When a tall verse fills the viewport (visibleCount = 1), the next
+        // ayah is only two items away. Recitation-follow must treat that as
+        // near and animate — a doorstep teleport would read as a jump across
+        // the mushaf page break.
+        assertFalse(FocusEngine.shouldTeleport(targetIndexDelta = 2, visibleItemCount = 1))
+        val plan = FocusEngine.planJump(
+            fromIndex = 10,
+            toIndex = 12,
+            visibleItemCount = 1,
+            totalItemCount = 100,
+        )
+        assertEquals(null, plan.doorstepIndex)
+        assertEquals(2, plan.animatedItemSpan)
+    }
+
     // ---- jump planning (near = direct, far = long residual up to 1s) ----
 
     @Test

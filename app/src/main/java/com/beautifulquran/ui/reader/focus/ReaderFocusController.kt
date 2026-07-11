@@ -1,10 +1,8 @@
 package com.beautifulquran.ui.reader.focus
 
-import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
@@ -140,7 +138,9 @@ class ReaderFocusController internal constructor(
      *   until it lands exactly, with no rush-then-settle handoff stutter.
      *
      * Recitation-follow leaves [preRoll] off so lyric tracking stays a gentle
-     * glide. See [FocusEngine.planJump].
+     * glide — still via the same continuous [animateHomeOnto] path (not a
+     * one-shot measure), so the next verse across a page divider never pops
+     * into place when it was not yet laid out. See [FocusEngine.planJump].
      */
     suspend fun focus(ayahNumber: Int, animate: Boolean, preRoll: Boolean = false) {
         focusMutex.withLock {
@@ -193,14 +193,20 @@ class ReaderFocusController internal constructor(
             )
         }
 
-        val delta = measureGlideDelta(itemIndex, viewportHeight) ?: return
         if (!animate) {
-            listState.scrollBy(delta.toFloat())
+            // Instant settle (continue-listening open): force the item into
+            // layout when needed, then snap by the exact remaining pixels.
+            val delta = measureGlideDelta(itemIndex, viewportHeight) ?: return
+            if (delta != 0) listState.scrollBy(delta.toFloat())
             return
         }
-        if (delta != 0) {
-            listState.animateScrollBy(delta.toFloat(), GlideSpec)
-        }
+
+        // Continuous re-aim — same path as the hand-jump residual. Critical
+        // across a mushaf page break: the next ayah often sits just past a
+        // PageDivider and is not yet laid out, so a one-shot measure would
+        // scrollToItem (a pop) before gliding. Estimating + re-aiming each
+        // frame keeps the motion a smooth decelerating scroll onto the verse.
+        animateHomeOnto(itemIndex, viewportHeight, GLIDE_MS)
     }
 
     /**
@@ -286,8 +292,8 @@ class ReaderFocusController internal constructor(
 
     /**
      * Pixels to scroll so [itemIndex] lands on its adaptive anchor. Forces the
-     * item into layout when it is not yet measured (used by the soft
-     * recitation-follow path).
+     * item into layout when it is not yet measured — used only by the instant
+     * (`animate = false`) settle path, where a snap is intentional.
      */
     private suspend fun measureGlideDelta(itemIndex: Int, viewportHeight: Int): Int? {
         var target = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == itemIndex }
@@ -336,10 +342,9 @@ class ReaderFocusController internal constructor(
     }
 
     private companion object {
-        /** Soft recitation-follow glide. Hand-initiated jumps use
-         *  [FocusEngine.planJump]'s duration instead. */
-        val GlideSpec: AnimationSpec<Float> =
-            tween(durationMillis = 700, easing = FastOutSlowInEasing)
+        /** Soft recitation-follow / layout-reflow glide duration. Hand-initiated
+         *  jumps use [FocusEngine.planJump]'s duration instead. */
+        const val GLIDE_MS: Int = 700
     }
 }
 

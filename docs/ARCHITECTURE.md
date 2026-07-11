@@ -188,9 +188,11 @@ ReaderFocusController ── holds the LazyListState; the sole writer to it
   (`homeScrollStep`): each frame re-aims at the live remaining distance so
   the decelerating glide stays smooth all the way onto the exact verse —
   no rush-then-settle handoff, no chunky end stutter. Recitation-follow
-  leaves `preRoll` off so lyric tracking stays a gentle glide. Concurrent
-  `focus()` calls are serialized on a mutex so a sibling effect cannot
-  cancel the slide mid-flight.
+  leaves `preRoll` off but still uses that same continuous home-scroll
+  (700 ms soft glide) — never a one-shot `scrollToItem` + animate — so the
+  next verse across a mushaf page divider (often not yet laid out) glides
+  instead of jumping. Concurrent `focus()` calls are serialized on a mutex
+  so a sibling effect cannot cancel the slide mid-flight.
 - Display settings that reflow ayah heights (reading mode, word gloss,
   transliteration, translation, font scale) trigger a gentle re-`focus` of
   the pinned verse after the LazyColumn remasures, so the reading line
