@@ -91,8 +91,9 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const playingNow =
     state.player.isPlaying &&
     state.player.nowPlaying?.surahId === content?.surah.id
-  // Debounced like Android — hold chrome recess across the brief isPlaying
-  // gap when the player swaps ayahs, so top bar / rail / transport stay faded.
+  // Debounced like Android — hold recess across the brief isPlaying gap when
+  // the player swaps ayahs. Top bar + rail fully hide (topBarAlpha → 0);
+  // player peripherals stay at a whisper (chromeAlpha → 0.08).
   const [recitingActive, setRecitingActive] = useState(playingNow)
   const receded = recitingActive && !searchActive
 
