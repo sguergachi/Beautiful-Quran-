@@ -384,7 +384,9 @@ the design docs — not shared UI code.
   the output to `docs/app`. GitHub Pages serves `master:/docs`, so that
   commit is what updates
   [`/app/`](https://sguergachi.github.io/Beautiful-Quran-/app/). Source-only
-  merges that skip this step leave the live reader stale.
+  merges that skip this step leave the live reader stale. The publish step
+  retries (rebuild + rebase) when concurrent master pushes race on hashed
+  `docs/app` assets.
 - Android `assembleRelease` stays in `build.yml` — web failures do not block it.
 
 ## 13. Quality gates (definition of done)
