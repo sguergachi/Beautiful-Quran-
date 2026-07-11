@@ -4,6 +4,10 @@
  *
  * Port of Android `ui/reader/focus/ReaderFocusController.kt` for a non-virtual
  * scroll element (all ayah blocks are in the DOM).
+ *
+ * Verse advances and tall-verse line follow both use continuous `homeScrollStep`
+ * re-aiming (not a one-shot delta or an instant `scrollTop` snap) so motion
+ * stays butter-smooth onto the next verse or the next line.
  */
 import {
   FocusEngine,
@@ -13,14 +17,14 @@ import {
   type TargetGeometry,
 } from '../../engine/focus'
 
+/** Soft recitation-follow / verse-glide duration — Android `GlideSpec` 700ms. */
 const GLIDE_MS = 700
+/** Tall-verse word-band follow — snappier than a full verse glide. */
+const WORD_GLIDE_MS = 450
 const ACTIVE_WORD_TOP_MARGIN_PX = 144
 const ACTIVE_WORD_BOTTOM_MARGIN_PX = 132
 
-function easeOutCubic(t: number): number {
-  return 1 - (1 - t) ** 3
-}
-
+/** Approximate Android `FastOutSlowInEasing` (path 0.4, 0, 0.2, 1). */
 function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 }
@@ -141,23 +145,16 @@ export class ReaderFocusController {
 
   /**
    * Secondary constraint: keep the active word inside the comfortable reading
-   * band when the verse is taller than the viewport.
+   * band when the verse is taller than the viewport. Smooth continuous glide
+   * (same `homeScrollStep` path as verse focus) — never an instant snap.
+   * Serialized with [focus] so line follow and verse advances do not fight.
    */
   keepWordInView(wordEl: HTMLElement | null | undefined): void {
-    const el = this.scrollEl
-    if (!el || !wordEl) return
-    const parentRect = el.getBoundingClientRect()
-    const rect = wordEl.getBoundingClientRect()
-    const top = rect.top - parentRect.top
-    const bottom = rect.bottom - parentRect.top
-    const bandTop = this.topGuardPx + ACTIVE_WORD_TOP_MARGIN_PX
-    const bandBottom = el.clientHeight - ACTIVE_WORD_BOTTOM_MARGIN_PX
-
-    let delta = 0
-    if (top < bandTop) delta = top - bandTop
-    else if (bottom > bandBottom) delta = bottom - bandBottom
-    if (Math.abs(delta) < 1) return
-    el.scrollTop = Math.max(0, el.scrollTop + delta)
+    if (!this.scrollEl || !wordEl) return
+    const epoch = ++this.focusEpoch
+    this.focusChain = this.focusChain
+      .catch(() => undefined)
+      .then(() => this.animateWordIntoBand(wordEl, WORD_GLIDE_MS, epoch))
   }
 
   private ayahEl(ayahNumber: number): HTMLElement | null {
@@ -226,6 +223,21 @@ export class ReaderFocusController {
       geom.heightPx,
     )
     return FocusEngine.glideDeltaPx(geom, anchor)
+  }
+
+  private wordBandDelta(wordEl: HTMLElement): number {
+    const el = this.scrollEl
+    if (!el) return 0
+    const parentRect = el.getBoundingClientRect()
+    const rect = wordEl.getBoundingClientRect()
+    return FocusEngine.wordBandDeltaPx(
+      rect.top - parentRect.top,
+      rect.bottom - parentRect.top,
+      el.clientHeight,
+      this.topGuardPx,
+      ACTIVE_WORD_TOP_MARGIN_PX,
+      ACTIVE_WORD_BOTTOM_MARGIN_PX,
+    )
   }
 
   private async focusLocked(
@@ -311,24 +323,57 @@ export class ReaderFocusController {
       }
     }
 
-    const delta = this.remainingPxToAnchor(ayahNumber)
     if (epoch !== this.focusEpoch) return
     if (!animate) {
+      const delta = this.remainingPxToAnchor(ayahNumber)
       el.scrollTop = Math.max(0, el.scrollTop + delta)
       return
     }
-    if (Math.abs(delta) < 0.5) return
-    await this.animateScrollBy(delta, GLIDE_MS, epoch, easeOutCubic)
+    // Recitation-follow: continuous re-aim (same path as hand-jump residual)
+    // so the next verse lands smoothly even when intervening heights vary.
+    await this.animateHomeOnto(ayahNumber, GLIDE_MS, epoch)
   }
 
+  /**
+   * Continuously home onto [ayahNumber]'s adaptive anchor over [durationMs].
+   * Re-reads the live remaining distance every frame via [homeScrollStep].
+   */
   private animateHomeOnto(
     ayahNumber: number,
     durationMs: number,
     epoch: number,
   ): Promise<void> {
+    return this.animateRemaining(
+      () => this.remainingPxToAnchor(ayahNumber),
+      durationMs,
+      epoch,
+    )
+  }
+
+  /**
+   * Continuously ease the active word into the reading band over [durationMs].
+   */
+  private animateWordIntoBand(
+    wordEl: HTMLElement,
+    durationMs: number,
+    epoch: number,
+  ): Promise<void> {
+    if (!wordEl.isConnected) return Promise.resolve()
+    return this.animateRemaining(() => this.wordBandDelta(wordEl), durationMs, epoch)
+  }
+
+  /**
+   * Shared decelerating glide: each frame scrolls the FastOutSlowIn fraction of
+   * whatever distance [remainingPx] still reports.
+   */
+  private animateRemaining(
+    remainingPx: () => number,
+    durationMs: number,
+    epoch: number,
+  ): Promise<void> {
     const el = this.scrollEl
     if (!el) return Promise.resolve()
-    if (Math.abs(this.remainingPxToAnchor(ayahNumber)) < 0.5) return Promise.resolve()
+    if (Math.abs(remainingPx()) < 0.5) return Promise.resolve()
 
     const duration = Math.max(1, durationMs)
     const start = performance.now()
@@ -342,7 +387,7 @@ export class ReaderFocusController {
         }
         const t = Math.min(1, (now - start) / duration)
         const progress = easeInOutCubic(t)
-        const remaining = this.remainingPxToAnchor(ayahNumber)
+        const remaining = remainingPx()
         const step = FocusEngine.homeScrollStep(remaining, progress, lastProgress)
         lastProgress = progress
         if (Math.abs(step) >= 0.5) {
@@ -351,7 +396,7 @@ export class ReaderFocusController {
         if (t < 1) {
           requestAnimationFrame(tick)
         } else {
-          const leftover = this.remainingPxToAnchor(ayahNumber)
+          const leftover = remainingPx()
           if (Math.abs(leftover) >= 0.5 && this.scrollEl) {
             this.scrollEl.scrollTop = Math.max(0, this.scrollEl.scrollTop + leftover)
           }
@@ -361,32 +406,6 @@ export class ReaderFocusController {
       requestAnimationFrame(tick)
     })
   }
-
-  private animateScrollBy(
-    deltaPx: number,
-    durationMs: number,
-    epoch: number,
-    ease: (t: number) => number,
-  ): Promise<void> {
-    const el = this.scrollEl
-    if (!el) return Promise.resolve()
-    const startTop = el.scrollTop
-    const start = performance.now()
-
-    return new Promise((resolve) => {
-      const tick = (now: number) => {
-        if (epoch !== this.focusEpoch || !this.scrollEl) {
-          resolve()
-          return
-        }
-        const t = Math.min(1, (now - start) / durationMs)
-        this.scrollEl.scrollTop = Math.max(0, startTop + deltaPx * ease(t))
-        if (t < 1) requestAnimationFrame(tick)
-        else resolve()
-      }
-      requestAnimationFrame(tick)
-    })
-  }
 }
 
-export { ACTIVE_WORD_TOP_MARGIN_PX, ACTIVE_WORD_BOTTOM_MARGIN_PX }
+export { ACTIVE_WORD_TOP_MARGIN_PX, ACTIVE_WORD_BOTTOM_MARGIN_PX, GLIDE_MS, WORD_GLIDE_MS }

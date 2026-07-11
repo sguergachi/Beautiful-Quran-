@@ -116,7 +116,10 @@ separate (`web/src/ui/reader/ReaderFocusController.ts` — sole writer to the
 reader `scrollTop`, using `getBoundingClientRect` + rAF `homeScrollStep`;
 resolves ayah 0 to the `.basmalah-block` above ayah 1 on preface chapters).
 Recitation-follow, selector jumps, return-to-ayah, and tall-verse word
-keep-in-view all go through it. Non-active ayahs recess only while audio is
+keep-in-view all go through it. Verse advances and tall-verse line follow
+both use continuous `homeScrollStep` re-aiming (never an instant `scrollTop`
+snap) so the next verse and the next line glide smoothly. Word-band math
+lives in pure `wordBandDeltaPx`. Non-active ayahs recess only while audio is
 actually playing (`recitingActive`); at rest every ayah is Plain (full opacity).
 
 **Follow pause (Android parity):** lyric follow is paused only by a vertical
