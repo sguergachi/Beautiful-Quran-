@@ -3,7 +3,6 @@ import { appStore, useAppState } from '../store/appStore'
 import { HomeScreen } from './home/HomeScreen'
 import { ReaderScreen } from './reader/ReaderScreen'
 import { SettingsScreen } from './settings/SettingsScreen'
-import { RootViewer } from './root/RootViewer'
 import { EntranceCover } from './entrance/EntranceCover'
 
 function resolveTheme(mode: string): string {
@@ -86,7 +85,6 @@ export function App() {
           <HomeScreen stackLayer={stack} />
           <ReaderScreen stackLayer={stack} />
           <SettingsScreen stackLayer={stack} hasReader={hasReader} />
-          <RootViewer />
         </>
       )}
       {!entranceDone && (

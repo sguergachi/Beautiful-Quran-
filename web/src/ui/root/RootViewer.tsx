@@ -6,9 +6,10 @@ import { IconClose } from '../icons/PlaybackIcons'
 const BLEED_OUT_MS = 420
 
 /**
- * Root lexicon overlay. Enter blooms with CSS `bleed-in` (circle clip expands);
- * exit punches a hole open via `bleed-out` — same enter/exit pair as Android
- * `InkRevealOverlay` — and stays mounted until the hole animation finishes.
+ * Root lexicon overlay hosted inside the reader sheet. Enter blooms with CSS
+ * `bleed-in` (circle clip expands); exit punches a hole open via `bleed-out` —
+ * same enter/exit pair as Android `InkRevealOverlay` — and stays mounted until
+ * the hole animation finishes. Contained to the paper sheet (not the viewport).
  */
 export function RootViewer() {
   const state = useAppState()

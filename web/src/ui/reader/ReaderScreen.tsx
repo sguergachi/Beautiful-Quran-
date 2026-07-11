@@ -27,6 +27,7 @@ import {
 } from '../icons/PlaybackIcons'
 import { AyahSelectorRail } from './AyahSelectorRail'
 import { ReaderFocusController } from './ReaderFocusController'
+import { RootViewer } from '../root/RootViewer'
 
 /** Usable in-surah query — mirrors Android `SurahSearchState.activeQuery`. */
 function activeSearchQuery(active: boolean, query: string): string | null {
@@ -584,6 +585,9 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       </div>
 
       {state.player.error ? <p className="muted-error">{state.player.error}</p> : null}
+
+      {/* Ink bleed lives on this sheet — not a full-viewport layer over the deck. */}
+      <RootViewer />
     </div>
   )
 }
