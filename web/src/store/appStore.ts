@@ -211,6 +211,9 @@ class AppStore {
       const reciters = QuranRepository.reciters()
       this.set({ ready: true, surahs, reciters, error: null, loadLabel: '' })
       player.setSpeed(this.state.settings.playbackSpeed)
+      // Only install the offline worker after a successful boot so a failed
+      // first paint cannot pin a poisoned shell in the Cache API.
+      void import('../swRegistration').then((m) => m.registerServiceWorker())
     } catch (e) {
       this.set({
         ready: false,

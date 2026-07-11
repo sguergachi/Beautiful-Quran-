@@ -20,31 +20,84 @@
     <title>Beautiful Quran</title>
     <script>
       document.documentElement.classList.add('js')
-      // If a stale service-worker shell left us with an empty root (cached
-      // index pointing at deleted hashed assets), wipe the worker + caches
-      // and reload once so the network-first shell can take over.
-      window.addEventListener('load', () => {
-        window.setTimeout(() => {
-          const root = document.getElementById('root')
-          if (!root || root.childElementCount > 0) return
+      /**
+       * Stale-shell heal for mobile browsers.
+       *
+       * A previous service worker could serve a cached index.html that still
+       * pointed at deleted hashed JS/CSS after a Pages deploy. The module
+       * 404 left #root empty. Wipe every worker + Cache API entry and reload
+       * once so the network-only shell can take over.
+       *
+       * Bump HEAL_KEY whenever the heal contract changes so phones that
+       * already attempted an older heal can try again.
+       */
+      ;(function () {
+        var HEAL_KEY = 'bq-sw-heal-v6'
+        var healing = false
+
+        function heal(reason) {
+          if (healing) return
           if (!('serviceWorker' in navigator)) return
-          const flag = 'bq-sw-heal'
-          if (sessionStorage.getItem(flag)) return
-          sessionStorage.setItem(flag, '1')
-          void (async () => {
-            const regs = await navigator.serviceWorker.getRegistrations()
-            await Promise.all(regs.map((r) => r.unregister()))
-            if (window.caches) {
-              const keys = await caches.keys()
-              await Promise.all(keys.map((k) => caches.delete(k)))
-            }
-            location.reload()
-          })()
-        }, 3500)
-      })
+          try {
+            if (sessionStorage.getItem(HEAL_KEY)) return
+            sessionStorage.setItem(HEAL_KEY, reason || '1')
+          } catch (e) {
+            /* private mode */
+          }
+          healing = true
+          Promise.resolve()
+            .then(function () {
+              return navigator.serviceWorker.getRegistrations()
+            })
+            .then(function (regs) {
+              return Promise.all(
+                regs.map(function (r) {
+                  return r.unregister()
+                }),
+              )
+            })
+            .then(function () {
+              if (!window.caches) return
+              return caches.keys().then(function (keys) {
+                return Promise.all(
+                  keys.map(function (k) {
+                    return caches.delete(k)
+                  }),
+                )
+              })
+            })
+            .then(function () {
+              location.reload()
+            })
+            .catch(function () {
+              location.reload()
+            })
+        }
+
+        // Hashed module / stylesheet 404 from a poisoned shell.
+        window.addEventListener(
+          'error',
+          function (e) {
+            var t = e && e.target
+            if (!t) return
+            var tag = t.tagName
+            if (tag === 'SCRIPT' || tag === 'LINK') heal('asset-error')
+          },
+          true,
+        )
+
+        // Empty root after a short wait (module never ran).
+        window.addEventListener('load', function () {
+          window.setTimeout(function () {
+            var root = document.getElementById('root')
+            if (!root || root.childElementCount > 0) return
+            heal('empty-root')
+          }, 1500)
+        })
+      })()
     </script>
-    <script type="module" crossorigin src="/Beautiful-Quran-/app/assets/index-sv_ZDRuR.js"></script>
-    <link rel="stylesheet" crossorigin href="/Beautiful-Quran-/app/assets/index-DnaSMIKQ.css">
+    <script type="module" crossorigin src="/Beautiful-Quran-/app/assets/index-_uZjUxdZ.js"></script>
+    <link rel="stylesheet" crossorigin href="/Beautiful-Quran-/app/assets/index-DhcIGLno.css">
   </head>
   <body>
     <div id="root"></div>

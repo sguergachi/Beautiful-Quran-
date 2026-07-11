@@ -372,6 +372,27 @@ select {
   max-width: 22rem;
 }
 
+.boot-retry {
+  margin-top: 1.5rem;
+  padding: 0.85rem 1.25rem;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  opacity: 0.72;
+}
+
+.boot-retry:active {
+  opacity: 1;
+}
+
 .boot .pulse {
   margin-top: 1.25rem;
   width: 2.5rem;
