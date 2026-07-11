@@ -93,11 +93,11 @@ private const val DUA_WASH_MS = 2_400
 private const val DUA_HOLD_MS = 900L
 
 /** The cover's hinge open. Deliberately slower than a page turn (460 ms):
- * a bound board is heavier than a sheet. Pivot on the left; positive
- * rotationY (Compose Y-up) brings the free edge toward the reader — opens
- * out of the screen facing them, not into the page. */
+ * a bound board is heavier than a sheet. Pivot on the left; negative
+ * rotationY brings the free edge toward the reader — same outward open as
+ * the web cover's `rotateY(-95deg)`. Positive would fold into the page. */
 private const val OPEN_MS = 1_150
-private const val OPEN_DEGREES = 88f
+private const val OPEN_DEGREES = -95f
 
 /** Same decelerating settle as the paper stack's page turns. */
 private val CoverOpenEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
@@ -230,15 +230,17 @@ fun EntranceCover(
                 .fillMaxSize()
                 .graphicsLayer {
                     val t = turn.value
-                    // Left-edge hinge: positive rotationY (Y-up) brings the
-                    // free edge toward the camera — opens out facing the reader.
+                    // Left-edge hinge: negative rotationY brings the free
+                    // edge toward the camera — opens out facing the reader
+                    // (matches web rotateY(-95deg); positive folds inward).
                     transformOrigin = TransformOrigin(0f, 0.5f)
-                    cameraDistance = 42f * density
+                    // Closer camera ≈ web perspective(1400px): enough depth
+                    // that the outward swing reads clearly.
+                    cameraDistance = 24f * density
                     rotationY = OPEN_DEGREES * t
                     // Edge-on the board is invisible anyway; the fade keeps its
                     // mirrored back from ever flashing at the end of the swing.
                     alpha = sheetAlpha.value * (1f - openFade(t))
-                    shadowElevation = 24f * t * (1f - t)
                 }
                 .clip(coverShape)
                 .drawBehind {
