@@ -2,15 +2,37 @@
  * Pure focus / scroll math — port of Android `ui/reader/focus/FocusEngine.kt`.
  */
 
-const FIT_TOP_MARGIN_FRACTION = 0.1
-const TALL_TOP_MARGIN_FRACTION = 0.04
-const IN_FOCUS_TOLERANCE_FRACTION = 0.18
-const NEAR_EXTRA_ITEMS = 2
-const ANIMATED_SPAN_MIN_VIEWPORTS = 1
-const ANIMATED_SPAN_MAX_ITEMS = 48
-const JUMP_DISTANCE_SATURATE_ITEMS = 200
-const JUMP_MIN_MS = 280
-const JUMP_MAX_MS = 1_000
+import { BASMALAH_PLAYLIST_AYAH } from './basmalah'
+
+export const FIT_TOP_MARGIN_FRACTION = 0.1
+export const TALL_TOP_MARGIN_FRACTION = 0.04
+export const IN_FOCUS_TOLERANCE_FRACTION = 0.18
+export const NEAR_EXTRA_ITEMS = 2
+export const ANIMATED_SPAN_MIN_VIEWPORTS = 1
+export const ANIMATED_SPAN_MAX_ITEMS = 48
+export const JUMP_DISTANCE_SATURATE_ITEMS = 200
+export const JUMP_MIN_MS = 280
+export const JUMP_MAX_MS = 1_000
+
+/** Focus-target ayah for the chapter-opening basmalah (playlist sentinel 0). */
+export const CHAPTER_TOP_FOCUS_AYAH = BASMALAH_PLAYLIST_AYAH
+
+/**
+ * Resolve lyric-follow / return-to-verse target. Basmalah lead-in wins so the
+ * surah header stays focused while the preface plays.
+ */
+export function playbackFocusTarget(
+  activeAyah: number | null | undefined,
+  activeBasmalah: boolean,
+): number | null {
+  if (activeBasmalah) return CHAPTER_TOP_FOCUS_AYAH
+  return activeAyah ?? null
+}
+
+/** True when [focusAyah] is the chapter-opening basmalah (header) target. */
+export function isChapterTopFocusTarget(focusAyah: number): boolean {
+  return focusAyah === CHAPTER_TOP_FOCUS_AYAH
+}
 
 export interface JumpPlan {
   doorstepIndex: number | null
@@ -127,8 +149,12 @@ export function anchorOffsetPx(
   viewportHeightPx: number,
   topGuardPx: number,
   targetHeightPx: number,
+  chapterTop = false,
 ): number {
   const u = usable(viewportHeightPx, topGuardPx)
+  if (chapterTop) {
+    return Math.round(topGuardPx + u * TALL_TOP_MARGIN_FRACTION)
+  }
   const fits = targetHeightPx >= 1 && targetHeightPx <= u
   if (fits) {
     const restingTop = topGuardPx + u * FIT_TOP_MARGIN_FRACTION
@@ -146,18 +172,20 @@ export function placement(
   target: TargetGeometry,
   viewportHeightPx: number,
   topGuardPx: number,
+  chapterTop = false,
 ): FocusPlacement {
   if (!target.isLaidOut) {
     const zone = target.isAboveWhenOffscreen ? FocusZone.ABOVE : FocusZone.BELOW
     return { zone, distancePx: 0 }
   }
-  const anchor = anchorOffsetPx(viewportHeightPx, topGuardPx, target.heightPx)
+  const anchor = anchorOffsetPx(viewportHeightPx, topGuardPx, target.heightPx, chapterTop)
   const distance = target.topPx - anchor
   const bottom = target.topPx + target.heightPx
   const u = usable(viewportHeightPx, topGuardPx)
   const tolerance = Math.round(u * IN_FOCUS_TOLERANCE_FRACTION)
 
   const fitsFullyVisible =
+    !chapterTop &&
     target.heightPx >= 1 &&
     target.heightPx <= u &&
     target.topPx >= topGuardPx &&
@@ -196,6 +224,9 @@ export function readoutPosition(readout: ReadoutSnapshot): number {
 }
 
 export const FocusEngine = {
+  CHAPTER_TOP_FOCUS_AYAH,
+  playbackFocusTarget,
+  isChapterTopFocusTarget,
   planJump,
   jumpDurationMs,
   homeScrollStep,

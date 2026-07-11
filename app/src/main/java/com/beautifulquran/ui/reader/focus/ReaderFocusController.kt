@@ -78,6 +78,7 @@ class ReaderFocusController internal constructor(
     fun placementOf(ayahNumber: Int?): FocusPlacement {
         val itemIndex = ayahNumber?.let { itemIndexOfAyah[it] }
             ?: return FocusPlacement(FocusZone.IN_FOCUS, 0)
+        val chapterTop = FocusEngine.isChapterTopFocusTarget(ayahNumber)
         val info = listState.layoutInfo
         val viewportHeight = info.viewportSize.height
         if (viewportHeight <= 0) return FocusPlacement(FocusZone.IN_FOCUS, 0)
@@ -97,7 +98,7 @@ class ReaderFocusController internal constructor(
                 isAboveWhenOffscreen = itemIndex < listState.firstVisibleItemIndex,
             )
         }
-        return FocusEngine.placement(geometry, viewportHeight, topGuardPx)
+        return FocusEngine.placement(geometry, viewportHeight, topGuardPx, chapterTop)
     }
 
     /** True when [ayahNumber] is currently laid out taller than the viewport, so
@@ -116,6 +117,9 @@ class ReaderFocusController internal constructor(
      * scroll. Waits for a real viewport before measuring (killing the
      * open-before-layout race), then lands the verse on its adaptive anchor.
      * [animate] false snaps instantly (used for the initial settle).
+     *
+     * Pass [FocusEngine.CHAPTER_TOP_FOCUS_AYAH] (0) to home onto the surah
+     * header / basmalah preface — the chapter-top item above ayah 1.
      *
      * [preRoll] is for jumps the reader initiates by hand (selector, search,
      * return-to-verse). The pure [FocusEngine.planJump] decides the whole
@@ -137,6 +141,7 @@ class ReaderFocusController internal constructor(
 
     private suspend fun focusLocked(ayahNumber: Int, animate: Boolean, preRoll: Boolean) {
         val itemIndex = itemIndexOfAyah[ayahNumber] ?: return
+        val chapterTop = FocusEngine.isChapterTopFocusTarget(ayahNumber)
         // Never measure against a zero viewport — wait for the first real layout.
         val viewportHeight = snapshotFlow { listState.layoutInfo.viewportSize.height }
             .first { it > 0 }
@@ -159,7 +164,7 @@ class ReaderFocusController internal constructor(
                 listState.scrollToItem(doorstep)
             }
             // One continuous decelerating home — no second settle phase.
-            animateHomeOnto(itemIndex, viewportHeight, plan.durationMs)
+            animateHomeOnto(itemIndex, viewportHeight, plan.durationMs, chapterTop)
             return
         }
 
@@ -180,7 +185,7 @@ class ReaderFocusController internal constructor(
             )
         }
 
-        val delta = measureGlideDelta(itemIndex, viewportHeight) ?: return
+        val delta = measureGlideDelta(itemIndex, viewportHeight, chapterTop) ?: return
         if (!animate) {
             listState.scrollBy(delta.toFloat())
             return
@@ -205,8 +210,9 @@ class ReaderFocusController internal constructor(
         itemIndex: Int,
         viewportHeight: Int,
         durationMs: Int,
+        chapterTop: Boolean,
     ) {
-        if (abs(remainingPxToAnchor(itemIndex, viewportHeight)) < 0.5f) return
+        if (abs(remainingPxToAnchor(itemIndex, viewportHeight, chapterTop)) < 0.5f) return
 
         listState.scroll {
             var lastProgress = 0f
@@ -218,7 +224,7 @@ class ReaderFocusController internal constructor(
                     easing = FastOutSlowInEasing,
                 ),
             ) { value, _ ->
-                val remaining = remainingPxToAnchor(itemIndex, viewportHeight)
+                val remaining = remainingPxToAnchor(itemIndex, viewportHeight, chapterTop)
                 val step = FocusEngine.homeScrollStep(remaining, value, lastProgress)
                 lastProgress = value
                 if (abs(step) >= 0.5f) {
@@ -226,7 +232,7 @@ class ReaderFocusController internal constructor(
                 }
             }
             // Consume any sub-pixel leftover from clamping — invisible as a jump.
-            val leftover = remainingPxToAnchor(itemIndex, viewportHeight)
+            val leftover = remainingPxToAnchor(itemIndex, viewportHeight, chapterTop)
             if (abs(leftover) >= 0.5f) {
                 scrollBy(leftover)
             }
@@ -238,11 +244,20 @@ class ReaderFocusController internal constructor(
      * Uses real geometry when laid out; otherwise estimates from the average
      * laid-out item height (updated as new verses enter during the home-scroll).
      */
-    private fun remainingPxToAnchor(itemIndex: Int, viewportHeight: Int): Float {
+    private fun remainingPxToAnchor(
+        itemIndex: Int,
+        viewportHeight: Int,
+        chapterTop: Boolean,
+    ): Float {
         val visible = listState.layoutInfo.visibleItemsInfo
             .firstOrNull { it.index == itemIndex }
         if (visible != null) {
-            val anchor = FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, visible.size)
+            val anchor = FocusEngine.anchorOffsetPx(
+                viewportHeight,
+                topGuardPx,
+                visible.size,
+                chapterTop,
+            )
             return FocusEngine.glideDeltaPx(
                 TargetGeometry(
                     visible.offset,
@@ -258,7 +273,7 @@ class ReaderFocusController internal constructor(
         // Approximate the target's top as if every intervening item were `avg`
         // tall, accounting for the partial scroll of the first visible item.
         val approxTop = indexDelta * avg - listState.firstVisibleItemScrollOffset
-        val approxAnchor = FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, avg)
+        val approxAnchor = FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, avg, chapterTop)
         return (approxTop - approxAnchor).toFloat()
     }
 
@@ -276,7 +291,11 @@ class ReaderFocusController internal constructor(
      * item into layout when it is not yet measured (used by the soft
      * recitation-follow path).
      */
-    private suspend fun measureGlideDelta(itemIndex: Int, viewportHeight: Int): Int? {
+    private suspend fun measureGlideDelta(
+        itemIndex: Int,
+        viewportHeight: Int,
+        chapterTop: Boolean,
+    ): Int? {
         var target = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == itemIndex }
         if (target == null) {
             listState.scrollToItem(itemIndex)
@@ -285,7 +304,12 @@ class ReaderFocusController internal constructor(
         val geometry = target?.let {
             TargetGeometry(it.offset, it.size, isLaidOut = true, isAboveWhenOffscreen = false)
         } ?: return null
-        val anchor = FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, geometry.heightPx)
+        val anchor = FocusEngine.anchorOffsetPx(
+            viewportHeight,
+            topGuardPx,
+            geometry.heightPx,
+            chapterTop,
+        )
         return FocusEngine.glideDeltaPx(geometry, anchor)
     }
 

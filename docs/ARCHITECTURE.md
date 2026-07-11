@@ -167,15 +167,21 @@ ReaderFocusController ── holds the LazyListState; the sole writer to it
   rests fully in view with a little breathing room; a verse taller than the
   screen has its top pinned so its opening line shows — plus a verse's
   `placement` (above / below / in focus) and the exact pixel `glideDelta` to
-  bring it to its anchor.
+  bring it to its anchor. The chapter-opening **basmalah** is a first-class
+  focus target: `playbackFocusTarget` resolves the lead-in to
+  `CHAPTER_TOP_FOCUS_AYAH` (playlist ayah 0), and chapter-top anchors pin near
+  the content start so the surah-header calligraphy stays in the opening band
+  while it is recited.
 - `ui/reader/focus/ReaderFocusController` is the Compose glue and the **single
   writer** to the `LazyListState`. Every programmatic scroll — a selector
-  jump, recitation-follow, the return-to-verse control, the initial
-  continue-listening settle — goes through its one `focus()` suspend, which
-  waits for a real viewport before measuring, teleports to a doorstep when the
-  target is far off-screen, then glides the last stretch by exact pixels. It
-  also exposes the shared read-out (`focusedAyah` / `focusedPosition`) the rail
-  and the return control both consume.
+  jump, recitation-follow (including the basmalah lead-in), the return-to-verse
+  control, the initial continue-listening settle — goes through its one
+  `focus()` suspend, which waits for a real viewport before measuring,
+  teleports to a doorstep when the target is far off-screen, then glides the
+  last stretch by exact pixels. It also exposes the shared read-out
+  (`focusedAyah` / `focusedPosition`) the rail and the return control both
+  consume. On preface surahs, ayah 0 maps to the header LazyColumn item above
+  ayah 1.
 - Hand-initiated jumps (selector, search, return-to-verse) pass `preRoll` to
   `focus()`. The pure `FocusEngine.planJump` owns the trajectory shape
   (near = full path; far = doorstep + distance-scaled residual up to ~48
