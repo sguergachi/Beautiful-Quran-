@@ -464,12 +464,16 @@ select {
   margin: 0 auto;
 }
 
-/* Same column as search + chapter list; soft ink wash matches Android ContinueCard. */
+/*
+ * Continue card lives inside .scroll with the chapter list so it shares the
+ * same horizontal column (scroll pad + --home-max). Soft green wash matches
+ * Android ContinueCard (primaryContainer).
+ */
 .continue-row {
-  padding: 0.45rem var(--sheet-pad) 0.85rem;
   max-width: var(--home-max);
   width: 100%;
-  margin: 0 auto;
+  margin: 0.15rem auto 1rem;
+  padding: 0;
 }
 
 .continue {
@@ -479,9 +483,13 @@ select {
   gap: 1rem;
   width: 100%;
   margin: 0;
-  padding: 1.05rem 1.25rem;
+  padding: 1.1rem 1.35rem;
   border-radius: 1.35rem;
-  background: color-mix(in srgb, var(--accent-container) 40%, transparent);
+  background-color: color-mix(
+    in srgb,
+    var(--accent-container) 72%,
+    var(--paper-surface)
+  );
   color: var(--ink);
   text-align: start;
   min-height: 44px;
@@ -496,7 +504,7 @@ select {
 }
 
 .continue-label {
-  color: color-mix(in srgb, var(--accent) 75%, transparent);
+  color: color-mix(in srgb, var(--accent) 80%, var(--ink-muted));
   font-size: 0.88rem;
 }
 
@@ -515,7 +523,11 @@ select {
 
 @media (hover: hover) {
   .continue:hover {
-    background: color-mix(in srgb, var(--accent-container) 55%, transparent);
+    background-color: color-mix(
+      in srgb,
+      var(--accent-container) 88%,
+      var(--paper-surface)
+    );
   }
 }
 

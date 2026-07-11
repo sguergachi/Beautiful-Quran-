@@ -71,36 +71,36 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
           />
         </div>
 
-        {continueSurah ? (
-          <div className="continue-row">
-            <button
-              type="button"
-              className="continue"
-              onClick={() =>
-                appStore.openSurah(
-                  continueSurah.id,
-                  state.settings.lastAyah || 1,
-                )
-              }
-            >
-              <span className="continue-copy">
-                <span className="continue-label">Continue listening</span>
-                <span className="continue-target">
-                  {continueSurah.nameTransliteration}
-                  {state.settings.lastAyah > 0
-                    ? ` · Ayah ${state.settings.lastAyah}`
-                    : ''}
-                </span>
-              </span>
-              <span className="continue-ar" lang="ar" dir="rtl">
-                {continueSurah.nameArabic}
-              </span>
-            </button>
-          </div>
-        ) : null}
-
         <div className="edge-fade">
           <div className="scroll">
+            {continueSurah ? (
+              <div className="continue-row">
+                <button
+                  type="button"
+                  className="continue"
+                  onClick={() =>
+                    appStore.openSurah(
+                      continueSurah.id,
+                      state.settings.lastAyah || 1,
+                    )
+                  }
+                >
+                  <span className="continue-copy">
+                    <span className="continue-label">Continue listening</span>
+                    <span className="continue-target">
+                      {continueSurah.nameTransliteration}
+                      {state.settings.lastAyah > 0
+                        ? ` · Ayah ${state.settings.lastAyah}`
+                        : ''}
+                    </span>
+                  </span>
+                  <span className="continue-ar" lang="ar" dir="rtl">
+                    {continueSurah.nameArabic}
+                  </span>
+                </button>
+              </div>
+            ) : null}
+
             <ul className="surah-list">
               {filtered.map((s) => (
                 <li key={s.id}>
