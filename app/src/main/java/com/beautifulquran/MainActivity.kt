@@ -153,7 +153,7 @@ private const val STACK_PAGE_DURATION_MS = 460
 private const val STACK_PAGE_TURN_THRESHOLD = 0.18f
 private const val STACK_PAGE_FLING_THRESHOLD = 0.35f
 private const val STACK_PAGE_PULL_RESISTANCE_DP = 34
-private const val STACK_OFFSCREEN_OVERSCAN_DP = 24f
+private const val STACK_OFFSCREEN_OVERSCAN_DP = 36f
 private val StackMotionEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
 
 @Composable
@@ -621,17 +621,21 @@ private fun Modifier.paperLayerTransform(
         PaperLayer.Ayah -> {
             val reveal = stackPosition.coerceIn(0f, 1f)
             val turn = (stackPosition - 1f).coerceIn(0f, 1f)
-            translationX = width * 0.055f * (1f - reveal) - width * turn
+            // Overscan past full width so rotationY foreshortening cannot leave
+            // the ayah rail peeking over Settings once this sheet has turned.
+            translationX = width * 0.055f * (1f - reveal) -
+                (width + STACK_OFFSCREEN_OVERSCAN_DP * density) * turn
             scaleX = 0.985f + 0.015f * reveal
             scaleY = 0.985f + 0.015f * reveal
             rotationY = -4f * turn
             shadowElevation = 18f * (1f - turn)
         }
         PaperLayer.Settings -> {
+            // Stay fully under the sheets above — no lateral shift that would
+            // let the reader rail read as a gutter beside Settings.
             val reveal = (stackPosition / settingsLayer.toFloat()).coerceIn(0f, 1f)
-            translationX = width * 0.035f * (1f - reveal)
-            scaleX = 0.97f + 0.03f * reveal
-            scaleY = 0.97f + 0.03f * reveal
+            scaleX = 0.985f + 0.015f * reveal
+            scaleY = 0.985f + 0.015f * reveal
         }
     }
 }

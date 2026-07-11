@@ -292,12 +292,15 @@ Three sheets, hand-rolled paper stack (no router chrome):
    drag uses tick-spaced wheel scrub so the visible label is the commit target);
    return-to-ayah roundel (gilt corolla, qalam arrow painted toward the
    active verse); bookmark ribbon.
-3. **Settings** — reciter, reading mode, text size, display toggles, theme.
-   Opens as a third sheet **over** the reader when a surah is open
-   (`stackLayer` 0→1→2). On phones sheets are full-bleed — back buttons (and
-   Escape) peel the stack; there is no left/right peek gutter. Wide viewports
-   (≥900px) recenter a column with equal L/R peeks so under-sheets show at
-   the edges; tap a peek (or Escape) to peel back.
+3. **Settings** — reciter (select), reading mode / ayah side / playback
+   (ink segmented rows), theme (choice list with swatches), text size,
+   display toggles. Opens as a third sheet **over** the reader when a surah
+   is open (`stackLayer` 0→1→2). On phones sheets are full-bleed — back
+   buttons (and Escape) peel the stack; there is no left/right peek gutter.
+   Wide viewports (≥900px) recenter a column with a thin equal L/R peek of
+   the under-sheet; tap a peek (or Escape) to peel back. The top sheet uses
+   one peek step of inset so Settings covers the reader (the ayah rail does
+   not hang in the gutter).
 
 Hard rules from `DESIGN.md` apply unchanged: no dialogs, cards, ripples,
 elevation, borders; hierarchy via spacing / size / ink alpha; ink-bleed

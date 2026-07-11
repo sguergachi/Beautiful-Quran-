@@ -1851,6 +1851,152 @@ select {
   padding-block: 0.35rem 0.55rem;
 }
 
+/* Ink segmented row — short enums, no borders / tracks. */
+.paper-segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.55rem;
+  width: 100%;
+  padding: 0.15rem 0 0.35rem;
+}
+
+.paper-segmented-item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.35;
+  padding: 0.55rem 0.35rem;
+  min-height: 44px;
+  color: color-mix(in srgb, var(--ink) 42%, transparent);
+  cursor: pointer;
+  transition: color 160ms ease;
+}
+
+.paper-segmented-item[data-pressed] {
+  color: var(--accent);
+}
+
+.paper-segmented-item:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) {
+  .paper-segmented-item:hover {
+    color: color-mix(in srgb, var(--ink) 72%, transparent);
+  }
+  .paper-segmented-item[data-pressed]:hover {
+    color: var(--accent);
+  }
+}
+
+/* Vertical choice list — theme / long visible enums. */
+.paper-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.paper-choice-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 48px;
+  padding: 0.45rem 0;
+  cursor: pointer;
+}
+
+.paper-choice-radio {
+  position: relative;
+  flex-shrink: 0;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 28%, transparent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.paper-choice-radio[data-checked] {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.paper-choice-indicator {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.paper-choice-radio[data-checked] .paper-choice-indicator {
+  background: var(--accent);
+}
+
+.paper-choice-radio:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.paper-choice-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.paper-choice-label {
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.paper-choice-row:has(.paper-choice-radio[data-checked]) .paper-choice-label {
+  color: var(--accent);
+}
+
+.paper-choice-desc {
+  color: color-mix(in srgb, var(--ink-muted) 85%, transparent);
+  font-size: 0.82rem;
+  line-height: 1.3;
+}
+
+.paper-choice-trailing {
+  flex-shrink: 0;
+  margin-inline-start: auto;
+}
+
+.theme-swatches {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.theme-swatch {
+  width: 16px;
+  height: 22px;
+  border-radius: 5px;
+  display: block;
+}
+
+.settings-subfield {
+  margin-top: 0.85rem;
+}
+
+.settings-subfield:first-child {
+  margin-top: 0;
+}
+
+.settings-sublabel {
+  margin: 0 0 0.2rem;
+  font-size: 0.9rem;
+  color: color-mix(in srgb, var(--ink) 72%, transparent);
+}
+
 .paper-slider {
   display: flex;
   flex-direction: column;
@@ -2463,7 +2609,8 @@ select {
   .app-shell {
     /* Flat under-paper on wide screens — no gradient wash, no elevation. */
     background: var(--paper);
-    --peek-step: clamp(28px, 3.5vw, 44px);
+    /* Thin edge only — enough to read the under-sheet, not the ayah rail. */
+    --peek-step: clamp(18px, 2.2vw, 28px);
   }
 
   .sheet-edge-back {
@@ -2482,43 +2629,20 @@ select {
     box-shadow: none;
   }
 
-  .app-shell[data-stack='1'] .sheet[data-depth='0'][data-active='true'] {
-    left: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
-    right: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
-    box-shadow: none;
-  }
-
+  .app-shell[data-stack='1'] .sheet[data-depth='0'][data-active='true'],
   .app-shell[data-stack='2'] .sheet[data-depth='0'][data-active='true'] {
-    left: max(
-      calc(var(--peek-step) * 2),
-      calc(50% - var(--sheet-half) + var(--peek-step) * 2)
-    );
-    right: max(
-      calc(var(--peek-step) * 2),
-      calc(50% - var(--sheet-half) + var(--peek-step) * 2)
-    );
+    /* Top sheet covers most of the column; one peek step of under-paper
+       shows on each side — not enough for the ayah rail to hang in the gutter. */
+    left: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
+    right: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
     box-shadow: none;
   }
 
-  .app-shell[data-stack='1'] .sheet[data-depth='1'] {
-    left: max(0px, calc(50% - var(--sheet-half)));
-    right: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
-  }
-
-  .app-shell[data-stack='2'] .sheet[data-depth='1'] {
-    left: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
-    right: max(
-      calc(var(--peek-step) * 2),
-      calc(50% - var(--sheet-half) + var(--peek-step) * 2)
-    );
-  }
-
+  .app-shell[data-stack='1'] .sheet[data-depth='1'],
+  .app-shell[data-stack='2'] .sheet[data-depth='1'],
   .app-shell[data-stack='2'] .sheet[data-depth='2'] {
     left: max(0px, calc(50% - var(--sheet-half)));
-    right: max(
-      calc(var(--peek-step) * 2),
-      calc(50% - var(--sheet-half) + var(--peek-step) * 2)
-    );
+    right: max(0px, calc(50% - var(--sheet-half)));
   }
 
   .sheet[data-name='reader'][data-active='false']:not([data-depth='1']):not([data-depth='2']),
