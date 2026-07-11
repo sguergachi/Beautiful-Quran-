@@ -123,6 +123,8 @@ private sealed interface LazyItem {
 fun ReaderScreen(
     surahId: Int,
     startAyah: Int?,
+    /** 1-based word from a home word-search hit — triggers the orange flash. */
+    startWordPosition: Int? = null,
     viewModel: ReaderViewModel,
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -413,6 +415,39 @@ fun ReaderScreen(
                 focusController.focus(startAyah, animate = false)
             }
         }
+    }
+
+    // Home word-search hit: quick orange fade-in / fade-out twice on the
+    // matched word once the verse is on screen.
+    val searchFlashAlpha = remember { Animatable(0f) }
+    var searchFlashAyah by remember { mutableStateOf<Int?>(null) }
+    var searchFlashWord by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(uiState.content?.surah?.id, startAyah, startWordPosition) {
+        searchFlashAlpha.snapTo(0f)
+        searchFlashAyah = null
+        searchFlashWord = null
+        val ayah = startAyah
+        val word = startWordPosition
+        val content = uiState.content
+        if (ayah == null || word == null || content == null) return@LaunchedEffect
+        if (ayah !in 1..content.ayahs.size) return@LaunchedEffect
+        val ayahWords = content.ayahs[ayah - 1].words
+        if (ayahWords.none { it.position == word }) return@LaunchedEffect
+        delay(SearchHitFlash.START_DELAY_MS)
+        searchFlashAyah = ayah
+        searchFlashWord = word
+        repeat(SearchHitFlash.PULSES) {
+            searchFlashAlpha.animateTo(
+                1f,
+                tween(SearchHitFlash.FADE_IN_MS, easing = FastOutSlowInEasing),
+            )
+            searchFlashAlpha.animateTo(
+                0f,
+                tween(SearchHitFlash.FADE_OUT_MS, easing = FastOutSlowInEasing),
+            )
+        }
+        searchFlashAyah = null
+        searchFlashWord = null
     }
 
     // Reading-mode / display toggles reflow every ayah's height. LazyList keeps
@@ -834,6 +869,15 @@ fun ReaderScreen(
                                 showTransliteration = settings.showTransliteration,
                                 showTranslation = settings.showTranslation,
                                 searchQuery = activeQuery,
+                                flashWordPosition = searchFlashWord
+                                    ?.takeIf { searchFlashAyah == ayah.number },
+                                flashAlpha = {
+                                    if (searchFlashAyah == ayah.number) {
+                                        searchFlashAlpha.value
+                                    } else {
+                                        0f
+                                    }
+                                },
                                 // Word-level following is the focus engine's
                                 // secondary constraint: it only takes over inside
                                 // a verse taller than the screen (where the

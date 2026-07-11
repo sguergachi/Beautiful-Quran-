@@ -93,7 +93,9 @@ private const val DISMISS_SCROLL_THRESHOLD_PX = 24
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
-    onOpenSurah: (surahId: Int, ayah: Int?) -> Unit,
+    /** [wordPosition] is set when opening from a Quran-wide word hit so the
+     *  reader can flash that word; null for surah / reference / continue. */
+    onOpenSurah: (surahId: Int, ayah: Int?, wordPosition: Int?) -> Unit,
     onOpenSettings: () -> Unit,
     /** True while the paper stack is on (or near) the chapter list — drives
      *  the floating transport's enter/exit across page turns. */
@@ -304,7 +306,7 @@ fun HomeScreen(
                 item(key = "continue") {
                     ContinueCard(
                         target = target,
-                        onClick = { onOpenSurah(target.surah.id, target.ayah) },
+                        onClick = { onOpenSurah(target.surah.id, target.ayah, null) },
                     )
                 }
             }
@@ -334,7 +336,7 @@ fun HomeScreen(
                     surah = uiState.surahs[index],
                     onClick = {
                         focusManager.clearFocus()
-                        onOpenSurah(uiState.surahs[index].id, uiState.ayahTarget)
+                        onOpenSurah(uiState.surahs[index].id, uiState.ayahTarget, null)
                     },
                 )
             }
@@ -364,7 +366,7 @@ fun HomeScreen(
                             query = uiState.query,
                             onClick = {
                                 focusManager.clearFocus()
-                                onOpenSurah(hit.surahId, hit.ayahNumber)
+                                onOpenSurah(hit.surahId, hit.ayahNumber, hit.position)
                             },
                         )
                     }
@@ -404,7 +406,7 @@ fun HomeScreen(
                 visible = searchPaneVisible,
                 onOpen = { surahId, ayah ->
                     focusManager.clearFocus()
-                    onOpenSurah(surahId, ayah)
+                    onOpenSurah(surahId, ayah, null)
                 },
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -430,7 +432,7 @@ fun HomeScreen(
                 onOpenNowPlaying = {
                     val target = floatingPlayback ?: return@FloatingPlaybackControl
                     focusManager.clearFocus()
-                    onOpenSurah(target.surah.id, target.ayah)
+                    onOpenSurah(target.surah.id, target.ayah, null)
                 },
                 onReciterClick = onOpenSettings,
                 onPlayPause = viewModel::togglePlayPause,
