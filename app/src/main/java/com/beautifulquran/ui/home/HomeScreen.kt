@@ -1,6 +1,5 @@
 package com.beautifulquran.ui.home
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -22,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,7 +35,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,22 +56,30 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.drop
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.beautifulquran.R
 import com.beautifulquran.data.model.Surah
+import com.beautifulquran.data.model.SurahWordSearchSection
+import com.beautifulquran.data.model.WordSearchHit
+import com.beautifulquran.domain.WORD_SEARCH_PREVIEW_LIMIT
+import com.beautifulquran.domain.ayahHighlightSpans
 import com.beautifulquran.ui.theme.ArabicTitleStyle
 import com.beautifulquran.ui.theme.GildedRosette
+import com.beautifulquran.ui.theme.HafsFontFamily
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.verticalFadingEdges
@@ -251,7 +258,7 @@ fun HomeScreen(
                     onValueChange = viewModel::onQueryChange,
                     placeholder = {
                         Text(
-                            "Search surah or 2:255",
+                            "Search surah, word, or 2:255",
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                         )
                     },
@@ -304,7 +311,25 @@ fun HomeScreen(
 
             item(key = "spacer-list") { Spacer(Modifier.height(16.dp)) }
 
-            items(count = uiState.surahs.size, key = { uiState.surahs[it].id }) { index ->
+            val searching = uiState.query.isNotBlank()
+            val showSurahMatches = searching && uiState.surahs.isNotEmpty()
+            val showWordSections = searching &&
+                (uiState.wordSections.isNotEmpty() || uiState.wordSearchLoading)
+            val showEmpty = searching &&
+                uiState.surahs.isEmpty() &&
+                uiState.wordSections.isEmpty() &&
+                !uiState.wordSearchLoading
+
+            if (showSurahMatches) {
+                item(key = "label-surahs") {
+                    SearchSectionLabel(text = "Surahs")
+                }
+            }
+
+            items(
+                count = uiState.surahs.size,
+                key = { "surah-${uiState.surahs[it].id}" },
+            ) { index ->
                 SurahRow(
                     surah = uiState.surahs[index],
                     onClick = {
@@ -312,6 +337,65 @@ fun HomeScreen(
                         onOpenSurah(uiState.surahs[index].id, uiState.ayahTarget)
                     },
                 )
+            }
+
+            if (showWordSections) {
+                item(key = "label-ayahs") {
+                    SearchSectionLabel(
+                        text = if (uiState.wordSearchLoading && uiState.wordSections.isEmpty()) {
+                            "Searching ayahs…"
+                        } else {
+                            "In the Quran"
+                        },
+                    )
+                }
+                uiState.wordSections.forEach { section ->
+                    item(key = "word-header-${section.surahId}") {
+                        WordSearchSurahHeader(section = section)
+                    }
+                    items(
+                        items = section.hits,
+                        key = { hit ->
+                            "hit-${hit.surahId}-${hit.ayahNumber}-${hit.position}"
+                        },
+                    ) { hit ->
+                        WordSearchHitRow(
+                            hit = hit,
+                            query = uiState.query,
+                            onClick = {
+                                focusManager.clearFocus()
+                                onOpenSurah(hit.surahId, hit.ayahNumber)
+                            },
+                        )
+                    }
+                    if (section.hiddenCount > 0) {
+                        item(key = "word-more-${section.surahId}") {
+                            WordSearchExpandRow(
+                                section = section,
+                                onClick = { viewModel.toggleWordSearchSection(section.surahId) },
+                            )
+                        }
+                    } else if (section.expanded && section.totalCount > WORD_SEARCH_PREVIEW_LIMIT) {
+                        item(key = "word-less-${section.surahId}") {
+                            WordSearchCollapseRow(
+                                onClick = { viewModel.toggleWordSearchSection(section.surahId) },
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (showEmpty) {
+                item(key = "empty") {
+                    Text(
+                        text = "No matches",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 28.dp, vertical = 24.dp),
+                    )
+                }
             }
             }
 
@@ -446,4 +530,175 @@ private fun SurahRow(surah: Surah, onClick: () -> Unit) {
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
         )
     }
+}
+
+@Composable
+private fun SearchSectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 28.dp)
+            .padding(top = 8.dp, bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun WordSearchSurahHeader(section: SurahWordSearchSection) {
+    val accents = LocalQuranAccents.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 28.dp)
+            .padding(top = 18.dp, bottom = 4.dp),
+    ) {
+        Text(
+            text = section.surahNameTransliteration,
+            style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = "${section.totalCount}",
+            style = MaterialTheme.typography.labelMedium,
+            color = accents.gold.copy(alpha = 0.7f),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = section.surahNameArabic,
+            style = ArabicTitleStyle,
+            fontSize = 20.sp,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+        )
+    }
+}
+
+@Composable
+private fun WordSearchHitRow(
+    hit: WordSearchHit,
+    query: String,
+    onClick: () -> Unit,
+) {
+    val accents = LocalQuranAccents.current
+    val highlightColor = accents.gold
+    val arabic = remember(hit.ayahText, hit.position, hit.arabic, highlightColor) {
+        buildAnnotatedString {
+            for (span in ayahHighlightSpans(hit.ayahText, hit.position, hit.arabic)) {
+                if (span.highlighted) {
+                    withStyle(
+                        SpanStyle(
+                            color = highlightColor,
+                            fontWeight = FontWeight.Medium,
+                        ),
+                    ) {
+                        append(span.text)
+                    }
+                } else {
+                    append(span.text)
+                }
+            }
+        }
+    }
+    val gloss = remember(hit.translation, hit.ayahTranslation, query, highlightColor) {
+        highlightEnglishSnippet(hit.translation, hit.ayahTranslation, query, highlightColor)
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .quietClickable(onClick = onClick)
+            .padding(horizontal = 28.dp, vertical = 10.dp),
+    ) {
+        Text(
+            text = "${hit.surahId}:${hit.ayahNumber}",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = arabic,
+            fontFamily = HafsFontFamily,
+            fontSize = 22.sp,
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.End,
+            modifier = Modifier.fillMaxWidth(),
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (gloss.isNotBlank()) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = gloss,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/**
+ * Prefers the matching word gloss; otherwise a short slice of the ayah
+ * translation with the query washed in gold.
+ */
+private fun highlightEnglishSnippet(
+    wordTranslation: String,
+    ayahTranslation: String,
+    query: String,
+    mark: Color,
+): AnnotatedString {
+    val trimmed = query.trim()
+    val source = when {
+        wordTranslation.contains(trimmed, ignoreCase = true) -> wordTranslation
+        ayahTranslation.contains(trimmed, ignoreCase = true) -> ayahTranslation
+        wordTranslation.isNotBlank() -> wordTranslation
+        else -> ayahTranslation
+    }
+    return buildAnnotatedString {
+        append(source)
+        if (trimmed.isEmpty()) return@buildAnnotatedString
+        var i = source.indexOf(trimmed, ignoreCase = true)
+        while (i >= 0) {
+            addStyle(
+                SpanStyle(color = mark, fontWeight = FontWeight.Medium),
+                i,
+                i + trimmed.length,
+            )
+            i = source.indexOf(trimmed, i + trimmed.length, ignoreCase = true)
+        }
+    }
+}
+
+@Composable
+private fun WordSearchExpandRow(
+    section: SurahWordSearchSection,
+    onClick: () -> Unit,
+) {
+    Text(
+        text = "Show ${section.hiddenCount} more in ${section.surahNameTransliteration}",
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .quietClickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 28.dp, vertical = 12.dp),
+    )
+}
+
+@Composable
+private fun WordSearchCollapseRow(onClick: () -> Unit) {
+    Text(
+        text = "Show less",
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .quietClickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 28.dp, vertical = 12.dp),
+    )
 }

@@ -6,13 +6,21 @@ import androidx.media3.common.Player
 import com.beautifulquran.data.QuranRepository
 import com.beautifulquran.data.SettingsRepository
 import com.beautifulquran.data.model.Surah
+import com.beautifulquran.data.model.SurahWordSearchSection
+import com.beautifulquran.data.model.WordSearchHit
+import com.beautifulquran.domain.isWordSearchQuery
+import com.beautifulquran.domain.sectionWordSearchHits
 import com.beautifulquran.playback.PlayerController
 import com.beautifulquran.playback.PlayerUiState
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -36,6 +44,10 @@ data class HomeUiState(
     val floatingPlayback: FloatingPlaybackTarget? = null,
     val playerState: PlayerUiState = PlayerUiState(),
     val reciterName: String = "",
+    /** Quran-wide word hits, sectioned by surah (truncated until expanded). */
+    val wordSections: List<SurahWordSearchSection> = emptyList(),
+    /** True while a debounced word search is in flight. */
+    val wordSearchLoading: Boolean = false,
 )
 
 /** A `surah:ayah` reference parsed from a search query, e.g. `2:255`. Ayah is null for `2:`. */
@@ -95,6 +107,13 @@ internal fun filterSurahs(surahs: List<Surah>, query: String): SurahFilterResult
     }
 }
 
+/** Word search runs for typed queries that are not `surah:ayah` jumps. */
+internal fun shouldRunWordSearch(query: String): Boolean {
+    if (!isWordSearchQuery(query)) return false
+    return parseAyahReference(query.trim()) == null
+}
+
+@OptIn(FlowPreview::class)
 class HomeViewModel(
     private val repository: QuranRepository,
     private val settings: SettingsRepository,
@@ -104,30 +123,54 @@ class HomeViewModel(
     private val query = MutableStateFlow("")
     private val allSurahs = MutableStateFlow<List<Surah>>(emptyList())
     private val reciterNames = MutableStateFlow<Map<Int, String>>(emptyMap())
+    private val wordHits = MutableStateFlow<List<WordSearchHit>>(emptyList())
+    private val expandedSurahIds = MutableStateFlow<Set<Int>>(emptySet())
+    private val wordSearchLoading = MutableStateFlow(false)
 
     val uiState: StateFlow<HomeUiState> =
-        combine(query, allSurahs, settings.settings, player.state, reciterNames) {
-                q, surahs, prefs, playerState, names ->
-            val (filtered, ayahTarget) = filterSurahs(surahs, q)
-            val nowPlaying = playerState.nowPlaying
+        combine(
+            combine(query, allSurahs, settings.settings, player.state, reciterNames) {
+                    q, surahs, prefs, playerState, names ->
+                HomeCombineBase(
+                    query = q,
+                    surahs = surahs,
+                    lastSurah = prefs.lastSurah,
+                    lastAyah = prefs.lastAyah,
+                    reciterId = prefs.reciterId,
+                    playerState = playerState,
+                    names = names,
+                )
+            },
+            wordHits,
+            expandedSurahIds,
+            wordSearchLoading,
+        ) { base, hits, expanded, loading ->
+            val (filtered, ayahTarget) = filterSurahs(base.surahs, base.query)
+            val nowPlaying = base.playerState.nowPlaying
             val floating = nowPlaying?.let { np ->
                 // The basmalah lead-in reports ayah 0; the float reads (and
                 // opens the reader at) the chapter opening, ayah 1.
-                surahs.firstOrNull { it.id == np.surahId }
+                base.surahs.firstOrNull { it.id == np.surahId }
                     ?.let { FloatingPlaybackTarget(it, np.ayah.coerceAtLeast(1)) }
             }
-            val reciterName = nowPlaying?.let { names[it.reciterId] }
-                ?: names[prefs.reciterId].orEmpty()
+            val reciterName = nowPlaying?.let { base.names[it.reciterId] }
+                ?: base.names[base.reciterId].orEmpty()
             HomeUiState(
-                query = q,
+                query = base.query,
                 surahs = filtered,
-                allSurahs = surahs,
-                continueTarget = surahs.firstOrNull { it.id == prefs.lastSurah }
-                    ?.let { ContinueTarget(it, prefs.lastAyah) },
+                allSurahs = base.surahs,
+                continueTarget = if (base.query.isBlank()) {
+                    base.surahs.firstOrNull { it.id == base.lastSurah }
+                        ?.let { ContinueTarget(it, base.lastAyah) }
+                } else {
+                    null
+                },
                 ayahTarget = ayahTarget,
                 floatingPlayback = floating,
-                playerState = playerState,
+                playerState = base.playerState,
                 reciterName = reciterName,
+                wordSections = sectionWordSearchHits(hits, expanded),
+                wordSearchLoading = loading,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
@@ -136,10 +179,40 @@ class HomeViewModel(
             allSurahs.value = repository.surahs()
             reciterNames.value = repository.reciters().associate { it.id to it.name }
         }
+        viewModelScope.launch {
+            query
+                .debounce(220)
+                .collectLatest { q ->
+                    if (!shouldRunWordSearch(q)) {
+                        wordHits.value = emptyList()
+                        wordSearchLoading.value = false
+                        return@collectLatest
+                    }
+                    wordSearchLoading.value = true
+                    wordHits.value = repository.searchWords(q)
+                    wordSearchLoading.value = false
+                }
+        }
     }
 
     fun onQueryChange(value: String) {
+        if (value != query.value) {
+            expandedSurahIds.value = emptySet()
+        }
         query.value = value
+        // Show a quiet loading cue as soon as a word-searchable query is typed,
+        // before debounce fires — avoids a blank gap under the surah matches.
+        wordSearchLoading.value = shouldRunWordSearch(value)
+        if (!shouldRunWordSearch(value)) {
+            wordHits.value = emptyList()
+        }
+    }
+
+    /** Expands or collapses the truncated hit list for one surah section. */
+    fun toggleWordSearchSection(surahId: Int) {
+        expandedSurahIds.update { current ->
+            if (surahId in current) current - surahId else current + surahId
+        }
     }
 
     fun togglePlayPause() = player.togglePlayPause()
@@ -168,3 +241,17 @@ class HomeViewModel(
     /** Dismisses the cover float and ends the playback session. */
     fun dismissFloatingPlayback() = player.stop()
 }
+
+/**
+ * Intermediate combine payload so the outer combine can stay within the
+ * five-flow overload while still carrying settings fields we need.
+ */
+private data class HomeCombineBase(
+    val query: String,
+    val surahs: List<Surah>,
+    val lastSurah: Int,
+    val lastAyah: Int,
+    val reciterId: Int,
+    val playerState: PlayerUiState,
+    val names: Map<Int, String>,
+)
