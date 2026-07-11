@@ -1126,17 +1126,15 @@ select {
   margin-block-start: 0.2rem;
 }
 
-/* English lyric: smaller mark, optically centred on the prose line. */
+/* English lyric: proportional ornament on the prose baseline. */
 .words[data-lyric='english'] > .ayah-mark {
-  display: inline-block;
+  display: inline;
   margin-inline-start: 0.2em;
+  /* Relative to the live 22px × user font scale, so it remains accurate at
+     every text-size setting rather than depending on a fixed pixel size. */
   font-size: 0.78em;
   line-height: inherit;
-  /* Hafs' visible ﴿N﴾ ink sits far below its reported font box. Baseline
-     alignment alone therefore looks wrong; translate only the paint so the
-     prose line height and wrapping remain unchanged. */
-  vertical-align: 0.22em;
-  transform: translateY(-0.44em);
+  vertical-align: baseline;
 }
 
 .words {

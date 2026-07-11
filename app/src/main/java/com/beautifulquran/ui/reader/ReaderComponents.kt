@@ -60,7 +60,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
@@ -683,10 +682,9 @@ private fun ResponsiveEnglishAyah(
                 SpanStyle(
                     color = gold,
                     fontFamily = HafsFontFamily,
-                    // Smaller ornament, lifted so its visual centre sits on
-                    // the English glyph line rather than its lower baseline.
+                    // 17/22 keeps the ornament proportional to every user
+                    // font scale; no BaselineShift means true shared baseline.
                     fontSize = 17.sp * fontScale,
-                    baselineShift = BaselineShift(0.64f),
                 ),
             ) {
                 append("﴿")
