@@ -171,6 +171,8 @@ private fun PaperStackApp(
 
     var selectedSurahId by rememberSaveable { mutableIntStateOf(0) }
     var selectedStartAyah by rememberSaveable { mutableIntStateOf(0) }
+    /** 1-based word position from a home word-search hit; 0 means no flash. */
+    var selectedStartWord by rememberSaveable { mutableIntStateOf(0) }
     var settledLayer by rememberSaveable { mutableIntStateOf(COVER_LAYER) }
     var ayahSelectorExpanded by remember { mutableStateOf(false) }
     /** The Timings Lab is not a page in the stack: it is a work sheet that
@@ -289,6 +291,7 @@ private fun PaperStackApp(
         }
         selectedSurahId = surahId
         selectedStartAyah = ayah
+        selectedStartWord = 0
         jumpEpoch++
         animateTo(AYAH_LAYER)
     }
@@ -302,6 +305,7 @@ private fun PaperStackApp(
         }
         selectedSurahId = target.surahId
         selectedStartAyah = target.ayah
+        selectedStartWord = 0
         jumpEpoch++
         animateTo(AYAH_LAYER)
     }
@@ -411,10 +415,11 @@ private fun PaperStackApp(
                 settingsLayer = settingsLayer,
                 modifier = Modifier.zIndex(if (readerBleedOpen) 3f else 1f),
             ) {
-                key(selectedSurahId, selectedStartAyah, jumpEpoch) {
+                key(selectedSurahId, selectedStartAyah, selectedStartWord, jumpEpoch) {
                     ReaderScreen(
                         surahId = selectedSurahId,
                         startAyah = selectedStartAyah.takeIf { it > 0 },
+                        startWordPosition = selectedStartWord.takeIf { it > 0 },
                         viewModel = readerViewModel,
                         onBack = { animateTo(COVER_LAYER) },
                         onOpenSettings = { animateTo(SETTINGS_LAYER) },
@@ -488,10 +493,11 @@ private fun PaperStackApp(
         ) {
             HomeScreen(
                 viewModel = homeViewModel,
-                onOpenSurah = { surahId, ayah ->
+                onOpenSurah = { surahId, ayah, wordPosition ->
                     readerViewModel.load(surahId)
                     selectedSurahId = surahId
                     selectedStartAyah = ayah ?: 0
+                    selectedStartWord = wordPosition ?: 0
                     animateTo(AYAH_LAYER)
                 },
                 onOpenSettings = { animateTo(SETTINGS_LAYER) },

@@ -382,7 +382,8 @@ private fun Modifier.wordUnitBehavior(
 
 /** The two-layer karaoke text every word unit renders: the base ink, plus an
  * orange overlay that sweeps in while the word belongs to a repeat chain and
- * dissolves back out once the chain releases. */
+ * dissolves back out once the chain releases. An optional [flashAlpha] adds a
+ * second whole-word orange pulse (home search-hit flash). */
 @Composable
 private fun HighlightLayeredText(
     text: String,
@@ -391,7 +392,10 @@ private fun HighlightLayeredText(
     color: Color,
     style: TextStyle,
     modifier: Modifier = Modifier,
+    showFlash: Boolean = false,
+    flashAlpha: () -> Float = { 0f },
 ) {
+    val repeatInk = LocalQuranAccents.current.repeatInk
     Box(modifier) {
         Text(
             text = text,
@@ -403,8 +407,19 @@ private fun HighlightLayeredText(
             Text(
                 text = text,
                 style = style,
-                color = LocalQuranAccents.current.repeatInk,
+                color = repeatInk,
                 modifier = Modifier.repeatInkLayer(highlight.repeatWash, rtl),
+            )
+        }
+        if (showFlash) {
+            // Search-hit flash: whole-word orange wash; alpha is draw-phase only.
+            Text(
+                text = text,
+                style = style,
+                color = repeatInk,
+                modifier = Modifier.graphicsLayer {
+                    alpha = flashAlpha().coerceIn(0f, 1f)
+                },
             )
         }
     }
@@ -422,8 +437,12 @@ fun WordUnit(
     keepInView: Boolean,
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)? = null,
+    /** When true, [flashAlpha] drives a quick orange pulse on Arabic + gloss. */
+    showFlash: Boolean = false,
+    flashAlpha: () -> Float = { 0f },
 ) {
     val highlight = rememberWordHighlight(ink, sweepMs)
+    val repeatInk = LocalQuranAccents.current.repeatInk
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -436,21 +455,38 @@ fun WordUnit(
             rtl = true,
             color = MaterialTheme.colorScheme.onBackground,
             style = ArabicWordStyle.copy(fontSize = ArabicWordStyle.fontSize * fontScale),
+            showFlash = showFlash,
+            flashAlpha = flashAlpha,
         )
         if (showGloss) {
-            Text(
-                text = word.translation,
-                fontSize = 12.sp * fontScale,
-                lineHeight = 15.sp * fontScale,
-                fontWeight = if (searchHit) FontWeight.Bold else null,
-                color = if (searchHit) {
-                    LocalQuranAccents.current.gold
-                } else {
-                    MaterialTheme.colorScheme.onBackground
-                },
-                textAlign = TextAlign.Center,
-                modifier = Modifier.graphicsLayer { alpha = highlight.secondaryAlpha() },
-            )
+            Box {
+                Text(
+                    text = word.translation,
+                    fontSize = 12.sp * fontScale,
+                    lineHeight = 15.sp * fontScale,
+                    fontWeight = if (searchHit) FontWeight.Bold else null,
+                    color = if (searchHit) {
+                        LocalQuranAccents.current.gold
+                    } else {
+                        MaterialTheme.colorScheme.onBackground
+                    },
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.graphicsLayer { alpha = highlight.secondaryAlpha() },
+                )
+                if (showFlash) {
+                    Text(
+                        text = word.translation,
+                        fontSize = 12.sp * fontScale,
+                        lineHeight = 15.sp * fontScale,
+                        fontWeight = FontWeight.Bold,
+                        color = repeatInk,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.graphicsLayer {
+                            alpha = flashAlpha().coerceIn(0f, 1f) * highlight.secondaryAlpha()
+                        },
+                    )
+                }
+            }
         }
         if (showTransliteration) {
             Text(
@@ -505,6 +541,9 @@ fun EnglishWordUnit(
     keepInView: Boolean,
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)? = null,
+    /** When true, [flashAlpha] drives a quick orange pulse on the gloss. */
+    showFlash: Boolean = false,
+    flashAlpha: () -> Float = { 0f },
 ) {
     val highlight = rememberWordHighlight(ink, sweepMs)
     HighlightLayeredText(
@@ -525,6 +564,8 @@ fun EnglishWordUnit(
         modifier = Modifier
             .wordUnitBehavior(highlight.isActive, keepInView, onClick, onLongClick)
             .padding(horizontal = 3.dp, vertical = 2.dp),
+        showFlash = showFlash,
+        flashAlpha = flashAlpha,
     )
 }
 
@@ -620,6 +661,8 @@ private fun ResponsiveHafsAyah(
     markAlpha: () -> Float,
     fontSize: TextUnit,
     activeSweepMs: Int?,
+    flashWordPosition: Int? = null,
+    flashAlpha: () -> Float = { 0f },
     onAyahClick: () -> Unit,
     onWordClick: ((Word) -> Unit)?,
     onWordLongClick: ((Word) -> Unit)? = null,
@@ -757,6 +800,23 @@ private fun ResponsiveHafsAyah(
                             layerAlpha = wash.alpha.value,
                         )
                     }
+                    // Home search-hit flash: full orange tint, alpha pulsed
+                    // from outside (quick fade in / out × 2).
+                    val flashPos = flashWordPosition
+                    val flashA = if (flashPos != null) flashAlpha() else 0f
+                    if (flashPos != null && flashA > 0f) {
+                        val flashIndex = ayah.words.indexOfFirst { it.position == flashPos }
+                        val range = rendered.wordRanges.getOrNull(flashIndex)
+                        if (range != null) {
+                            blooms += ShapedWordBloom.ColorReveal(
+                                range = range,
+                                progress = 1f,
+                                color = palette.repeatInkColor,
+                                restingAlpha = 0f,
+                                layerAlpha = flashA,
+                            )
+                        }
+                    }
                     blooms
                 },
                 layout = { layoutResult },
@@ -857,6 +917,10 @@ fun AyahBlock(
     showTransliteration: Boolean,
     showTranslation: Boolean,
     searchQuery: String? = null,
+    /** 1-based word to orange-flash (home search hit); null = no flash. */
+    flashWordPosition: Int? = null,
+    /** Draw-phase alpha for [flashWordPosition]; ignored when that is null. */
+    flashAlpha: () -> Float = { 0f },
     keepActiveWordInView: Boolean = false,
     /** Bookmark ribbon lives in this block's outer margin (opposite the
      * ayah selector). Null hides the ribbon entirely. */
@@ -936,6 +1000,7 @@ fun AyahBlock(
                     ayah.words.forEachIndexed { index, word ->
                         val ink = inks[index]
                         val isActiveWord = ink.state == InkEngine.State.Active
+                        val flashing = flashWordPosition == word.position
                         EnglishWordUnit(
                             word = word,
                             ink = ink,
@@ -945,6 +1010,8 @@ fun AyahBlock(
                             keepInView = keepActiveWordInView && isActiveWord,
                             onClick = onWordClick?.let { handler -> { handler(word) } },
                             onLongClick = onWordLongClick?.let { handler -> { handler(word) } },
+                            showFlash = flashing,
+                            flashAlpha = if (flashing) flashAlpha else ({ 0f }),
                         )
                     }
                     Box(
@@ -971,6 +1038,7 @@ fun AyahBlock(
                         ayah.words.forEachIndexed { index, word ->
                             val ink = inks[index]
                             val isActiveWord = ink.state == InkEngine.State.Active
+                            val flashing = flashWordPosition == word.position
                             WordUnit(
                                 word = word,
                                 ink = ink,
@@ -982,6 +1050,8 @@ fun AyahBlock(
                                 keepInView = keepActiveWordInView && isActiveWord,
                                 onClick = onWordClick?.let { handler -> { handler(word) } },
                                 onLongClick = onWordLongClick?.let { handler -> { handler(word) } },
+                                showFlash = flashing,
+                                flashAlpha = if (flashing) flashAlpha else ({ 0f }),
                             )
                         }
                         Box(
@@ -1002,6 +1072,8 @@ fun AyahBlock(
                         markAlpha = { ayahMarkAlpha.value },
                         fontSize = ArabicWordStyle.fontSize * fontScale * ARABIC_ONLY_HAFS_FONT_MULTIPLIER,
                         activeSweepMs = sweepMs,
+                        flashWordPosition = flashWordPosition,
+                        flashAlpha = flashAlpha,
                         onAyahClick = onAyahClick,
                         onWordClick = onWordClick?.let { handler -> { word -> handler(word) } },
                         onWordLongClick = onWordLongClick?.let { handler -> { word -> handler(word) } },
