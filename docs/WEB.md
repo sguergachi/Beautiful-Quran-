@@ -119,6 +119,16 @@ Recitation-follow, selector jumps, return-to-ayah, and tall-verse word
 keep-in-view all go through it. Non-active ayahs recess only while audio is
 actually playing (`recitingActive`); at rest every ayah is Plain (full opacity).
 
+**Follow pause (Android parity):** lyric follow is paused only by a vertical
+hand drag past touch-slop or a wheel gesture (`followGesture.ts`) — never by
+`scroll` events from FocusEngine or `keepWordInView`. Programmatic verse
+advances (including the fade-lead bump and the real media-item join) must
+keep the active target anchored without clearing `followEnabled`.
+
+**Word tap → start there:** tapping a word calls `playFromWord` /
+`seekToWordAndPlay` with that word's timing `startMs` (no basmalah preface),
+matching Android `onWordClick` → `playFromWord`.
+
 ### 5.3 `InkEngine` (pure policy)
 
 Port exactly:
@@ -159,6 +169,9 @@ mid-tier phones — measure first.
 
 - Same everyayah URLs / reciter slugs as Android `Reciter`.
 - Playlist model: one clip per ayah (+ basmalah preface where applicable).
+- **Word-level start:** `PlayerController.seekToWordAndPlay(ayah, positionMs)`
+  seeks within the loaded clip (or rebuilds from that ayah) and plays —
+  used by word taps. Mid-ayah starts never prepend the basmalah lead-in.
 - Poll `currentTime` at ~33 ms while playing; publish `ActiveWord` only on
   change (`distinctUntilChanged` equivalent).
 - **Prefetch / buffering (Android parity):** `AudioPrefetcher` read-aheads the

@@ -28,6 +28,7 @@ import {
 } from '../icons/PlaybackIcons'
 import { AyahSelectorRail } from './AyahSelectorRail'
 import { ReaderFocusController } from './ReaderFocusController'
+import { shouldPauseFollowOnDrag } from './followGesture'
 import { RootViewer } from '../root/RootViewer'
 
 /** Usable in-surah query — mirrors Android `SurahSearchState.activeQuery`. */
@@ -72,7 +73,6 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchIndex, setSearchIndex] = useState(0)
   const followWasEnabled = useRef(true)
-  const programmaticScroll = useRef(false)
 
   const side = state.settings.ayahSelectorSide
   const receded = state.chromeReceded && !searchActive
@@ -128,13 +128,9 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     if (!isTop || !content || activeQuery == null) return
     const target = searchMatches[matchIndex]
     if (target == null) return
-    programmaticScroll.current = true
-    void focusRef.current
-      .focus(target, { animate: true, preRoll: true })
-      .finally(() => {
-        programmaticScroll.current = false
-        setFocusedAyah(focusRef.current.focusedAyah())
-      })
+    void focusRef.current.focus(target, { animate: true, preRoll: true }).then(() => {
+      setFocusedAyah(focusRef.current.focusedAyah())
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeQuery, matchIndex, searchMatches, isTop, content?.surah.id])
 
@@ -156,6 +152,8 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   }, [content?.surah.id, isTop])
 
   // Scroll readout + return-to-verse placement.
+  // Follow pauses only on user vertical drag / wheel — never on FocusEngine
+  // or keepWordInView scrollTop writes (Android pointerInput parity).
   useEffect(() => {
     const el = scrollRef.current
     if (!el || !content || !isTop) return
@@ -176,25 +174,62 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       }
     }
 
-    const onScroll = () => {
-      if (programmaticScroll.current) {
-        update()
-        return
-      }
-      // Hand scroll pauses lyric follow — focus engine yields the page.
+    const pauseFollowFromUser = () => {
       focus.cancel()
       if (state.followEnabled) appStore.setFollowEnabled(false)
       followWasEnabled.current = false
       update()
     }
 
-    el.addEventListener('scroll', onScroll, { passive: true })
+    let pointerId: number | null = null
+    let startX = 0
+    let startY = 0
+    let dragStarted = false
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      pointerId = e.pointerId
+      startX = e.clientX
+      startY = e.clientY
+      dragStarted = false
+    }
+    const onPointerMove = (e: PointerEvent) => {
+      if (pointerId !== e.pointerId || dragStarted) return
+      const dx = e.clientX - startX
+      const dy = e.clientY - startY
+      if (shouldPauseFollowOnDrag(dx, dy)) {
+        dragStarted = true
+        pauseFollowFromUser()
+      }
+    }
+    const onPointerUp = (e: PointerEvent) => {
+      if (pointerId === e.pointerId) pointerId = null
+    }
+    const onWheel = () => {
+      pauseFollowFromUser()
+    }
+
+    el.addEventListener('scroll', update, { passive: true })
+    el.addEventListener('pointerdown', onPointerDown)
+    el.addEventListener('pointermove', onPointerMove)
+    el.addEventListener('pointerup', onPointerUp)
+    el.addEventListener('pointercancel', onPointerUp)
+    el.addEventListener('wheel', onWheel, { passive: true })
     update()
-    return () => el.removeEventListener('scroll', onScroll)
+    return () => {
+      el.removeEventListener('scroll', update)
+      el.removeEventListener('pointerdown', onPointerDown)
+      el.removeEventListener('pointermove', onPointerMove)
+      el.removeEventListener('pointerup', onPointerUp)
+      el.removeEventListener('pointercancel', onPointerUp)
+      el.removeEventListener('wheel', onWheel)
+    }
   }, [content?.surah.id, state.activeAyah, state.activeBasmalah, state.followEnabled, isTop])
 
   // Lyric-style auto-scroll: keep the active target on its adaptive anchor
   // (verse, or chapter-top basmalah header while the lead-in plays).
+  // Also re-homes when the media item advances — fade-lead may have already
+  // bumped activeAyah, so nowPlaying.ayah is the boundary that must not miss.
   useEffect(() => {
     if (!isTop || !content) return
     const target = playbackFocusTarget(state.activeAyah, state.activeBasmalah)
@@ -204,16 +239,19 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     }
     const justEnabled = !followWasEnabled.current
     followWasEnabled.current = true
-    programmaticScroll.current = true
-    void focusRef.current
-      .focus(target, { animate: true, preRoll: justEnabled })
-      .finally(() => {
-        programmaticScroll.current = false
-        setShowReturn(false)
-        setFocusedAyah(focusRef.current.focusedAyah())
-        setActiveExceedsViewport(focusRef.current.exceedsViewport(state.activeAyah))
-      })
-  }, [state.activeAyah, state.activeBasmalah, state.followEnabled, isTop, content?.surah.id])
+    void focusRef.current.focus(target, { animate: true, preRoll: justEnabled }).then(() => {
+      setShowReturn(false)
+      setFocusedAyah(focusRef.current.focusedAyah())
+      setActiveExceedsViewport(focusRef.current.exceedsViewport(state.activeAyah))
+    })
+  }, [
+    state.activeAyah,
+    state.activeBasmalah,
+    state.followEnabled,
+    state.player.nowPlaying?.ayah,
+    isTop,
+    content?.surah.id,
+  ])
 
   // Display reflow (font / mode / gloss) — re-home the pinned verse.
   const layoutReady = useRef(false)
@@ -228,10 +266,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       state.followEnabled && focusTarget != null
         ? focusTarget
         : focusedAyah
-    programmaticScroll.current = true
-    void focusRef.current.focus(pin, { animate: true, preRoll: false }).finally(() => {
-      programmaticScroll.current = false
-    })
+    void focusRef.current.focus(pin, { animate: true, preRoll: false })
     // Intentionally keyed on layout-affecting settings only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -261,13 +296,9 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     appStore.setFollowEnabled(playingThisSurah)
     followWasEnabled.current = playingThisSurah
     setFocusedAyah(targetAyah)
-    programmaticScroll.current = true
-    void focusRef.current
-      .focus(targetAyah, { animate: true, preRoll: true })
-      .finally(() => {
-        programmaticScroll.current = false
-        setFocusedAyah(focusRef.current.focusedAyah())
-      })
+    void focusRef.current.focus(targetAyah, { animate: true, preRoll: true }).then(() => {
+      setFocusedAyah(focusRef.current.focusedAyah())
+    })
   }
 
   const closeSearch = () => {
@@ -455,7 +486,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     className="basmalah"
                     data-state={preface}
                     style={{ opacity: prefaceOpacity }}
-                    onClick={() => void appStore.playAyah(1, false)}
+                    onClick={() => void appStore.playAyah(1)}
                   />
                 </div>
               ) : null}
@@ -490,7 +521,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     bookmarkInteractive={!receded}
                     speed={state.settings.playbackSpeed}
                     fontScale={state.settings.fontScale}
-                    onPlayAyah={(n, fromWord) => void appStore.playAyah(n, fromWord)}
+                    onPlayWord={(ayah, pos) => void appStore.playFromWord(ayah, pos)}
                     onToggleBookmark={(n) => appStore.toggleBookmark(n)}
                     onHoldWord={(a, pos, arabic, translation) =>
                       appStore.openRootViewer(content.surah.id, a, pos, arabic, translation)

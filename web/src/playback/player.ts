@@ -284,6 +284,52 @@ export class PlayerController {
     await this.playIndex(this.index, true)
   }
 
+  /**
+   * Seek to [positionMs] within [ayah] and play — Android `seekToWordAndPlay`.
+   * Word taps never include the basmalah preface. Range-repeat is cleared so
+   * a mid-ayah start does not stay trapped in a prior loop window.
+   */
+  async seekToWordAndPlay(ayah: number, positionMs: number) {
+    if (!this.content || !this.reciter) return
+    if (this.state.repeatMode === 'range') {
+      this.patch({ repeatMode: 'off', repeatRange: null })
+      this.active.loop = false
+    }
+
+    const np = this.state.nowPlaying
+    const sameSession =
+      np != null &&
+      np.surahId === this.surahId &&
+      np.reciterId === this.reciter.id
+
+    let idx = sameSession ? this.playlist.findIndex((p) => p.ayah === ayah) : -1
+    if (!sameSession || idx < 0) {
+      // Fresh load or ayah outside a truncated mid-surah playlist.
+      this.loadSurah(this.content, this.reciter, Math.max(1, ayah))
+      idx = this.playlist.findIndex((p) => p.ayah === ayah)
+      if (idx < 0) return
+      await this.playIndex(idx, true)
+      if (positionMs > 0) this.seekMs(positionMs)
+      return
+    }
+
+    if (this.index !== idx || np.ayah !== ayah) {
+      await this.playIndex(idx, true)
+    } else if (!this.state.isPlaying) {
+      try {
+        await this.active.play()
+        this.startTick()
+      } catch (e) {
+        this.patch({
+          error: e instanceof Error ? e.message : 'Playback blocked',
+          isPlaying: false,
+        })
+        return
+      }
+    }
+    this.seekMs(Math.max(0, positionMs))
+  }
+
   private async playIndex(i: number, autoplay = true) {
     if (i < 0 || i >= this.playlist.length) {
       this.patch({ isPlaying: false })
