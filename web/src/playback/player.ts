@@ -316,12 +316,13 @@ export class PlayerController {
    *
    * [opts.warm] defaults true for play-from paths; openSurah passes false so
    * the sheet peel is not competing with a whole-surah MP3 warm.
+   * [opts.quiet] skips Media Session / nowPlaying churn on chapter open.
    */
   loadSurah(
     content: SurahContent,
     reciter: Reciter,
     startAyah = 1,
-    opts: { warm?: boolean } = {},
+    opts: { warm?: boolean; quiet?: boolean } = {},
   ) {
     this.content = content
     this.reciter = reciter
@@ -344,8 +345,8 @@ export class PlayerController {
     // Always read-ahead the opening window; whole-surah warm is optional.
     if (opts.warm !== false) this.prefetcher.warmSurah(urls)
     this.prefetcher.readAhead(urls, -1) // include index 0 as "next" from -1
-    void this.playIndex(0, /*autoplay*/ false)
-    this.updateMediaSession()
+    void this.playIndex(0, /*autoplay*/ false, { quiet: opts.quiet === true })
+    if (!opts.quiet) this.updateMediaSession()
   }
 
   /** Start (or resume) from a specific ayah; optionally skip basmalah. */
@@ -415,13 +416,18 @@ export class PlayerController {
     this.seekMs(Math.max(0, positionMs))
   }
 
-  private async playIndex(i: number, autoplay = true) {
+  private async playIndex(
+    i: number,
+    autoplay = true,
+    opts: { quiet?: boolean } = {},
+  ) {
     if (i < 0 || i >= this.playlist.length) {
       this.setBuffering(false)
       this.patch({ isPlaying: false })
       return
     }
     const token = ++this.playToken
+    const quiet = opts.quiet === true
 
     // Fast path: standby already holds this index — swap and play immediately.
     if (
@@ -456,23 +462,41 @@ export class PlayerController {
 
     this.index = i
     const item = this.playlist[i]!
-    // Publish nowPlaying (+ optimistic isPlaying) before the blob fetch so
-    // reader chrome can recede on the tap, not after the network round-trip.
-    this.publishNowPlaying(autoplay ? { playing: true } : undefined)
-    this.updateMediaSession()
+    // Quiet chapter-open: set nowPlaying without a store fan-out storm — patch
+    // once after src is assigned. Loud path publishes intent immediately.
+    if (!quiet) {
+      this.publishNowPlaying(autoplay ? { playing: true } : undefined)
+      this.updateMediaSession()
+    } else {
+      // Still record identity for the next Play tap without emitting yet.
+      const nextNow = {
+        surahId: this.surahId,
+        ayah: item.ayah,
+        reciterId: this.reciter?.id ?? 0,
+      }
+      this.state = {
+        ...this.state,
+        nowPlaying: nextNow,
+        positionMs: 0,
+        error: null,
+      }
+    }
     // Show the spinner while we fetch a full blob — critical on Safari where
     // progressive remote buffering of the next ayah is unreliable.
     if (autoplay && !this.prefetcher.isWarm(item.url)) {
       this.setBuffering(true)
     }
-    const blobSrc = await this.prefetcher.ensure(item.url)
+    // Quiet open: prefer remote src immediately; warm blob in the background.
+    const blobSrc = quiet
+      ? this.prefetcher.resolveSrc(item.url)
+      : (await this.prefetcher.ensure(item.url)) ?? this.prefetcher.resolveSrc(item.url)
     if (token !== this.playToken) return
     // User may have paused while warming.
     if (autoplay && !this.state.isPlaying) {
       this.setBuffering(false)
       return
     }
-    const src = blobSrc ?? this.prefetcher.resolveSrc(item.url)
+    const src = typeof blobSrc === 'string' ? blobSrc : this.prefetcher.resolveSrc(item.url)
 
     // Only suppress the pause→isPlaying:false sync when we intend to keep
     // playing after the src swap. Quiet loads (openSurah) must still clear it.
@@ -485,6 +509,23 @@ export class PlayerController {
       this.active.load()
     } finally {
       this.suppressPauseSync = false
+    }
+    if (quiet) {
+      // One emit after src assign — listeners see nowPlaying without a second
+      // mid-mount patch from publishNowPlaying.
+      this.patch({
+        nowPlaying: {
+          surahId: this.surahId,
+          ayah: item.ayah,
+          reciterId: this.reciter?.id ?? 0,
+        },
+        positionMs: 0,
+        durationMs: Math.round((this.active.duration || 0) * 1000),
+        error: null,
+      })
+      void this.prefetcher.ensure(item.url)
+      this.schedulePrefetch()
+      return
     }
     this.patch({
       durationMs: Math.round((this.active.duration || 0) * 1000),

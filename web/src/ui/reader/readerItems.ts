@@ -27,3 +27,32 @@ export function buildReaderItems(ayahs: Ayah[]): ReaderItem[] {
   }
   return items
 }
+
+/**
+ * Slice [items] to the progressive mount window [lo..hi], keeping page breaks
+ * that sit immediately before a mounted ayah. Callers add top/bottom padding
+ * for the unmounted ranges — do not emit hundreds of spacer nodes.
+ */
+export function sliceReaderItems(
+  items: ReaderItem[],
+  lo: number,
+  hi: number,
+): ReaderItem[] {
+  const out: ReaderItem[] = []
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]!
+    if (item.kind === 'ayah') {
+      if (item.ayah.number >= lo && item.ayah.number <= hi) out.push(item)
+      continue
+    }
+    const next = items[i + 1]
+    if (
+      next?.kind === 'ayah' &&
+      next.ayah.number >= lo &&
+      next.ayah.number <= hi
+    ) {
+      out.push(item)
+    }
+  }
+  return out
+}

@@ -238,10 +238,11 @@ Translate `docs/PERFORMANCE.md` into web terms:
    while `isPlaying || isBuffering` for ayah joins). Pause works mid-buffer.
    Play intent flips `isPlaying` before `canplay`. Focus glide is deferred one
    frame so the icon + CSS recess paint first.
-7. **Sheet peel first.** `openSurah` starts the paper slide on the tap frame,
-   then loads content / mounts ayahs under `startTransition`. Long surahs
-   progressive-mount a window around the landing ayah; parked reader sheets
-   use `content-visibility: hidden`. Same-surah reopen peels without remount.
+7. **Sheet peel first.** `openSurah` starts the paper slide on the tap frame
+   (blank reader sheet), then loads content after the peel has painted.
+   Long surahs progressive-mount a tight ayah window with scroll padding;
+   parked reader sheets use `content-visibility: hidden`. Same-surah reopen
+   peels without remount. Sheet glide is ~360ms so the transition is visible.
 8. **Measure on mid-tier mobile Chrome/Safari**, not only desktop. Target:
    scroll and ink at display refresh with no layout thrash during wash.
 

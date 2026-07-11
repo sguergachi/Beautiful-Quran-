@@ -172,11 +172,13 @@ select {
   display: flex;
   flex-direction: column;
   background: var(--paper);
+  /* Visible paper peel — long enough to read as a sheet glide, short enough
+     not to feel stuck. Heavy work must not run on this same frame. */
   transition:
-    transform 380ms cubic-bezier(0.24, 0.02, 0.12, 1),
-    opacity 320ms ease,
-    left 380ms cubic-bezier(0.24, 0.02, 0.12, 1),
-    right 380ms cubic-bezier(0.24, 0.02, 0.12, 1);
+    transform 360ms cubic-bezier(0.24, 0.02, 0.12, 1),
+    opacity 300ms ease,
+    left 360ms cubic-bezier(0.24, 0.02, 0.12, 1),
+    right 360ms cubic-bezier(0.24, 0.02, 0.12, 1);
   transform-origin: center center;
   transform: translateX(0) scale(1);
   opacity: 1;
@@ -1051,6 +1053,12 @@ select {
   /* Skip paint/layout for off-screen verses after mount (browser virtualization). */
   content-visibility: auto;
   contain-intrinsic-size: auto 7.5rem;
+}
+
+/* Progressive-mount scroll padding — one block above/below the window. */
+.ayah-mount-pad {
+  pointer-events: none;
+  flex-shrink: 0;
 }
 
 /* Progressive-mount placeholder — keeps scroll geometry while the window expands. */
