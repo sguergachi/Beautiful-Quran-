@@ -257,7 +257,9 @@ Translate `docs/PERFORMANCE.md` into web terms:
    Audio and whole-surah timings hydrate after the first reader frame. A new
    chapter gets fresh focus-controller and rail geometry, initialized at its
    target ayah, so stale dial state cannot move during the peel.
-   Long surahs progressive-mount a tight ayah window with scroll padding;
+   Long surahs first mount a tight ayah window with scroll padding. Expansion
+   waits until the 360 ms peel is complete, then mounts only 12 ayahs per idle
+   slice so spacer replacement cannot move the rail during navigation;
    parked reader sheets use `content-visibility: hidden`. Same-surah reopen
    peels without remount. Sheet glide is ~360ms so the transition is visible.
 8. **Measure on mid-tier mobile Chrome/Safari**, not only desktop. Target:
