@@ -215,6 +215,66 @@ export function ayahHighlightSpans(
   return spans
 }
 
+/**
+ * Builds spans for an English ayah translation, highlighting the search
+ * term (or the matched word gloss) so home search results read in English.
+ */
+export function englishTranslationHighlightSpans(
+  ayahTranslation: string,
+  query: string,
+  wordGloss: string,
+): AyahTextSpan[] {
+  if (!ayahTranslation) return []
+  const needle = highlightNeedle(
+    ayahTranslation,
+    query.trim(),
+    wordGloss.trim(),
+  )
+  if (!needle) return [{ text: ayahTranslation, highlighted: false }]
+  return highlightAllOccurrences(ayahTranslation, needle)
+}
+
+/** Prefers the typed query when present; otherwise the word gloss / a token. */
+export function highlightNeedle(
+  haystack: string,
+  query: string,
+  wordGloss: string,
+): string | null {
+  if (query && haystack.toLowerCase().includes(query.toLowerCase())) {
+    return query
+  }
+  if (wordGloss && haystack.toLowerCase().includes(wordGloss.toLowerCase())) {
+    return wordGloss
+  }
+  const tokens = wordGloss
+    .split(/[\s,;:]+/)
+    .map((t) => t.trim().replace(/^[([{"']+|[)\]}"']+$/g, ''))
+    .filter((t) => t.length >= 3)
+    .sort((a, b) => b.length - a.length)
+  for (const token of tokens) {
+    if (haystack.toLowerCase().includes(token.toLowerCase())) return token
+  }
+  return null
+}
+
+function highlightAllOccurrences(text: string, needle: string): AyahTextSpan[] {
+  const spans: AyahTextSpan[] = []
+  const lowerText = text.toLowerCase()
+  const lowerNeedle = needle.toLowerCase()
+  let start = 0
+  let i = lowerText.indexOf(lowerNeedle)
+  if (i < 0) return [{ text, highlighted: false }]
+  while (i >= 0) {
+    if (i > start) spans.push({ text: text.slice(start, i), highlighted: false })
+    const end = i + needle.length
+    spans.push({ text: text.slice(i, end), highlighted: true })
+    start = end
+    i = lowerText.indexOf(lowerNeedle, start)
+  }
+  if (start < text.length) spans.push({ text: text.slice(start), highlighted: false })
+  return spans
+}
+
 export interface SurahFilterResult {
   surahs: { id: number; nameArabic: string; nameTransliteration: string; nameTranslation: string; ayahCount: number }[]
   ayahTarget: number | null

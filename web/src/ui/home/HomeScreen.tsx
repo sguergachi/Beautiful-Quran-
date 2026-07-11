@@ -11,7 +11,7 @@ import { PaperInput } from '../kit'
 import { appStore, useAppState, COVER_LAYER, READER_LAYER } from '../../store/appStore'
 import { QuranRepository } from '../../data/repository'
 import {
-  ayahHighlightSpans,
+  englishTranslationHighlightSpans,
   filterSurahs,
   sectionWordSearchHits,
   shouldRunWordSearch,
@@ -329,20 +329,20 @@ function WordSearchSection({
               <span className="word-search-ref">
                 {hit.surahId}:{hit.ayahNumber}
               </span>
-              <span className="word-search-ayah" lang="ar" dir="rtl">
-                {ayahHighlightSpans(hit.ayahText, hit.position, hit.arabic).map(
-                  (span, i) =>
-                    span.highlighted ? (
-                      <mark key={i} className="word-search-mark">
-                        {span.text}
-                      </mark>
-                    ) : (
-                      <span key={i}>{span.text}</span>
-                    ),
+              <span className="word-search-translation">
+                {englishTranslationHighlightSpans(
+                  hit.ayahTranslation,
+                  query,
+                  hit.translation,
+                ).map((span, i) =>
+                  span.highlighted ? (
+                    <mark key={i} className="word-search-mark">
+                      {span.text}
+                    </mark>
+                  ) : (
+                    <span key={i}>{span.text}</span>
+                  ),
                 )}
-              </span>
-              <span className="word-search-gloss">
-                {glossSnippet(hit, query)}
               </span>
             </button>
           </li>
@@ -359,15 +359,4 @@ function WordSearchSection({
       ) : null}
     </section>
   )
-}
-
-function glossSnippet(hit: WordSearchHit, query: string): string {
-  const trimmed = query.trim()
-  if (hit.translation.toLowerCase().includes(trimmed.toLowerCase())) {
-    return hit.translation
-  }
-  if (hit.ayahTranslation.toLowerCase().includes(trimmed.toLowerCase())) {
-    return hit.ayahTranslation
-  }
-  return hit.translation || hit.ayahTranslation
 }

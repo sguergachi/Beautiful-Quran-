@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   ayahHighlightSpans,
+  englishTranslationHighlightSpans,
   filterSurahs,
   isWordSearchQuery,
   matchWordSearch,
@@ -113,6 +114,37 @@ describe('ayahHighlightSpans', () => {
       'ٱلرَّحۡمَٰنِ',
     ])
     expect(spans.map((s) => s.text).join('')).toBe(text)
+  })
+})
+
+describe('englishTranslationHighlightSpans', () => {
+  it('prefers the typed query in the ayah translation', () => {
+    const ayah =
+      'In the name of Allah, the Entirely Merciful, the Especially Merciful.'
+    const spans = englishTranslationHighlightSpans(
+      ayah,
+      'Merciful',
+      'the Most Merciful',
+    )
+    expect(spans.filter((s) => s.highlighted).map((s) => s.text)).toEqual([
+      'Merciful',
+      'Merciful',
+    ])
+    expect(spans.map((s) => s.text).join('')).toBe(ayah)
+  })
+
+  it('falls back to a gloss token when the query is Arabic', () => {
+    const ayah = 'And He is the Oft-Returning, the Merciful.'
+    const spans = englishTranslationHighlightSpans(
+      ayah,
+      'التواب',
+      '(is) the Oft-returning (to mercy)',
+    )
+    expect(
+      spans.some(
+        (s) => s.highlighted && s.text.toLowerCase() === 'oft-returning',
+      ),
+    ).toBe(true)
   })
 })
 

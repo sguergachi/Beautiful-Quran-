@@ -157,4 +157,65 @@ fun ayahHighlightSpans(
     return spans
 }
 
+/**
+ * Builds spans for an English ayah translation, highlighting the search
+ * term (or the matched word gloss) so home search results read in English.
+ */
+fun englishTranslationHighlightSpans(
+    ayahTranslation: String,
+    query: String,
+    wordGloss: String,
+): List<AyahTextSpan> {
+    if (ayahTranslation.isEmpty()) return emptyList()
+    val needle = highlightNeedle(ayahTranslation, query.trim(), wordGloss.trim())
+        ?: return listOf(AyahTextSpan(ayahTranslation, highlighted = false))
+    return highlightAllOccurrences(ayahTranslation, needle)
+}
+
+/**
+ * Prefers the typed query when it appears in the translation; otherwise the
+ * word gloss. Returns null when neither can be found (case-insensitive).
+ */
+internal fun highlightNeedle(
+    haystack: String,
+    query: String,
+    wordGloss: String,
+): String? {
+    if (query.isNotEmpty() && haystack.contains(query, ignoreCase = true)) {
+        return query
+    }
+    if (wordGloss.isNotEmpty() && haystack.contains(wordGloss, ignoreCase = true)) {
+        return wordGloss
+    }
+    // Gloss rows are often "(is) the Merciful" while the ayah says "the Merciful" —
+    // try the longest whitespace token from the gloss that still appears.
+    val tokens = wordGloss
+        .split(Regex("[\\s,;:]+"))
+        .map { it.trim().trim('(', ')', '[', ']', '"', '\'') }
+        .filter { it.length >= 3 }
+        .sortedByDescending { it.length }
+    for (token in tokens) {
+        if (haystack.contains(token, ignoreCase = true)) return token
+    }
+    return null
+}
+
+private fun highlightAllOccurrences(text: String, needle: String): List<AyahTextSpan> {
+    val spans = ArrayList<AyahTextSpan>()
+    var start = 0
+    var i = text.indexOf(needle, ignoreCase = true)
+    if (i < 0) return listOf(AyahTextSpan(text, highlighted = false))
+    while (i >= 0) {
+        if (i > start) spans.add(AyahTextSpan(text.substring(start, i), highlighted = false))
+        val end = i + needle.length
+        spans.add(AyahTextSpan(text.substring(i, end), highlighted = true))
+        start = end
+        i = text.indexOf(needle, start, ignoreCase = true)
+    }
+    if (start < text.length) {
+        spans.add(AyahTextSpan(text.substring(start), highlighted = false))
+    }
+    return spans
+}
+
 data class AyahTextSpan(val text: String, val highlighted: Boolean)
