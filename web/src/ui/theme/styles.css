@@ -803,8 +803,14 @@ select {
   background: none;
   color: var(--ink);
   cursor: pointer;
+  /* Soft-dim when recessed; Active snaps — wash mask carries the reveal. */
   transition: opacity 450ms ease;
   -webkit-tap-highlight-color: transparent;
+}
+
+.basmalah-calligraphy[data-state='Active'],
+.basmalah[data-state='Active'] {
+  transition: none;
 }
 
 .basmalah-calligraphy svg {
@@ -884,7 +890,8 @@ select {
 .word-translit {
   font-size: calc(0.72rem * var(--font-scale, 1));
   color: var(--ink-muted);
-  opacity: 0.75;
+  /* Opacity is driven by WordUnit (0.55 × secondaryAlpha) — do not set a
+     fixed opacity here or it compounds with the parent Upcoming dim. */
   font-style: italic;
 }
 

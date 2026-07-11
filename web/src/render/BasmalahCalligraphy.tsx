@@ -1,29 +1,102 @@
-import type { CSSProperties, MouseEventHandler } from 'react'
+import {
+  useLayoutEffect,
+  useRef,
+  type CSSProperties,
+  type MouseEventHandler,
+} from 'react'
+import {
+  getTuning,
+  inkAlpha,
+  prefaceState,
+  prefaceWashProgress,
+  InkState,
+} from '../engine/ink'
+import { washMaskImage } from '../engine/fade'
 import { BASMALAH_UTHMANI } from '../engine/basmalah'
+import { player } from '../playback/player'
+import { applyMask } from './inkWash'
 
 /**
  * Traditional Naskh manuscript calligraphy of the basmalah — same artwork
  * as Android `R.drawable.basmalah_naskh` (Wikimedia Basmala.svg / Baba66,
  * CC BY-SA 3.0). Tint via `currentColor` / CSS color.
+ *
+ * While the lead-in clip plays (`active`), an RTL ink wash advances across the
+ * SVG on the clip clock (`prefaceWashProgress`), matching Android
+ * `BasmalahCalligraphy` + `InkEngine.prefaceWashProgress`.
  */
 export function BasmalahCalligraphy({
   className,
   style,
   onClick,
+  active = false,
+  dimmed = false,
   'data-state': dataState,
 }: {
   className?: string
   style?: CSSProperties
   onClick?: MouseEventHandler<HTMLButtonElement>
+  /** True while the basmalah lead-in clip is the now-playing item. */
+  active?: boolean
+  /** Recessed while another ayah is recited. */
+  dimmed?: boolean
   'data-state'?: string
 }) {
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const inkState = prefaceState(active, dimmed)
+  const resolvedState = dataState ?? inkState
+  // Active: snap to full base ink; the wash mask reveals from the Upcoming floor.
+  // Otherwise: lyric ink (Upcoming faint / Plain full) via opacity.
+  const opacity = inkState === InkState.Active ? 1 : inkAlpha(inkState)
+
+  useLayoutEffect(() => {
+    const svg = btnRef.current?.querySelector('svg')
+    if (!svg) return
+    if (!active) {
+      applyMask(svg, 'none')
+      return
+    }
+    const t = getTuning()
+    let raf = 0
+    let cancelled = false
+    const tick = () => {
+      if (cancelled) return
+      const ps = player.getState()
+      const progress = prefaceWashProgress(ps.positionMs, ps.durationMs)
+      if (progress >= 1) {
+        applyMask(svg, 'none')
+      } else {
+        applyMask(
+          svg,
+          washMaskImage(progress, t.upcomingAlpha, true, t.washFeather),
+        )
+      }
+      // Keep sampling the clip clock while active (seek / resume mid-wash).
+      raf = requestAnimationFrame(tick)
+    }
+    // Progress-0 (or current) mask before paint — same flash-avoidance as WordUnit.
+    const ps = player.getState()
+    const initial = prefaceWashProgress(ps.positionMs, ps.durationMs)
+    if (initial >= 1) applyMask(svg, 'none')
+    else {
+      applyMask(svg, washMaskImage(initial, t.upcomingAlpha, true, t.washFeather))
+    }
+    raf = requestAnimationFrame(tick)
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(raf)
+      applyMask(svg, 'none')
+    }
+  }, [active])
+
   return (
     <button
+      ref={btnRef}
       type="button"
       className={className ? `basmalah-calligraphy ${className}` : 'basmalah-calligraphy'}
-      style={style}
+      style={{ ...style, opacity }}
       onClick={onClick}
-      data-state={dataState}
+      data-state={resolvedState}
       aria-label={BASMALAH_UTHMANI}
     >
       <svg

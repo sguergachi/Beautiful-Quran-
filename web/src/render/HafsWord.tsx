@@ -197,7 +197,9 @@ export function HafsWord({
       const tick = (now: number) => {
         if (cancelled) return
         const p = Math.min(1, (now - start) / duration)
-        overlay.style.opacity = String(1 - p)
+        // Android: tween(repeatFadeOutMs, easing = sweepEasing)
+        const eased = cubicBezierEase(p, ease.x1, ease.y1, ease.x2, ease.y2)
+        overlay.style.opacity = String(1 - eased)
         if (p < 1) raf = requestAnimationFrame(tick)
         else overlay.style.opacity = '0'
       }

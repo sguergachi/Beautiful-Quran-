@@ -207,6 +207,7 @@ technique.
 |---|---|---|
 | Arabic + gloss | Per-word spans; directional `letterFadeIn` wash (CSS mask or per-word Canvas) | Timed word-by-word ink; never static highlight |
 | English lyric | Same wash, LTR | Same timings as Arabic |
+| Gloss / translit under Arabic | Whole-word opacity via `secondaryAlpha` (tracks sweep; never letter-reveal) | Same as Android `WordHighlight.secondaryAlpha` |
 | Arabic-only (Hafs) | One shaped paragraph; bloom clipped to word ranges (DOM Range / Canvas path) | No per-glyph style runs that break joining; no neighbour bleed; upcoming = opaque paper cover, not alpha |
 
 Product rule from `DESIGN.md` / `CONNECTED_ARABIC_RENDERING.md`: a renderer
