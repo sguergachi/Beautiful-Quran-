@@ -72,7 +72,6 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const [focusedPosition, setFocusedPosition] = useState(1)
   const [showReturn, setShowReturn] = useState(false)
   const [returnPointUp, setReturnPointUp] = useState(false)
-  const [recitingActive, setRecitingActive] = useState(false)
   const [activeExceedsViewport, setActiveExceedsViewport] = useState(false)
   const [searchActive, setSearchActive] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -84,7 +83,6 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const pendingJumpAyah = useRef<number | null>(null)
 
   const side = state.settings.ayahSelectorSide
-  const receded = state.chromeReceded && !searchActive
   const depth = content ? Math.max(0, stackLayer - READER_LAYER) : 0
   const isTop = content != null && stackLayer === READER_LAYER
   const peeking = content != null && stackLayer > READER_LAYER
@@ -92,6 +90,10 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const playingNow =
     state.player.isPlaying &&
     state.player.nowPlaying?.surahId === content?.surah.id
+  // Debounced like Android — hold chrome recess across the brief isPlaying
+  // gap when the player swaps ayahs, so top bar / rail / transport stay faded.
+  const [recitingActive, setRecitingActive] = useState(playingNow)
+  const receded = recitingActive && !searchActive
 
   const activeQuery = activeSearchQuery(searchActive, searchQuery)
   const searchMatches = useMemo(() => {
@@ -110,7 +112,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     Math.max(0, searchMatches.length - 1),
   )
 
-  // Debounced recess flag — matches Android `recitingActive`.
+  // Hold recess across brief pause blips (ayah joins / repeat restarts).
   useEffect(() => {
     if (playingNow) {
       setRecitingActive(true)
