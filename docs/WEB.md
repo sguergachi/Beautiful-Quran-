@@ -269,7 +269,9 @@ Three sheets, hand-rolled paper stack (no router chrome):
 2. **Reader** — header + ayahs + icon player bar; once the opening surah
    header scrolls off, a compact ornate title (Arabic + chapter ·
    transliteration) reappears in the top bar; ayah selector rail
-   (hover-magnified dashes with gold focal tick under the cursor; centered on desktop, Android-
+   (hover-magnified dashes with gold focal tick under the cursor; spring
+   expand from the minimized stack into the dial wheel — Android parity;
+   centered on desktop, Android-
    style edge-flush on mobile ≤640px so bars grow from the screen edge;
    drag uses tick-spaced wheel scrub so the visible label is the commit target);
    return-to-ayah roundel (gilt corolla, qalam arrow painted toward the
@@ -331,8 +333,9 @@ sans.
 
 ### Phase 3 — Focus + paper stack polish
 - ✅ `ReaderFocusController` (doorstep + `homeScrollStep`, recitation-follow,
-  centered hover-magnify ayah selector rail with tick-spaced wheel scrub
-  (edge-flush on mobile), return-to-ayah, tall-verse word keep-in-view).
+  centered hover-magnify ayah selector rail with spring expand/collapse and
+  tick-spaced wheel scrub (edge-flush on mobile), return-to-ayah, tall-verse
+  word keep-in-view).
 - ✅ Recess/dim only while playing; full Plain ink when paused or idle.
 - Sheet transitions + page-turn feel (audio optional).
 - Bookmarks ribbon; settings persistence; continue listening.

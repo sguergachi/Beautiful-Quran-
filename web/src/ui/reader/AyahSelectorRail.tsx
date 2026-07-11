@@ -5,6 +5,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
+import { animate, type AnimationPlaybackControls } from 'motion'
 import {
   dialDeltaFromPointerDy,
   dialFromTickY,
@@ -23,6 +24,14 @@ import {
   trackYFromDial,
   type RailGrowFrom,
 } from './ayahRailMath'
+
+/**
+ * Android `AyahSelectorRail` springs, converted for Motion:
+ * damping = dampingRatio * 2 * sqrt(stiffness) (mass = 1).
+ * Expand: dampingRatio 0.85, stiffness 340. Collapse: 1.0 / 200.
+ */
+const EXPAND_SPRING = { type: 'spring' as const, stiffness: 340, damping: 31.3 }
+const COLLAPSE_SPRING = { type: 'spring' as const, stiffness: 200, damping: 28.3 }
 
 const TOP_FRAC = 0.08
 const BOTTOM_FRAC = 0.12
@@ -89,10 +98,10 @@ function railGrowFrom(): RailGrowFrom {
  * Ayah scrub rail for the web reader.
  *
  * Collapsed: a symbolic stack of dashes tracking reading progress.
- * Hover / press: blooms into a magnification dial — bars grow widthwise under
- * the pointer, taper at the top and bottom edges, and the focal ayah is the
- * widest (gold). Hover maps pointer Y along the track so the gold tick stays
- * under the cursor.
+ * Hover / press: spring-animates into a magnification dial (Android parity) —
+ * minimized dashes retract while ticks bloom widthwise under the pointer,
+ * taper at the top and bottom edges, and the focal ayah is the widest (gold).
+ * Hover maps pointer Y along the track so the gold tick stays under the cursor.
  *
  * Desktop keeps a centered midline. Mobile (≤640px) matches Android: bars
  * grow flush from the screen edge with the outer rounded cap hidden, and
@@ -122,6 +131,7 @@ export function AyahSelectorRail({
   const lastClientYRef = useRef<number | null>(null)
   const rafRef = useRef(0)
   const expandTargetRef = useRef(0)
+  const expandControlsRef = useRef<AnimationPlaybackControls | null>(null)
   const readingPosRef = useRef(currentPosition ?? currentAyah)
   const [ariaAyah, setAriaAyah] = useState(currentAyah)
 
@@ -263,15 +273,6 @@ export function AyahSelectorRail({
     if (rafRef.current) return
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = 0
-      // Ease expansion toward target.
-      const target = expandTargetRef.current
-      const cur = expandRef.current
-      if (Math.abs(target - cur) > 0.001) {
-        expandRef.current = cur + (target - cur) * 0.22
-        schedulePaint()
-      } else {
-        expandRef.current = target
-      }
       // Sync dial to reading position only while fully collapsed and idle.
       if (
         expandTargetRef.current < 0.01 &&
@@ -298,13 +299,46 @@ export function AyahSelectorRail({
     return () => {
       window.removeEventListener('resize', onResize)
       mq.removeEventListener('change', onMq)
-      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = 0
+      }
+      expandControlsRef.current?.stop()
+      expandControlsRef.current = null
     }
   }, [schedulePaint])
 
   const setExpanded = (open: boolean) => {
-    expandTargetRef.current = open ? 1 : 0
-    schedulePaint()
+    const target = open ? 1 : 0
+    expandTargetRef.current = target
+    expandControlsRef.current?.stop()
+    expandControlsRef.current = null
+
+    const reducedMotion =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    if (reducedMotion || Math.abs(expandRef.current - target) < 0.001) {
+      expandRef.current = target
+      schedulePaint()
+      return
+    }
+
+    // Spring the canvas expand scalar — minimized stack retracts while the
+    // magnification wheel blooms (same springs as Android AyahSelectorRail).
+    expandControlsRef.current = animate(expandRef.current, target, {
+      ...(open ? EXPAND_SPRING : COLLAPSE_SPRING),
+      onUpdate: (value) => {
+        expandRef.current = value
+        schedulePaint()
+      },
+      onComplete: () => {
+        expandRef.current = target
+        expandControlsRef.current = null
+        schedulePaint()
+      },
+    })
   }
 
   const commitDial = (next: number) => {

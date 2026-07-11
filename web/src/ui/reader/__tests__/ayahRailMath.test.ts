@@ -183,10 +183,14 @@ describe('railExpandedLayout', () => {
 })
 
 describe('railCollapsedBarRect', () => {
-  it('centers collapsed dashes on desktop', () => {
-    const rect = railCollapsedBarRect(80, 'left', 'center', 10, 1.5, 1)
-    expect(rect.x).toBeCloseTo(35, 5)
-    expect(rect.width).toBe(10)
+  it('centers collapsed dashes on desktop and shrinks them on exit', () => {
+    const full = railCollapsedBarRect(80, 'left', 'center', 10, 1.5, 1)
+    expect(full.x).toBeCloseTo(35, 5)
+    expect(full.width).toBe(10)
+
+    const half = railCollapsedBarRect(80, 'left', 'center', 10, 1.5, 0.5)
+    expect(half.width).toBe(5)
+    expect(half.x).toBeCloseTo(37.5, 5)
   })
 
   it('flushes collapsed dashes to the screen edge on mobile', () => {
@@ -197,5 +201,11 @@ describe('railCollapsedBarRect', () => {
     const right = railCollapsedBarRect(80, 'right', 'edge', 10, 1.5, 1)
     expect(right.x).toBeCloseTo(70, 5)
     expect(right.x + right.width).toBeGreaterThan(80)
+  })
+
+  it('slips edge-flush dashes off-screen as they exit', () => {
+    const open = railCollapsedBarRect(80, 'left', 'edge', 10, 1.5, 1)
+    const exiting = railCollapsedBarRect(80, 'left', 'edge', 10, 1.5, 0)
+    expect(exiting.x).toBeLessThan(open.x)
   })
 })
