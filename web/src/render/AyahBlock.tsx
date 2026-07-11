@@ -31,6 +31,8 @@ interface Props {
   fontScale: number
   /** Live in-surah English query (≥ 2 chars); highlights matching glosses. */
   searchQuery?: string | null
+  /** 1-based word to orange-flash (home search hit); null = no flash. */
+  flashWordPosition?: number | null
   /** Tap a word to start recitation at that word's timing. */
   onPlayWord: (ayah: number, wordPosition: number) => void
   onToggleBookmark: (ayah: number) => boolean
@@ -56,6 +58,7 @@ function AyahBlockInner({
   speed,
   fontScale,
   searchQuery = null,
+  flashWordPosition = null,
   onPlayWord,
   onToggleBookmark,
   onHoldWord,
@@ -111,6 +114,7 @@ function AyahBlockInner({
               isActiveAyah={isActiveAyah}
               dimmed={dimmed}
               speed={speed}
+              searchFlash={flashWordPosition === w.position}
               rootRef={
                 isActiveAyah && activeWord?.wordPosition === w.position
                   ? activeWordRef
@@ -143,6 +147,7 @@ function AyahBlockInner({
               showTransliteration={showTransliteration}
               englishMode={englishOnly}
               searchHit={hits(w.translation)}
+              searchFlash={flashWordPosition === w.position}
               speed={speed}
               rootRef={
                 isActiveAyah && activeWord?.wordPosition === w.position

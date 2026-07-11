@@ -28,6 +28,8 @@ interface Props {
   showTransliteration: boolean
   englishMode?: boolean
   searchHit?: boolean
+  /** When true, pulse the orange search-hit flash on Arabic + gloss. */
+  searchFlash?: boolean
   speed: number
   /** Optional external ref so the ayah can keep the active word in view. */
   rootRef?: MutableRefObject<HTMLElement | null>
@@ -94,6 +96,7 @@ export function WordUnit({
   showTransliteration,
   englishMode = false,
   searchHit = false,
+  searchFlash = false,
   speed,
   rootRef: externalRootRef,
   onPlay,
@@ -429,17 +432,37 @@ export function WordUnit({
         >
           {label}
         </span>
+        {searchFlash ? (
+          <span
+            className={`word-search-flash-overlay ${baseClass}`}
+            aria-hidden="true"
+            data-pulse="true"
+          >
+            {label}
+          </span>
+        ) : null}
       </span>
       {/* Gloss/translit are siblings of the glyph stack (not nested under the
           wash mask). Arabic path: they own Upcoming dim. English path: parent
           `.word-ink` owns it. During Active both track secondaryAlpha. */}
       {!englishMode && showGloss && word.translation ? (
-        <span
-          ref={glossRef}
-          className="word-gloss"
-          data-search-hit={searchHit ? 'true' : undefined}
-        >
-          {word.translation}
+        <span className="word-gloss-flash">
+          <span
+            ref={glossRef}
+            className="word-gloss"
+            data-search-hit={searchHit ? 'true' : undefined}
+          >
+            {word.translation}
+          </span>
+          {searchFlash ? (
+            <span
+              className="word-search-flash-overlay word-gloss"
+              aria-hidden="true"
+              data-pulse="true"
+            >
+              {word.translation}
+            </span>
+          ) : null}
         </span>
       ) : null}
       {showTransliteration && word.transliteration ? (

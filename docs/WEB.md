@@ -250,9 +250,12 @@ the repeat chain releases (`InkEngine` + `REPEAT_HIGHLIGHTING.md`).
 
 Three sheets, hand-rolled paper stack (no router chrome):
 
-1. **Home** — surah list, search, continue-listening, floating playback
-   control while a verse is loaded (chapter · ayah label, transport, quiet
-   Close that stops the session — Android parity).
+1. **Home** — surah list, Quran-wide word search (sectioned by surah with
+   truncated expand-in-place lists), `surah:ayah` references, continue-
+   listening, floating playback control while a verse is loaded (chapter ·
+   ayah label, transport, quiet Close that stops the session — Android
+   parity). Opening a word hit flashes that Arabic (and English gloss) word
+   twice with an orange wash on the reader (~500 ms total).
 2. **Reader** — header + ayahs + icon player bar; once the opening surah
    header scrolls off, a compact ornate title (Arabic + chapter ·
    transliteration) reappears in the top bar; ayah selector rail

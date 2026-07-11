@@ -10,9 +10,18 @@ import type {
   Word,
   WordMorphology,
 } from './models'
+import {
+  matchWordSearch,
+  normalizeArabicForSearch,
+  shouldRunWordSearch,
+  WORD_SEARCH_MAX_HITS,
+  type WordSearchHit,
+  type WordSearchIndexEntry,
+} from '../engine/wordSearch'
 
 let surahsCache: Surah[] | null = null
 let recitersCache: Reciter[] | null = null
+let wordSearchIndex: WordSearchIndexEntry[] | null = null
 
 export async function ensureReady(
   onProgress?: (p: LoadProgress) => void,
@@ -175,6 +184,53 @@ export function rootSummary(root: string): RootSummary | null {
   return { root, occurrenceCount: countRow, occurrences }
 }
 
+function wordSearchIndexRows(): WordSearchIndexEntry[] {
+  if (wordSearchIndex) return wordSearchIndex
+  wordSearchIndex = queryAll(
+    `SELECT w.surah_id, w.ayah_number, w.position, w.arabic,
+            w.translation_en AS word_translation, w.transliteration,
+            a.text_uthmani, a.translation_en AS ayah_translation,
+            s.name_transliteration, s.name_arabic
+     FROM words w
+     JOIN ayahs a
+       ON a.surah_id = w.surah_id AND a.ayah_number = w.ayah_number
+     JOIN surahs s ON s.id = w.surah_id
+     ORDER BY w.surah_id, w.ayah_number, w.position`,
+    [],
+    (r) => {
+      const arabic = String(r.arabic)
+      const translation = String(r.word_translation)
+      const transliteration = String(r.transliteration)
+      return {
+        surahId: Number(r.surah_id),
+        ayahNumber: Number(r.ayah_number),
+        position: Number(r.position),
+        arabic,
+        arabicNorm: normalizeArabicForSearch(arabic),
+        translation,
+        translationLower: translation.toLowerCase(),
+        transliteration,
+        transliterationLower: transliteration.toLowerCase(),
+        ayahText: String(r.text_uthmani),
+        ayahTranslation: String(r.ayah_translation),
+        surahNameTransliteration: String(r.name_transliteration),
+        surahNameArabic: String(r.name_arabic),
+      }
+    },
+  )
+  return wordSearchIndex
+}
+
+/**
+ * Quran-wide word search for the cover sheet. Blank / too-short /
+ * `surah:ayah` queries yield an empty list (caller should gate with
+ * `shouldRunWordSearch`).
+ */
+export function searchWords(query: string): WordSearchHit[] {
+  if (!shouldRunWordSearch(query)) return []
+  return matchWordSearch(wordSearchIndexRows(), query, WORD_SEARCH_MAX_HITS)
+}
+
 export const QuranRepository = {
   ensureReady,
   surahs,
@@ -184,4 +240,5 @@ export const QuranRepository = {
   parseSegments,
   wordMorphology,
   rootSummary,
+  searchWords,
 }

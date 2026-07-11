@@ -117,4 +117,27 @@ class WordSearchTest {
         assertEquals(listOf("ٱلرَّحۡمَٰنِ"), highlighted)
         assertEquals(text, spans.joinToString("") { it.text })
     }
+
+    @Test
+    fun `english translation highlight prefers the query`() {
+        val ayah =
+            "In the name of Allah, the Entirely Merciful, the Especially Merciful."
+        val spans = englishTranslationHighlightSpans(ayah, "Merciful", "the Most Merciful")
+        assertEquals(
+            listOf("Merciful", "Merciful"),
+            spans.filter { it.highlighted }.map { it.text },
+        )
+        assertEquals(ayah, spans.joinToString("") { it.text })
+    }
+
+    @Test
+    fun `english translation highlight falls back to gloss token`() {
+        val ayah = "And He is the Oft-Returning, the Merciful."
+        val spans = englishTranslationHighlightSpans(
+            ayah,
+            "التواب",
+            "(is) the Oft-returning (to mercy)",
+        )
+        assertTrue(spans.any { it.highlighted && it.text.equals("Oft-Returning", ignoreCase = true) })
+    }
 }

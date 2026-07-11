@@ -77,6 +77,11 @@ export interface AppState {
   /** True while the ink-bleed exit hole is animating; data stays until it ends. */
   rootViewerClosing: boolean
   followEnabled: boolean
+  /**
+   * Pending home word-search flash — set by [openSurah] with a word position,
+   * consumed by the reader after focus settles.
+   */
+  pendingSearchFlash: { ayah: number; wordPosition: number } | null
 }
 
 type Listener = () => void
@@ -115,6 +120,7 @@ class AppStore {
     rootViewer: null,
     rootViewerClosing: false,
     followEnabled: true,
+    pendingSearchFlash: null,
   }
 
   constructor() {
@@ -280,7 +286,7 @@ class AppStore {
     this.set({ hasTimings: reciter.hasTimings && map.size > 0 })
   }
 
-  openSurah(surahId: number, ayah = 1) {
+  openSurah(surahId: number, ayah = 1, wordPosition?: number) {
     const content = QuranRepository.surahContent(surahId)
     const reciter =
       this.state.reciters.find((r) => r.id === this.state.settings.reciterId) ??
@@ -300,6 +306,9 @@ class AppStore {
     }
     saveSettings(settings)
 
+    const flashWord =
+      wordPosition != null && wordPosition > 0 ? wordPosition : null
+
     player.loadSurah(content, reciter, ayah)
     this.set({
       content,
@@ -314,7 +323,15 @@ class AppStore {
       // Keep the bleed mounted so the exit hole can finish (Android InkReveal).
       rootViewer: this.state.rootViewer,
       rootViewerClosing: this.state.rootViewer != null ? true : false,
+      pendingSearchFlash:
+        flashWord != null ? { ayah, wordPosition: flashWord } : null,
     })
+  }
+
+  /** Clears the one-shot search-hit flash after the reader finishes pulsing. */
+  clearSearchFlash() {
+    if (this.state.pendingSearchFlash == null) return
+    this.set({ pendingSearchFlash: null })
   }
 
   async playPause() {

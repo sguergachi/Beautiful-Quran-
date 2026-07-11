@@ -32,6 +32,7 @@ import { OrnateSurahTitle } from './OrnateSurahTitle'
 import { ReaderFocusController } from './ReaderFocusController'
 import { shouldPauseFollowOnDrag } from './followGesture'
 import { RootViewer } from '../root/RootViewer'
+import { SearchHitFlash } from '../../engine/wordSearch'
 
 /** Usable in-surah query — mirrors Android `SurahSearchState.activeQuery`. */
 function activeSearchQuery(active: boolean, query: string): string | null {
@@ -185,6 +186,51 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     // Only on surah open / becoming top sheet.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content?.surah.id, isTop])
+
+  // Home word-search hit: quick orange fade-in / fade-out twice on the
+  // matched word once the verse is on screen (Android SearchHitFlash).
+  const pendingFlash = state.pendingSearchFlash
+  const [flashTarget, setFlashTarget] = useState<{
+    ayah: number
+    wordPosition: number
+  } | null>(null)
+  useEffect(() => {
+    if (!content || !isTop || pendingFlash == null) {
+      setFlashTarget(null)
+      return
+    }
+    const ayah = pendingFlash.ayah
+    const word = pendingFlash.wordPosition
+    const ayahRow = content.ayahs.find((a) => a.number === ayah)
+    if (!ayahRow || !ayahRow.words.some((w) => w.position === word)) {
+      appStore.clearSearchFlash()
+      return
+    }
+    let cancelled = false
+    let clearTimer = 0
+    const startTimer = window.setTimeout(() => {
+      if (cancelled) return
+      setFlashTarget({ ayah, wordPosition: word })
+      const pulseMs =
+        SearchHitFlash.PULSES *
+        (SearchHitFlash.FADE_IN_MS + SearchHitFlash.FADE_OUT_MS)
+      clearTimer = window.setTimeout(() => {
+        if (cancelled) return
+        setFlashTarget(null)
+        appStore.clearSearchFlash()
+      }, pulseMs)
+    }, SearchHitFlash.START_DELAY_MS)
+    return () => {
+      cancelled = true
+      window.clearTimeout(startTimer)
+      window.clearTimeout(clearTimer)
+    }
+  }, [
+    content?.surah.id,
+    isTop,
+    pendingFlash?.ayah,
+    pendingFlash?.wordPosition,
+  ])
 
   // Scroll readout + return-to-verse placement.
   // Follow pauses only on user vertical drag / wheel — never on FocusEngine
@@ -616,6 +662,11 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                       appStore.openRootViewer(content.surah.id, a, pos, arabic, translation)
                     }
                     searchQuery={activeQuery}
+                    flashWordPosition={
+                      flashTarget?.ayah === ayah.number
+                        ? flashTarget.wordPosition
+                        : null
+                    }
                   />
                 )
               })}

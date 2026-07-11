@@ -46,7 +46,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -59,11 +61,9 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
@@ -76,10 +76,9 @@ import com.beautifulquran.data.model.Surah
 import com.beautifulquran.data.model.SurahWordSearchSection
 import com.beautifulquran.data.model.WordSearchHit
 import com.beautifulquran.domain.WORD_SEARCH_PREVIEW_LIMIT
-import com.beautifulquran.domain.ayahHighlightSpans
+import com.beautifulquran.domain.englishTranslationHighlightSpans
 import com.beautifulquran.ui.theme.ArabicTitleStyle
 import com.beautifulquran.ui.theme.GildedRosette
-import com.beautifulquran.ui.theme.HafsFontFamily
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.verticalFadingEdges
@@ -550,12 +549,23 @@ private fun SearchSectionLabel(text: String) {
 @Composable
 private fun WordSearchSurahHeader(section: SurahWordSearchSection) {
     val accents = LocalQuranAccents.current
+    val rule = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 28.dp)
-            .padding(top = 18.dp, bottom = 4.dp),
+            .padding(top = 18.dp, bottom = 8.dp)
+            .drawBehind {
+                val y = size.height - 0.5.dp.toPx()
+                drawLine(
+                    color = rule,
+                    start = Offset(0f, y),
+                    end = Offset(size.width, y),
+                    strokeWidth = 1.dp.toPx(),
+                )
+            }
+            .padding(bottom = 10.dp),
     ) {
         Text(
             text = section.surahNameTransliteration,
@@ -588,9 +598,13 @@ private fun WordSearchHitRow(
 ) {
     val accents = LocalQuranAccents.current
     val highlightColor = accents.gold
-    val arabic = remember(hit.ayahText, hit.position, hit.arabic, highlightColor) {
+    val translation = remember(hit.ayahTranslation, hit.translation, query, highlightColor) {
         buildAnnotatedString {
-            for (span in ayahHighlightSpans(hit.ayahText, hit.position, hit.arabic)) {
+            for (span in englishTranslationHighlightSpans(
+                ayahTranslation = hit.ayahTranslation,
+                query = query,
+                wordGloss = hit.translation,
+            )) {
                 if (span.highlighted) {
                     withStyle(
                         SpanStyle(
@@ -606,9 +620,6 @@ private fun WordSearchHitRow(
             }
         }
     }
-    val gloss = remember(hit.translation, hit.ayahTranslation, query, highlightColor) {
-        highlightEnglishSnippet(hit.translation, hit.ayahTranslation, query, highlightColor)
-    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -620,58 +631,15 @@ private fun WordSearchHitRow(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
         )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = arabic,
-            fontFamily = HafsFontFamily,
-            fontSize = 22.sp,
-            color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.End,
-            modifier = Modifier.fillMaxWidth(),
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (gloss.isNotBlank()) {
+        if (translation.isNotBlank()) {
             Spacer(Modifier.height(4.dp))
             Text(
-                text = gloss,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                maxLines = 2,
+                text = translation,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.88f),
+                maxLines = 4,
                 overflow = TextOverflow.Ellipsis,
             )
-        }
-    }
-}
-
-/**
- * Prefers the matching word gloss; otherwise a short slice of the ayah
- * translation with the query washed in gold.
- */
-private fun highlightEnglishSnippet(
-    wordTranslation: String,
-    ayahTranslation: String,
-    query: String,
-    mark: Color,
-): AnnotatedString {
-    val trimmed = query.trim()
-    val source = when {
-        wordTranslation.contains(trimmed, ignoreCase = true) -> wordTranslation
-        ayahTranslation.contains(trimmed, ignoreCase = true) -> ayahTranslation
-        wordTranslation.isNotBlank() -> wordTranslation
-        else -> ayahTranslation
-    }
-    return buildAnnotatedString {
-        append(source)
-        if (trimmed.isEmpty()) return@buildAnnotatedString
-        var i = source.indexOf(trimmed, ignoreCase = true)
-        while (i >= 0) {
-            addStyle(
-                SpanStyle(color = mark, fontWeight = FontWeight.Medium),
-                i,
-                i + trimmed.length,
-            )
-            i = source.indexOf(trimmed, i + trimmed.length, ignoreCase = true)
         }
     }
 }

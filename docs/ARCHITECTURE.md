@@ -222,8 +222,8 @@ horizontal page turn — draggable, fling-able, with page-turn audio
   expand-in-place lists), a continue-listening card, and a floating playback
   control (paper-native transport) while a verse is loaded in the session;
   opening a word hit flashes that Arabic (and English gloss) word twice with
-  a quick orange wash on the reader. The reader's embedded `PlayerBar` takes
-  over once that sheet is open.
+  an orange wash on the reader (~500 ms total). The reader's embedded `PlayerBar`
+  takes over once that sheet is open.
 - `reader/ReaderScreen` — the follow-along view. Composed of
   `SurahHeader` + one `AyahBlock` per ayah in a `LazyColumn`;
   `AyahBlock` renders `WordUnit`s (Arabic mode, RTL flow) or
