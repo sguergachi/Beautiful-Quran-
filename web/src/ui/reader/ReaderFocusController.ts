@@ -281,6 +281,13 @@ export class ReaderFocusController {
           el.scrollTop = Math.max(0, door.offsetTop - anchor)
         }
       }
+      if (!animate) {
+        const delta = this.remainingPxToAnchor(ayahNumber)
+        if (epoch === this.focusEpoch && Math.abs(delta) >= 0.5) {
+          el.scrollTop = Math.max(0, el.scrollTop + delta)
+        }
+        return
+      }
       await this.animateHomeOnto(ayahNumber, plan.durationMs, epoch)
       return
     }
