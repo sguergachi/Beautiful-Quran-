@@ -1128,13 +1128,17 @@ select {
 
 /* English lyric: proportional ornament on the prose baseline. */
 .words[data-lyric='english'] > .ayah-mark {
-  display: inline;
+  display: inline-block;
   margin-inline-start: 0.2em;
   /* Relative to the live 22px × user font scale, so it remains accurate at
      every text-size setting rather than depending on a fixed pixel size. */
   font-size: 0.78em;
   line-height: inherit;
   vertical-align: baseline;
+  /* Calibrated against the rasterized fonts in the production browser: Hafs'
+     ornament ink starts with a 0.619em lift. The final literal half-pixel
+     adjustment is intentionally scale-independent for exact raster alignment. */
+  transform: translateY(calc(-0.619em + 1px));
 }
 
 .words {

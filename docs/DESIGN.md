@@ -152,8 +152,9 @@ or as a control — a bookmark is the reader's own ink, not the app's.
   the word spans exist only for karaoke paint and interaction. Web uses
   `text-wrap: pretty` as a progressive enhancement and never justifies or
   hyphenates this word-addressable text. Its trailing Hafs verse mark is about
-  0.78 em and shares the English run's actual baseline with no visual
-  translation. The em ratio keeps it proportional at every user font scale.
+  0.78 em with a calibrated paint lift. Web uses `-0.619em + 1px` so the
+  final subpixel raster adjustment stays exact at every user font size;
+  Compose uses the equivalent default-scale ratio.
 - **English gloss punctuation**: display-only periods close each ayah and
   precede genuine capitalized sentence starts. Proper and reverential capitals
   (Allah, His, Lord, etc.) and speech cues are excluded. This policy never
