@@ -99,7 +99,16 @@ private const val DUA_HOLD_MS = 900L
 private const val OPEN_MS = 1_150
 private const val OPEN_DEGREES = -95f
 
-/** Same decelerating settle as the paper stack's page turns. */
+/**
+ * Perspective strength for the hinge open. Compose's cameraDistance is in
+ * pixels and must be density-scaled; 8× is the documented default and the
+ * dramatic end of the usable range — close enough that the free edge
+ * foreshortens toward the reader instead of reading as a flat horizontal
+ * squash. Values ≥ ~24× look nearly orthographic (the bug we had).
+ */
+private const val OPEN_CAMERA_DISTANCE = 8f
+
+/** Same decelerating settle as the paper stack's page turns / web cover. */
 private val CoverOpenEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
 
 /**
@@ -230,16 +239,18 @@ fun EntranceCover(
                 .fillMaxSize()
                 .graphicsLayer {
                     val t = turn.value
-                    // Left-edge hinge: negative rotationY brings the free
-                    // edge toward the camera — opens out facing the reader
-                    // (matches web rotateY(-95deg); positive folds inward).
+                    // Left-edge hinge, opening toward the reader — same motion
+                    // as web `perspective(…) rotateY(-95deg)` with origin left.
                     transformOrigin = TransformOrigin(0f, 0.5f)
-                    // Closer camera ≈ web perspective(1400px): enough depth
-                    // that the outward swing reads clearly.
-                    cameraDistance = 24f * density
+                    cameraDistance = OPEN_CAMERA_DISTANCE * density
                     rotationY = OPEN_DEGREES * t
-                    // Edge-on the board is invisible anyway; the fade keeps its
-                    // mirrored back from ever flashing at the end of the swing.
+                    // Keep the layer unclipped so perspective foreshortening
+                    // on the near (free) edge can extend past the layout box —
+                    // clipping here is what made the swing read as a 2D wipe.
+                    clip = false
+                    // Edge-on the board is invisible anyway; the fade matches
+                    // web (hold until ~55%, then ease out) so the foreshortened
+                    // face is visible through the heart of the swing.
                     alpha = sheetAlpha.value * (1f - openFade(t))
                 }
                 .clip(coverShape)
@@ -394,9 +405,9 @@ private fun readScreenCornerRadii(view: android.view.View): ScreenCornerRadiiPx 
     )
 }
 
-/** 0 until the swing passes ~60°, then eases to 1 as the board goes edge-on. */
+/** 0 until the swing passes ~55% (web keyframe), then eases to 1 edge-on. */
 private fun openFade(t: Float): Float {
-    val f = ((t - 0.62f) / 0.38f).coerceIn(0f, 1f)
+    val f = ((t - 0.55f) / 0.45f).coerceIn(0f, 1f)
     return f * f * (3f - 2f * f)
 }
 
