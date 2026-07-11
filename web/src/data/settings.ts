@@ -28,7 +28,7 @@ const DEFAULTS: Settings = {
   readingMode: 'arabic_english',
   showWordGloss: true,
   showTransliteration: false,
-  showTranslation: true,
+  showTranslation: false,
   themeMode: 'system',
   ayahSelectorSide: 'left',
   lastSurah: 0,

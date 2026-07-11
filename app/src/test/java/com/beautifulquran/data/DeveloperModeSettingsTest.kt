@@ -17,6 +17,13 @@ class DeveloperModeSettingsTest {
     }
 
     @Test
+    fun `reading defaults to word gloss without ayah translation`() {
+        val defaults = Settings()
+        assertTrue(defaults.showWordGloss)
+        assertFalse(defaults.showTranslation)
+    }
+
+    @Test
     fun `developer mode toggles via copy`() {
         val on = Settings().copy(developerModeEnabled = true)
         assertTrue(on.developerModeEnabled)
