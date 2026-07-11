@@ -1546,29 +1546,79 @@ select {
   font-size: 0.85rem;
 }
 
+.scroll-with-float {
+  padding-bottom: 6.5rem;
+}
+
 .floating-play {
   position: absolute;
   left: 50%;
-  bottom: calc(0.85rem + env(safe-area-inset-bottom, 0px));
+  bottom: calc(0.55rem + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   z-index: 8;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
   gap: 0.1rem;
-  padding: 0.35rem 0.4rem;
+  width: min(22rem, calc(100% - 1.25rem));
+  padding: 0.45rem 0.55rem 0.35rem;
   background: var(--paper);
-  border: 1px solid color-mix(in srgb, var(--gold) 40%, transparent);
-  border-radius: 999px;
   animation: float-in 280ms ease;
   color: var(--accent);
-  max-width: calc(100% - 1.25rem);
 }
 
-.floating-play button {
+.floating-play .float-close {
+  position: absolute;
+  top: 0.15rem;
+  right: 0.15rem;
+  color: color-mix(in srgb, var(--ink) 45%, transparent);
+  padding: 0.45rem;
+  min-height: 40px;
+  min-width: 40px;
+  font-size: 0.95rem;
+}
+
+.floating-play .float-now-playing {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0;
+  max-width: calc(100% - 2.5rem);
+  padding: 0.2rem 0.5rem;
+  min-height: 1.75rem;
+  color: color-mix(in srgb, var(--ink) 82%, transparent);
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.floating-play .float-chapter {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 12rem;
+}
+
+.floating-play .float-sep {
+  color: color-mix(in srgb, var(--ink) 28%, transparent);
+  flex-shrink: 0;
+}
+
+.floating-play .float-ayah {
+  color: color-mix(in srgb, var(--ink) 55%, transparent);
+  flex-shrink: 0;
+}
+
+.floating-play .float-transport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+}
+
+.floating-play .float-transport button {
   color: var(--accent);
-  padding: 0.55rem 0.7rem;
+  padding: 0.55rem 0.75rem;
   font-size: 1.05rem;
   white-space: nowrap;
   min-height: 44px;
@@ -1578,13 +1628,10 @@ select {
   justify-content: center;
 }
 
-.floating-play .float-open {
-  font-size: 0.92rem;
-  padding-inline: 0.85rem;
-}
-
 @media (hover: hover) {
-  .floating-play button:hover {
+  .floating-play .float-transport button:hover,
+  .floating-play .float-close:hover,
+  .floating-play .float-now-playing:hover {
     opacity: 0.72;
   }
 }
