@@ -3,8 +3,10 @@ import { useEffect, useState } from 'react'
 /** First paint — just enough ayahs to fill a phone viewport. */
 const INITIAL_BEFORE = 1
 const INITIAL_AFTER = 5
-/** Expand in larger idle chunks so open/close aren't fighting rAF thrash. */
-const EXPAND_STEP = 48
+/** Small idle batches avoid a long React/layout task on word-heavy chapters. */
+const EXPAND_STEP = 12
+/** The paper peel is 360 ms; do not replace spacer geometry while it moves. */
+const FIRST_EXPAND_DELAY_MS = 500
 
 export interface AyahMountRange {
   lo: number
@@ -81,7 +83,7 @@ export function useProgressiveAyahWindow(
         }
       ).requestIdleCallback
       if (typeof ric === 'function') {
-        idleId = ric(() => cb(), { timeout: 120 })
+        idleId = ric(() => cb(), { timeout: 750 })
       } else {
         timeoutId = window.setTimeout(cb, 32)
       }
@@ -98,7 +100,11 @@ export function useProgressiveAyahWindow(
         return { lo, hi, complete }
       })
     }
-    schedule(expand)
+    // An idle callback with a short timeout was firing 120 ms into the peel,
+    // mounting dozens of ayahs and changing spacer geometry while the rail
+    // was painting. Give the content-bearing first frame and sheet transition
+    // exclusive use of the opening window.
+    timeoutId = window.setTimeout(() => schedule(expand), FIRST_EXPAND_DELAY_MS)
     return () => {
       cancelled = true
       const cic = (
