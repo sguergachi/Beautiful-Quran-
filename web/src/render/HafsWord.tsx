@@ -108,7 +108,7 @@ export function HafsWord({
     if (ink.state === InkState.Upcoming) {
       applyMask(cover, 'none')
       // Recess soft-dim: ease the cover on over recessMs (play-start / leave).
-      cover.style.transition = `opacity ${t.recessMs}ms cubic-bezier(0.33, 0, 0.2, 1)`
+      cover.style.transition = `opacity ${t.recessMs}ms cubic-bezier(0.4, 0, 0.2, 1)`
       cover.style.opacity = String(1 - resting)
       return
     }
