@@ -10,10 +10,9 @@ import {
   prefaceWashProgress,
   InkState,
 } from '../engine/ink'
-import { paperCoverMaskImage } from '../engine/fade'
 import { BASMALAH_UTHMANI } from '../engine/basmalah'
 import { player } from '../playback/player'
-import { applyMask } from './inkWash'
+import { applyMask, cachedPaperCoverMask } from './inkWash'
 
 /**
  * Traditional Naskh manuscript calligraphy of the basmalah — same artwork
@@ -87,7 +86,7 @@ export function BasmalahCalligraphy({
       } else {
         applyMask(
           cover,
-          paperCoverMaskImage(progress, resting, true, t.washFeather),
+          cachedPaperCoverMask(progress, resting, true, t.washFeather),
         )
         cover.style.opacity = '1'
       }
@@ -101,7 +100,7 @@ export function BasmalahCalligraphy({
     } else {
       applyMask(
         cover,
-        paperCoverMaskImage(initial, resting, true, t.washFeather),
+        cachedPaperCoverMask(initial, resting, true, t.washFeather),
       )
     }
     raf = requestAnimationFrame(tick)

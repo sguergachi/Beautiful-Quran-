@@ -11,6 +11,9 @@
  *
  * Progress timelines run through Motion with Material FastOutSlowIn — the same
  * curve Android uses via `FastOutSlowInEasing`.
+ *
+ * Layout: ayah geometry is cached as content-space tops/heights so glide frames
+ * only read `scrollTop` (no per-frame `getBoundingClientRect` thrash).
  */
 import { animate, type AnimationPlaybackControls } from 'motion'
 import {
@@ -39,6 +42,13 @@ const JUMP_DURATION_FLOOR_MS = 200
 const ACTIVE_WORD_TOP_MARGIN_PX = 144
 const ACTIVE_WORD_BOTTOM_MARGIN_PX = 132
 
+interface BlockGeom {
+  /** Distance from the scroll content's top edge to the block's top. */
+  contentTop: number
+  height: number
+  el: HTMLElement
+}
+
 export class ReaderFocusController {
   private scrollEl: HTMLElement | null = null
   private topGuardPx = 0
@@ -49,10 +59,33 @@ export class ReaderFocusController {
   private animating = false
   private activeControls: AnimationPlaybackControls | null = null
 
+  /** Cached ayah/basmalah geometry in content space — invalidated on resize. */
+  private blockGeom = new Map<number, BlockGeom>()
+  /** Ordered focus keys matching document order (basmalah 0, then ayahs). */
+  private blockOrder: number[] = []
+  private cacheValid = false
+  private resizeObserver: ResizeObserver | null = null
+
   bind(scrollEl: HTMLElement | null, lastAyahNumber: number, topGuardPx = 0) {
-    this.scrollEl = scrollEl
+    if (this.scrollEl !== scrollEl) {
+      this.resizeObserver?.disconnect()
+      this.resizeObserver = null
+      this.scrollEl = scrollEl
+      if (scrollEl && typeof ResizeObserver !== 'undefined') {
+        this.resizeObserver = new ResizeObserver(() => this.invalidateLayout())
+        this.resizeObserver.observe(scrollEl)
+      }
+    }
     this.lastAyahNumber = Math.max(1, lastAyahNumber)
     this.topGuardPx = topGuardPx
+    this.invalidateLayout()
+  }
+
+  /** Drop cached block geometry (font/mode/content change). */
+  invalidateLayout() {
+    this.cacheValid = false
+    this.blockGeom.clear()
+    this.blockOrder = []
   }
 
   /**
@@ -109,6 +142,12 @@ export class ReaderFocusController {
 
   exceedsViewport(ayahNumber: number | null | undefined): boolean {
     if (ayahNumber == null || !this.scrollEl) return false
+    this.ensureCache()
+    const cached = this.blockGeom.get(ayahNumber)
+    if (cached) {
+      const usable = Math.max(1, this.scrollEl.clientHeight - this.topGuardPx)
+      return cached.height > usable
+    }
     const target = this.ayahEl(ayahNumber)
     if (!target) return false
     const usable = Math.max(1, this.scrollEl.clientHeight - this.topGuardPx)
@@ -121,34 +160,44 @@ export class ReaderFocusController {
     if (!el) return 1
     const viewport = el.clientHeight
     if (viewport <= 0) return 1
-    const line = FocusEngine.readingLinePx(viewport, this.topGuardPx)
-    const blocks = Array.from(el.querySelectorAll<HTMLElement>('.ayah-block'))
-    if (blocks.length === 0) return 1
+    this.ensureCache()
+    if (this.blockOrder.length === 0) return 1
 
-    const parentTop = el.getBoundingClientRect().top
-    let reading: HTMLElement | null = null
-    let readingTop = 0
-    let readingHeight = 0
+    const line = FocusEngine.readingLinePx(viewport, this.topGuardPx)
+    const scrollTop = el.scrollTop
     // 1px slack: after home-scroll, the target can sit a subpixel below the
     // reading line; without slack, readout would stick on the previous ayah.
     const lineSlackPx = 1
-    for (const block of blocks) {
-      const top = block.getBoundingClientRect().top - parentTop
+
+    let readingAyah = 1
+    let readingTop = 0
+    let readingHeight = 0
+    let found = false
+    for (const key of this.blockOrder) {
+      if (key === FocusEngine.CHAPTER_TOP_FOCUS_AYAH) continue
+      const g = this.blockGeom.get(key)
+      if (!g) continue
+      const top = g.contentTop - scrollTop
       if (top <= line + lineSlackPx) {
-        reading = block
+        readingAyah = key
         readingTop = top
-        readingHeight = block.offsetHeight
+        readingHeight = g.height
+        found = true
       }
     }
-    if (!reading) {
-      reading = blocks[0]!
-      readingTop = reading.getBoundingClientRect().top - parentTop
-      readingHeight = reading.offsetHeight
+    if (!found) {
+      const firstAyah = this.blockOrder.find((k) => k !== FocusEngine.CHAPTER_TOP_FOCUS_AYAH)
+      if (firstAyah == null) return 1
+      const g = this.blockGeom.get(firstAyah)!
+      readingAyah = firstAyah
+      readingTop = g.contentTop - scrollTop
+      readingHeight = g.height
     }
-    const readingAyah = Number(reading.dataset.ayah) || 1
-    const last = blocks[blocks.length - 1]!
-    const lastTop = last.getBoundingClientRect().top - parentTop
-    const lastBottom = lastTop + last.offsetHeight
+
+    const lastKey = this.blockOrder[this.blockOrder.length - 1]!
+    const last = this.blockGeom.get(lastKey)!
+    const lastTop = last.contentTop - scrollTop
+    const lastBottom = lastTop + last.height
     const tailVisible = lastBottom <= viewport + 1 || lastTop < viewport
     const beyond = Math.max(0, lastBottom - viewport)
 
@@ -159,7 +208,7 @@ export class ReaderFocusController {
       readingLinePx: line,
       tailVisible,
       tailBeyondFoldPx: Math.round(beyond),
-      tailHeightPx: last.offsetHeight,
+      tailHeightPx: last.height,
       lastAyahNumber: this.lastAyahNumber,
     })
   }
@@ -179,6 +228,10 @@ export class ReaderFocusController {
    */
   keepWordInView(wordEl: HTMLElement | null | undefined): void {
     if (!this.scrollEl || !wordEl) return
+    // Don't fight an in-flight verse glide; the next word tick will retry.
+    if (this.animating) return
+    const delta = this.wordBandDelta(wordEl)
+    if (Math.abs(delta) < 0.5) return
     const epoch = ++this.focusEpoch
     this.focusChain = this.focusChain
       .catch(() => undefined)
@@ -193,17 +246,6 @@ export class ReaderFocusController {
     return this.scrollEl.querySelector<HTMLElement>(`#ayah-${ayahNumber}`)
   }
 
-  /** Focusable blocks in document order: optional basmalah, then ayahs. */
-  private focusBlocks(): HTMLElement[] {
-    const el = this.scrollEl
-    if (!el) return []
-    const blocks: HTMLElement[] = []
-    const basmalah = el.querySelector<HTMLElement>('#ayah-0, .basmalah-block')
-    if (basmalah) blocks.push(basmalah)
-    blocks.push(...Array.from(el.querySelectorAll<HTMLElement>('.ayah-block')))
-    return blocks
-  }
-
   private blockFocusAyah(block: HTMLElement): number {
     if (
       block.id === 'ayah-0' ||
@@ -215,19 +257,61 @@ export class ReaderFocusController {
     return Number(block.dataset.ayah) || 1
   }
 
-  private geometryOf(ayahNumber: number): TargetGeometry | null {
+  /**
+   * Measure all focus blocks once into content-space tops. Subsequent glide
+   * frames derive viewport-relative tops from `scrollTop` alone.
+   */
+  private ensureCache() {
     const el = this.scrollEl
-    const target = this.ayahEl(ayahNumber)
-    if (!el || !target) return null
-    return this.geometryOfBlock(target)
+    if (!el) return
+    if (this.cacheValid && this.blockOrder.length > 0) {
+      // Cheap staleness check: first cached node still connected.
+      const first = this.blockGeom.get(this.blockOrder[0]!)
+      if (first?.el.isConnected) return
+    }
+
+    const blocks: HTMLElement[] = []
+    const basmalah = el.querySelector<HTMLElement>('#ayah-0, .basmalah-block')
+    if (basmalah) blocks.push(basmalah)
+    blocks.push(...Array.from(el.querySelectorAll<HTMLElement>('.ayah-block')))
+
+    const parentRect = el.getBoundingClientRect()
+    const scrollTop = el.scrollTop
+    this.blockGeom.clear()
+    this.blockOrder = []
+    for (const block of blocks) {
+      const key = this.blockFocusAyah(block)
+      const rect = block.getBoundingClientRect()
+      this.blockGeom.set(key, {
+        contentTop: scrollTop + (rect.top - parentRect.top),
+        height: rect.height,
+        el: block,
+      })
+      this.blockOrder.push(key)
+    }
+    this.cacheValid = true
   }
 
-  /**
-   * Live viewport-relative geometry. Keep subpixel precision — rounding here
-   * made home-scroll land a hair below the reading line, so readout then
-   * reported the previous ayah after a rail jump.
-   */
-  private geometryOfBlock(target: HTMLElement): TargetGeometry | null {
+  private geometryOf(ayahNumber: number): TargetGeometry | null {
+    const el = this.scrollEl
+    if (!el) return null
+    this.ensureCache()
+    const cached = this.blockGeom.get(ayahNumber)
+    if (cached) {
+      return {
+        topPx: cached.contentTop - el.scrollTop,
+        heightPx: cached.height,
+        isLaidOut: true,
+        isAboveWhenOffscreen: false,
+      }
+    }
+    const target = this.ayahEl(ayahNumber)
+    if (!target) return null
+    return this.geometryOfBlockLive(target)
+  }
+
+  /** Live measure — used for snaps and cache seeding only. */
+  private geometryOfBlockLive(target: HTMLElement): TargetGeometry | null {
     const el = this.scrollEl
     if (!el) return null
     const parentRect = el.getBoundingClientRect()
@@ -257,7 +341,8 @@ export class ReaderFocusController {
   private snapBlockOntoAnchor(block: HTMLElement) {
     const el = this.scrollEl
     if (!el) return
-    const geom = this.geometryOfBlock(block)
+    // Live measure — doorstep snap may land before cache is warm after teleport.
+    const geom = this.geometryOfBlockLive(block)
     if (!geom) return
     const anchor = FocusEngine.anchorOffsetPx(
       el.clientHeight,
@@ -268,6 +353,8 @@ export class ReaderFocusController {
     if (Math.abs(delta) >= 0.5) {
       el.scrollTop = Math.max(0, el.scrollTop + delta)
     }
+    // Scroll changed content-relative viewport; refresh cache tops.
+    this.invalidateLayout()
   }
 
   private wordBandDelta(wordEl: HTMLElement): number {
@@ -278,6 +365,28 @@ export class ReaderFocusController {
     return FocusEngine.wordBandDeltaPx(
       rect.top - parentRect.top,
       rect.bottom - parentRect.top,
+      el.clientHeight,
+      this.topGuardPx,
+      ACTIVE_WORD_TOP_MARGIN_PX,
+      ACTIVE_WORD_BOTTOM_MARGIN_PX,
+    )
+  }
+
+  /**
+   * Seed word content-space edges once, then derive band delta from scrollTop
+   * only — avoids dual getBoundingClientRect every Motion frame.
+   */
+  private wordBandDeltaFromCache(
+    contentTop: number,
+    contentBottom: number,
+  ): number {
+    const el = this.scrollEl
+    if (!el) return 0
+    const topPx = contentTop - el.scrollTop
+    const bottomPx = contentBottom - el.scrollTop
+    return FocusEngine.wordBandDeltaPx(
+      topPx,
+      bottomPx,
       el.clientHeight,
       this.topGuardPx,
       ACTIVE_WORD_TOP_MARGIN_PX,
@@ -297,22 +406,24 @@ export class ReaderFocusController {
   ): Promise<void> {
     const el = this.scrollEl
     if (!el || epoch !== this.focusEpoch) return
+    this.ensureCache()
     const target = this.ayahEl(ayahNumber)
     if (!target) return
 
     const viewport = el.clientHeight
     if (viewport <= 0) return
 
-    const blocks = this.focusBlocks()
-    const toIndex = blocks.findIndex((b) => this.blockFocusAyah(b) === ayahNumber)
+    const toIndex = this.blockOrder.indexOf(ayahNumber)
     if (toIndex < 0) return
 
     const line = FocusEngine.readingLinePx(viewport, this.topGuardPx)
-    const parentTop = el.getBoundingClientRect().top
+    const scrollTop = el.scrollTop
     let fromIndex = 0
     let best = Infinity
-    blocks.forEach((b, i) => {
-      const top = b.getBoundingClientRect().top - parentTop
+    this.blockOrder.forEach((key, i) => {
+      const g = this.blockGeom.get(key)
+      if (!g) return
+      const top = g.contentTop - scrollTop
       const dist = Math.abs(top - line)
       if (dist < best) {
         best = dist
@@ -322,17 +433,25 @@ export class ReaderFocusController {
 
     const visibleCount = Math.max(
       1,
-      blocks.filter((b) => {
-        const top = b.getBoundingClientRect().top - parentTop
-        const bottom = top + b.offsetHeight
+      this.blockOrder.filter((key) => {
+        const g = this.blockGeom.get(key)
+        if (!g) return false
+        const top = g.contentTop - scrollTop
+        const bottom = top + g.height
         return bottom > 0 && top < viewport
       }).length,
     )
 
     if (preRoll) {
-      const plan = FocusEngine.planJump(fromIndex, toIndex, visibleCount, blocks.length)
+      const plan = FocusEngine.planJump(
+        fromIndex,
+        toIndex,
+        visibleCount,
+        this.blockOrder.length,
+      )
       if (plan.doorstepIndex != null && epoch === this.focusEpoch) {
-        const door = blocks[plan.doorstepIndex]
+        const doorKey = this.blockOrder[plan.doorstepIndex]
+        const door = doorKey != null ? this.blockGeom.get(doorKey)?.el : null
         if (door) this.snapBlockOntoAnchor(door)
       }
       if (!shouldAnimate) {
@@ -353,8 +472,9 @@ export class ReaderFocusController {
       const doorstepIndex =
         toIndex > fromIndex
           ? Math.max(0, toIndex - visibleCount)
-          : Math.min(blocks.length - 1, toIndex + visibleCount)
-      const door = blocks[doorstepIndex]
+          : Math.min(this.blockOrder.length - 1, toIndex + visibleCount)
+      const doorKey = this.blockOrder[doorstepIndex]
+      const door = doorKey != null ? this.blockGeom.get(doorKey)?.el : null
       if (door) this.snapBlockOntoAnchor(door)
     }
 
@@ -378,6 +498,8 @@ export class ReaderFocusController {
     durationMs: number,
     epoch: number,
   ): Promise<void> {
+    // Warm cache once before the Motion loop so each frame is scrollTop-only.
+    this.ensureCache()
     return this.animateRemaining(
       () => this.remainingPxToAnchor(ayahNumber),
       durationMs,
@@ -394,7 +516,18 @@ export class ReaderFocusController {
     epoch: number,
   ): Promise<void> {
     if (!wordEl.isConnected) return Promise.resolve()
-    return this.animateRemaining(() => this.wordBandDelta(wordEl), durationMs, epoch)
+    const el = this.scrollEl
+    if (!el) return Promise.resolve()
+    // Seed content-space edges once; glide frames avoid layout reads.
+    const parentRect = el.getBoundingClientRect()
+    const rect = wordEl.getBoundingClientRect()
+    const contentTop = el.scrollTop + (rect.top - parentRect.top)
+    const contentBottom = el.scrollTop + (rect.bottom - parentRect.top)
+    return this.animateRemaining(
+      () => this.wordBandDeltaFromCache(contentTop, contentBottom),
+      durationMs,
+      epoch,
+    )
   }
 
   /**

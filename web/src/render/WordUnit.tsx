@@ -16,8 +16,13 @@ import {
   sweepMs,
   TRANSLITERATION_COLOR_ALPHA,
 } from '../engine/ink'
-import { cubicBezierEase, paperCoverMaskImage, washMaskImage } from '../engine/fade'
-import { applyMask, runWash } from './inkWash'
+import { cubicBezierEase } from '../engine/fade'
+import {
+  applyMask,
+  cachedPaperCoverMask,
+  cachedWashMask,
+  runWash,
+} from './inkWash'
 
 interface Props {
   word: Word
@@ -207,7 +212,7 @@ export function WordUnit({
       const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
       cover.style.transition = 'none'
       cover.style.opacity = '1'
-      applyMask(cover, paperCoverMaskImage(0, resting, true, t.washFeather))
+      applyMask(cover, cachedPaperCoverMask(0, resting, true, t.washFeather))
       paintSecondary(glossRef.current, translitRef.current, ink, 0, false)
 
       return runWash(
@@ -221,7 +226,7 @@ export function WordUnit({
             paintSecondary(glossRef.current, translitRef.current, ink, 1, false)
             return
           }
-          applyMask(cover, paperCoverMaskImage(eased, resting, true, t.washFeather))
+          applyMask(cover, cachedPaperCoverMask(eased, resting, true, t.washFeather))
         },
         () => {
           clearCover(cover)
@@ -255,7 +260,7 @@ export function WordUnit({
     if (!enteredActive) return
 
     const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
-    applyMask(el, washMaskImage(0, resting, rtl, t.washFeather))
+    applyMask(el, cachedWashMask(0, resting, rtl, t.washFeather))
     paintSecondary(glossRef.current, translitRef.current, ink, 0, true)
 
     return runWash(
@@ -263,7 +268,7 @@ export function WordUnit({
       ease,
       cubicBezierEase,
       (_p, eased) => {
-        applyMask(el, washMaskImage(eased, resting, rtl, t.washFeather))
+        applyMask(el, cachedWashMask(eased, resting, rtl, t.washFeather))
         paintSecondary(glossRef.current, translitRef.current, ink, eased, true)
       },
       () => {
@@ -314,13 +319,13 @@ export function WordUnit({
     if (enteredRepeat) {
       const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
       overlay.style.opacity = '1'
-      applyMask(overlay, washMaskImage(0, 0, rtl, t.washFeather))
+      applyMask(overlay, cachedWashMask(0, 0, rtl, t.washFeather))
       return runWash(
         duration,
         ease,
         cubicBezierEase,
         (_p, eased) => {
-          applyMask(overlay, washMaskImage(eased, 0, rtl, t.washFeather))
+          applyMask(overlay, cachedWashMask(eased, 0, rtl, t.washFeather))
         },
         () => applyMask(overlay, 'none'),
       )

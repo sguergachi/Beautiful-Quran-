@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AyahBlock } from '../../render/AyahBlock'
 import { BasmalahCalligraphy } from '../../render/BasmalahCalligraphy'
 import { prefaceState } from '../../engine'
@@ -82,6 +82,31 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const followWasEnabled = useRef(true)
   /** While a rail/search jump is in flight, pin focus UI to the commit target. */
   const pendingJumpAyah = useRef<number | null>(null)
+
+  // Stable callbacks so memo(AyahBlock) can skip inactive verses on word ticks.
+  const onKeepWordInView = useCallback((wordEl: HTMLElement) => {
+    focusRef.current.keepWordInView(wordEl)
+  }, [])
+  const onPlayWord = useCallback((ayah: number, pos: number) => {
+    void appStore.playFromWord(ayah, pos)
+  }, [])
+  const onToggleBookmark = useCallback((n: number) => appStore.toggleBookmark(n), [])
+  const surahIdRef = useRef(content?.surah.id ?? 0)
+  surahIdRef.current = content?.surah.id ?? 0
+  const onHoldWord = useCallback(
+    (a: number, pos: number, arabic: string, translation: string) => {
+      appStore.openRootViewer(surahIdRef.current, a, pos, arabic, translation)
+    },
+    [],
+  )
+
+  const bookmarkedAyahs = useMemo(() => {
+    const id = content?.surah.id
+    if (id == null) return new Set<number>()
+    return new Set(
+      state.bookmarks.filter((b) => b.surahId === id).map((b) => b.ayah),
+    )
+  }, [state.bookmarks, content?.surah.id])
 
   const side = state.settings.ayahSelectorSide
   const depth = content ? Math.max(0, stackLayer - READER_LAYER) : 0
@@ -279,6 +304,16 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       }
     }
 
+    // Coalesce scroll → one readout per animation frame (mobile scroll storms).
+    let raf = 0
+    const onScroll = () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        update()
+      })
+    }
+
     const pauseFollowFromUser = () => {
       focus.cancel()
       if (state.followEnabled) appStore.setFollowEnabled(false)
@@ -314,7 +349,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       pauseFollowFromUser()
     }
 
-    el.addEventListener('scroll', update, { passive: true })
+    el.addEventListener('scroll', onScroll, { passive: true })
     el.addEventListener('pointerdown', onPointerDown)
     el.addEventListener('pointermove', onPointerMove)
     el.addEventListener('pointerup', onPointerUp)
@@ -322,7 +357,8 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     el.addEventListener('wheel', onWheel, { passive: true })
     update()
     return () => {
-      el.removeEventListener('scroll', update)
+      if (raf) cancelAnimationFrame(raf)
+      el.removeEventListener('scroll', onScroll)
       el.removeEventListener('pointerdown', onPointerDown)
       el.removeEventListener('pointermove', onPointerMove)
       el.removeEventListener('pointerup', onPointerUp)
@@ -366,6 +402,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       layoutReady.current = true
       return
     }
+    focusRef.current.invalidateLayout()
     const focusTarget = playbackFocusTarget(state.activeAyah, state.activeBasmalah)
     const pin =
       state.followEnabled && focusTarget != null
@@ -646,22 +683,20 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     dimmed={dimmed}
                     focused={focusedAyah === ayah.number}
                     keepActiveWordInView={keepWordInView && isActive}
-                    onKeepWordInView={(wordEl) => focusRef.current.keepWordInView(wordEl)}
+                    onKeepWordInView={onKeepWordInView}
                     readingMode={state.settings.readingMode}
                     showWordGloss={state.settings.showWordGloss}
                     showTransliteration={state.settings.showTransliteration}
                     showTranslation={state.settings.showTranslation}
-                    bookmarked={appStore.isBookmarked(ayah.number)}
+                    bookmarked={bookmarkedAyahs.has(ayah.number)}
                     bookmarkSide={side === 'left' ? 'right' : 'left'}
                     bookmarkChromeAlpha={receded ? 0 : 1}
                     bookmarkInteractive={!receded}
                     speed={state.settings.playbackSpeed}
                     fontScale={state.settings.fontScale}
-                    onPlayWord={(ayah, pos) => void appStore.playFromWord(ayah, pos)}
-                    onToggleBookmark={(n) => appStore.toggleBookmark(n)}
-                    onHoldWord={(a, pos, arabic, translation) =>
-                      appStore.openRootViewer(content.surah.id, a, pos, arabic, translation)
-                    }
+                    onPlayWord={onPlayWord}
+                    onToggleBookmark={onToggleBookmark}
+                    onHoldWord={onHoldWord}
                     searchQuery={activeQuery}
                     flashWordPosition={
                       flashTarget?.ayah === ayah.number

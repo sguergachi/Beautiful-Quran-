@@ -15,8 +15,13 @@ import {
 } from 'react'
 import type { ActiveWord, Word } from '../data/models'
 import { InkEngine, InkState, getTuning, startRevealed, sweepMs } from '../engine/ink'
-import { cubicBezierEase, paperCoverMaskImage, washMaskImage } from '../engine/fade'
-import { applyMask, runWash } from './inkWash'
+import { cubicBezierEase } from '../engine/fade'
+import {
+  applyMask,
+  cachedPaperCoverMask,
+  cachedWashMask,
+  runWash,
+} from './inkWash'
 
 interface Props {
   word: Word
@@ -138,7 +143,7 @@ export function HafsWord({
     const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
     cover.style.transition = 'none'
     cover.style.opacity = '1'
-    applyMask(cover, paperCoverMaskImage(0, resting, true, t.washFeather))
+    applyMask(cover, cachedPaperCoverMask(0, resting, true, t.washFeather))
 
     return runWash(
       duration,
@@ -149,7 +154,7 @@ export function HafsWord({
           clearCover(cover)
           return
         }
-        applyMask(cover, paperCoverMaskImage(eased, resting, true, t.washFeather))
+        applyMask(cover, cachedPaperCoverMask(eased, resting, true, t.washFeather))
       },
       () => {
         clearCover(cover)
@@ -180,13 +185,13 @@ export function HafsWord({
     if (enteredRepeat) {
       const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
       overlay.style.opacity = '1'
-      applyMask(overlay, washMaskImage(0, 0, true, t.washFeather))
+      applyMask(overlay, cachedWashMask(0, 0, true, t.washFeather))
       return runWash(
         duration,
         ease,
         cubicBezierEase,
         (_p, eased) => {
-          applyMask(overlay, washMaskImage(eased, 0, true, t.washFeather))
+          applyMask(overlay, cachedWashMask(eased, 0, true, t.washFeather))
         },
         () => applyMask(overlay, 'none'),
       )
