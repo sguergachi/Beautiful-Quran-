@@ -62,10 +62,10 @@ export function BasmalahCalligraphy({
     }
 
     if (!active) {
-      // Plain / Recited: no cover.
+      // Plain: clear inline opacity so CSS `[data-reciting]` recess can paint.
       cover.style.transition = 'none'
       applyMask(cover, 'none')
-      cover.style.opacity = '0'
+      cover.style.removeProperty('opacity')
       return
     }
 
@@ -82,7 +82,7 @@ export function BasmalahCalligraphy({
       const progress = prefaceWashProgress(ps.positionMs, ps.durationMs)
       if (progress >= 1) {
         applyMask(cover, 'none')
-        cover.style.opacity = '0'
+        cover.style.removeProperty('opacity')
       } else {
         applyMask(
           cover,
@@ -96,7 +96,7 @@ export function BasmalahCalligraphy({
     const initial = prefaceWashProgress(ps.positionMs, ps.durationMs)
     if (initial >= 1) {
       applyMask(cover, 'none')
-      cover.style.opacity = '0'
+      cover.style.removeProperty('opacity')
     } else {
       applyMask(
         cover,
@@ -108,7 +108,7 @@ export function BasmalahCalligraphy({
       cancelled = true
       cancelAnimationFrame(raf)
       applyMask(cover, 'none')
-      cover.style.opacity = '0'
+      cover.style.removeProperty('opacity')
     }
   }, [active, inkState])
 

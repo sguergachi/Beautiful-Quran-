@@ -42,11 +42,14 @@ interface Props {
 const HOLD_MS = 450
 const MOVE_CANCEL_PX = 10
 
-/** Snap-clear the paper cover — never CSS-transition a solid rect away. */
+/**
+ * Snap-clear the paper cover — never CSS-transition a solid rect away.
+ * Clears inline opacity so parent `[data-reciting]` CSS can paint global recess.
+ */
 function clearCover(cover: HTMLElement) {
   cover.style.transition = 'none'
   applyMask(cover, 'none')
-  cover.style.opacity = '0'
+  cover.style.removeProperty('opacity')
 }
 
 export function HafsWord({

@@ -48,11 +48,15 @@ interface Props {
 const HOLD_MS = 450
 const MOVE_CANCEL_PX = 10
 
-/** Snap-clear the paper cover — never CSS-transition a solid rect away. */
+/**
+ * Snap-clear the paper cover — never CSS-transition a solid rect away.
+ * Clears inline opacity so parent `[data-reciting]` CSS can paint global recess
+ * without fighting an opacity:0 leftover from the last Active wash.
+ */
 function clearCover(cover: HTMLElement) {
   cover.style.transition = 'none'
   applyMask(cover, 'none')
-  cover.style.opacity = '0'
+  cover.style.removeProperty('opacity')
 }
 
 /**
@@ -89,9 +93,15 @@ function paintSecondary(
   }
 
   // Arabic path: parent is full opacity; secondary lines carry Upcoming themselves.
-  const floor = ink.state === InkState.Upcoming ? getTuning().upcomingAlpha : 1
-  if (gloss) gloss.style.opacity = String(floor)
-  if (translit) translit.style.opacity = String(TRANSLITERATION_COLOR_ALPHA * floor)
+  // Plain/Recited clear inline opacity so CSS global recess can dim inactive ayahs.
+  if (ink.state === InkState.Upcoming) {
+    const floor = getTuning().upcomingAlpha
+    if (gloss) gloss.style.opacity = String(floor)
+    if (translit) translit.style.opacity = String(TRANSLITERATION_COLOR_ALPHA * floor)
+    return
+  }
+  if (gloss) gloss.style.removeProperty('opacity')
+  if (translit) translit.style.opacity = String(TRANSLITERATION_COLOR_ALPHA)
 }
 
 export function WordUnit({

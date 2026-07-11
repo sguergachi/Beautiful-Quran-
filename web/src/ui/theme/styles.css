@@ -25,6 +25,9 @@
   --home-max: 40rem;
   --ease-sheet: cubic-bezier(0.22, 0.61, 0.36, 1);
   --upcoming-alpha: 0.22;
+  /* Paper-cover strength for recessed (Upcoming) Arabic — 1 − upcoming-alpha. */
+  --upcoming-cover: 0.78;
+  --translit-alpha: 0.55;
   /* Play-start recess — even ease-in-out, matched to Android. */
   --chrome-recede-ms: 520ms;
   --ink-fade-ms: 400ms;
@@ -1326,6 +1329,47 @@ select {
 
 .ayah-block[data-dimmed='true'] .ayah-translation {
   opacity: var(--upcoming-alpha, 0.22);
+}
+
+/*
+ * Global play/pause recess — paint-phase only (Android draw-phase dimming).
+ *
+ * Toggling [data-reciting] on .scroll dims every inactive ayah via CSS without
+ * React re-rendering WordUnit/HafsWord across the surah. Only the active ayah
+ * ([data-ayah-active]) wakes for karaoke ink. Covers must not carry an inline
+ * opacity:0 from clearCover, or this rule cannot paint.
+ */
+.scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .ink-paper-cover,
+.scroll[data-reciting='true'] .basmalah-block:not([data-ayah-active='true']) .ink-paper-cover {
+  opacity: var(--upcoming-cover, 0.78);
+  transition: opacity var(--recess-ms) var(--recede-ease);
+}
+
+.scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .word-ink {
+  opacity: var(--upcoming-alpha, 0.22);
+}
+
+.scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .word-arabic-ink > .word-gloss-flash > .word-gloss {
+  opacity: var(--upcoming-alpha, 0.22);
+}
+
+.scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .word-arabic-ink > .word-translit {
+  opacity: calc(var(--upcoming-alpha, 0.22) * var(--translit-alpha, 0.55));
+}
+
+.scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .ayah-mark {
+  opacity: 0.22;
+}
+
+.scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .ayah-translation {
+  opacity: var(--upcoming-alpha, 0.22);
+}
+
+/* Bookmark ribbons recede with chrome — CSS only, no per-ayah React update. */
+.scroll[data-reciting='true'] .verse-ribbon {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--chrome-recede-ms) var(--recede-ease);
 }
 
 .ayah-translation[data-search-hit='true'],

@@ -122,8 +122,10 @@ selector jumps, return-to-ayah, and tall-verse word keep-in-view all go
 through it. Verse advances and tall-verse line follow both use continuous
 `homeScrollStep` re-aiming (never an instant `scrollTop` snap) so the next
 verse and the next line glide smoothly. Word-band math lives in pure
-`wordBandDeltaPx`. Non-active ayahs recess only while audio is actually
-playing (`recitingActive`); at rest every ayah is Plain (full opacity).
+`wordBandDeltaPx`. Non-active ayahs recess only while a reciting session is
+live (`isPlaying || isBuffering` on this surah) via `.scroll[data-reciting]`
+CSS — at rest every ayah is Plain (full opacity). Play/pause must not
+React-reconcile the whole surah.
 JS-driven washes / ribbons / entrance also use the `motion` package
 (`web/src/ui/motion/easing.ts` for shared Android curves); wash masks are
 quantized + cached so ink frames stay cheap.
@@ -188,8 +190,9 @@ mid-tier phones — measure first.
 - **Word-level start:** `PlayerController.seekToWordAndPlay(ayah, positionMs)`
   seeks within the loaded clip (or rebuilds from that ayah) and plays —
   used by word taps. Mid-ayah starts never prepend the basmalah lead-in.
-- Poll `currentTime` at ~33 ms while playing; publish `ActiveWord` only on
-  change (`distinctUntilChanged` equivalent).
+- Poll `currentTime` on `requestAnimationFrame` while playing; publish
+  `ActiveWord` only on change (`distinctUntilChanged` equivalent). Stop the
+  ticker on pause.
 - **Prefetch / buffering (Android parity):** `AudioPrefetcher` read-aheads the
   next ~8 ayahs into a dedicated Cache API store (`beautiful-quran-audio-v1`)
   with parallel fetches (concurrency 3) and in-memory blob URLs; pinned blobs
@@ -221,14 +224,21 @@ Translate `docs/PERFORMANCE.md` into web terms:
    frame. React commits only on word/ayah *boundaries* (~2–3×/s).
 2. **One ayah wakes.** Active-word subscription is scoped per ayah block
    (selector / memo / store slice). Scrolling must not re-render the whole
-   surah.
+   surah. **Play/pause recess** is the same rule: toggling
+   `.scroll[data-reciting]` dims inactive ayahs in CSS (paper covers / ink
+   alpha) so React does not reconcile every `WordUnit` on the transport tap.
 3. **Virtualized lists.** Home and reader use windowing; offscreen ayahs
    unmount.
 4. **Edge fades without offscreen masks.** Prefer solid paper-color gradient
    overlays (same trick as Android) over `mask-image` on the whole list.
-5. **Cheap ticker.** 33 ms poll → derive word → emit only on change; 250 ms
-   while paused; stop when reader unmounts.
-6. **Measure on mid-tier mobile Chrome/Safari**, not only desktop. Target:
+5. **Cheap ticker.** `requestAnimationFrame` while playing → derive word →
+   emit only on change; **stop on pause** (no idle 250 ms wakeups). Target
+   display refresh (≥60 fps) for position → ink.
+6. **Instant transport.** Pause releases recess in the same tick (hold only
+   while `isPlaying || isBuffering` for ayah joins). Pause works mid-buffer.
+   Play intent flips `isPlaying` before `canplay`. Focus glide is deferred one
+   frame so the icon + CSS recess paint first.
+7. **Measure on mid-tier mobile Chrome/Safari**, not only desktop. Target:
    scroll and ink at display refresh with no layout thrash during wash.
 
 If a technique forces React to re-render per frame, it is wrong — fix the
@@ -330,7 +340,8 @@ sans.
 
 ### Phase 2 — Playback + highlight + ink
 - Audio playlist, basmalah preface, speed, ayah/range repeat.
-- 33 ms ticker → `PreparedTimings` → `ActiveWord`.
+- rAF ticker → `PreparedTimings` → `ActiveWord` (stopped on pause).
+- CSS `[data-reciting]` recess so play/pause stays ≥60 fps (one ayah wakes).
 - `InkEngine` → gloss/English word renderers with real directional wash.
 - Repeat orange wash for repeat-aware reciters.
 - Chrome recede while playing (top bar + ayah rail → fully hidden like

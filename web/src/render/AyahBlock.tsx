@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { ActiveWord, Ayah } from '../data/models'
 import type { ReadingMode } from '../data/settings'
-import { ayahTranslationAlpha, inkAlpha, InkState } from '../engine/ink'
+import { ayahTranslationAlpha } from '../engine/ink'
 import { toArabicIndic } from '../util/digits'
 import { WordUnit } from './WordUnit'
 import { HafsWord } from './HafsWord'
@@ -62,10 +62,8 @@ function AyahBlockInner({
 }: Props) {
   const englishOnly = readingMode === 'english_only'
   const arabicOnly = readingMode === 'arabic_only'
-  // Ayah mark: full ink when not recessed (Android `focused = !dimmed`).
-  // At rest every verse is undimmed → full opacity; during playback only the
-  // active verse's mark blooms to full.
-  const markOpacity = dimmed ? 0.22 : 1
+  // Ayah mark opacity is CSS-driven via `.scroll[data-reciting]` (paint-phase
+  // recess) — no inline style so play/pause does not thrash every verse.
   const words = useMemo(() => ayah.words, [ayah.words])
   const activeWordRef = useRef<HTMLElement | null>(null)
   const [hovered, setHovered] = useState(false)
@@ -85,7 +83,8 @@ function AyahBlockInner({
     <article
       className="ayah-block"
       data-ayah={ayah.number}
-      data-dimmed={dimmed}
+      data-ayah-active={isActiveAyah || undefined}
+      data-dimmed={dimmed || undefined}
       style={{ ['--font-scale' as string]: String(fontScale) }}
       id={`ayah-${ayah.number}`}
       onMouseEnter={() => setHovered(true)}
@@ -127,9 +126,7 @@ function AyahBlockInner({
               }}
             />
           ))}
-          <span className="ayah-mark" style={{ opacity: markOpacity }}>
-            ﴿{toArabicIndic(ayah.number)}﴾
-          </span>
+          <span className="ayah-mark">﴿{toArabicIndic(ayah.number)}﴾</span>
         </p>
       ) : (
         <div className="words" dir={englishOnly ? 'ltr' : 'rtl'} data-lyric={englishOnly ? 'english' : 'arabic'}>
@@ -161,9 +158,7 @@ function AyahBlockInner({
               }}
             />
           ))}
-          <span className="ayah-mark" style={{ opacity: markOpacity }}>
-            ﴿{toArabicIndic(ayah.number)}﴾
-          </span>
+          <span className="ayah-mark">﴿{toArabicIndic(ayah.number)}﴾</span>
         </div>
       )}
 
@@ -171,12 +166,8 @@ function AyahBlockInner({
         <p
           className="ayah-translation"
           data-search-hit={translationHit ? 'true' : undefined}
-          // CSS color is already 66% ink; multiply by Upcoming when recessed
-          // (Android: 0.66 * upcomingAlpha). ayahTranslationAlpha documents the
-          // combined strength for tests.
+          // Combined alpha documented for tests/devtools; visual recess is CSS.
           style={{
-            opacity: dimmed ? inkAlpha(InkState.Upcoming) : 1,
-            // Keep the documented combined alpha available to tests/devtools.
             ['--ayah-translation-alpha' as string]: String(ayahTranslationAlpha(dimmed)),
           }}
         >

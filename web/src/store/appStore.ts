@@ -368,7 +368,12 @@ class AppStore {
    * With opts from the reader: start at the selected / jumped ayah instead of
    * resuming the chapter-opening clip left by `openSurah` / `loadSurah`.
    */
-  async playPause(opts?: { selectedAyah?: number; pendingJump?: boolean }) {
+  async playPause(opts?: {
+    selectedAyah?: number
+    pendingJump?: boolean
+    /** When true, enable lyric follow in the same emit as play (no double render). */
+    enableFollow?: boolean
+  }) {
     if (!this.state.content) return
     const ps = this.state.player
     const content = this.state.content
@@ -378,6 +383,11 @@ class AppStore {
       opts?.selectedAyah != null && opts.selectedAyah > 0
         ? opts.selectedAyah
         : this.state.settings.lastAyah || 1
+
+    if (opts?.enableFollow && !ps.isPlaying) {
+      // Batch before the player emit so React sees follow + isPlaying together.
+      this.state = { ...this.state, followEnabled: true }
+    }
 
     if (thisSurahLoaded) {
       if (ps.isPlaying) {
@@ -389,7 +399,6 @@ class AppStore {
       if (opts?.pendingJump) {
         await player.playLoadedFromAyah(selected)
         this.onAyahBecameActive(selected)
-        this.set({ followEnabled: true })
         return
       }
       await player.toggle()
