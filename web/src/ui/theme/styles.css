@@ -1128,13 +1128,17 @@ select {
 
 /* English lyric: proportional ornament on the prose baseline. */
 .words[data-lyric='english'] > .ayah-mark {
-  display: inline;
+  display: inline-block;
   margin-inline-start: 0.2em;
   /* Relative to the live 22px × user font scale, so it remains accurate at
      every text-size setting rather than depending on a fixed pixel size. */
   font-size: 0.78em;
   line-height: inherit;
   vertical-align: baseline;
+  /* At 22px EB Garamond paints ~1px below the baseline; 17.16px Hafs paints
+     ~6px below it. Lift the ornament by that measured 5px descent delta.
+     Expressed in the mark's em, the correction scales with user text size. */
+  transform: translateY(-0.29em);
 }
 
 .words {
