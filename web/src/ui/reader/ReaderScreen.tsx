@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AyahBlock } from '../../render/AyahBlock'
 import { BasmalahCalligraphy } from '../../render/BasmalahCalligraphy'
 import { prefaceState, InkState } from '../../engine'
-import { isAway, playbackFocusTarget } from '../../engine/focus'
+import { isAway, playbackFocusTarget, pointUp } from '../../engine/focus'
+import { ReturnToAyahButton } from './ReturnToAyahButton'
 import { surahOpensWithBasmalahPreface } from '../../engine/basmalah'
 import {
   appStore,
@@ -63,6 +64,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const focusRef = useRef(new ReaderFocusController())
   const [focusedAyah, setFocusedAyah] = useState(1)
   const [showReturn, setShowReturn] = useState(false)
+  const [returnPointUp, setReturnPointUp] = useState(false)
   const [recitingActive, setRecitingActive] = useState(false)
   const [activeExceedsViewport, setActiveExceedsViewport] = useState(false)
   const [searchActive, setSearchActive] = useState(false)
@@ -165,7 +167,9 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       setActiveExceedsViewport(focus.exceedsViewport(state.activeAyah))
 
       if (focusTarget != null && !state.followEnabled) {
-        setShowReturn(isAway(focus.placementOf(focusTarget)))
+        const placement = focus.placementOf(focusTarget)
+        setShowReturn(isAway(placement))
+        setReturnPointUp(pointUp(placement))
       } else {
         setShowReturn(false)
       }
@@ -498,18 +502,16 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
           </div>
 
           {showReturn &&
+          recitingActive &&
           playbackFocusTarget(state.activeAyah, state.activeBasmalah) != null ? (
-            <button
-              type="button"
-              className="return-ayah"
+            <ReturnToAyahButton
+              pointUp={returnPointUp}
               onClick={() => {
                 followWasEnabled.current = false
                 appStore.setFollowEnabled(true)
                 setShowReturn(false)
               }}
-            >
-              Return to the recitation
-            </button>
+            />
           ) : null}
 
           <div className="player-bar">

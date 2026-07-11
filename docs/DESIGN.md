@@ -263,7 +263,8 @@ weight.
   only physical *object* on the sheet rather than ink in it, and the only
   motion allowed a touch of whimsy.
 - Auto-scroll keeps the active ayah in the upper third and yields instantly
-  to the reader's hand; a quiet line above the player offers the way back.
+  to the reader's hand; the return-to-ayah roundel (gilt corolla + painted
+  qalam arrow) offers the way back, pointing up or down toward the verse.
 - On the chapter list, when a verse is loaded (playing or paused mid-session),
   the floating playback control slides up with the same fade + vertical
   motion as the reader's return-to-ayah / Back-to ornaments
