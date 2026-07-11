@@ -9,6 +9,7 @@
   --ink-muted: #6e6858;
   --accent: #0e5c4a;
   --accent-soft: #7fb8a4;
+  --accent-container: #d7e8e1;
   --gold: #c9a227;
   --gold-bright: #e9cd7a;
   --gold-deep: #8a6b1e;
@@ -32,6 +33,7 @@
   --ink-muted: #97917f;
   --accent: #7fb8a4;
   --accent-soft: #7fb8a4;
+  --accent-container: #282d30;
   --gold: #d9b44a;
   --gold-bright: #e9cd7a;
   --gold-deep: #a8842a;
@@ -46,6 +48,7 @@
   --ink: #e8e2d5;
   --ink-muted: #97917f;
   --accent: #7fb8a4;
+  --accent-container: #0e5c4a;
   --gold: #d9b44a;
   --gold-bright: #e9cd7a;
   --gold-deep: #a8842a;
@@ -461,21 +464,58 @@ select {
   margin: 0 auto;
 }
 
-.continue {
-  display: block;
+/* Same column as search + chapter list; soft ink wash matches Android ContinueCard. */
+.continue-row {
+  padding: 0.45rem var(--sheet-pad) 0.85rem;
   max-width: var(--home-max);
-  width: calc(100% - 2 * var(--sheet-pad));
-  margin: 0.15rem auto 0.85rem;
-  padding: 0.85rem 0;
-  color: var(--accent);
+  width: 100%;
+  margin: 0 auto;
+}
+
+.continue {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  margin: 0;
+  padding: 1.05rem 1.25rem;
+  border-radius: 1.35rem;
+  background: color-mix(in srgb, var(--accent-container) 40%, transparent);
+  color: var(--ink);
   text-align: start;
-  font-size: 1.08rem;
   min-height: 44px;
+}
+
+.continue-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.continue-label {
+  color: color-mix(in srgb, var(--accent) 75%, transparent);
+  font-size: 0.88rem;
+}
+
+.continue-target {
+  font-size: 1.08rem;
+  color: var(--ink);
+}
+
+.continue-ar {
+  font-family: var(--font-arabic);
+  font-size: clamp(1.2rem, 3.5vw, 1.45rem);
+  color: var(--accent);
+  flex-shrink: 0;
+  line-height: 1.2;
 }
 
 @media (hover: hover) {
   .continue:hover {
-    opacity: 0.75;
+    background: color-mix(in srgb, var(--accent-container) 55%, transparent);
   }
 }
 
