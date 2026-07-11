@@ -3,7 +3,7 @@
  * Controllers only — engines stay pure in `engine/`.
  */
 
-export function applyMask(el: HTMLElement, mask: string) {
+export function applyMask(el: HTMLElement | SVGElement, mask: string) {
   if (mask === 'none') {
     el.style.removeProperty('mask-image')
     el.style.removeProperty('-webkit-mask-image')

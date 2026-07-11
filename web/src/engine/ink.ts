@@ -126,6 +126,61 @@ export function prefaceState(isActive: boolean, dimmed: boolean): InkState {
   return InkState.Plain
 }
 
+/**
+ * How far the basmalah calligraphy wash has traveled (0..1) across the SVG.
+ * Driven by the lead-in clip's playback clock — settles at
+ * [PREFACE_WASH_SETTLE_FRACTION] so the feathered edge finishes before audio ends.
+ * Port of Android `InkEngine.prefaceWashProgress`.
+ */
+export function prefaceWashProgress(positionMs: number, durationMs: number): number {
+  if (durationMs <= 0) return 0
+  if (positionMs <= 0) return 0
+  const settleAt = Math.max(1, Math.round(durationMs * PREFACE_WASH_SETTLE_FRACTION))
+  if (positionMs >= settleAt) return 1
+  return Math.min(1, Math.max(0, positionMs / settleAt))
+}
+
+/** Fraction of the lead-in clip at which the SVG wash must be fully settled. */
+export const PREFACE_WASH_SETTLE_FRACTION = 0.88
+
+/**
+ * Lerp Upcoming → Active ink with wash progress.
+ * Port of Android `wordFadeAlpha` (ReaderComponents) — used for secondary
+ * gloss/transliteration lines that fade with the sweep but never letter-reveal.
+ */
+export function wordFadeAlpha(progress: number): number {
+  const resting = inkAlpha(InkState.Upcoming)
+  const full = inkAlpha(InkState.Active)
+  const p = Math.min(1, Math.max(0, progress))
+  return resting + (full - resting) * p
+}
+
+/**
+ * Alpha for secondary lines (gloss, transliteration).
+ * While Active and not repeating, tracks the letter sweep; otherwise the
+ * lyric ink for the word's state. Port of Android `WordHighlight.secondaryAlpha`.
+ */
+export function secondaryAlpha(
+  state: InkState,
+  repeat: boolean,
+  sweepProgress: number,
+): number {
+  if (state === InkState.Active && !repeat) return wordFadeAlpha(sweepProgress)
+  return inkAlpha(state)
+}
+
+/**
+ * Block ayah-translation ink strength. Android uses `onSurface` at 0.66, and
+ * multiplies by Upcoming alpha when the verse is recessed.
+ */
+export function ayahTranslationAlpha(dimmed: boolean): number {
+  const base = 0.66
+  return dimmed ? base * inkAlpha(InkState.Upcoming) : base
+}
+
+/** Transliteration color strength under secondary alpha (Android 0.55). */
+export const TRANSLITERATION_COLOR_ALPHA = 0.55
+
 export const InkEngine = {
   State: InkState,
   get tuning() {
@@ -140,6 +195,12 @@ export const InkEngine = {
   sweepMs,
   startRevealed,
   prefaceState,
+  prefaceWashProgress,
+  PREFACE_WASH_SETTLE_FRACTION,
+  wordFadeAlpha,
+  secondaryAlpha,
+  ayahTranslationAlpha,
+  TRANSLITERATION_COLOR_ALPHA,
   inkAlpha,
   resetTuning,
   setTuning,

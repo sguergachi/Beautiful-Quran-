@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AyahBlock } from '../../render/AyahBlock'
 import { BasmalahCalligraphy } from '../../render/BasmalahCalligraphy'
-import { prefaceState, InkState } from '../../engine'
+import { prefaceState } from '../../engine'
 import { isAway, playbackFocusTarget, pointUp } from '../../engine/focus'
 import { ReturnToAyahButton } from './ReturnToAyahButton'
 import { surahOpensWithBasmalahPreface } from '../../engine/basmalah'
@@ -331,7 +331,6 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   // (paused / stopped / loaded-but-idle) every ayah is Plain — full opacity.
   const dimmedGlobal = recitingActive
   const preface = prefaceState(state.activeBasmalah, dimmedGlobal && !state.activeBasmalah)
-  const prefaceOpacity = preface === InkState.Upcoming ? 0.22 : 1
   const showBasmalah = surahOpensWithBasmalahPreface(content.surah.id)
   const ayahCount = content.surah.ayahCount
   // Rail tracks the recitation only while playing; otherwise the reading line.
@@ -485,7 +484,8 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                   <BasmalahCalligraphy
                     className="basmalah"
                     data-state={preface}
-                    style={{ opacity: prefaceOpacity }}
+                    active={state.activeBasmalah}
+                    dimmed={dimmedGlobal && !state.activeBasmalah}
                     onClick={() => void appStore.playAyah(1)}
                   />
                 </div>

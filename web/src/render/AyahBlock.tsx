@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { ActiveWord, Ayah } from '../data/models'
 import type { ReadingMode } from '../data/settings'
+import { ayahTranslationAlpha, inkAlpha, InkState } from '../engine/ink'
 import { WordUnit } from './WordUnit'
 import { HafsWord } from './HafsWord'
 import { VerseBookmarkRibbon } from './VerseBookmarkRibbon'
@@ -168,6 +169,14 @@ function AyahBlockInner({
         <p
           className="ayah-translation"
           data-search-hit={translationHit ? 'true' : undefined}
+          // CSS color is already 66% ink; multiply by Upcoming when recessed
+          // (Android: 0.66 * upcomingAlpha). ayahTranslationAlpha documents the
+          // combined strength for tests.
+          style={{
+            opacity: dimmed ? inkAlpha(InkState.Upcoming) : 1,
+            // Keep the documented combined alpha available to tests/devtools.
+            ['--ayah-translation-alpha' as string]: String(ayahTranslationAlpha(dimmed)),
+          }}
         >
           {ayah.translation}
         </p>
