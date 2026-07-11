@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AyahBlock } from '../../render/AyahBlock'
 import { BasmalahCalligraphy } from '../../render/BasmalahCalligraphy'
 import { prefaceState, InkState } from '../../engine'
@@ -11,16 +11,28 @@ import {
   READER_LAYER,
 } from '../../store/appStore'
 import type { StackLayer } from '../paper/stack'
+import { PaperInput } from '../kit'
 import {
+  IconChevronDown,
+  IconChevronUp,
+  IconClose,
   IconNext,
   IconPause,
   IconPlay,
   IconPrev,
   IconRepeat,
   IconRepeatOne,
+  IconSearch,
+  IconTune,
 } from '../icons/PlaybackIcons'
 import { AyahSelectorRail } from './AyahSelectorRail'
 import { ReaderFocusController } from './ReaderFocusController'
+
+/** Usable in-surah query — mirrors Android `SurahSearchState.activeQuery`. */
+function activeSearchQuery(active: boolean, query: string): string | null {
+  const trimmed = query.trim()
+  return active && trimmed.length >= 2 ? trimmed : null
+}
 
 /** Android `recitingActive` debounce — hold recess across brief pause blips. */
 const RECITING_RELEASE_MS = 350
@@ -53,11 +65,14 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const [showReturn, setShowReturn] = useState(false)
   const [recitingActive, setRecitingActive] = useState(false)
   const [activeExceedsViewport, setActiveExceedsViewport] = useState(false)
+  const [searchActive, setSearchActive] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchIndex, setSearchIndex] = useState(0)
   const followWasEnabled = useRef(true)
   const programmaticScroll = useRef(false)
 
   const side = state.settings.ayahSelectorSide
-  const receded = state.chromeReceded
+  const receded = state.chromeReceded && !searchActive
   const depth = content ? Math.max(0, stackLayer - READER_LAYER) : 0
   const isTop = content != null && stackLayer === READER_LAYER
   const peeking = content != null && stackLayer > READER_LAYER
@@ -65,6 +80,23 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const playingNow =
     state.player.isPlaying &&
     state.player.nowPlaying?.surahId === content?.surah.id
+
+  const activeQuery = activeSearchQuery(searchActive, searchQuery)
+  const searchMatches = useMemo(() => {
+    if (!activeQuery || !content) return [] as number[]
+    const q = activeQuery.toLowerCase()
+    return content.ayahs
+      .filter(
+        (a) =>
+          a.translation.toLowerCase().includes(q) ||
+          a.words.some((w) => w.translation.toLowerCase().includes(q)),
+      )
+      .map((a) => a.number)
+  }, [content, activeQuery])
+  const matchIndex = Math.min(
+    Math.max(0, searchIndex),
+    Math.max(0, searchMatches.length - 1),
+  )
 
   // Debounced recess flag — matches Android `recitingActive`.
   useEffect(() => {
@@ -75,6 +107,33 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     const t = window.setTimeout(() => setRecitingActive(false), RECITING_RELEASE_MS)
     return () => clearTimeout(t)
   }, [playingNow])
+
+  // Reset search when the surah changes.
+  useEffect(() => {
+    setSearchActive(false)
+    setSearchQuery('')
+    setSearchIndex(0)
+  }, [content?.surah.id])
+
+  // New query → first match.
+  useEffect(() => {
+    setSearchIndex(0)
+  }, [activeQuery])
+
+  // Jump the reading line to the current search hit.
+  useEffect(() => {
+    if (!isTop || !content || activeQuery == null) return
+    const target = searchMatches[matchIndex]
+    if (target == null) return
+    programmaticScroll.current = true
+    void focusRef.current
+      .focus(target, { animate: true, preRoll: true })
+      .finally(() => {
+        programmaticScroll.current = false
+        setFocusedAyah(focusRef.current.focusedAyah())
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeQuery, matchIndex, searchMatches, isTop, content?.surah.id])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -202,6 +261,19 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       })
   }
 
+  const closeSearch = () => {
+    setSearchActive(false)
+    setSearchQuery('')
+    setSearchIndex(0)
+  }
+
+  const stepSearch = (delta: number) => {
+    if (searchMatches.length === 0) return
+    setSearchIndex(
+      (matchIndex + delta + searchMatches.length) % searchMatches.length,
+    )
+  }
+
   if (!content) {
     return (
       <div
@@ -241,6 +313,14 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const repeatMode = state.player.repeatMode
   const keepWordInView =
     state.followEnabled && recitingActive && activeExceedsViewport
+  const reciterName =
+    state.reciters.find((r) => r.id === state.settings.reciterId)?.name ?? 'Reciter'
+  const matchLabel =
+    searchMatches.length === 0
+      ? activeQuery == null
+        ? ''
+        : '0/0'
+      : `${matchIndex + 1}/${searchMatches.length}`
 
   return (
     <div
@@ -259,17 +339,86 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
         />
       ) : null}
 
-      <div className="reader-top" data-receded={receded}>
+      <div className="reader-top" data-receded={receded} data-search={searchActive}>
         <button
           type="button"
           className="back"
-          onClick={() => appStore.revealLayer(COVER_LAYER)}
+          aria-label={searchActive ? 'Close search' : 'Back to chapters'}
+          disabled={!searchActive && recitingActive}
+          onClick={() => {
+            if (searchActive) closeSearch()
+            else appStore.revealLayer(COVER_LAYER)
+          }}
         >
-          ← Chapters
+          {searchActive ? <IconClose /> : '← Chapters'}
         </button>
-        <button type="button" className="meta-btn" onClick={() => appStore.setSheet('settings')}>
-          {state.reciters.find((r) => r.id === state.settings.reciterId)?.name ?? 'Settings'}
-        </button>
+
+        {searchActive ? (
+          <div className="reader-search">
+            <PaperInput
+              id="surah-search"
+              name="surah-search"
+              type="search"
+              placeholder="Find an English word…"
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+              aria-label="Search in surah"
+              autoFocus
+              className="reader-search-input"
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.preventDefault()
+                  closeSearch()
+                } else if (e.key === 'Enter') {
+                  e.preventDefault()
+                  stepSearch(e.shiftKey ? -1 : 1)
+                }
+              }}
+            />
+            <span className="reader-search-count" aria-live="polite">
+              {matchLabel}
+            </span>
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="Previous match"
+              disabled={searchMatches.length === 0}
+              onClick={() => stepSearch(-1)}
+            >
+              <IconChevronUp />
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="Next match"
+              disabled={searchMatches.length === 0}
+              onClick={() => stepSearch(1)}
+            >
+              <IconChevronDown />
+            </button>
+          </div>
+        ) : (
+          <div className="reader-actions">
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="Search in surah"
+              disabled={recitingActive}
+              onClick={() => setSearchActive(true)}
+            >
+              <IconSearch />
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="Settings"
+              disabled={recitingActive}
+              onClick={() => appStore.setSheet('settings')}
+            >
+              <IconTune />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Overlay on the sheet edge — never a flex sibling of the verse column. */}
@@ -338,6 +487,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     onHoldWord={(a, pos, arabic, translation) =>
                       appStore.openRootViewer(content.surah.id, a, pos, arabic, translation)
                     }
+                    searchQuery={activeQuery}
                   />
                 )
               })}
@@ -362,59 +512,70 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
           <div className="player-bar">
             <button
               type="button"
-              className="ctrl"
+              className="reciter-btn"
               data-receded={receded}
-              aria-label={repeatMode === 'off' ? 'Repeat off' : `Repeat ${repeatMode}`}
-              onClick={() =>
-                appStore.setRepeat(repeatMode === 'ayah' ? 'off' : 'ayah')
-              }
+              aria-label={`Reciter ${reciterName}. Open settings`}
+              onClick={() => appStore.setSheet('settings')}
             >
-              {repeatMode === 'ayah' ? <IconRepeatOne /> : <IconRepeat />}
+              {reciterName}
             </button>
-            <button
-              type="button"
-              className="ctrl"
-              aria-label="Previous ayah"
-              onClick={() => void appStore.prev()}
-            >
-              <IconPrev />
-            </button>
-            <button
-              type="button"
-              className="play"
-              aria-label={state.player.isPlaying ? 'Pause' : 'Play'}
-              onClick={() => {
-                if (!state.player.isPlaying) {
-                  followWasEnabled.current = false
-                  appStore.setFollowEnabled(true)
+            <div className="player-transport">
+              <button
+                type="button"
+                className="ctrl"
+                data-receded={receded}
+                aria-label={repeatMode === 'off' ? 'Repeat off' : `Repeat ${repeatMode}`}
+                onClick={() =>
+                  appStore.setRepeat(repeatMode === 'ayah' ? 'off' : 'ayah')
                 }
-                void appStore.playPause()
-              }}
-            >
-              {state.player.isPlaying ? <IconPause /> : <IconPlay />}
-            </button>
-            <button
-              type="button"
-              className="ctrl"
-              aria-label="Next ayah"
-              onClick={() => void appStore.next()}
-            >
-              <IconNext />
-            </button>
-            <button
-              type="button"
-              className="ctrl speed"
-              data-receded={receded}
-              aria-label={`Speed ${state.settings.playbackSpeed}×`}
-              onClick={() => {
-                const speeds = [0.75, 1, 1.25, 1.5]
-                const i = speeds.indexOf(state.settings.playbackSpeed)
-                const next = speeds[(i + 1) % speeds.length]!
-                appStore.updateSettings({ playbackSpeed: next })
-              }}
-            >
-              {state.settings.playbackSpeed}×
-            </button>
+              >
+                {repeatMode === 'ayah' ? <IconRepeatOne /> : <IconRepeat />}
+              </button>
+              <button
+                type="button"
+                className="ctrl"
+                aria-label="Previous ayah"
+                onClick={() => void appStore.prev()}
+              >
+                <IconPrev />
+              </button>
+              <button
+                type="button"
+                className="play"
+                aria-label={state.player.isPlaying ? 'Pause' : 'Play'}
+                onClick={() => {
+                  if (!state.player.isPlaying) {
+                    followWasEnabled.current = false
+                    appStore.setFollowEnabled(true)
+                  }
+                  void appStore.playPause()
+                }}
+              >
+                {state.player.isPlaying ? <IconPause /> : <IconPlay />}
+              </button>
+              <button
+                type="button"
+                className="ctrl"
+                aria-label="Next ayah"
+                onClick={() => void appStore.next()}
+              >
+                <IconNext />
+              </button>
+              <button
+                type="button"
+                className="ctrl speed"
+                data-receded={receded}
+                aria-label={`Speed ${state.settings.playbackSpeed}×`}
+                onClick={() => {
+                  const speeds = [0.75, 1, 1.25, 1.5]
+                  const i = speeds.indexOf(state.settings.playbackSpeed)
+                  const next = speeds[(i + 1) % speeds.length]!
+                  appStore.updateSettings({ playbackSpeed: next })
+                }}
+              >
+                {state.settings.playbackSpeed}×
+              </button>
+            </div>
           </div>
         </div>
       </div>
