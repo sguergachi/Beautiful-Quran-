@@ -291,11 +291,11 @@ with the rest of the chrome and vanishes entirely while reciting.
 
 - **Unified with the verse.** The ribbon is composed inside `AyahBlock`, so its
   height *is* the block's height (Arabic, gloss, and translation together). It
-  cannot drift, lag, or sit mid-block — the tip is always the top corner of
-  *that* verse, left or right.
+  cannot drift, lag, or sit mid-block — the tip begins 24 dp below the block
+  edge, aligned with that verse's first line of ink, left or right.
 - **Every verse carries a tip; a saved verse carries the whole ribbon.** An
-  idle verse shows only the short swallowtail **tip** of the ribbon at the top
-  corner — the same shape as a saved mark, just short and faded so it does not
+  idle verse shows only the short swallowtail **tip** of the ribbon beside the
+  first line — the same shape as a saved mark, just short and faded so it does not
   pull the eye. (On web, that tip stays hidden until the verse is hovered,
   then click to unfurl.) Bookmark it and that tip grows nearly the **full
   vertical length** of the block at full ink, stopping **48 dp** above the next

@@ -20,6 +20,7 @@ const SETTLE_AMP = 3.2
 const OVERSHOOT = 0.06
 const NUB_FOCUSED_ALPHA = 0.4
 const SOLID_ALPHA = 0.94
+const TOP_INSET = 24
 const TOP_FOLD = 3.5
 
 type Side = 'left' | 'right'
@@ -107,15 +108,16 @@ export function VerseBookmarkRibbon({
     const outer = EDGE_INSET
     const inner = EDGE_INSET + RIBBON_WIDTH
     const center = EDGE_INSET + RIBBON_WIDTH / 2
-    const fullLen = Math.max(NUB_LENGTH, h - BOTTOM_GAP)
+    const retractedTipY = TOP_INSET + NUB_LENGTH
+    const fullLen = Math.max(retractedTipY, h - BOTTOM_GAP)
 
     const progress = Math.max(0, unfurl.current)
     const tipY =
       progress <= 0.001
-        ? NUB_LENGTH
+        ? retractedTipY
         : Math.min(
             fullLen * 1.08,
-            NUB_LENGTH + Math.max(1, fullLen - NUB_LENGTH) * progress,
+            retractedTipY + Math.max(1, fullLen - retractedTipY) * progress,
           )
 
     const showingRibbon = progress > 0.02 || bookmarked
@@ -147,8 +149,8 @@ export function VerseBookmarkRibbon({
       return cloth + flutter
     }
 
-    const top = TOP_FOLD
-    const bot = Math.max(NUB_LENGTH * 0.6, tipY)
+    const top = TOP_INSET + TOP_FOLD
+    const bot = Math.max(TOP_INSET + NUB_LENGTH * 0.6, tipY)
     const span = Math.max(1, bot - top)
     const notchDepth = Math.min(NOTCH, span * 0.42)
     const steps = Math.min(72, Math.max(8, Math.floor(span / 2.5)))
