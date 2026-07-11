@@ -115,6 +115,35 @@ export function surahContent(surahId: number): SurahContent {
   return content
 }
 
+/** Materialize every chapter a little at a time during startup idle periods. */
+export async function preloadAllSurahContent(preferredSurahId?: number): Promise<void> {
+  const allSurahs = surahs()
+  if (surahContentCache.size >= allSurahs.length) return
+
+  const ids = allSurahs.map((s) => s.id)
+  if (preferredSurahId != null && ids.includes(preferredSurahId)) {
+    ids.splice(ids.indexOf(preferredSurahId), 1)
+    ids.unshift(preferredSurahId)
+  }
+
+  for (const id of ids) {
+    if (surahContentCache.has(id)) continue
+    await new Promise<void>((resolve) => {
+      const run = () => {
+        surahContent(id)
+        resolve()
+      }
+      const ric = (
+        globalThis as unknown as {
+          requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number
+        }
+      ).requestIdleCallback
+      if (typeof ric === 'function') ric(run, { timeout: 1_500 })
+      else setTimeout(run, 0)
+    })
+  }
+}
+
 export function parseSegments(raw: string): Segment[] {
   try {
     const parsed = JSON.parse(raw) as number[][]
@@ -335,6 +364,7 @@ export const QuranRepository = {
   surahs,
   reciters,
   surahContent,
+  preloadAllSurahContent,
   timings,
   parseSegments,
   wordMorphology,

@@ -186,6 +186,10 @@ Renderers consume these; they do not re-derive curves.
   are local.
 - Queries mirror `QuranRepository`: surah list, surah content (ayahs + words),
   timings for (reciter, surah), morphology for root viewer.
+- At startup, all 114 chapters progressively materialize into the repository
+  cache, one chapter per browser idle slice (the last-read chapter first).
+  This keeps the main-thread sql.js work from freezing the cover or paper
+  peel. Timings remain lazy and hydrate after the reader's first frame.
 - **Do not** add data-repair logic in the web app (Android invariant #2).
 
 Optional later optimization (not required for v1): export per-surah JSON
@@ -251,11 +255,12 @@ Translate `docs/PERFORMANCE.md` into web terms:
    while `isPlaying || isBuffering` for ayah joins). Pause works mid-buffer.
    Play intent flips `isPlaying` before `canplay`. Focus glide is deferred one
    frame so the icon + CSS recess paint first.
-7. **Content-bearing peel.** Home prepares chapter content on hover, focus, or
-   pointer-down; `openSurah` commits that cached content and the paper slide in
-   one state change. A cold programmatic open materializes content while the
-   current sheet remains visible. There is no intermediate reader-loading
-   sheet. Audio and whole-surah timings hydrate after the first reader frame.
+7. **Content-bearing peel.** Startup progressively materializes all chapter
+   text during idle slices; `openSurah` commits cached content and the paper
+   slide in one state change. There is no intermediate reader-loading sheet.
+   Audio and whole-surah timings hydrate after the first reader frame. A new
+   chapter gets fresh focus-controller and rail geometry, initialized at its
+   target ayah, so stale dial state cannot move during the peel.
    Long surahs progressive-mount a tight ayah window with scroll padding;
    parked reader sheets use `content-visibility: hidden`. Same-surah reopen
    peels without remount. Sheet glide is ~360ms so the transition is visible.

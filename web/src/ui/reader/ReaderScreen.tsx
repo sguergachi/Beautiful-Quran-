@@ -80,9 +80,10 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   }
   // Lazily created once — definite after the null check above.
   const focus = focusRef.current
-  const [focusedAyah, setFocusedAyah] = useState(1)
+  const initialAyah = Math.max(1, state.settings.lastAyah || 1)
+  const [focusedAyah, setFocusedAyah] = useState(initialAyah)
   /** Continuous readout for the rail marker (Android `focusedPosition`). */
-  const [focusedPosition, setFocusedPosition] = useState(1)
+  const [focusedPosition, setFocusedPosition] = useState(initialAyah)
   const [showReturn, setShowReturn] = useState(false)
   const [returnPointUp, setReturnPointUp] = useState(false)
   const [activeExceedsViewport, setActiveExceedsViewport] = useState(false)
