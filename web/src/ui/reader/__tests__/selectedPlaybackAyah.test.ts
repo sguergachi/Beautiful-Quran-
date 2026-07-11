@@ -64,7 +64,23 @@ describe('selectedPlaybackAyah', () => {
       selectedPlaybackAyah({ ...base, requestedJumpAyah: 99, ayahCount: 7 }),
     ).toBe(7)
     expect(
-      selectedPlaybackAyah({ ...base, requestedJumpAyah: 0, scrolledAyah: 0 }),
+      selectedPlaybackAyah({
+        ...base,
+        requestedJumpAyah: null,
+        activeAyah: null,
+        scrolledAyah: 0,
+      }),
     ).toBe(1)
+  })
+
+  it('ignores a zero pending jump (Android latch cleared)', () => {
+    expect(
+      selectedPlaybackAyah({
+        ...base,
+        requestedJumpAyah: 0,
+        activeAyah: 3,
+        scrolledAyah: 5,
+      }),
+    ).toBe(3)
   })
 })
