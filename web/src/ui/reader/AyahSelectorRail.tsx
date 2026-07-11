@@ -6,7 +6,8 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import {
-  dialFromTrackY,
+  dialDeltaFromPointerDy,
+  dialFromTickY,
   focusRadiusForHeight,
   isMajorAyah,
   MOBILE_RAIL_MEDIA,
@@ -95,9 +96,11 @@ function railGrowFrom(): RailGrowFrom {
  * grow flush from the screen edge with the outer rounded cap hidden, and
  * ayah numbers hang inward toward the page.
  *
- * Dragging only moves the dial. The page stays put until release, when
- * [onJump] fires so the reader can run a FocusEngine pre-roll slide — same
- * commit model as Android's `AyahSelectorRail`.
+ * Dragging only moves the dial by tick spacing (Android wheel scrub). The
+ * page stays put until release, when [onJump] fires so the reader can run a
+ * FocusEngine pre-roll slide — same commit model as Android's
+ * `AyahSelectorRail`. A no-drag tap selects the visible tick under the
+ * pointer, not an absolute track fraction.
  */
 export function AyahSelectorRail({
   ayahCount,
@@ -113,6 +116,8 @@ export function AyahSelectorRail({
   const expandRef = useRef(0)
   const hoverRef = useRef(false)
   const draggingRef = useRef(false)
+  const draggedRef = useRef(false)
+  const lastClientYRef = useRef<number | null>(null)
   const rafRef = useRef(0)
   const expandTargetRef = useRef(0)
   const readingPosRef = useRef(currentPosition ?? currentAyah)
@@ -300,33 +305,62 @@ export function AyahSelectorRail({
     schedulePaint()
   }
 
-  /** Move the dial under the pointer only — never scroll the page. */
-  const updateDialFromClientY = (clientY: number) => {
+  const commitDial = (next: number) => {
+    dialRef.current = next
+    const ayah = Math.min(ayahCount, Math.max(1, Math.round(next)))
+    setAriaAyah(ayah)
+    schedulePaint()
+  }
+
+  /**
+   * Scrub the magnification wheel by pointer delta — one tickSpacingPx of
+   * movement = one ayah, matching the drawn tick spacing (Android parity).
+   * Absolute Y→ayah mapping is wrong here: nearby tick labels are 14px apart
+   * while a long surah packs the full range into the track.
+   */
+  const scrubDialByClientY = (clientY: number, rubberBand: boolean) => {
+    const lastY = lastClientYRef.current
+    lastClientYRef.current = clientY
+    if (lastY == null) return
+    const dy = clientY - lastY
+    if (Math.abs(dy) < 0.01) return
+    draggedRef.current = true
+    const raw = dialRef.current + dialDeltaFromPointerDy(dy, TICK_SPACING_PX)
+    const next = rubberBand
+      ? rubberBandDialPosition(raw, 1, ayahCount)
+      : Math.min(ayahCount, Math.max(1, raw))
+    commitDial(next)
+  }
+
+  /** Pick the visible tick under [clientY] without moving the page. */
+  const snapDialToTickUnderPointer = (clientY: number) => {
     const root = rootRef.current
     if (!root) return
     const rect = root.getBoundingClientRect()
     const y = clientY - rect.top
-    const next = dialFromTrackY(y, rect.height, ayahCount, TOP_FRAC, BOTTOM_FRAC)
-    dialRef.current = draggingRef.current
-      ? rubberBandDialPosition(next, 1, ayahCount)
-      : Math.min(ayahCount, Math.max(1, next))
-    const ayah = Math.min(ayahCount, Math.max(1, Math.round(dialRef.current)))
-    setAriaAyah(ayah)
-    schedulePaint()
+    const dial = dialRef.current
+    const anchorY = trackYFromDial(dial, rect.height, ayahCount, TOP_FRAC, BOTTOM_FRAC)
+    const next = Math.min(
+      ayahCount,
+      Math.max(1, dialFromTickY(y, dial, anchorY, TICK_SPACING_PX)),
+    )
+    commitDial(next)
   }
 
   const onPointerEnter = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (receded) return
     hoverRef.current = true
+    lastClientYRef.current = e.clientY
     if (!draggingRef.current) {
       dialRef.current = readingPosRef.current
+      setAriaAyah(Math.min(ayahCount, Math.max(1, Math.round(dialRef.current))))
     }
     setExpanded(true)
-    updateDialFromClientY(e.clientY)
   }
 
   const onPointerLeave = () => {
     hoverRef.current = false
+    lastClientYRef.current = null
     if (!draggingRef.current) {
       setAriaAyah(currentAyah)
       setExpanded(false)
@@ -338,16 +372,25 @@ export function AyahSelectorRail({
     if (e.pointerType === 'mouse' && e.button !== 0) return
     e.preventDefault()
     draggingRef.current = true
+    draggedRef.current = false
     hoverRef.current = true
+    lastClientYRef.current = e.clientY
     e.currentTarget.setPointerCapture(e.pointerId)
+    if (expandTargetRef.current < 0.5) {
+      dialRef.current = readingPosRef.current
+    }
     setExpanded(true)
-    updateDialFromClientY(e.clientY)
+    schedulePaint()
   }
 
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (receded) return
-    if (draggingRef.current || hoverRef.current) {
-      updateDialFromClientY(e.clientY)
+    if (draggingRef.current) {
+      scrubDialByClientY(e.clientY, true)
+      return
+    }
+    if (hoverRef.current) {
+      scrubDialByClientY(e.clientY, false)
     }
   }
 
@@ -357,7 +400,14 @@ export function AyahSelectorRail({
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId)
     }
-    updateDialFromClientY(e.clientY)
+    // No-drag tap/click: select the tick under the pointer (visible label),
+    // not an absolute track fraction — that was skipping past the exact ayah.
+    if (!draggedRef.current) {
+      snapDialToTickUnderPointer(e.clientY)
+    } else {
+      scrubDialByClientY(e.clientY, false)
+    }
+    lastClientYRef.current = null
     const ayah = Math.min(ayahCount, Math.max(1, Math.round(dialRef.current)))
     // Hand-initiated jump — FocusEngine planJump + home-scroll, not a scrub.
     onJump(ayah)

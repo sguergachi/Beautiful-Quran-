@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   ayahFromTrackY,
+  dialDeltaFromPointerDy,
+  dialFromTickY,
   dialFromTrackY,
   focusRadiusForHeight,
   isMajorAyah,
@@ -55,6 +57,32 @@ describe('track ↔ dial mapping', () => {
   it('returns the sole ayah for single-ayah surahs', () => {
     expect(ayahFromTrackY(500, h, 1)).toBe(1)
     expect(dialFromTrackY(100, h, 1)).toBe(1)
+  })
+})
+
+describe('wheel scrub (tick spacing)', () => {
+  const tick = 14
+
+  it('maps one tick of pointer travel to one ayah (Android parity)', () => {
+    expect(dialDeltaFromPointerDy(-tick, tick)).toBeCloseTo(1, 5)
+    expect(dialDeltaFromPointerDy(tick, tick)).toBeCloseTo(-1, 5)
+    expect(dialDeltaFromPointerDy(-tick * 2.5, tick)).toBeCloseTo(2.5, 5)
+  })
+
+  it('selects the visible tick under the pointer, not an absolute track fraction', () => {
+    // Magnification wheel: dial at 50, ticks 14px apart. Pointer on the tick
+    // drawn for ayah 55 (5 ticks below the focal anchor) must commit 55 —
+    // absolute track mapping on a long surah would skip far past it.
+    const dial = 50
+    const anchorY = 400
+    const yOnAyah55 = anchorY + (55 - dial) * tick
+    expect(Math.round(dialFromTickY(yOnAyah55, dial, anchorY, tick))).toBe(55)
+
+    // Absolute track mapping (the old bug) would not land on 55 for Al-Baqarah.
+    const ayahCount = 286
+    const height = 800
+    const absolute = dialFromTrackY(yOnAyah55, height, ayahCount)
+    expect(Math.round(absolute)).not.toBe(55)
   })
 })
 

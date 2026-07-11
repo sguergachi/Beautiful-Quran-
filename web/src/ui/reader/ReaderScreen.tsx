@@ -68,6 +68,8 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const headerRef = useRef<HTMLElement>(null)
   const focusRef = useRef(new ReaderFocusController())
   const [focusedAyah, setFocusedAyah] = useState(1)
+  /** Continuous readout for the rail marker (Android `focusedPosition`). */
+  const [focusedPosition, setFocusedPosition] = useState(1)
   const [showReturn, setShowReturn] = useState(false)
   const [returnPointUp, setReturnPointUp] = useState(false)
   const [recitingActive, setRecitingActive] = useState(false)
@@ -78,6 +80,8 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   /** Android `showTopTitle` — header scrolled fully off the page. */
   const [showTopTitle, setShowTopTitle] = useState(false)
   const followWasEnabled = useRef(true)
+  /** While a rail/search jump is in flight, pin focus UI to the commit target. */
+  const pendingJumpAyah = useRef<number | null>(null)
 
   const side = state.settings.ayahSelectorSide
   const receded = state.chromeReceded && !searchActive
@@ -152,8 +156,13 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     if (!isTop || !content || activeQuery == null) return
     const target = searchMatches[matchIndex]
     if (target == null) return
-    void focusRef.current.focus(target, { animate: true, preRoll: true }).then(() => {
-      setFocusedAyah(focusRef.current.focusedAyah())
+    pendingJumpAyah.current = target
+    setFocusedAyah(target)
+    setFocusedPosition(target)
+    void focusRef.current.focus(target, { animate: true, preRoll: true }).finally(() => {
+      setFocusedAyah(target)
+      setFocusedPosition(target)
+      pendingJumpAyah.current = null
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeQuery, matchIndex, searchMatches, isTop, content?.surah.id])
@@ -185,7 +194,26 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     const focusTarget = playbackFocusTarget(state.activeAyah, state.activeBasmalah)
 
     const update = () => {
-      const next = focus.focusedAyah()
+      if (pendingJumpAyah.current != null) {
+        const pinned = pendingJumpAyah.current
+        setFocusedAyah((prev) => (prev === pinned ? prev : pinned))
+        setFocusedPosition((prev) => (prev === pinned ? prev : pinned))
+        setActiveExceedsViewport(focus.exceedsViewport(state.activeAyah))
+        if (focusTarget != null && !state.followEnabled) {
+          const placement = focus.placementOf(focusTarget)
+          setShowReturn(isAway(placement))
+          setReturnPointUp(pointUp(placement))
+        } else {
+          setShowReturn(false)
+        }
+        return
+      }
+      const nextPos = focus.readoutPosition()
+      const next = Math.min(
+        content.surah.ayahCount,
+        Math.max(1, Math.floor(nextPos)),
+      )
+      setFocusedPosition((prev) => (prev === nextPos ? prev : nextPos))
       setFocusedAyah((prev) => (prev === next ? prev : next))
       setActiveExceedsViewport(focus.exceedsViewport(state.activeAyah))
 
@@ -319,9 +347,15 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       state.player.nowPlaying?.surahId === content.surah.id
     appStore.setFollowEnabled(playingThisSurah)
     followWasEnabled.current = playingThisSurah
+    pendingJumpAyah.current = targetAyah
     setFocusedAyah(targetAyah)
-    void focusRef.current.focus(targetAyah, { animate: true, preRoll: true }).then(() => {
-      setFocusedAyah(focusRef.current.focusedAyah())
+    setFocusedPosition(targetAyah)
+    void focusRef.current.focus(targetAyah, { animate: true, preRoll: true }).finally(() => {
+      // Keep the committed jump target — readout can briefly report the
+      // previous ayah while the home-scroll settles on the anchor.
+      setFocusedAyah(targetAyah)
+      setFocusedPosition(targetAyah)
+      pendingJumpAyah.current = null
     })
   }
 
@@ -360,12 +394,14 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   // Rail tracks the recitation only while playing; otherwise the reading line.
   const railAyah =
     recitingActive && state.activeAyah != null ? state.activeAyah : focusedAyah
+  const railPosition =
+    recitingActive && state.activeAyah != null ? state.activeAyah : focusedPosition
 
   const rail = (
     <AyahSelectorRail
       ayahCount={ayahCount}
       currentAyah={railAyah}
-      currentPosition={railAyah}
+      currentPosition={railPosition}
       side={side}
       receded={receded}
       onJump={jumpToAyah}

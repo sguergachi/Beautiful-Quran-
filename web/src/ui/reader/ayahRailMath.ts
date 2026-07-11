@@ -67,6 +67,28 @@ export function trackYFromDial(
   return height * (topFrac + Math.min(1, Math.max(0, t)) * span)
 }
 
+/**
+ * Ayah delta from a pointer move — Android `AyahSelectorRail` wheel scrub.
+ * Negative dy (finger/mouse up) advances the dial; one tickSpacingPx = 1 ayah,
+ * matching the magnified tick spacing so the label under focus is what commits.
+ */
+export function dialDeltaFromPointerDy(dy: number, tickSpacingPx: number): number {
+  return -dy / Math.max(1, tickSpacingPx)
+}
+
+/**
+ * Dial value for the tick drawn under [y], given the wheel's current dial and
+ * its track anchor. Used for a no-drag click/tap onto a visible tick label.
+ */
+export function dialFromTickY(
+  y: number,
+  currentDial: number,
+  anchorY: number,
+  tickSpacingPx: number,
+): number {
+  return currentDial + (y - anchorY) / Math.max(1, tickSpacingPx)
+}
+
 /** 1 at the focal ayah, 0 at `focusRadius` ticks away. */
 export function tickFocus(offset: number, focusRadius: number): number {
   const r = Math.max(1, focusRadius)
