@@ -29,6 +29,7 @@ import {
   COVER_LAYER,
   READER_LAYER,
   SETTINGS_LAYER,
+  hasReaderOpen,
   settingsLayerFor,
   sheetAtLayer,
   type StackLayer,
@@ -186,7 +187,8 @@ class AppStore {
   }
 
   private hasReader(): boolean {
-    return this.state.content != null
+    // Match App.tsx — peel-first open claims sheet 'reader' before content.
+    return hasReaderOpen(this.state.content, this.state.sheet)
   }
 
   /** Animate / snap the paper stack to a layer. */
