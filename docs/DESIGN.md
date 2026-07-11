@@ -145,7 +145,20 @@ or as a control — a bookmark is the reader's own ink, not the app's.
   figures on in running text (`'kern', 'liga', 'onum'`).
 - **Display face**: Cormorant Garamond semibold for surah titles and
   headlines, where its tall fine-stroked capitals can breathe.
-- **English lyric mode**: EB Garamond semibold, 22 sp — reading-first.
+- **English lyric mode**: EB Garamond regular, 22 sp with 1.5 em leading.
+  It is one flush-left, ragged-right inline paragraph — never a flex/flow row
+  of padded word tiles. Natural font spaces, kerning, common ligatures, and
+  old-style figures remain intact across the 45–75-character target measure;
+  the word spans exist only for karaoke paint and interaction. Web uses
+  `text-wrap: pretty` as a progressive enhancement and never justifies or
+  hyphenates this word-addressable text. Its trailing Hafs verse mark is about
+  0.78 em and is paint-shifted upward to compensate for the Hafs font's low
+  internal ornament placement, keeping it optically centred on the English
+  glyphs without changing prose line height or wrapping.
+- **English gloss punctuation**: display-only periods close each ayah and
+  precede genuine capitalized sentence starts. Proper and reverential capitals
+  (Allah, His, Lord, etc.) and speech cues are excluded. This policy never
+  mutates the database text or the timing/search identity of a word.
 - **Translations**: EB Garamond, 17 sp, 26 sp leading, at 66 % ink.
 - **UI text**: the same serif at small sizes with letterspacing and reduced
   alpha; labels never compete with scripture. Nothing in the app is sans.
@@ -154,7 +167,10 @@ or as a control — a bookmark is the reader's own ink, not the app's.
 
 Reference points: **Unread** (iOS RSS reader) for chrome-free typographic
 lists and reading view; **Apple Music lyrics** for the word illumination and
-the recede-while-playing behavior.
+the recede-while-playing behavior. Running-text rules follow Bringhurst's
+*Elements of Typographic Style* (45–75 character measure, natural word space,
+ragged-right setting, leading proportional to type size) and WCAG's text
+spacing / visual-presentation guidance.
 
 ## Ornament
 
@@ -320,3 +336,5 @@ SharedPreferences store (`data/BookmarkRepository.kt`), never in the read-only
   each word; optional transliteration; the flowing translation below.
 - **English** — the gloss becomes the lyric line itself, flowing
   left-to-right and lighting word-by-word on the same timings.
+  Web page breaks centre one Western folio number between equal visible gold
+  rules; the mirrored Arabic-Indic number is reserved for Arabic modes.
