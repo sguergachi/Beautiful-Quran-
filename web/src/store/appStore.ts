@@ -342,6 +342,11 @@ class AppStore {
     await player.prev()
   }
 
+  /** Dismiss the cover float and end the playback session. */
+  dismissFloatingPlayback() {
+    player.stop()
+  }
+
   setRepeat(mode: PlayerState['repeatMode'], range: PlayerState['repeatRange'] = null) {
     player.setRepeatMode(mode, range)
   }

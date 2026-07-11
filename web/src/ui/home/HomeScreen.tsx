@@ -1,4 +1,5 @@
 import {
+  IconClose,
   IconNext,
   IconPause,
   IconPlay,
@@ -28,7 +29,26 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
 
   const depth = Math.max(0, stackLayer - COVER_LAYER)
   const isTop = stackLayer === COVER_LAYER
-  const showFloat = state.player.nowPlaying != null && isTop
+  const nowPlaying = state.player.nowPlaying
+  const showFloat = nowPlaying != null && isTop
+  // Basmalah lead-in reports ayah 0; the float labels (and opens) ayah 1.
+  const floatAyah = nowPlaying != null ? Math.max(1, nowPlaying.ayah) : 1
+  const floatSurah =
+    nowPlaying != null
+      ? state.surahs.find((s) => s.id === nowPlaying.surahId) ?? null
+      : null
+  const chapterLabel = floatSurah?.nameTransliteration ?? ''
+  const ayahLabel =
+    floatSurah != null ? `${floatSurah.id}:${floatAyah}` : ''
+
+  const openNowPlaying = () => {
+    if (!nowPlaying) return
+    if (state.content?.surah.id === nowPlaying.surahId) {
+      appStore.revealLayer(READER_LAYER)
+      return
+    }
+    appStore.openSurah(nowPlaying.surahId, floatAyah)
+  }
 
   return (
     <div
@@ -72,7 +92,7 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
         </div>
 
         <div className="edge-fade">
-          <div className="scroll">
+          <div className={`scroll${showFloat ? ' scroll-with-float' : ''}`}>
             {continueSurah ? (
               <div className="continue-row">
                 <button
@@ -126,35 +146,49 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
       </div>
 
       {showFloat ? (
-        <div className="floating-play">
-          <button type="button" aria-label="Previous ayah" onClick={() => void appStore.prev()}>
-            <IconPrev />
+        <div className="floating-play" role="group" aria-label="Playback">
+          <button
+            type="button"
+            className="float-close"
+            aria-label="Close playback"
+            onClick={() => appStore.dismissFloatingPlayback()}
+          >
+            <IconClose />
           </button>
           <button
             type="button"
-            aria-label={state.player.isPlaying ? 'Pause' : 'Play'}
-            onClick={() => void appStore.playPause()}
+            className="float-now-playing"
+            aria-label={
+              chapterLabel && ayahLabel
+                ? `Open ${chapterLabel} · ${ayahLabel}`
+                : 'Open now playing'
+            }
+            onClick={openNowPlaying}
           >
-            {state.player.isPlaying ? <IconPause /> : <IconPlay />}
+            <span className="float-chapter">{chapterLabel}</span>
+            {chapterLabel && ayahLabel ? (
+              <span className="float-sep" aria-hidden="true">
+                {' '}
+                ·{' '}
+              </span>
+            ) : null}
+            <span className="float-ayah">{ayahLabel}</span>
           </button>
-          <button type="button" aria-label="Next ayah" onClick={() => void appStore.next()}>
-            <IconNext />
-          </button>
-          <button
-            type="button"
-            className="float-open"
-            onClick={() => {
-              if (state.content) appStore.revealLayer(READER_LAYER)
-              else if (state.player.nowPlaying) {
-                appStore.openSurah(
-                  state.player.nowPlaying.surahId,
-                  Math.max(1, state.player.nowPlaying.ayah),
-                )
-              }
-            }}
-          >
-            Open
-          </button>
+          <div className="float-transport">
+            <button type="button" aria-label="Previous ayah" onClick={() => void appStore.prev()}>
+              <IconPrev />
+            </button>
+            <button
+              type="button"
+              aria-label={state.player.isPlaying ? 'Pause' : 'Play'}
+              onClick={() => void appStore.playPause()}
+            >
+              {state.player.isPlaying ? <IconPause /> : <IconPlay />}
+            </button>
+            <button type="button" aria-label="Next ayah" onClick={() => void appStore.next()}>
+              <IconNext />
+            </button>
+          </div>
         </div>
       ) : null}
     </div>

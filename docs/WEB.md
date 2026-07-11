@@ -223,7 +223,8 @@ the repeat chain releases (`InkEngine` + `REPEAT_HIGHLIGHTING.md`).
 Three sheets, hand-rolled paper stack (no router chrome):
 
 1. **Home** — surah list, search, continue-listening, floating playback
-   control while a verse is loaded.
+   control while a verse is loaded (chapter · ayah label, transport, quiet
+   Close that stops the session — Android parity).
 2. **Reader** — header + ayahs + icon player bar; centered ayah
    selector rail (hover-magnified dashes, gold focal tick);
 
