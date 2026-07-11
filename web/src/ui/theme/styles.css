@@ -1135,10 +1135,10 @@ select {
   font-size: 0.78em;
   line-height: inherit;
   vertical-align: baseline;
-  /* At 22px EB Garamond paints ~1px below the baseline; 17.16px Hafs paints
-     ~6px below it. Lift the ornament by that measured 5px descent delta.
-     Expressed in the mark's em, the correction scales with user text size. */
-  transform: translateY(-0.29em);
+  /* Calibrated against the rasterized fonts in the production browser: Hafs'
+     ornament ink needs a 0.78em paint lift to meet EB Garamond's baseline.
+     Keeping this in em preserves the alignment at every user text scale. */
+  transform: translateY(-0.78em);
 }
 
 .words {
