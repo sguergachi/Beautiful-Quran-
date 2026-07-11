@@ -2542,11 +2542,11 @@ select {
   flex-direction: column;
   align-items: center;
   gap: 0.1rem;
-  /* Match the centered content column above (`.sheet-frame`), rather than
-     stretching across the wider desktop paper sheet. Auto inline margins
-     center the fixed-width absolute box without consuming its transform,
-     which remains available for the entrance animation. */
-  width: min(100%, 52rem);
+  /* Match the chapter content column above. The desktop paper frame is wider
+     than the list, so sizing this to the frame leaves the dismiss control
+     hanging past the list's edge. Auto inline margins center the absolute box
+     without consuming its transform, which remains available for entrance. */
+  width: min(100%, var(--home-max));
   margin-inline: auto;
   padding: 0.45rem var(--sheet-pad) 0.35rem;
   background: var(--paper);
