@@ -3,7 +3,7 @@ import type { ActiveWord, Ayah } from '../data/models'
 import type { ReadingMode } from '../data/settings'
 import { InkEngine, InkState } from '../ui/reader/InkEngine'
 import { ayahTranslationAlpha } from '../ui/reader/WordHighlight'
-import { toArabicIndic } from '../util/digits'
+import { formatReaderDigits } from '../util/digits'
 import { WordUnit } from './WordUnit'
 import { HafsWord } from './HafsWord'
 import { VerseBookmarkRibbon } from './VerseBookmarkRibbon'
@@ -63,6 +63,8 @@ function AyahBlockInner({
 }: Props) {
   const englishOnly = readingMode === 'english_only'
   const arabicOnly = readingMode === 'arabic_only'
+  // English-only: Western digits (Android AyahNumberMark useArabicIndicDigits=false).
+  const ayahMark = `﴿${formatReaderDigits(ayah.number, !englishOnly)}﴾`
   // Ayah mark opacity is CSS-driven via `.scroll[data-reciting]` (paint-phase
   // recess) — no inline style so play/pause does not thrash every verse.
   const words = useMemo(() => ayah.words, [ayah.words])
@@ -130,7 +132,7 @@ function AyahBlockInner({
               />
             )
           })}
-          <span className="ayah-mark">﴿{toArabicIndic(ayah.number)}﴾</span>
+          <span className="ayah-mark">{ayahMark}</span>
         </p>
       ) : (
         <div className="words" dir={englishOnly ? 'ltr' : 'rtl'} data-lyric={englishOnly ? 'english' : 'arabic'}>
@@ -159,7 +161,7 @@ function AyahBlockInner({
               />
             )
           })}
-          <span className="ayah-mark">﴿{toArabicIndic(ayah.number)}﴾</span>
+          <span className="ayah-mark">{ayahMark}</span>
         </div>
       )}
 
