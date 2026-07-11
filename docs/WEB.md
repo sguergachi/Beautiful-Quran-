@@ -171,9 +171,8 @@ mid-tier phones — measure first.
   `quran.db`.
 - **Ribbon tip on hover (web).** Unlike Android’s always-visible faint tip, the
   web idle swallowtail is hidden until the verse is hovered (or the ribbon is
-  keyboard-focused). Click the tip to unfurl and bookmark. Touch / coarse
-  pointers keep the always-on tip so the affordance stays discoverable.
-  Saved verses still show the full ribbon at rest.
+  keyboard-focused). Click the tip to unfurl and bookmark. Saved verses still
+  show the full ribbon at rest.
 
 ## 7. Performance bar (non-negotiable)
 

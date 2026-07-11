@@ -1,10 +1,10 @@
 /**
  * Verse bookmark ribbon — port of Android `VerseBookmarkRibbon.kt`.
  *
- * Idle (fine pointer): tip hidden until the verse is hovered (or the ribbon
- * is keyboard-focused). Touch / coarse pointers keep a faint tip always on.
- * Saved: the same ruby strip grown nearly the full verse height.
- * Click unfurls with a cloth wave + overshoot; unmark gathers back into the tip.
+ * Idle: tip hidden until the verse is hovered (or the ribbon is
+ * keyboard-focused). Saved: the same ruby strip grown nearly the full
+ * verse height. Click unfurls with a cloth wave + overshoot; unmark
+ * gathers back into the tip.
  */
 import { useEffect, useRef, useCallback, useState, type CSSProperties } from 'react'
 
@@ -16,7 +16,6 @@ const NOTCH = 6.5
 const WAVE_AMP = 4.5
 const SETTLE_AMP = 3.2
 const OVERSHOOT = 0.06
-const NUB_ALPHA = 0.2
 const NUB_FOCUSED_ALPHA = 0.4
 const SOLID_ALPHA = 0.94
 const TOP_FOLD = 3.5
@@ -122,18 +121,6 @@ export function VerseBookmarkRibbon({
   const rubyRef = useRef({ r: 179, g: 18, b: 47 })
   const userDriven = useRef(false)
   const [ribbonFocused, setRibbonFocused] = useState(false)
-  // Devices without hover keep the always-on tip so bookmarking stays discoverable.
-  const [fineHover, setFineHover] = useState(() =>
-    typeof window !== 'undefined' ? window.matchMedia('(hover: hover)').matches : false,
-  )
-
-  useEffect(() => {
-    const mq = window.matchMedia('(hover: hover)')
-    const sync = () => setFineHover(mq.matches)
-    sync()
-    mq.addEventListener('change', sync)
-    return () => mq.removeEventListener('change', sync)
-  }, [])
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current
@@ -175,13 +162,16 @@ export function VerseBookmarkRibbon({
           )
 
     const showingRibbon = progress > 0.02 || bookmarked
-    const revealTip = hovered || ribbonFocused || !fineHover
+    // Tip only while the verse is hovered (or the ribbon button is focused).
+    const revealTip = hovered || ribbonFocused
     let alpha: number
     if (showingRibbon && progress > 0.5) alpha = SOLID_ALPHA
     else if (showingRibbon) alpha = SOLID_ALPHA * (0.55 + 0.45 * Math.min(1, progress))
     else if (!revealTip) alpha = 0
-    else if (hovered || ribbonFocused || focused) alpha = NUB_FOCUSED_ALPHA
-    else alpha = NUB_ALPHA
+    else alpha = NUB_FOCUSED_ALPHA
+
+    // Nothing to paint — skip path work so idle verses stay blank.
+    if (alpha <= 0.001) return
 
     const wavePhase = progress * Math.PI * 2.4
     const liveWave =
@@ -313,7 +303,7 @@ export function VerseBookmarkRibbon({
     ctx.strokeStyle = `rgba(30,4,10,${0.35 * alpha})`
     ctx.lineWidth = 1.05
     ctx.stroke()
-  }, [bookmarked, focused, hovered, ribbonFocused, fineHover, side])
+  }, [bookmarked, hovered, ribbonFocused, side])
 
   // Keep ruby color in sync with theme tokens.
   useEffect(() => {
@@ -345,7 +335,7 @@ export function VerseBookmarkRibbon({
 
   useEffect(() => {
     draw()
-  }, [focused, hovered, ribbonFocused, fineHover, chromeAlpha, draw])
+  }, [hovered, ribbonFocused, chromeAlpha, draw])
 
   // Resize observer — ribbon height tracks the ayah block.
   useEffect(() => {
