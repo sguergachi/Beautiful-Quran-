@@ -1,4 +1,5 @@
 import { appStore, useAppState } from '../../store/appStore'
+import { IconClose } from '../icons/PlaybackIcons'
 
 export function RootViewer() {
   const state = useAppState()
@@ -8,9 +9,16 @@ export function RootViewer() {
   return (
     <div className="ink-bleed" style={{ ['--ox' as string]: '50%', ['--oy' as string]: '35%' }}>
       <div className="ink-bleed-inner">
-        <button type="button" className="close" onClick={() => appStore.closeRootViewer()}>
-          Close
-        </button>
+        <div className="ink-bleed-chrome">
+          <button
+            type="button"
+            className="close"
+            aria-label="Close"
+            onClick={() => appStore.closeRootViewer()}
+          >
+            <IconClose width="1.35em" height="1.35em" />
+          </button>
+        </div>
         <p className="arabic-lg">{rv.arabic}</p>
         <p className="muted">{rv.translation}</p>
         <h2>{rv.root || 'Word'}</h2>

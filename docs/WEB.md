@@ -229,7 +229,10 @@ Three sheets, hand-rolled paper stack (no router chrome):
 
 Hard rules from `DESIGN.md` apply unchanged: no dialogs, cards, ripples,
 elevation, borders; hierarchy via spacing / size / ink alpha; ink-bleed
-overlays for root viewer (and later system prompts).
+overlays for root viewer (and later system prompts). The root viewer bleed
+uses the same contrasting workbench as Android (`contrastingOverlayColorScheme`):
+**Royal Green** over Paper / Nightfall, and **Nightfall** when the reader is
+already Royal Green. Dismiss chrome is an icon (×), not a text label.
 
 Ink wash uses the smootherstep mask from `fade.washMaskImage` (not a blunt
 3-stop wipe). Repeat orange is a second overlay that washes in and dissolves
