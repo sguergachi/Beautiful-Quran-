@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { ActiveWord, Ayah } from '../data/models'
 import type { ReadingMode } from '../data/settings'
 import { WordUnit } from './WordUnit'
@@ -63,6 +63,7 @@ function AyahBlockInner({
   const markOpacity = dimmed ? 0.22 : 1
   const words = useMemo(() => ayah.words, [ayah.words])
   const activeWordRef = useRef<HTMLElement | null>(null)
+  const [hovered, setHovered] = useState(false)
 
   useEffect(() => {
     if (!keepActiveWordInView || !onKeepWordInView) return
@@ -77,10 +78,13 @@ function AyahBlockInner({
       data-dimmed={dimmed}
       style={{ ['--font-scale' as string]: String(fontScale) }}
       id={`ayah-${ayah.number}`}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
       <VerseBookmarkRibbon
         bookmarked={bookmarked}
         focused={focused}
+        hovered={hovered}
         side={bookmarkSide}
         chromeAlpha={bookmarkChromeAlpha}
         interactive={bookmarkInteractive}
