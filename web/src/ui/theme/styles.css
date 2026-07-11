@@ -1398,12 +1398,31 @@ select {
   border-bottom-color: var(--accent);
 }
 
-/* —— Ink bleed / root viewer —— */
+/* —— Ink bleed / root viewer ——
+ * Contrasting workbench (mirrors Android contrastingOverlayColorScheme):
+ * Royal Green over paper/night themes; Nightfall when the reader is already
+ * Royal Green so the bloom still reads against the page. */
 .ink-bleed {
+  /* Royal Green palette — scoped so the bleed does not inherit reader paper. */
+  --paper: #062c24;
+  --paper-surface: #0a382e;
+  --ink: #e8e2d5;
+  --ink-muted: #97917f;
+  --accent: #7fb8a4;
+  --accent-soft: #7fb8a4;
+  --accent-container: #0e5c4a;
+  --gold: #d9b44a;
+  --gold-bright: #e9cd7a;
+  --gold-deep: #a8842a;
+  --repeat: #e08a4a;
+  --bookmark: #d64358;
+  color-scheme: dark;
+
   position: absolute;
   inset: 0;
   z-index: 20;
   background: var(--paper);
+  color: var(--ink);
   animation: bleed-in 420ms ease;
   overflow: auto;
   padding: 1.5rem var(--sheet-pad) 3rem;
@@ -1413,9 +1432,31 @@ select {
   overscroll-behavior: contain;
 }
 
+/* Under Royal Green the reader already is that green — Nightfall for contrast. */
+[data-theme='royal_green'] .ink-bleed {
+  --paper: #0a0b0c;
+  --paper-surface: #111315;
+  --ink: #e8e2d5;
+  --ink-muted: #97917f;
+  --accent: #7fb8a4;
+  --accent-soft: #7fb8a4;
+  --accent-container: #282d30;
+  --gold: #d9b44a;
+  --gold-bright: #e9cd7a;
+  --gold-deep: #a8842a;
+  --repeat: #e08a4a;
+  --bookmark: #d64358;
+}
+
 .ink-bleed-inner {
   max-width: 34rem;
   margin: 0 auto;
+}
+
+.ink-bleed-chrome {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.5rem;
 }
 
 @keyframes bleed-in {
@@ -1447,17 +1488,18 @@ select {
 }
 
 .ink-bleed .close {
-  color: var(--accent);
-  margin-bottom: 1.35rem;
-  padding: 0.55rem 0;
+  color: color-mix(in srgb, var(--ink-muted) 55%, transparent);
+  padding: 0.55rem;
+  min-width: 44px;
   min-height: 44px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
 }
 
 @media (hover: hover) {
   .ink-bleed .close:hover {
-    opacity: 0.75;
+    color: var(--ink-muted);
   }
 }
 
