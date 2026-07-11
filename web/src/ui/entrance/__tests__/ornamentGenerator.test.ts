@@ -1,0 +1,131 @@
+import { describe, expect, it } from 'vitest'
+import {
+  generateCoverOrnament,
+  Mulberry32,
+  type OrnamentPoint,
+} from '../ornamentGenerator'
+
+describe('ornamentGenerator', () => {
+  it('prng matches the reference mulberry32 stream (Android parity)', () => {
+    // Same known-answer values asserted by OrnamentGeneratorTest.kt — the
+    // cross-platform contract that keeps both covers drawing from one stream.
+    const expected: Array<[number, number[]]> = [
+      [1, [2693262067, 11749833, 2265367787, 4213581821]],
+      [123456789, [1107202814, 4169434471, 3372958138, 885470128]],
+      [-7, [1860010037, 1397564179, 2337619704, 2062400319]],
+    ]
+    for (const [seed, values] of expected) {
+      const rng = new Mulberry32(seed)
+      for (const v of values) expect(rng.nextUInt()).toBe(v)
+    }
+  })
+
+  it('grows the same ornament from the same seed', () => {
+    for (const seed of [1, 42, -913, 2000000011]) {
+      expect(generateCoverOrnament(seed)).toEqual(generateCoverOrnament(seed))
+    }
+  })
+
+  it('grows different ornaments from different seeds', () => {
+    const a = generateCoverOrnament(1)
+    let anyDiffer = false
+    for (let seed = 2; seed <= 12; seed++) {
+      try {
+        expect(generateCoverOrnament(seed)).not.toEqual(a)
+        anyDiffer = true
+      } catch {
+        /* one collision is tolerable; all colliding is not */
+      }
+    }
+    expect(anyDiffer).toBe(true)
+  })
+
+  it('generates a sane ornament for a wide seed sample', () => {
+    // Plain checks collected into a violation list (per-point expect() calls
+    // are far too slow at this volume); a single assert reports the first few.
+    const violations: string[] = []
+    const check = (ok: boolean, label: string) => {
+      if (!ok && violations.length < 5) violations.push(label)
+    }
+    for (let seed = 0; seed < 300; seed++) {
+      const o = generateCoverOrnament(seed * 7919 + seed)
+      const at = `seed ${seed * 7919 + seed}`
+      check(o.medallion.strokes.length >= 4, `${at}: medallion strokes`)
+      check(o.medallion.dots.length > 0, `${at}: medallion dots`)
+      check(o.cornerSeal.strokes.length > 0, `${at}: seal strokes`)
+      check(o.border.strokes.length > 0, `${at}: border strokes`)
+      check(o.border.period > 0.5, `${at}: border period`)
+      check(o.field.strokes.length >= 8, `${at}: field strokes`)
+      check(o.field.cellW > 0 && o.field.cellH > 0, `${at}: field cell`)
+
+      for (const s of [...o.medallion.strokes, ...o.cornerSeal.strokes]) {
+        check(s.points.length >= 2, `${at}: short stroke`)
+        check(s.birth >= 0 && s.birth + s.span <= 1.0001, `${at}: build window`)
+        for (const p of s.points) {
+          check(
+            p.x >= -0.001 && p.x <= 1.001 && p.y >= -0.001 && p.y <= 1.001,
+            `${at}: rosette point outside unit box (${p.x}, ${p.y})`,
+          )
+        }
+      }
+      for (const s of o.border.strokes) {
+        for (const p of s.points) {
+          check(
+            p.x >= -0.001 && p.x <= o.border.period + 0.001 && p.y >= -0.001 && p.y <= 1.001,
+            `${at}: border point outside band (${p.x}, ${p.y})`,
+          )
+        }
+      }
+    }
+    expect(violations).toEqual([])
+  })
+
+  it('medallion has full n-fold rotational symmetry', () => {
+    for (const seed of [3, 17, 99, 1234, -55, 777777]) {
+      const m = generateCoverOrnament(seed).medallion
+      const angle = (2 * Math.PI) / m.fold
+      const pts: OrnamentPoint[] = m.strokes.flatMap((s) => s.points)
+      for (const p of pts) {
+        const rx = 0.5 + (p.x - 0.5) * Math.cos(angle) - (p.y - 0.5) * Math.sin(angle)
+        const ry = 0.5 + (p.x - 0.5) * Math.sin(angle) + (p.y - 0.5) * Math.cos(angle)
+        const hit = pts.some((q) => Math.abs(q.x - rx) < 1e-6 && Math.abs(q.y - ry) < 1e-6)
+        expect(hit, `seed ${seed} fold ${m.fold}: rotated point unmatched`).toBe(true)
+      }
+    }
+  })
+
+  it('field pattern is continuous across cell edges', () => {
+    for (const seed of [5, 8, 21, 100, 4242]) {
+      const f = generateCoverOrnament(seed).field
+      const starts = f.strokes.map((s) => s.points[0]!)
+      for (const s of starts) {
+        let mates = 0
+        for (const t of starts) {
+          for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+              const tx = t.x + dx * f.cellW
+              const ty = t.y + dy * f.cellH
+              if (Math.abs(tx - s.x) < 1e-6 && Math.abs(ty - s.y) < 1e-6) mates++
+            }
+          }
+        }
+        expect(mates, `seed ${seed}: lonely ray`).toBeGreaterThanOrEqual(2)
+      }
+    }
+  })
+
+  it('a seed sample uses every fold, motif family, tiling, and border', () => {
+    const folds = new Set<number>()
+    const tilings = new Set<string>()
+    const borders = new Set<string>()
+    for (let seed = 0; seed < 200; seed++) {
+      const o = generateCoverOrnament(seed)
+      folds.add(o.medallion.fold)
+      tilings.add(`${o.field.cellW.toFixed(3)}x${o.field.cellH.toFixed(3)}`)
+      borders.add(`${o.border.strokes.length}/${o.border.dots.length}`)
+    }
+    expect([...folds].sort((a, b) => a - b)).toEqual([8, 10, 12, 16])
+    expect(tilings.size).toBe(3)
+    expect(borders.size).toBeGreaterThanOrEqual(3)
+  })
+})
