@@ -61,12 +61,30 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/app
-          if git diff --staged --quiet; then
-            echo "docs/app already up to date — nothing to publish"
-            exit 0
-          fi
-          git commit -m "Publish web app to docs/app for GitHub Pages"
-          # Rebase onto latest master in case another push landed during the build.
-          git pull --rebase origin master
-          git push origin HEAD:master
+
+          # Concurrent master merges each rebuild hashed Vite assets under
+          # docs/app. A plain `git pull --rebase` then races and fails on
+          # rename/delete conflicts (seen on #247 / #249). On conflict: abort,
+          # reset to latest master, rebuild pages, and retry the push.
+          attempt=0
+          max_attempts=5
+          while [ "$attempt" -lt "$max_attempts" ]; do
+            attempt=$((attempt + 1))
+            git add docs/app
+            if git diff --staged --quiet; then
+              echo "docs/app already up to date — nothing to publish"
+              exit 0
+            fi
+            git commit -m "Publish web app to docs/app for GitHub Pages"
+            if git pull --rebase origin master && git push origin HEAD:master; then
+              echo "Published docs/app on attempt $attempt"
+              exit 0
+            fi
+            echo "Publish race on attempt $attempt — rebuilding against latest master"
+            git rebase --abort 2>/dev/null || true
+            git fetch origin master
+            git reset --hard origin/master
+            (cd web && npm run build:pages)
+          done
+          echo "Failed to publish docs/app after $max_attempts attempts"
+          exit 1
