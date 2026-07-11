@@ -434,11 +434,6 @@ export function EntranceCover({
             </div>
           )}
           <div className="entrance-air entrance-air--bot" />
-          {!showLoading && !error && (
-            <p className="entrance-hint" style={{ opacity: captionOn ? 1 : 0 }}>
-              Touch to open
-            </p>
-          )}
         </div>
       </div>
     </div>

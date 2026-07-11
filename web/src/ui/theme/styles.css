@@ -1705,7 +1705,6 @@ select {
   --cover-title-en: 15px;
   --cover-dua-ar: 16px;
   --cover-dua-en: 11px;
-  --cover-hint: 11px;
   --cover-load-label: 12px;
   --cover-pad-x: 42px;
   --cover-pad-y: 40px;
@@ -1841,7 +1840,7 @@ select {
 
 /*
  * Vertical cover grid: pad → top air → medallion → titles → mid air →
- * dua/load → bot air → hint. Air weights and type sizes come from
+ * dua/load → bot air. Air weights and type sizes come from
  * coverLayout() so phone and sheet-column boards stay in proportion.
  */
 .entrance-content {
@@ -1959,18 +1958,6 @@ select {
   font-style: italic;
   text-align: center;
   color: rgba(232, 226, 213, 0.55);
-}
-
-.entrance-hint {
-  flex-shrink: 0;
-  margin: 0;
-  padding-bottom: calc(var(--cover-unit) * 0.4);
-  font-family: var(--font-body);
-  font-size: var(--cover-hint);
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: rgba(232, 226, 213, 0.34);
-  transition: opacity 900ms ease;
 }
 
 /* Load progress inked onto the cover — replaces the plain boot screen. */

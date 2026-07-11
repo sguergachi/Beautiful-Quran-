@@ -353,15 +353,6 @@ fun EntranceCover(
                     )
                 }
                 Spacer(Modifier.weight(0.5f))
-                Text(
-                    text = "Touch to open",
-                    style = MaterialTheme.typography.labelSmall,
-                    letterSpacing = 2.4.sp,
-                    color = CoverParchment.copy(alpha = 0.34f),
-                    modifier = Modifier
-                        .graphicsLayer { alpha = captionAlpha }
-                        .padding(bottom = 26.dp),
-                )
             }
         }
     }

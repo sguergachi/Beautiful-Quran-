@@ -22,7 +22,6 @@ export interface CoverLayout {
   titleEn: number
   duaAr: number
   duaEn: number
-  hint: number
   loadLabel: number
   padX: number
   padY: number
@@ -69,7 +68,7 @@ export function coverLayout(width: number, height: number): CoverLayout {
   const starSize = clamp(outerInset * 1.42, unit * 2.6, outerInset * 1.65)
 
   // Medallion: ~44% of board width, but never more than ~26% of height so
-  // the vertical stack (medal → titles → dua → hint) keeps air.
+  // the vertical stack (medal → titles → dua) keeps air.
   const medallion = clamp(
     Math.min(w * 0.44, h * 0.26, short * 0.48),
     unit * 12,
@@ -82,7 +81,6 @@ export function coverLayout(width: number, height: number): CoverLayout {
   const titleEn = clamp(titleAr * 0.52, 12, 22)
   const duaAr = clamp(titleAr * 0.58, 14, 24)
   const duaEn = clamp(titleAr * 0.38, 11, 16)
-  const hint = clamp(titleAr * 0.3, 10, 13)
   const loadLabel = clamp(titleAr * 0.34, 11, 14)
 
   const padX = innerInset + unit * 0.85
@@ -110,7 +108,6 @@ export function coverLayout(width: number, height: number): CoverLayout {
     titleEn,
     duaAr,
     duaEn,
-    hint,
     loadLabel,
     padX,
     padY,
@@ -138,7 +135,6 @@ export function coverLayoutCssVars(layout: CoverLayout): Record<string, string> 
     '--cover-title-en': px(layout.titleEn),
     '--cover-dua-ar': px(layout.duaAr),
     '--cover-dua-en': px(layout.duaEn),
-    '--cover-hint': px(layout.hint),
     '--cover-load-label': px(layout.loadLabel),
     '--cover-pad-x': px(layout.padX),
     '--cover-pad-y': px(layout.padY),
