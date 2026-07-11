@@ -14,6 +14,24 @@ function resolveTheme(mode: string): string {
   return dark ? 'dark' : 'light'
 }
 
+function retryBoot() {
+  void (async () => {
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations()
+        await Promise.all(regs.map((r) => r.unregister()))
+      }
+      if (window.caches) {
+        const keys = await caches.keys()
+        await Promise.all(keys.map((k) => caches.delete(k)))
+      }
+    } catch {
+      /* still reload */
+    }
+    location.reload()
+  })()
+}
+
 export function App() {
   const state = useAppState()
   // Once per page load — mirrors Android rememberSaveable entranceDone.
@@ -50,60 +68,35 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [entranceDone])
 
-  if (!state.ready && !state.error) {
-    return (
-      <div className="boot">
-        <h1>Beautiful Quran</h1>
-        <p>{state.loadLabel || 'Opening the book…'}</p>
-        <div className="pulse" aria-hidden="true" />
-      </div>
-    )
-  }
-
-  if (state.error) {
-    return (
-      <div className="boot">
-        <h1>Beautiful Quran</h1>
-        <p>{state.error}</p>
-        <button
-          type="button"
-          className="boot-retry"
-          onClick={() => {
-            void (async () => {
-              try {
-                if ('serviceWorker' in navigator) {
-                  const regs = await navigator.serviceWorker.getRegistrations()
-                  await Promise.all(regs.map((r) => r.unregister()))
-                }
-                if (window.caches) {
-                  const keys = await caches.keys()
-                  await Promise.all(keys.map((k) => caches.delete(k)))
-                }
-              } catch {
-                /* still reload */
-              }
-              location.reload()
-            })()
-          }}
-        >
-          Try again
-        </button>
-      </div>
-    )
-  }
-
   const stack = state.stackLayer
   const hasReader = state.content != null
   const recitationLive = state.player.isPlaying || state.player.nowPlaying != null
+  // The cover *is* the loading screen — show the shell underneath only once
+  // the book is ready so the open reveals chapters, not an empty page.
+  const showStack = state.ready
 
   return (
-    <div className="app-shell" data-stack={stack} data-has-reader={hasReader}>
-      <HomeScreen stackLayer={stack} />
-      <ReaderScreen stackLayer={stack} />
-      <SettingsScreen stackLayer={stack} hasReader={hasReader} />
-      <RootViewer />
+    <div
+      className="app-shell"
+      data-stack={stack}
+      data-has-reader={hasReader}
+      data-booting={showStack ? undefined : 'true'}
+    >
+      {showStack && (
+        <>
+          <HomeScreen stackLayer={stack} />
+          <ReaderScreen stackLayer={stack} />
+          <SettingsScreen stackLayer={stack} hasReader={hasReader} />
+          <RootViewer />
+        </>
+      )}
       {!entranceDone && (
         <EntranceCover
+          ready={state.ready}
+          loadLabel={state.loadLabel}
+          loadProgress={state.loadProgress}
+          error={state.error}
+          onRetry={state.error ? retryBoot : undefined}
           reciters={state.reciters}
           reciterId={state.settings.reciterId}
           recitationLive={recitationLive}

@@ -1,6 +1,7 @@
 /**
  * Entrance ceremony — the closed mushaf over the paper stack.
- * Port of Android `ui/entrance/EntranceCover`: arrive → recite → open once.
+ * Also the cold-start loading screen: the cover is up while quran.db loads,
+ * with progress inked onto the leather; the open waits until the book is ready.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { washMaskImage } from '../../engine/fade'
@@ -18,9 +19,18 @@ const SILENT_HOLD_MS = 600
 const OPEN_MS = 1_150
 const URL_WAIT_MS = 5_000
 
-type Phase = 'arriving' | 'reciting' | 'opening'
+type Phase = 'loading' | 'arriving' | 'reciting' | 'opening'
 
 export interface EntranceCoverProps {
+  /** True once quran.db is open and the chapter list can be shown. */
+  ready: boolean
+  /** Status line while the book loads (empty when ready). */
+  loadLabel: string
+  /** 0..1 while DB bytes stream; null for indeterminate prepare phases. */
+  loadProgress: number | null
+  /** Boot failure — shown on the cover with a retry control. */
+  error: string | null
+  onRetry?: () => void
   reciters: Reciter[]
   reciterId: number
   /** True when a recitation session is already live — keep the du'a silent. */
@@ -158,25 +168,33 @@ function MushafCoverFrame() {
 }
 
 /**
- * Cold-start closed mushaf. Plays once; tap / Escape opens immediately.
- * theme-color is painted leather while the cover is up.
+ * Cold-start closed mushaf — also the loading screen. The cover is up from
+ * the first paint; load progress inks onto the leather; the hinge open waits
+ * until the book is ready. Tap / Escape opens once ready.
  */
 export function EntranceCover({
+  ready,
+  loadLabel,
+  loadProgress,
+  error,
+  onRetry,
   reciters,
   reciterId,
   recitationLive,
   onFinished,
 }: EntranceCoverProps) {
-  const [phase, setPhase] = useState<Phase>('arriving')
+  const [phase, setPhase] = useState<Phase>('loading')
   const [sheetAlpha, setSheetAlpha] = useState(0)
   const [opening, setOpening] = useState(false)
   const [captionOn, setCaptionOn] = useState(false)
+  const [arrivalDone, setArrivalDone] = useState(false)
 
   const titleArRef = useRef<HTMLParagraphElement>(null)
   const titleEnRef = useRef<HTMLParagraphElement>(null)
   const duaRef = useRef<HTMLParagraphElement>(null)
   const momentAcRef = useRef<AbortController | null>(null)
   const finishedRef = useRef(false)
+  const ceremonyStartedRef = useRef(false)
   const onFinishedRef = useRef(onFinished)
   const recitersRef = useRef(reciters)
   const reciterIdRef = useRef(reciterId)
@@ -186,12 +204,17 @@ export function EntranceCover({
   reciterIdRef.current = reciterId
   recitationLiveRef.current = recitationLive
 
+  const canOpen = ready && !error
+  const showLoading = !ready && !error
+  const showProgress =
+    showLoading && loadProgress != null && loadProgress >= 0 && loadProgress < 1
+
   const skipToOpening = useCallback(() => {
-    if (phase === 'opening') return
+    if (!canOpen || phase === 'opening') return
     setPhase('opening')
     setCaptionOn(true)
     momentAcRef.current?.abort()
-  }, [phase])
+  }, [canOpen, phase])
 
   useEffect(() => {
     const prevTheme = document.querySelector('meta[name="theme-color"]')?.getAttribute('content')
@@ -216,28 +239,49 @@ export function EntranceCover({
     return () => window.removeEventListener('keydown', onKey, true)
   }, [skipToOpening])
 
-  // One-shot ceremony — empty deps so arrival never re-runs when reciters land.
+  // Arrival — fade + title wash once, while the book may still be loading.
   useEffect(() => {
+    const ac = new AbortController()
+    const { signal } = ac
+    ;(async () => {
+      try {
+        setSheetAlpha(1)
+        setPhase('arriving')
+        await wait(SHEET_FADE_MS, signal)
+        const start = performance.now()
+        applyWash(titleArRef.current, 0, 0)
+        applyWash(titleEnRef.current, 0, 0)
+        while (!signal.aborted) {
+          const t = (performance.now() - start) / TITLE_WASH_MS
+          const p = Math.min(1, t)
+          applyWash(titleArRef.current, p, 0)
+          applyWash(titleEnRef.current, p, 0)
+          if (p >= 1) break
+          await wait(32, signal)
+        }
+        applyWash(titleArRef.current, 1, 0)
+        applyWash(titleEnRef.current, 1, 0)
+        await wait(ARRIVAL_HOLD_MS, signal)
+        if (!signal.aborted) setArrivalDone(true)
+      } catch {
+        /* unmount */
+      }
+    })()
+    return () => ac.abort()
+  }, [])
+
+  // Once arrival is done and the book is ready, recite then open.
+  // Skip aborts the in-flight moment without replaying the title.
+  useEffect(() => {
+    if (!arrivalDone || !canOpen || ceremonyStartedRef.current || finishedRef.current) {
+      return
+    }
+    ceremonyStartedRef.current = true
+
     const momentAc = new AbortController()
     momentAcRef.current = momentAc
     const openAc = new AbortController()
     const { signal } = momentAc
-
-    const runTitleWash = async () => {
-      const start = performance.now()
-      applyWash(titleArRef.current, 0, 0)
-      applyWash(titleEnRef.current, 0, 0)
-      while (!signal.aborted) {
-        const t = (performance.now() - start) / TITLE_WASH_MS
-        const p = Math.min(1, t)
-        applyWash(titleArRef.current, p, 0)
-        applyWash(titleEnRef.current, p, 0)
-        if (p >= 1) break
-        await wait(32, signal)
-      }
-      applyWash(titleArRef.current, 1, 0)
-      applyWash(titleEnRef.current, 1, 0)
-    }
 
     const resolveUrls = async (): Promise<string[]> => {
       const deadline = performance.now() + URL_WAIT_MS
@@ -255,11 +299,6 @@ export function EntranceCover({
 
     ;(async () => {
       try {
-        setSheetAlpha(1)
-        await wait(SHEET_FADE_MS, signal)
-        await runTitleWash()
-        await wait(ARRIVAL_HOLD_MS, signal)
-
         setPhase('reciting')
         setCaptionOn(true)
         let duaProgress = 0
@@ -319,18 +358,42 @@ export function EntranceCover({
       openAc.abort()
       momentAcRef.current = null
     }
-    // One-shot: live reciter/playback values are read through refs.
-  }, [])
+  }, [arrivalDone, canOpen])
+
+  const progressPct =
+    loadProgress != null ? Math.round(Math.min(1, Math.max(0, loadProgress)) * 100) : null
 
   return (
-    <div className="entrance" role="dialog" aria-modal="true" aria-label="The Noble Quran">
-      <button
-        type="button"
+    <div
+      className="entrance"
+      role="dialog"
+      aria-modal="true"
+      aria-label={error ? 'Failed to open the book' : 'The Noble Quran'}
+      aria-busy={showLoading || undefined}
+    >
+      <div
         className={`entrance-board${opening ? ' entrance-board--opening' : ''}`}
-        style={{ opacity: opening ? undefined : sheetAlpha }}
-        onClick={phase === 'opening' ? undefined : skipToOpening}
-        disabled={phase === 'opening'}
-        aria-label="The Noble Quran — touch to open"
+        style={{ opacity: opening ? undefined : sheetAlpha || 1 }}
+        role={canOpen && phase !== 'opening' ? 'button' : undefined}
+        tabIndex={canOpen && phase !== 'opening' ? 0 : undefined}
+        onClick={canOpen && phase !== 'opening' ? skipToOpening : undefined}
+        onKeyDown={
+          canOpen && phase !== 'opening'
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  skipToOpening()
+                }
+              }
+            : undefined
+        }
+        aria-label={
+          error
+            ? 'Failed to open the book'
+            : showLoading
+              ? loadLabel || 'Opening the book…'
+              : 'The Noble Quran — touch to open'
+        }
       >
         <div className="entrance-leather" aria-hidden="true" />
         <div className="entrance-weave" aria-hidden="true" />
@@ -345,18 +408,46 @@ export function EntranceCover({
             The Noble Quran
           </p>
           <div className="entrance-mid-space" />
-          <div className="entrance-dua" style={{ opacity: captionOn ? 1 : 0 }}>
-            <p ref={duaRef} className="entrance-dua-ar" lang="ar" dir="rtl">
-              {ISTIADHA_ARABIC}
-            </p>
-            <p className="entrance-dua-en">{ISTIADHA_ENGLISH}</p>
-          </div>
+          {error ? (
+            <div className="entrance-load">
+              <p className="entrance-load-label">{error}</p>
+              {onRetry && (
+                <button type="button" className="entrance-load-retry" onClick={onRetry}>
+                  Try again
+                </button>
+              )}
+            </div>
+          ) : showLoading ? (
+            <div className="entrance-load" aria-live="polite">
+              <p className="entrance-load-label">
+                {loadLabel || 'Opening the book…'}
+              </p>
+              <div
+                className={`entrance-load-track${showProgress ? '' : ' entrance-load-track--pulse'}`}
+                aria-hidden="true"
+              >
+                <div
+                  className="entrance-load-fill"
+                  style={showProgress ? { width: `${progressPct}%` } : undefined}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="entrance-dua" style={{ opacity: captionOn ? 1 : 0 }}>
+              <p ref={duaRef} className="entrance-dua-ar" lang="ar" dir="rtl">
+                {ISTIADHA_ARABIC}
+              </p>
+              <p className="entrance-dua-en">{ISTIADHA_ENGLISH}</p>
+            </div>
+          )}
           <div className="entrance-bot-space" />
-          <p className="entrance-hint" style={{ opacity: captionOn ? 1 : 0 }}>
-            Touch to open
-          </p>
+          {!showLoading && !error && (
+            <p className="entrance-hint" style={{ opacity: captionOn ? 1 : 0 }}>
+              Touch to open
+            </p>
+          )}
         </div>
-      </button>
+      </div>
     </div>
   )
 }

@@ -223,9 +223,11 @@ has two moments:
    outward open. On web the cover matches the paper-sheet column
    (`--sheet-half`), with corner ornaments kept square.
 
-(The web entrance still includes a third moment — the isti'adha recited
-once from the chosen reciter's everyayah pack — before the cover opens;
-Android does not.)
+(The web entrance is also the loading screen: the cover is up from the first
+paint while `quran.db` streams in, with progress inked onto the leather; the
+hinge open waits until the book is ready. The web entrance still includes a
+third moment — the isti'adha recited once from the chosen reciter's everyayah
+pack — before the cover opens; Android does not.)
 
 A tap anywhere (or back) opens the cover at once; the ceremony never holds a
 reader hostage, and it plays only once per session (`rememberSaveable`), so
