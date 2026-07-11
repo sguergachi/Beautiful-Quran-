@@ -152,11 +152,10 @@ describe('filterSurahs', () => {
 })
 
 describe('SearchHitFlash', () => {
-  it('stays quick', () => {
+  it('two pulses total about half a second', () => {
     const cycle = SearchHitFlash.FADE_IN_MS + SearchHitFlash.FADE_OUT_MS
-    const total =
-      SearchHitFlash.START_DELAY_MS + cycle * SearchHitFlash.PULSES
     expect(SearchHitFlash.PULSES).toBe(2)
-    expect(total).toBe(500)
+    expect(cycle).toBe(250)
+    expect(cycle * SearchHitFlash.PULSES).toBe(500)
   })
 })

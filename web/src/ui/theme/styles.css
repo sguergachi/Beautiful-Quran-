@@ -689,18 +689,19 @@ select {
   opacity: 0;
 }
 
-/* Quick fade-in / fade-out twice (~80ms / ~100ms each) — Android SearchHitFlash. */
+/* Fade-in / fade-out twice — 250 ms per pulse, ~500 ms total
+   (Android SearchHitFlash). */
 @keyframes search-hit-flash-pulse {
   0% {
     opacity: 0;
   }
-  22% {
+  25% {
     opacity: 1;
   }
   50% {
     opacity: 0;
   }
-  72% {
+  75% {
     opacity: 1;
   }
   100% {
@@ -710,7 +711,7 @@ select {
 
 .word-search-flash-overlay[data-pulse='true'],
 .hafs-search-flash-overlay[data-pulse='true'] {
-  animation: search-hit-flash-pulse 360ms ease-in-out forwards;
+  animation: search-hit-flash-pulse 500ms ease-in-out forwards;
 }
 
 .surah-row {

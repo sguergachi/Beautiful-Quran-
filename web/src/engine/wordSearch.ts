@@ -4,11 +4,12 @@ export const WORD_SEARCH_MAX_HITS = 400
 export const WORD_SEARCH_MIN_QUERY_LENGTH = 2
 export const WORD_SEARCH_PREVIEW_LIMIT = 3
 
-/** Timing for the reader search-hit orange pulse (Android `SearchHitFlash`). */
+/** Timing for the reader search-hit orange pulse (Android `SearchHitFlash`).
+ *  Two pulses total ~500 ms (250 ms each). */
 export const SearchHitFlash = {
   START_DELAY_MS: 140,
-  FADE_IN_MS: 80,
-  FADE_OUT_MS: 100,
+  FADE_IN_MS: 125,
+  FADE_OUT_MS: 125,
   PULSES: 2,
 } as const
 
