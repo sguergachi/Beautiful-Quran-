@@ -1872,17 +1872,6 @@ select {
   color: rgba(232, 226, 213, 0.55);
 }
 
-.entrance-hint {
-  margin: 0;
-  padding-bottom: 0.4rem;
-  font-family: var(--font-body);
-  font-size: 0.72rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: rgba(232, 226, 213, 0.34);
-  transition: opacity 900ms ease;
-}
-
 html[data-entrance='true'],
 html[data-entrance='true'] body {
   background: #031c15;

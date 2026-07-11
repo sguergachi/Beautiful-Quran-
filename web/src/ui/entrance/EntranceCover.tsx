@@ -310,9 +310,6 @@ export function EntranceCover({ onFinished }: EntranceCoverProps) {
             <p className="entrance-dua-en">{ISTIADHA_ENGLISH}</p>
           </div>
           <div className="entrance-bot-space" />
-          <p className="entrance-hint" style={{ opacity: captionOn ? 1 : 0 }}>
-            Touch to open
-          </p>
         </div>
       </button>
     </div>
