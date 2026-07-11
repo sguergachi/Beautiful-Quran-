@@ -588,9 +588,18 @@ export class PlayerController {
 
   /** Seek to [ayah] at [positionMs] within the loaded playlist (Android `seekTo`). */
   async seekToAyah(ayah: number, positionMs = 0) {
-    const idx = this.playlist.findIndex((p) => p.ayah === ayah)
-    if (idx < 0) return
+    let idx = this.playlist.findIndex((p) => p.ayah === ayah)
     const autoplay = this.state.isPlaying
+    // Mid-surah playlists (Continue / word-tap) may omit earlier ayahs — rebuild.
+    if (idx < 0) {
+      if (!this.content || !this.reciter) return
+      this.loadSurah(this.content, this.reciter, Math.max(1, ayah))
+      idx = this.playlist.findIndex((p) => p.ayah === ayah)
+      if (idx < 0) return
+      await this.playIndex(idx, autoplay)
+      this.seekMs(Math.max(0, positionMs))
+      return
+    }
     if (this.index !== idx) {
       await this.playIndex(idx, autoplay)
     }
@@ -609,8 +618,13 @@ export class PlayerController {
       this.content != null &&
       surahOpensWithBasmalahPreface(this.content.surah.id)
     const target = startAtBasmalah ? BASMALAH_PLAYLIST_AYAH : ayah
-    const idx = this.playlist.findIndex((p) => p.ayah === target)
-    if (idx < 0) return
+    let idx = this.playlist.findIndex((p) => p.ayah === target)
+    if (idx < 0) {
+      // Truncated playlist — rebuild from the requested ayah (Android always
+      // has the full chapter loaded; web may have started mid-surah).
+      await this.playFrom(ayah, startAtBasmalah)
+      return
+    }
     await this.playIndex(idx, true)
     this.seekMs(0)
   }
