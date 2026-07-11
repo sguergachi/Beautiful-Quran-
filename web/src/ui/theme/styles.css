@@ -1136,9 +1136,9 @@ select {
   line-height: inherit;
   vertical-align: baseline;
   /* Calibrated against the rasterized fonts in the production browser: Hafs'
-     ornament ink needs a 0.677em paint lift to meet EB Garamond's baseline.
+     ornament ink needs a 0.619em paint lift to meet EB Garamond's baseline.
      Keeping this in em preserves the alignment at every user text scale. */
-  transform: translateY(-0.677em);
+  transform: translateY(-0.619em);
 }
 
 .words {
