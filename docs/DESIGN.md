@@ -222,10 +222,10 @@ three moments:
    screen, facing them — not into the page) and travels right→left — slower
    and heavier than a page (1150 ms vs 460 ms), with the flip stems pitched
    slightly down (`PageTurnSounds.playCoverOpen`), revealing the chapter
-   list beneath. Compose uses positive `rotationY` (Y-up); CSS uses negative
-   `rotateY` (Y-down) — opposite signs, same outward open. On web the cover
-   matches the paper-sheet column (`--sheet-half`), with corner ornaments
-   kept square.
+   list beneath. Both platforms use a negative Y rotation for the outward
+   open (`rotationY(-95°)` on Android, `rotateY(-95deg)` on web) — positive
+   folds the free edge into the page. On web the cover matches the
+   paper-sheet column (`--sheet-half`), with corner ornaments kept square.
 
 (The web entrance is also the loading screen: the cover is up from the first
 paint while `quran.db` streams in, with progress inked onto the leather; the
