@@ -245,7 +245,9 @@ Three sheets, hand-rolled paper stack (no router chrome):
    control while a verse is loaded (chapter · ayah label, transport, quiet
    Close that stops the session — Android parity).
 2. **Reader** — header + ayahs + icon player bar; centered ayah
-   selector rail (hover-magnified dashes, gold focal tick);
+   selector rail (hover-magnified dashes, gold focal tick; on narrow
+   mobile widths the midline biases outward so ayah numbers stay inside
+   the canvas);
 
    return-to-ayah roundel (gilt corolla, qalam arrow painted toward the
    active verse); bookmark ribbon.

@@ -9,6 +9,7 @@ import {
   dialFromTrackY,
   focusRadiusForHeight,
   isMajorAyah,
+  railExpandedLayout,
   rubberBandDialPosition,
   symbolicAyahBarCount,
   tickFocus,
@@ -20,8 +21,6 @@ const TOP_FRAC = 0.08
 const BOTTOM_FRAC = 0.12
 const TICK_SPACING_PX = 14
 const MIN_BAR_LEN = 8
-const MAX_BAR_LEN = 44
-const MAJOR_BONUS = 6
 const MIN_THICKNESS = 2
 const MAX_THICKNESS = 4
 const VERTICAL_FADE_PX = 82
@@ -77,9 +76,10 @@ function withAlpha(color: string, alpha: number): string {
  *
  * Collapsed: a symbolic stack of dashes tracking reading progress.
  * Hover / press: blooms into a magnification dial — bars grow widthwise from
- * the rail center under the pointer, taper at the top and bottom edges, and
- * the focal ayah is the widest (gold). Unlike Android's edge-flush rail, every
- * bar is centered on the midline.
+ * the rail midline under the pointer, taper at the top and bottom edges, and
+ * the focal ayah is the widest (gold). On a wide rail the midline stays
+ * centered; on a narrow mobile rail it biases toward the outer edge so ayah
+ * numbers hang fully inside the canvas instead of clipping.
  *
  * Dragging only moves the dial. The page stays put until release, when
  * [onJump] fires so the reader can run a FocusEngine pre-roll slide — same
@@ -138,7 +138,7 @@ export function AyahSelectorRail({
     const gold = readCssColor(root, '--gold', '#c9a227')
     const expand = expandRef.current
     const collapsedAlpha = 1 - expand
-    const midX = cssW * 0.5
+    const collapsedMidX = cssW * 0.5
     const centerY = cssH * 0.5
 
     const collapsedCount = symbolicAyahBarCount(ayahCount)
@@ -162,7 +162,14 @@ export function AyahSelectorRail({
         const barW = COLLAPSED_BAR_W * (0.7 + 0.45 * focus)
         const alpha = (0.18 + 0.72 * focus) * exit
         ctx.beginPath()
-        roundRect(ctx, midX - barW / 2, y - COLLAPSED_BAR_H / 2, barW, COLLAPSED_BAR_H, COLLAPSED_BAR_H)
+        roundRect(
+          ctx,
+          collapsedMidX - barW / 2,
+          y - COLLAPSED_BAR_H / 2,
+          barW,
+          COLLAPSED_BAR_H,
+          COLLAPSED_BAR_H,
+        )
         ctx.fillStyle = withAlpha(ink, alpha)
         ctx.fill()
       }
@@ -184,6 +191,13 @@ export function AyahSelectorRail({
         Math.ceil(dial + (cssH - drawAnchorY) / TICK_SPACING_PX + 1),
       )
 
+      // Reserve room for the longest ayah label at the selected (largest) size
+      // so numbers never clip against the canvas edge on narrow mobile rails.
+      ctx.font = '700 11px "EB Garamond", "Times New Roman", serif'
+      const labelWidth = ctx.measureText(String(ayahCount)).width
+      const layout = railExpandedLayout(cssW, side, labelWidth)
+      const { midX, maxBarLen, majorBonus, labelGap } = layout
+
       // Numbers hang toward the page (inner edge of the overlay rail).
       const numbersTowardPage = side === 'left'
       ctx.textAlign = numbersTowardPage ? 'left' : 'right'
@@ -201,7 +215,7 @@ export function AyahSelectorRail({
         const edgeFade = Math.min(1, Math.max(0, Math.min(y, cssH - y) / VERTICAL_FADE_PX))
         const grow = arrival * (0.35 + 0.65 * Math.max(edgeFade, focus * focus))
         const length =
-          tickLength(focus, major, MIN_BAR_LEN, MAX_BAR_LEN, MAJOR_BONUS) * grow
+          tickLength(focus, major, MIN_BAR_LEN, maxBarLen, majorBonus) * grow
         const thickness = MIN_THICKNESS + (MAX_THICKNESS - MIN_THICKNESS) * focus
         const alpha = (0.1 + 0.62 * focus) * arrival * edgeFade
         const isSelected = ayah === selectedAyah
@@ -222,8 +236,8 @@ export function AyahSelectorRail({
             ? '700 11px "EB Garamond", "Times New Roman", serif'
             : '600 8.5px "EB Garamond", "Times New Roman", serif'
           const labelX = numbersTowardPage
-            ? midX + length / 2 + 6
-            : midX - length / 2 - 6
+            ? midX + length / 2 + labelGap
+            : midX - length / 2 - labelGap
           ctx.fillText(String(ayah), labelX, y)
         }
       }

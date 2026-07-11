@@ -4,6 +4,7 @@ import {
   dialFromTrackY,
   focusRadiusForHeight,
   isMajorAyah,
+  railExpandedLayout,
   rubberBandDialPosition,
   symbolicAyahBarCount,
   tickFocus,
@@ -81,5 +82,61 @@ describe('isMajorAyah / focusRadiusForHeight', () => {
   it('keeps a usable focus window on short rails', () => {
     expect(focusRadiusForHeight(200, 14)).toBeGreaterThanOrEqual(8)
     expect(focusRadiusForHeight(800, 14)).toBeGreaterThan(8)
+  })
+})
+
+describe('railExpandedLayout', () => {
+  const labelGap = 6
+  const edgePad = 2
+
+  function labelFits(
+    railWidth: number,
+    side: 'left' | 'right',
+    labelWidth: number,
+  ): boolean {
+    const { midX, maxBarLen, majorBonus, labelGap: gap } = railExpandedLayout(
+      railWidth,
+      side,
+      labelWidth,
+    )
+    const peak = maxBarLen + majorBonus
+    if (side === 'left') {
+      const labelEnd = midX + peak / 2 + gap + labelWidth
+      return labelEnd <= railWidth - edgePad + 0.01
+    }
+    const labelStart = midX - peak / 2 - gap - labelWidth
+    return labelStart >= edgePad - 0.01
+  }
+
+  it('keeps the midline centered when the rail is wide enough', () => {
+    const layout = railExpandedLayout(120, 'left', 20)
+    expect(layout.midX).toBeCloseTo(60, 5)
+    expect(layout.maxBarLen).toBe(44)
+    expect(layout.majorBonus).toBe(6)
+    expect(layout.labelGap).toBe(labelGap)
+  })
+
+  it('biases toward the outer edge on a narrow mobile rail', () => {
+    const left = railExpandedLayout(72, 'left', 20)
+    expect(left.midX).toBeLessThan(36)
+    expect(labelFits(72, 'left', 20)).toBe(true)
+
+    const right = railExpandedLayout(72, 'right', 20)
+    expect(right.midX).toBeGreaterThan(36)
+    expect(labelFits(72, 'right', 20)).toBe(true)
+  })
+
+  it('fits 3-digit labels inside a 5.5rem (~88px) rail', () => {
+    expect(labelFits(88, 'left', 22)).toBe(true)
+    expect(labelFits(88, 'right', 22)).toBe(true)
+    const layout = railExpandedLayout(88, 'left', 22)
+    expect(layout.maxBarLen + layout.majorBonus).toBeGreaterThanOrEqual(44)
+  })
+
+  it('shortens bars only when even edge-anchoring cannot fit the label', () => {
+    // 40px cannot hold a 50px peak tick + label; peak must shrink.
+    const layout = railExpandedLayout(40, 'left', 14)
+    expect(layout.maxBarLen + layout.majorBonus).toBeLessThan(50)
+    expect(labelFits(40, 'left', 14)).toBe(true)
   })
 })
