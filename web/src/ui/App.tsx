@@ -70,7 +70,6 @@ export function App() {
 
   const stack = state.stackLayer
   const hasReader = state.content != null
-  const recitationLive = state.player.isPlaying || state.player.nowPlaying != null
   // The cover *is* the loading screen — show the shell underneath only once
   // the book is ready so the open reveals chapters, not an empty page.
   const showStack = state.ready
@@ -97,9 +96,6 @@ export function App() {
           loadProgress={state.loadProgress}
           error={state.error}
           onRetry={state.error ? retryBoot : undefined}
-          reciters={state.reciters}
-          reciterId={state.settings.reciterId}
-          recitationLive={recitationLive}
           onFinished={() => setEntranceDone(true)}
         />
       )}

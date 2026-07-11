@@ -1,13 +1,12 @@
 /**
  * Entrance ceremony — the closed mushaf over the paper stack.
  * Also the cold-start loading screen: the cover is up while quran.db loads,
- * with progress inked onto the leather; the open waits until the book is ready.
+ * with progress inked onto the leather; arrive → du'a text fade → open once
+ * the book is ready.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { washMaskImage } from '../../engine/fade'
-import { istiadhaAudioUrl, type Reciter } from '../../data/models'
 import { coverLayout, coverLayoutCssVars } from './coverLayout'
-import { reciteIstiadha, silentWash } from './istiadhaPlayer'
 
 const ISTIADHA_ARABIC = 'أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَٰنِ ٱلرَّجِيمِ'
 const ISTIADHA_ENGLISH = 'I seek refuge in Allah from Shaytan, the accursed'
@@ -15,12 +14,12 @@ const ISTIADHA_ENGLISH = 'I seek refuge in Allah from Shaytan, the accursed'
 const SHEET_FADE_MS = 550
 const TITLE_WASH_MS = 1_500
 const ARRIVAL_HOLD_MS = 300
-const SILENT_WASH_MS = 3_800
-const SILENT_HOLD_MS = 600
+const DUA_WASH_MS = 2_400
+const DUA_HOLD_MS = 900
 const OPEN_MS = 1_150
-const URL_WAIT_MS = 5_000
+const WASH_TICK_MS = 32
 
-type Phase = 'loading' | 'arriving' | 'reciting' | 'opening'
+type Phase = 'loading' | 'arriving' | 'dua' | 'opening'
 
 export interface EntranceCoverProps {
   /** True once quran.db is open and the chapter list can be shown. */
@@ -32,10 +31,6 @@ export interface EntranceCoverProps {
   /** Boot failure — shown on the cover with a retry control. */
   error: string | null
   onRetry?: () => void
-  reciters: Reciter[]
-  reciterId: number
-  /** True when a recitation session is already live — keep the du'a silent. */
-  recitationLive: boolean
   onFinished: () => void
 }
 
@@ -73,6 +68,24 @@ function applyWash(
   el.style.maskImage = mask
   el.style.webkitMaskImage = mask
   el.style.opacity = '1'
+}
+
+/** Drive a letter wash from 0→1 over [durationMs], calling [paint] each tick. */
+async function runWash(
+  durationMs: number,
+  paint: (progress: number) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const start = performance.now()
+  paint(0)
+  while (!signal.aborted) {
+    const t = (performance.now() - start) / durationMs
+    const p = Math.min(1, t)
+    paint(p)
+    if (p >= 1) break
+    await wait(WASH_TICK_MS, signal)
+  }
+  paint(1)
 }
 
 /** Eight-fold khatam + octagram medallion — ceremonial scale, 1:1. */
@@ -169,8 +182,8 @@ function MushafCoverFrame() {
 
 /**
  * Cold-start closed mushaf — also the loading screen. The cover is up from
- * the first paint; load progress inks onto the leather; the hinge open waits
- * until the book is ready. Tap / Escape opens once ready.
+ * the first paint; load progress inks onto the leather; the du'a text wash
+ * and hinge open wait until the book is ready. Tap / Escape opens once ready.
  */
 export function EntranceCover({
   ready,
@@ -178,9 +191,6 @@ export function EntranceCover({
   loadProgress,
   error,
   onRetry,
-  reciters,
-  reciterId,
-  recitationLive,
   onFinished,
 }: EntranceCoverProps) {
   const [phase, setPhase] = useState<Phase>('loading')
@@ -200,13 +210,7 @@ export function EntranceCover({
   const finishedRef = useRef(false)
   const ceremonyStartedRef = useRef(false)
   const onFinishedRef = useRef(onFinished)
-  const recitersRef = useRef(reciters)
-  const reciterIdRef = useRef(reciterId)
-  const recitationLiveRef = useRef(recitationLive)
   onFinishedRef.current = onFinished
-  recitersRef.current = reciters
-  reciterIdRef.current = reciterId
-  recitationLiveRef.current = recitationLive
 
   const canOpen = ready && !error
   const showLoading = !ready && !error
@@ -269,19 +273,14 @@ export function EntranceCover({
         setSheetAlpha(1)
         setPhase('arriving')
         await wait(SHEET_FADE_MS, signal)
-        const start = performance.now()
-        applyWash(titleArRef.current, 0, 0)
-        applyWash(titleEnRef.current, 0, 0)
-        while (!signal.aborted) {
-          const t = (performance.now() - start) / TITLE_WASH_MS
-          const p = Math.min(1, t)
-          applyWash(titleArRef.current, p, 0)
-          applyWash(titleEnRef.current, p, 0)
-          if (p >= 1) break
-          await wait(32, signal)
-        }
-        applyWash(titleArRef.current, 1, 0)
-        applyWash(titleEnRef.current, 1, 0)
+        await runWash(
+          TITLE_WASH_MS,
+          (p) => {
+            applyWash(titleArRef.current, p, 0)
+            applyWash(titleEnRef.current, p, 0)
+          },
+          signal,
+        )
         await wait(ARRIVAL_HOLD_MS, signal)
         if (!signal.aborted) setArrivalDone(true)
       } catch {
@@ -291,7 +290,7 @@ export function EntranceCover({
     return () => ac.abort()
   }, [])
 
-  // Once arrival is done and the book is ready, recite then open.
+  // Once arrival is done and the book is ready, fade the du'a then open.
   // Skip aborts the in-flight moment without replaying the title.
   useEffect(() => {
     if (!arrivalDone || !canOpen || ceremonyStartedRef.current || finishedRef.current) {
@@ -304,50 +303,16 @@ export function EntranceCover({
     const openAc = new AbortController()
     const { signal } = momentAc
 
-    const resolveUrls = async (): Promise<string[]> => {
-      const deadline = performance.now() + URL_WAIT_MS
-      while (!signal.aborted && performance.now() < deadline) {
-        const list = recitersRef.current
-        if (list.length > 0) {
-          const chosen = list.find((r) => r.id === reciterIdRef.current) ?? list[0]
-          const fallback = list[0]
-          return [...new Set([chosen, fallback].filter(Boolean).map((r) => istiadhaAudioUrl(r!)))]
-        }
-        await wait(100, signal)
-      }
-      return []
-    }
-
     ;(async () => {
       try {
-        setPhase('reciting')
+        setPhase('dua')
         setCaptionOn(true)
-        let duaProgress = 0
-        const paintDua = () => applyWash(duaRef.current, duaProgress, 0.12)
-        paintDua()
-        const urls = await resolveUrls()
-        let recited = false
-        if (!recitationLiveRef.current && urls.length > 0) {
-          recited = await reciteIstiadha(
-            urls,
-            (p) => {
-              duaProgress = p
-              paintDua()
-            },
-            signal,
-          )
-        }
-        if (!recited && !signal.aborted) {
-          await silentWash(
-            (p) => {
-              duaProgress = p
-              paintDua()
-            },
-            SILENT_WASH_MS,
-            signal,
-          )
-          await wait(SILENT_HOLD_MS, signal)
-        }
+        await runWash(
+          DUA_WASH_MS,
+          (p) => applyWash(duaRef.current, p, 0.12),
+          signal,
+        )
+        await wait(DUA_HOLD_MS, signal)
       } catch {
         /* skip / unmount — fall through to open */
       }
@@ -356,6 +321,7 @@ export function EntranceCover({
 
       applyWash(titleArRef.current, 1, 0)
       applyWash(titleEnRef.current, 1, 0)
+      applyWash(duaRef.current, 1, 0.12)
       setSheetAlpha(1)
       setCaptionOn(true)
       setPhase('opening')

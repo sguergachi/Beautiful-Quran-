@@ -42,11 +42,11 @@ Engines are DOM-free and unit-tested against the Android JVM suites. See
 ## Notes
 
 - Cold start opens on the closed mushaf (the loading screen): title wash and
-  load progress on the leather while `quran.db` streams in, then optional
-  isti'adha, then the cover lifts open on its left hinge toward the reader.
-  Frame, corner seals, medallion, and type scale from a 48-unit grid on the
-  live board size (`coverLayout`). Tap or Escape skips once ready;
-  autoplay-blocked or offline falls back to a silent ink wash.
+  load progress on the leather while `quran.db` streams in, then the
+  isti'adha fading in as text, then the cover lifts open on its left hinge
+  toward the reader. Frame, corner seals, medallion, and type scale from a
+  48-unit grid on the live board size (`coverLayout`). Tap or Escape skips
+  once ready.
 - First load downloads `quran.db`; a service worker caches the DB, fonts, and
   hashed assets (cache-first) **only after a successful boot**. Navigations /
   `index.html` are **network-only** (never written to the Cache API) so a

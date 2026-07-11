@@ -48,6 +48,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -69,8 +70,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-/** The ceremony's two moments. Skipping jumps straight to Opening. */
-private enum class EntrancePhase { Arriving, Opening }
+/** The ceremony's three moments. Skipping jumps straight to Opening. */
+private enum class EntrancePhase { Arriving, Dua, Opening }
+
+/** أعوذ بالله من الشيطان الرجيم — shown in text before the cover opens. */
+private const val ISTIADHA_ARABIC = "أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَٰنِ ٱلرَّجِيمِ"
+private const val ISTIADHA_ENGLISH = "I seek refuge in Allah from Shaytan, the accursed"
 
 /** The sheet breathing in from the system splash. */
 private const val SHEET_FADE_MS = 550
@@ -78,8 +83,14 @@ private const val SHEET_FADE_MS = 550
 /** The title's ink wash across the calligraphy. */
 private const val TITLE_WASH_MS = 1_500
 
-/** Rest after the title settles so the closed cover can be read before it opens. */
-private const val COVER_HOLD_MS = 1_200L
+/** Brief rest after the title settles before the du'a fades in. */
+private const val ARRIVAL_HOLD_MS = 300L
+
+/** The du'a's letter wash — a quiet text fade-in, not a recitation. */
+private const val DUA_WASH_MS = 2_400
+
+/** Rest after the du'a settles so it can be read before the cover opens. */
+private const val DUA_HOLD_MS = 900L
 
 /** The cover's hinge open. Deliberately slower than a page turn (460 ms):
  * a bound board is heavier than a sheet. Pivot on the left; positive
@@ -96,9 +107,11 @@ private val CoverOpenEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
  * tooled with the star-and-cross weave, framed and cornered in gilt,
  * concentric with the phone's screen radius so the cover feels cut for this
  * device, carrying the gilded khatam medallion and the title in the Hafs
- * hand. After a brief hold the board swings open on its left hinge: the
- * free edge comes toward the reader (out of the screen) and travels
- * right→left onto chapter selection. A tap anywhere, or back, opens it at once.
+ * hand. The isti'adha then fades in as text — its Arabic ink washes across
+ * the cover — and after a brief hold the board swings open on its left
+ * hinge: the free edge comes toward the reader (out of the screen) and
+ * travels right→left onto chapter selection. A tap anywhere, or back, opens
+ * it at once.
  *
  * Sits over the whole paper stack and leaves composition via [onFinished].
  * The status bar is hidden for the ceremony so the leather board reads as a
@@ -116,13 +129,14 @@ fun EntranceCover(
     var phase by remember { mutableStateOf(EntrancePhase.Arriving) }
     val sheetAlpha = remember { Animatable(0f) }
     val titleWash = remember { Animatable(0f) }
+    val duaWash = remember { Animatable(0f) }
     val turn = remember { Animatable(0f) }
     // Skip requests cancel the in-flight moment without re-running arrival —
     // re-keying a phase effect used to replay the title wash.
     var skipRequested by remember { mutableStateOf(false) }
-    // Hint fades up once the title has landed — driven by a settled flag so
+    // Caption fades up once the du'a moment begins — driven by phase so
     // composition does not poll the wash Animatable every frame.
-    var titleSettled by remember { mutableStateOf(false) }
+    var captionVisible by remember { mutableStateOf(false) }
 
     val screenRadii = rememberScreenCornerRadii()
     val frameGeometry = remember(screenRadii, localDensity.density) {
@@ -158,32 +172,39 @@ fun EntranceCover(
     fun skipToOpening() {
         if (phase != EntrancePhase.Opening) {
             skipRequested = true
+            captionVisible = true
             phase = EntrancePhase.Opening
         }
     }
 
     BackHandler(enabled = phase != EntrancePhase.Opening) { skipToOpening() }
 
-    // One-shot ceremony: arrival (and its title wash) runs exactly once.
-    // Skip cancels the in-flight moment without re-keying this effect —
-    // re-keying on phase used to replay the title wash.
+    // One-shot ceremony: arrival → du'a text fade → open. Skip cancels the
+    // in-flight moment without re-keying this effect — re-keying on phase
+    // used to replay the title wash.
     LaunchedEffect(Unit) {
         val moment = launch {
             sheetAlpha.animateTo(1f, tween(SHEET_FADE_MS, easing = LinearEasing))
             titleWash.animateTo(1f, tween(TITLE_WASH_MS, easing = LinearEasing))
-            titleSettled = true
-            delay(COVER_HOLD_MS)
+            delay(ARRIVAL_HOLD_MS)
+
+            phase = EntrancePhase.Dua
+            captionVisible = true
+            duaWash.animateTo(1f, tween(DUA_WASH_MS, easing = LinearEasing))
+            delay(DUA_HOLD_MS)
         }
-        // A tap/back cancels arrival immediately.
+        // A tap/back cancels arrival / du'a immediately.
         launch {
             snapshotFlow { skipRequested }.first { it }
             moment.cancel()
         }
         moment.join()
 
-        // Open with a settled face even when skipped mid-arrival.
+        // Open with a settled face even when skipped mid-ceremony.
         sheetAlpha.snapTo(1f)
         titleWash.snapTo(1f)
+        duaWash.snapTo(1f)
+        captionVisible = true
         phase = EntrancePhase.Opening
         onOpenBegan()
         turn.animateTo(1f, tween(OPEN_MS, easing = CoverOpenEasing))
@@ -197,10 +218,10 @@ fun EntranceCover(
         animationSpec = infiniteRepeatable(tween(6_500), RepeatMode.Reverse),
         label = "coverSheenTilt",
     )
-    val hintAlpha by animateFloatAsState(
-        targetValue = if (titleSettled || phase == EntrancePhase.Opening) 1f else 0f,
+    val captionAlpha by animateFloatAsState(
+        targetValue = if (captionVisible) 1f else 0f,
         animationSpec = tween(900),
-        label = "openHint",
+        label = "duaCaption",
     )
 
     Box(modifier.fillMaxSize()) {
@@ -264,7 +285,7 @@ fun EntranceCover(
                     .navigationBarsPadding()
                     .padding(horizontal = 40.dp),
             ) {
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.weight(0.9f))
                 GildedMedallion(
                     size = medallionSize,
                     brightGold = accents.goldBright,
@@ -303,14 +324,42 @@ fun EntranceCover(
                         restingAlpha = 0f,
                     ),
                 )
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.weight(0.55f))
+                // The isti'adha — text fade-in before the cover opens.
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.graphicsLayer { alpha = captionAlpha },
+                ) {
+                    Text(
+                        text = ISTIADHA_ARABIC,
+                        fontFamily = HafsFontFamily,
+                        fontSize = 24.sp,
+                        lineHeight = 1.9.em,
+                        textAlign = TextAlign.Center,
+                        color = CoverParchment,
+                        modifier = Modifier.letterFadeIn(
+                            progress = { duaWash.value },
+                            rtl = true,
+                            restingAlpha = 0.12f,
+                        ),
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = ISTIADHA_ENGLISH,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontStyle = FontStyle.Italic,
+                        textAlign = TextAlign.Center,
+                        color = CoverParchment.copy(alpha = 0.55f),
+                    )
+                }
+                Spacer(Modifier.weight(0.5f))
                 Text(
                     text = "Touch to open",
                     style = MaterialTheme.typography.labelSmall,
                     letterSpacing = 2.4.sp,
                     color = CoverParchment.copy(alpha = 0.34f),
                     modifier = Modifier
-                        .graphicsLayer { alpha = hintAlpha }
+                        .graphicsLayer { alpha = captionAlpha }
                         .padding(bottom = 26.dp),
                 )
             }
