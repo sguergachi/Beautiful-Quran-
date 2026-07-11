@@ -23,17 +23,16 @@ Hard rules:
 - **No borders, no dividers, no cards, no elevation.** Hierarchy comes from
   spacing, size, and ink strength (text alpha) only.
 - **Nothing floats.** No FABs, no snackbars, no modal sheets, no dialogs.
-  Anything that would traditionally float becomes a line *in* the page (the
-  "Return to the recitation" line, error messages), its own sheet
-  (Settings), or an **ink bleed** that turns the current sheet into the
-  message (system prompts — see below). The deliberate exceptions are quiet
-  paper ornaments hosted by the shared `FloatingPaperControl` (same enter /
-  exit slide+fade and **10 dp** bottom inset): the reader's **return-to-ayah
-  roundel** and the stack-level **Back-to capsule** (opaque stadium with the
-  same gilt rim and drawn qalam arrow). The cover sheet's **floating
-  playback control** reuses that same motion and inset over the chapter list
-  while a verse is loaded. One vertical rhythm when the paper stack turns
-  between cover and reader.
+  Anything that would traditionally float becomes a line *in* the page
+  (error messages), its own sheet (Settings), or an **ink bleed** that
+  turns the current sheet into the message (system prompts — see below).
+  The deliberate exceptions are quiet paper ornaments hosted by the shared
+  `FloatingPaperControl` (same enter / exit slide+fade and **10 dp** bottom
+  inset): the reader's **return-to-ayah roundel** and the stack-level
+  **Back-to capsule** (opaque stadium with the same gilt rim and drawn
+  qalam arrow). The cover sheet's **floating playback control** reuses that
+  same motion and inset over the chapter list while a verse is loaded. One
+  vertical rhythm when the paper stack turns between cover and reader.
 - **Edges dissolve.** Scrolling content fades out at the top and bottom of
   every sheet — ink fading off the page, not content clipped by a boundary.
 - **Taps have no ripple.** Touch feedback is the content's own motion
@@ -263,7 +262,8 @@ weight.
   only physical *object* on the sheet rather than ink in it, and the only
   motion allowed a touch of whimsy.
 - Auto-scroll keeps the active ayah in the upper third and yields instantly
-  to the reader's hand; a quiet line above the player offers the way back.
+  to the reader's hand; the return-to-ayah roundel (gilt corolla + painted
+  qalam arrow) offers the way back, pointing up or down toward the verse.
 - On the chapter list, when a verse is loaded (playing or paused mid-session),
   the floating playback control slides up with the same fade + vertical
   motion as the reader's return-to-ayah / Back-to ornaments

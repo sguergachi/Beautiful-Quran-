@@ -13,6 +13,8 @@
   --gold: #c9a227;
   --gold-bright: #e9cd7a;
   --gold-deep: #8a6b1e;
+  --emboss-dark: rgba(0, 0, 0, 0.14);
+  --emboss-light: rgba(255, 255, 255, 0.35);
   --repeat: #c2622a;
   --bookmark: #b3122f;
   --font-display: 'Cormorant Garamond', 'Times New Roman', serif;
@@ -37,6 +39,8 @@
   --gold: #d9b44a;
   --gold-bright: #e9cd7a;
   --gold-deep: #a8842a;
+  --emboss-dark: rgba(0, 0, 0, 0.4);
+  --emboss-light: rgba(255, 255, 255, 0.12);
   --repeat: #e08a4a;
   --bookmark: #d64358;
   color-scheme: dark;
@@ -52,6 +56,8 @@
   --gold: #d9b44a;
   --gold-bright: #e9cd7a;
   --gold-deep: #a8842a;
+  --emboss-dark: rgba(0, 0, 0, 0.4);
+  --emboss-light: rgba(255, 255, 255, 0.12);
   --repeat: #e08a4a;
   --bookmark: #d64358;
   color-scheme: dark;
@@ -1097,34 +1103,45 @@ select {
   pointer-events: none;
 }
 
+/* Return-to-ayah roundel — canvas ornament (Android IslamicReturnToAyahButton).
+ * No border/chip chrome: the gilt corolla is drawn on the canvas. */
 .return-ayah {
   position: absolute;
   bottom: calc(6.9rem + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
   z-index: 6;
-  padding: 0.65rem 1.1rem;
+  padding: 0;
+  margin: 0 0 10px;
+  width: 44px;
+  height: 44px;
   color: var(--accent);
-  font-size: 0.9rem;
-  background: var(--paper);
-  border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
-  border-radius: 999px;
-  animation: float-in 280ms ease;
-  white-space: nowrap;
-  min-height: 44px;
-  max-width: calc(100% - 2rem);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  animation: float-in 280ms var(--ease-sheet);
+  line-height: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.return-ayah canvas {
+  display: block;
+  width: 44px;
+  height: 44px;
+  pointer-events: none;
 }
 
 @media (hover: hover) {
   .return-ayah:hover {
-    border-color: var(--accent);
+    opacity: 0.92;
   }
 }
 
 @keyframes float-in {
   from {
     opacity: 0;
-    transform: translate(-50%, 8px);
+    transform: translate(-50%, 100%);
   }
   to {
     opacity: 1;

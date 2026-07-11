@@ -228,7 +228,8 @@ Three sheets, hand-rolled paper stack (no router chrome):
 2. **Reader** — header + ayahs + icon player bar; centered ayah
    selector rail (hover-magnified dashes, gold focal tick);
 
-   return-to-ayah ornament; bookmark ribbon.
+   return-to-ayah roundel (gilt corolla, qalam arrow painted toward the
+   active verse); bookmark ribbon.
 3. **Settings** — reciter, reading mode, text size, display toggles, theme.
    Opens as a third sheet **over** the reader when a surah is open
    (`stackLayer` 0→1→2). All three sheets share one centered axis: the top
