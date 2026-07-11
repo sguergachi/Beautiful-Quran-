@@ -35,31 +35,31 @@ class FocusEngineTest {
     }
 
     @Test
-    fun `chapter-top anchor pins near the content start even for a short header`() {
-        val shortHeader = 300
-        val chapterTop = FocusEngine.anchorOffsetPx(
-            viewport, guard, shortHeader, chapterTop = true,
-        )
-        val verseRest = FocusEngine.anchorOffsetPx(
-            viewport, guard, shortHeader, chapterTop = false,
-        )
-        // Tall-margin pin (4%), not the verse-style 10% rest.
-        assertEquals(80, chapterTop)
-        assertEquals(200, verseRest)
-        assertTrue(chapterTop < verseRest)
-    }
-
-    @Test
-    fun `chapter-top placement is in focus when the header sits on its pin`() {
-        val anchor = FocusEngine.anchorOffsetPx(viewport, guard, 400, chapterTop = true)
+    fun `basmalah list item uses the same adaptive anchor as a short verse`() {
+        // The basmalah is its own short LazyColumn item — not the tall header —
+        // so it rests on the verse-style reading line (fitsFullyVisible path).
+        val basmalahHeight = 120
+        val anchor = FocusEngine.anchorOffsetPx(viewport, guard, basmalahHeight)
+        assertEquals(200, anchor)
         val placement = FocusEngine.placement(
-            TargetGeometry(topPx = anchor, heightPx = 400, isLaidOut = true, isAboveWhenOffscreen = false),
+            TargetGeometry(topPx = anchor, heightPx = basmalahHeight, isLaidOut = true, isAboveWhenOffscreen = false),
             viewport,
             guard,
-            chapterTop = true,
         )
         assertEquals(FocusZone.IN_FOCUS, placement.zone)
         assertFalse(placement.isAway)
+    }
+
+    @Test
+    fun `basmalah scrolled off the top reads as away and points up`() {
+        val placement = FocusEngine.placement(
+            TargetGeometry(topPx = -400, heightPx = 120, isLaidOut = true, isAboveWhenOffscreen = false),
+            viewport,
+            guard,
+        )
+        assertEquals(FocusZone.ABOVE, placement.zone)
+        assertTrue(placement.isAway)
+        assertTrue(placement.pointUp)
     }
 
     // ---- anchorOffsetPx ----

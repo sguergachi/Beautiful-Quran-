@@ -1051,12 +1051,9 @@ fun AyahBlock(
 /**
  * Surah opening: quiet centered typography over a whisper-faint embossed
  * star-and-cross weave, crowned by a gilded eight-fold rosette whose sheen
- * shifts with the page ([sheen] is read at draw time only). Surahs that open
- * with the basmalah (every chapter except Al-Fatihah and At-Tawbah) carry it
- * as traditional Naskh manuscript calligraphy beneath the title — not
- * numbered, not an ayah. The glyph follows [InkEngine] ink (Active during the
- * basmalah lead-in, Upcoming while another ayah plays) and is tappable.
- * When [basmalahWashProgress] is set, the SVG wash advances on the lead-in clock.
+ * shifts with the page ([sheen] is read at draw time only). The chapter-opening
+ * basmalah (when present) is a separate list item beneath this header so the
+ * focus engine can home onto it independently — see [BasmalahBlock].
  */
 @Composable
 fun SurahHeader(
@@ -1067,14 +1064,10 @@ fun SurahHeader(
     revelationPlace: String,
     ayahCount: Int,
     sheen: State<Float>,
-    basmalahActive: Boolean = false,
-    basmalahDimmed: Boolean = false,
-    basmalahWashProgress: StateFlow<Float?>? = null,
-    onBasmalahClick: (() -> Unit)? = null,
 ) {
     val accents = LocalQuranAccents.current
     val weaveFade = MaterialTheme.colorScheme.background
-    val showBasmalah = surahOpensWithBasmalahPreface(chapterNumber)
+    val hasBasmalahBelow = surahOpensWithBasmalahPreface(chapterNumber)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -1086,7 +1079,8 @@ fun SurahHeader(
             .verticalFadingEdges(color = weaveFade, top = 12.dp, bottom = 36.dp)
             .padding(
                 top = 36.dp,
-                bottom = if (showBasmalah) 22.dp else 30.dp,
+                // Tighter bottom when the basmalah block follows immediately.
+                bottom = if (hasBasmalahBelow) 8.dp else 30.dp,
                 start = 24.dp,
                 end = 24.dp,
             ),
@@ -1118,15 +1112,34 @@ fun SurahHeader(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
         )
-        if (showBasmalah) {
-            Spacer(Modifier.height(28.dp))
-            BasmalahCalligraphy(
-                active = basmalahActive,
-                dimmed = basmalahDimmed,
-                washProgress = basmalahWashProgress,
-                onClick = onBasmalahClick,
-            )
-        }
+    }
+}
+
+/**
+ * Chapter-opening basmalah as its own LazyColumn item — the focus engine's
+ * target while the lead-in clip plays ([BASMALAH_PLAYLIST_AYAH]). Kept separate
+ * from [SurahHeader] so placement, lyric-follow, and return-to-verse use the
+ * calligraphy's own geometry (same path as any verse), not the taller title block.
+ */
+@Composable
+fun BasmalahBlock(
+    active: Boolean,
+    dimmed: Boolean,
+    washProgress: StateFlow<Float?>? = null,
+    onClick: (() -> Unit)? = null,
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 28.dp),
+    ) {
+        BasmalahCalligraphy(
+            active = active,
+            dimmed = dimmed,
+            washProgress = washProgress,
+            onClick = onClick,
+        )
     }
 }
 

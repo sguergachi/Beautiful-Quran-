@@ -276,11 +276,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
         <div className="reader-main">
           <div className="edge-fade">
             <div className="scroll" ref={scrollRef}>
-              <header
-                className="surah-header"
-                data-chapter-top={showBasmalah ? 'true' : undefined}
-                id={showBasmalah ? 'ayah-0' : undefined}
-              >
+              <header className="surah-header">
                 <Rosette />
                 <h2>{content.surah.nameTransliteration}</h2>
                 <p className="ar-title">{content.surah.nameArabic}</p>
@@ -288,15 +284,21 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                   {content.surah.nameTranslation} · {content.surah.ayahCount} ayahs ·{' '}
                   {content.surah.revelationPlace}
                 </p>
-                {showBasmalah ? (
+              </header>
+              {showBasmalah ? (
+                <div
+                  id="ayah-0"
+                  className="basmalah-block"
+                  data-ayah="0"
+                >
                   <BasmalahCalligraphy
                     className="basmalah"
                     data-state={preface}
                     style={{ opacity: prefaceOpacity }}
                     onClick={() => void appStore.playAyah(1, false)}
                   />
-                ) : null}
-              </header>
+                </div>
+              ) : null}
 
               {content.ayahs.map((ayah) => {
                 const isActive = state.activeAyah === ayah.number

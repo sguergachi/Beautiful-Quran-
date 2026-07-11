@@ -104,6 +104,11 @@ private sealed interface LazyItem {
     data object Header : LazyItem {
         override val key = "header"
     }
+    /** Chapter-opening basmalah calligraphy — its own focusable list item
+     *  above ayah 1 (playlist sentinel [BASMALAH_PLAYLIST_AYAH]). */
+    data object Basmalah : LazyItem {
+        override val key = "basmalah"
+    }
     data class AyahItem(val ayahIndex: Int) : LazyItem {
         override val key = "ayah_$ayahIndex"
     }
@@ -237,6 +242,12 @@ fun ReaderScreen(
         val c = uiState.content
         if (c == null) emptyList() else buildList {
             add(LazyItem.Header)
+            // Own list item so the focus engine can home / place / return onto
+            // the calligraphy the same way it does for any verse — not buried
+            // inside the taller surah-header geometry.
+            if (surahOpensWithBasmalahPreface(c.surah.id)) {
+                add(LazyItem.Basmalah)
+            }
             var lastPage = 0
             c.ayahs.forEachIndexed { i, ayah ->
                 val page = ayah.page
@@ -251,19 +262,15 @@ fun ReaderScreen(
 
     // Maps between focus targets and their slot in the lazy item list, so the
     // focus engine can resolve either direction cheaply. Ayah numbers are
-    // 1-based; [BASMALAH_PLAYLIST_AYAH] (0) maps to the surah header when this
-    // chapter opens with a basmalah preface — the chapter-top focus target.
-    val itemIndexOfAyah = remember(readerItems, surahId) {
+    // 1-based; [BASMALAH_PLAYLIST_AYAH] (0) maps to the dedicated basmalah
+    // item that sits above ayah 1 on preface chapters.
+    val itemIndexOfAyah = remember(readerItems) {
         buildMap {
             readerItems.forEachIndexed { index, item ->
                 when (item) {
-                    LazyItem.Header -> {
-                        if (surahOpensWithBasmalahPreface(surahId)) {
-                            put(BASMALAH_PLAYLIST_AYAH, index)
-                        }
-                    }
+                    LazyItem.Basmalah -> put(BASMALAH_PLAYLIST_AYAH, index)
                     is LazyItem.AyahItem -> put(item.ayahIndex + 1, index)
-                    is LazyItem.PageDivider -> Unit
+                    LazyItem.Header, is LazyItem.PageDivider -> Unit
                 }
             }
         }
@@ -271,6 +278,8 @@ fun ReaderScreen(
     val ayahNumberByItemIndex = remember(readerItems) {
         buildMap {
             readerItems.forEachIndexed { index, item ->
+                // Ayahs only — basmalah is a focus target via itemIndexOfAyah
+                // but must not enter the rail readout (1..N).
                 if (item is LazyItem.AyahItem) put(index, item.ayahIndex + 1)
             }
         }
@@ -323,7 +332,7 @@ fun ReaderScreen(
     // whether it is taller than the screen — the return-to-verse control reads
     // the former, the word-level follow gate reads the latter. Both watch
     // layoutInfo, so they recompute only when their answer actually changes.
-    // During the basmalah lead-in the target is the chapter-top header (ayah 0).
+    // During the basmalah lead-in the target is ayah 0 (the basmalah list item).
     val playbackFocusTarget = FocusEngine.playbackFocusTarget(
         activeAyah = activeAyah,
         activeBasmalah = isThisSurahPlaying && activeBasmalah == true,
@@ -331,8 +340,8 @@ fun ReaderScreen(
     val activeAyahPlacement = remember(playbackFocusTarget) {
         derivedStateOf { focusController.placementOf(playbackFocusTarget) }
     }
-    val activeVerseExceedsViewport = remember(activeAyah) {
-        derivedStateOf { focusController.exceedsViewport(activeAyah) }
+    val activeVerseExceedsViewport = remember(playbackFocusTarget) {
+        derivedStateOf { focusController.exceedsViewport(playbackFocusTarget) }
     }
 
     // A fresh query restarts from its first match…
@@ -773,10 +782,14 @@ fun ReaderScreen(
                                 revelationPlace = content.surah.revelationPlace,
                                 ayahCount = content.surah.ayahCount,
                                 sheen = sheen,
-                                basmalahActive = isThisSurahPlaying && activeBasmalah == true,
-                                basmalahDimmed = recitingActive && activeBasmalah != true,
-                                basmalahWashProgress = viewModel.basmalahWashProgress,
-                                onBasmalahClick = {
+                            )
+                        }
+                        LazyItem.Basmalah -> {
+                            BasmalahBlock(
+                                active = isThisSurahPlaying && activeBasmalah == true,
+                                dimmed = recitingActive && activeBasmalah != true,
+                                washProgress = viewModel.basmalahWashProgress,
+                                onClick = {
                                     notifPermission.request {
                                         followEnabled = true
                                         viewModel.playFromAyah(1)

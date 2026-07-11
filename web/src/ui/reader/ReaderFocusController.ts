@@ -75,12 +75,7 @@ export class ReaderFocusController {
         distancePx: 0,
       }
     }
-    return FocusEngine.placement(
-      geom,
-      el.clientHeight,
-      this.topGuardPx,
-      isChapterTopFocusTarget(ayahNumber),
-    )
+    return FocusEngine.placement(geom, el.clientHeight, this.topGuardPx)
   }
 
   exceedsViewport(ayahNumber: number | null | undefined): boolean {
@@ -168,24 +163,28 @@ export class ReaderFocusController {
   private ayahEl(ayahNumber: number): HTMLElement | null {
     if (!this.scrollEl) return null
     if (isChapterTopFocusTarget(ayahNumber)) {
-      return this.scrollEl.querySelector<HTMLElement>('.surah-header')
+      return this.scrollEl.querySelector<HTMLElement>('#ayah-0, .basmalah-block')
     }
     return this.scrollEl.querySelector<HTMLElement>(`#ayah-${ayahNumber}`)
   }
 
-  /** Focusable blocks in document order: optional chapter-top header, then ayahs. */
+  /** Focusable blocks in document order: optional basmalah, then ayahs. */
   private focusBlocks(): HTMLElement[] {
     const el = this.scrollEl
     if (!el) return []
     const blocks: HTMLElement[] = []
-    const header = el.querySelector<HTMLElement>('.surah-header[data-chapter-top="true"]')
-    if (header) blocks.push(header)
+    const basmalah = el.querySelector<HTMLElement>('#ayah-0, .basmalah-block')
+    if (basmalah) blocks.push(basmalah)
     blocks.push(...Array.from(el.querySelectorAll<HTMLElement>('.ayah-block')))
     return blocks
   }
 
   private blockFocusAyah(block: HTMLElement): number {
-    if (block.classList.contains('surah-header')) {
+    if (
+      block.id === 'ayah-0' ||
+      block.classList.contains('basmalah-block') ||
+      Number(block.dataset.ayah) === FocusEngine.CHAPTER_TOP_FOCUS_AYAH
+    ) {
       return FocusEngine.CHAPTER_TOP_FOCUS_AYAH
     }
     return Number(block.dataset.ayah) || 1
@@ -208,7 +207,6 @@ export class ReaderFocusController {
   private remainingPxToAnchor(ayahNumber: number): number {
     const el = this.scrollEl
     if (!el) return 0
-    const chapterTop = isChapterTopFocusTarget(ayahNumber)
     const geom = this.geometryOf(ayahNumber)
     if (!geom) {
       // Estimate from offsetTop when not yet painted in view.
@@ -219,7 +217,6 @@ export class ReaderFocusController {
         el.clientHeight,
         this.topGuardPx,
         target.offsetHeight,
-        chapterTop,
       )
       return approxTop - anchor
     }
@@ -227,7 +224,6 @@ export class ReaderFocusController {
       el.clientHeight,
       this.topGuardPx,
       geom.heightPx,
-      chapterTop,
     )
     return FocusEngine.glideDeltaPx(geom, anchor)
   }
@@ -277,12 +273,10 @@ export class ReaderFocusController {
       if (plan.doorstepIndex != null && epoch === this.focusEpoch) {
         const door = blocks[plan.doorstepIndex]
         if (door) {
-          const doorChapterTop = door.classList.contains('surah-header')
           const anchor = FocusEngine.anchorOffsetPx(
             viewport,
             this.topGuardPx,
             door.offsetHeight,
-            doorChapterTop,
           )
           el.scrollTop = Math.max(0, door.offsetTop - anchor)
         }
@@ -301,12 +295,10 @@ export class ReaderFocusController {
           : Math.min(blocks.length - 1, toIndex + visibleCount)
       const door = blocks[doorstepIndex]
       if (door) {
-        const doorChapterTop = door.classList.contains('surah-header')
         const anchor = FocusEngine.anchorOffsetPx(
           viewport,
           this.topGuardPx,
           door.offsetHeight,
-          doorChapterTop,
         )
         el.scrollTop = Math.max(0, door.offsetTop - anchor)
       }

@@ -25,25 +25,28 @@ describe('FocusEngine', () => {
     expect(FocusEngine.isChapterTopFocusTarget(1)).toBe(false)
   })
 
-  it('chapter-top anchor pins near the content start even for a short header', () => {
-    const shortHeader = 300
-    const chapterTop = FocusEngine.anchorOffsetPx(viewport, guard, shortHeader, true)
-    const verseRest = FocusEngine.anchorOffsetPx(viewport, guard, shortHeader, false)
-    expect(chapterTop).toBe(80)
-    expect(verseRest).toBe(200)
-    expect(chapterTop).toBeLessThan(verseRest)
-  })
-
-  it('chapter-top placement is in focus when the header sits on its pin', () => {
-    const anchor = FocusEngine.anchorOffsetPx(viewport, guard, 400, true)
+  it('basmalah list item uses the same adaptive anchor as a short verse', () => {
+    const basmalahHeight = 120
+    const anchor = FocusEngine.anchorOffsetPx(viewport, guard, basmalahHeight)
+    expect(anchor).toBe(200)
     const placement = FocusEngine.placement(
-      { topPx: anchor, heightPx: 400, isLaidOut: true, isAboveWhenOffscreen: false },
+      { topPx: anchor, heightPx: basmalahHeight, isLaidOut: true, isAboveWhenOffscreen: false },
       viewport,
       guard,
-      true,
     )
     expect(placement.zone).toBe(FocusZone.IN_FOCUS)
     expect(isAway(placement)).toBe(false)
+  })
+
+  it('basmalah scrolled off the top reads as away and points up', () => {
+    const placement = FocusEngine.placement(
+      { topPx: -400, heightPx: 120, isLaidOut: true, isAboveWhenOffscreen: false },
+      viewport,
+      guard,
+    )
+    expect(placement.zone).toBe(FocusZone.ABOVE)
+    expect(isAway(placement)).toBe(true)
+    expect(pointUp(placement)).toBe(true)
   })
 
   it('a short verse rests below the reading margin, fully visible', () => {

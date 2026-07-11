@@ -707,6 +707,17 @@ select {
   font-size: 0.92rem;
 }
 
+.basmalah-block {
+  display: flex;
+  justify-content: center;
+  padding: 1.25rem 1.5rem 1.75rem;
+}
+
+.basmalah-block .basmalah,
+.basmalah-block .basmalah-calligraphy {
+  margin-top: 0;
+}
+
 .basmalah,
 .basmalah-calligraphy {
   display: block;

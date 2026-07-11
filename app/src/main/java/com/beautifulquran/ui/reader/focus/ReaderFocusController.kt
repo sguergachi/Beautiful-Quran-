@@ -21,8 +21,9 @@ import kotlin.math.abs
  * The Compose-facing half of the focus engine: it holds the [LazyListState] and
  * the verse↔item lookups, and is the **single writer** to that scroll state.
  * Every programmatic scroll in the reader — jumping from the selector, following
- * the recitation, returning to the playing verse, the initial "continue
- * listening" settle — goes through [focus], so nothing fights over the list.
+ * the recitation (including the chapter-opening basmalah), returning to the
+ * playing target, the initial "continue listening" settle — goes through
+ * [focus], so nothing fights over the list.
  *
  * All the actual maths lives in the pure [FocusEngine]; this class only reads
  * `layoutInfo`, snapshots it, and hands it over.
@@ -33,10 +34,18 @@ import kotlin.math.abs
 class ReaderFocusController internal constructor(
     val listState: LazyListState,
 ) {
-    /** ayah number (1-based) → index in the LazyColumn item list. */
+    /**
+     * Focus-target key → index in the LazyColumn item list.
+     * Ayah numbers are 1-based; [FocusEngine.CHAPTER_TOP_FOCUS_AYAH] (0) maps
+     * to the dedicated basmalah list item on preface chapters.
+     */
     internal var itemIndexOfAyah: Map<Int, Int> = emptyMap()
 
-    /** LazyColumn item index → ayah number (1-based), for ayah items only. */
+    /**
+     * LazyColumn item index → ayah number (1-based), for ayah items only.
+     * The basmalah item is intentionally omitted so the rail readout stays in
+     * 1..N.
+     */
     internal var ayahNumberByItemIndex: Map<Int, Int> = emptyMap()
 
     /** Highest verse number in the surah — the top of the rail's range. */
@@ -74,11 +83,11 @@ class ReaderFocusController internal constructor(
      * Where [ayahNumber] sits relative to its ideal focus position. Reads
      * `layoutInfo`, so call inside a `derivedStateOf` to stay reactive. Returns
      * an in-focus placement for a null/unknown verse (nothing to correct).
+     * Pass [FocusEngine.CHAPTER_TOP_FOCUS_AYAH] for the basmalah list item.
      */
     fun placementOf(ayahNumber: Int?): FocusPlacement {
         val itemIndex = ayahNumber?.let { itemIndexOfAyah[it] }
             ?: return FocusPlacement(FocusZone.IN_FOCUS, 0)
-        val chapterTop = FocusEngine.isChapterTopFocusTarget(ayahNumber)
         val info = listState.layoutInfo
         val viewportHeight = info.viewportSize.height
         if (viewportHeight <= 0) return FocusPlacement(FocusZone.IN_FOCUS, 0)
@@ -98,7 +107,7 @@ class ReaderFocusController internal constructor(
                 isAboveWhenOffscreen = itemIndex < listState.firstVisibleItemIndex,
             )
         }
-        return FocusEngine.placement(geometry, viewportHeight, topGuardPx, chapterTop)
+        return FocusEngine.placement(geometry, viewportHeight, topGuardPx)
     }
 
     /** True when [ayahNumber] is currently laid out taller than the viewport, so
@@ -115,11 +124,11 @@ class ReaderFocusController internal constructor(
     /**
      * Bring [ayahNumber] into focus — the one entry point for every programmatic
      * scroll. Waits for a real viewport before measuring (killing the
-     * open-before-layout race), then lands the verse on its adaptive anchor.
+     * open-before-layout race), then lands the target on its adaptive anchor.
      * [animate] false snaps instantly (used for the initial settle).
      *
-     * Pass [FocusEngine.CHAPTER_TOP_FOCUS_AYAH] (0) to home onto the surah
-     * header / basmalah preface — the chapter-top item above ayah 1.
+     * Pass [FocusEngine.CHAPTER_TOP_FOCUS_AYAH] (0) to home onto the basmalah
+     * list item above ayah 1 — same glide / placement path as any verse.
      *
      * [preRoll] is for jumps the reader initiates by hand (selector, search,
      * return-to-verse). The pure [FocusEngine.planJump] decides the whole
@@ -141,7 +150,6 @@ class ReaderFocusController internal constructor(
 
     private suspend fun focusLocked(ayahNumber: Int, animate: Boolean, preRoll: Boolean) {
         val itemIndex = itemIndexOfAyah[ayahNumber] ?: return
-        val chapterTop = FocusEngine.isChapterTopFocusTarget(ayahNumber)
         // Never measure against a zero viewport — wait for the first real layout.
         val viewportHeight = snapshotFlow { listState.layoutInfo.viewportSize.height }
             .first { it > 0 }
@@ -164,7 +172,7 @@ class ReaderFocusController internal constructor(
                 listState.scrollToItem(doorstep)
             }
             // One continuous decelerating home — no second settle phase.
-            animateHomeOnto(itemIndex, viewportHeight, plan.durationMs, chapterTop)
+            animateHomeOnto(itemIndex, viewportHeight, plan.durationMs)
             return
         }
 
@@ -185,7 +193,7 @@ class ReaderFocusController internal constructor(
             )
         }
 
-        val delta = measureGlideDelta(itemIndex, viewportHeight, chapterTop) ?: return
+        val delta = measureGlideDelta(itemIndex, viewportHeight) ?: return
         if (!animate) {
             listState.scrollBy(delta.toFloat())
             return
@@ -210,9 +218,8 @@ class ReaderFocusController internal constructor(
         itemIndex: Int,
         viewportHeight: Int,
         durationMs: Int,
-        chapterTop: Boolean,
     ) {
-        if (abs(remainingPxToAnchor(itemIndex, viewportHeight, chapterTop)) < 0.5f) return
+        if (abs(remainingPxToAnchor(itemIndex, viewportHeight)) < 0.5f) return
 
         listState.scroll {
             var lastProgress = 0f
@@ -224,7 +231,7 @@ class ReaderFocusController internal constructor(
                     easing = FastOutSlowInEasing,
                 ),
             ) { value, _ ->
-                val remaining = remainingPxToAnchor(itemIndex, viewportHeight, chapterTop)
+                val remaining = remainingPxToAnchor(itemIndex, viewportHeight)
                 val step = FocusEngine.homeScrollStep(remaining, value, lastProgress)
                 lastProgress = value
                 if (abs(step) >= 0.5f) {
@@ -232,7 +239,7 @@ class ReaderFocusController internal constructor(
                 }
             }
             // Consume any sub-pixel leftover from clamping — invisible as a jump.
-            val leftover = remainingPxToAnchor(itemIndex, viewportHeight, chapterTop)
+            val leftover = remainingPxToAnchor(itemIndex, viewportHeight)
             if (abs(leftover) >= 0.5f) {
                 scrollBy(leftover)
             }
@@ -244,20 +251,11 @@ class ReaderFocusController internal constructor(
      * Uses real geometry when laid out; otherwise estimates from the average
      * laid-out item height (updated as new verses enter during the home-scroll).
      */
-    private fun remainingPxToAnchor(
-        itemIndex: Int,
-        viewportHeight: Int,
-        chapterTop: Boolean,
-    ): Float {
+    private fun remainingPxToAnchor(itemIndex: Int, viewportHeight: Int): Float {
         val visible = listState.layoutInfo.visibleItemsInfo
             .firstOrNull { it.index == itemIndex }
         if (visible != null) {
-            val anchor = FocusEngine.anchorOffsetPx(
-                viewportHeight,
-                topGuardPx,
-                visible.size,
-                chapterTop,
-            )
+            val anchor = FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, visible.size)
             return FocusEngine.glideDeltaPx(
                 TargetGeometry(
                     visible.offset,
@@ -273,7 +271,7 @@ class ReaderFocusController internal constructor(
         // Approximate the target's top as if every intervening item were `avg`
         // tall, accounting for the partial scroll of the first visible item.
         val approxTop = indexDelta * avg - listState.firstVisibleItemScrollOffset
-        val approxAnchor = FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, avg, chapterTop)
+        val approxAnchor = FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, avg)
         return (approxTop - approxAnchor).toFloat()
     }
 
@@ -291,11 +289,7 @@ class ReaderFocusController internal constructor(
      * item into layout when it is not yet measured (used by the soft
      * recitation-follow path).
      */
-    private suspend fun measureGlideDelta(
-        itemIndex: Int,
-        viewportHeight: Int,
-        chapterTop: Boolean,
-    ): Int? {
+    private suspend fun measureGlideDelta(itemIndex: Int, viewportHeight: Int): Int? {
         var target = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == itemIndex }
         if (target == null) {
             listState.scrollToItem(itemIndex)
@@ -304,12 +298,7 @@ class ReaderFocusController internal constructor(
         val geometry = target?.let {
             TargetGeometry(it.offset, it.size, isLaidOut = true, isAboveWhenOffscreen = false)
         } ?: return null
-        val anchor = FocusEngine.anchorOffsetPx(
-            viewportHeight,
-            topGuardPx,
-            geometry.heightPx,
-            chapterTop,
-        )
+        val anchor = FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, geometry.heightPx)
         return FocusEngine.glideDeltaPx(geometry, anchor)
     }
 

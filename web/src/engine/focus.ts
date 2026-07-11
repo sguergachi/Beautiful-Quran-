@@ -1,5 +1,9 @@
 /**
  * Pure focus / scroll math — port of Android `ui/reader/focus/FocusEngine.kt`.
+ *
+ * Chapter-opening basmalah: [CHAPTER_TOP_FOCUS_AYAH] (0) is a first-class focus
+ * key for the dedicated basmalah list item above ayah 1. It uses the same
+ * adaptive anchor / placement path as any short verse.
  */
 
 import { BASMALAH_PLAYLIST_AYAH } from './basmalah'
@@ -19,7 +23,7 @@ export const CHAPTER_TOP_FOCUS_AYAH = BASMALAH_PLAYLIST_AYAH
 
 /**
  * Resolve lyric-follow / return-to-verse target. Basmalah lead-in wins so the
- * surah header stays focused while the preface plays.
+ * basmalah list item stays focused while the preface plays.
  */
 export function playbackFocusTarget(
   activeAyah: number | null | undefined,
@@ -29,7 +33,7 @@ export function playbackFocusTarget(
   return activeAyah ?? null
 }
 
-/** True when [focusAyah] is the chapter-opening basmalah (header) target. */
+/** True when [focusAyah] is the chapter-opening basmalah target. */
 export function isChapterTopFocusTarget(focusAyah: number): boolean {
   return focusAyah === CHAPTER_TOP_FOCUS_AYAH
 }
@@ -149,12 +153,8 @@ export function anchorOffsetPx(
   viewportHeightPx: number,
   topGuardPx: number,
   targetHeightPx: number,
-  chapterTop = false,
 ): number {
   const u = usable(viewportHeightPx, topGuardPx)
-  if (chapterTop) {
-    return Math.round(topGuardPx + u * TALL_TOP_MARGIN_FRACTION)
-  }
   const fits = targetHeightPx >= 1 && targetHeightPx <= u
   if (fits) {
     const restingTop = topGuardPx + u * FIT_TOP_MARGIN_FRACTION
@@ -172,20 +172,18 @@ export function placement(
   target: TargetGeometry,
   viewportHeightPx: number,
   topGuardPx: number,
-  chapterTop = false,
 ): FocusPlacement {
   if (!target.isLaidOut) {
     const zone = target.isAboveWhenOffscreen ? FocusZone.ABOVE : FocusZone.BELOW
     return { zone, distancePx: 0 }
   }
-  const anchor = anchorOffsetPx(viewportHeightPx, topGuardPx, target.heightPx, chapterTop)
+  const anchor = anchorOffsetPx(viewportHeightPx, topGuardPx, target.heightPx)
   const distance = target.topPx - anchor
   const bottom = target.topPx + target.heightPx
   const u = usable(viewportHeightPx, topGuardPx)
   const tolerance = Math.round(u * IN_FOCUS_TOLERANCE_FRACTION)
 
   const fitsFullyVisible =
-    !chapterTop &&
     target.heightPx >= 1 &&
     target.heightPx <= u &&
     target.topPx >= topGuardPx &&
