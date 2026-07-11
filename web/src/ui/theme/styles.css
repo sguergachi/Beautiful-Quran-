@@ -1338,6 +1338,13 @@ select {
   position: absolute;
 }
 
+/* English prose gives `.word-gloss` a mode-specific `color: inherit` above.
+   Match that selector's mode context so it cannot override the orange repeat
+   twin and turn the directional wash into invisible ink-on-identical-ink. */
+.words[data-lyric='english'] .word-repeat-overlay.word-gloss {
+  color: var(--repeat);
+}
+
 .word-gloss-flash {
   position: relative;
   display: inline-block;
