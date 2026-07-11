@@ -1,9 +1,10 @@
 /**
- * Audio playback controller — dual HTMLAudioElement + Media Session.
+ * Audio playback controller — HTMLAudioElement + Media Session.
  *
- * One element plays the current ayah; the other preloads the next so verse
- * joins do not stall on `src` assignment + network. [AudioPrefetcher] warms
- * upcoming clips into Cache API / blob URLs ahead of the standby element.
+ * Desktop browsers promote a preloaded standby element at verse joins. iOS
+ * deliberately keeps one persistent element and changes its HTTPS source:
+ * WebKit supports one media stream reliably, while dual-element/blob promotion
+ * can wedge its playback pipeline. [AudioPrefetcher] still warms upcoming URLs.
  *
  * `isPlaying` is set on play *intent* (before canplay / `HTMLMediaElement.play`)
  * so reader chrome can recede on the tap rather than after the buffer fills.
@@ -18,6 +19,8 @@ import {
 } from '../data/models'
 import { BASMALAH_PLAYLIST_AYAH, surahOpensWithBasmalahPreface } from '../domain/Basmalah'
 import { AudioPrefetcher } from './audioPrefetch'
+import { isIOSMediaEnvironment } from './iosMedia'
+import { PlaybackStallWatchdog } from './playbackStallWatchdog'
 import { peekPlaylistNextIndex } from './playlistNext'
 
 export interface NowPlaying {
@@ -56,14 +59,14 @@ const initial: PlayerState = {
 /** HTMLMediaElement.HAVE_FUTURE_DATA — enough to start without an immediate stall. */
 const HAVE_FUTURE_DATA = 3
 
-/** How soon before ayah end we insist the next blob is warm (Safari joins). */
+/** How soon before ayah end we insist the next clip has been fetched. */
 const JOIN_PREP_REMAINING_S = 4
 
 export class PlayerController {
   /** Active playback element (swaps with [standby] on ayah joins). */
   private active: HTMLAudioElement
-  /** Preloaded next-ayah element. */
-  private standby: HTMLAudioElement
+  /** Preloaded next-ayah element; omitted on iOS to keep one media pipeline. */
+  private standby: HTMLAudioElement | null
   private state: PlayerState = { ...initial }
   private listeners = new Set<Listener>()
   private playlist: { ayah: number; url: string }[] = []
@@ -73,11 +76,15 @@ export class PlayerController {
   private content: SurahContent | null = null
   private tickTimer: number | null = null
   private readonly prefetcher: AudioPrefetcher
+  private readonly singleElementPlayback: boolean
   /** Playlist index the standby element is prepared for, or -1. */
   private standbyIndex = -1
   private prepareToken = 0
   /** Bumps on every playIndex entry so a superseded load aborts after awaits. */
   private playToken = 0
+  private readonly stallWatchdog = new PlaybackStallWatchdog()
+  /** True while performing the pause/play cycle that revives frozen Safari audio. */
+  private recoveringStall = false
   /**
    * When true, the next `pause` event on the active element must not clear
    * isPlaying — set while swapping `src` during an in-flight playIndex
@@ -89,12 +96,16 @@ export class PlayerController {
    */
   private suppressPauseSync = false
 
-  constructor(prefetcher: AudioPrefetcher = new AudioPrefetcher()) {
+  constructor(
+    prefetcher: AudioPrefetcher = new AudioPrefetcher(),
+    singleElementPlayback = isIOSMediaEnvironment(),
+  ) {
     this.prefetcher = prefetcher
+    this.singleElementPlayback = singleElementPlayback
     this.active = this.createAudio()
-    this.standby = this.createAudio()
+    this.standby = singleElementPlayback ? null : this.createAudio()
     this.bindAudio(this.active)
-    this.bindAudio(this.standby)
+    if (this.standby) this.bindAudio(this.standby)
   }
 
   private createAudio(): HTMLAudioElement {
@@ -131,6 +142,9 @@ export class PlayerController {
     })
     audio.addEventListener('pause', () => {
       if (audio !== this.active) return
+      // A watchdog recovery deliberately cycles pause/play; it must preserve
+      // the user's play intent while the media element restarts.
+      if (this.recoveringStall) return
       // `pause()` fires this asynchronously; consume the one swap-induced pause
       // so the mid-join src swap does not momentarily clear isPlaying.
       if (this.suppressPauseSync) {
@@ -177,8 +191,8 @@ export class PlayerController {
   }
 
   /**
-   * In the last few seconds of an ayah, insist the next clip is a warm blob
-   * (Safari will not deeply buffer a remote standby element).
+   * In the last few seconds of an ayah, insist the next clip has been fetched.
+   * Desktop then has a warm blob; iOS has a cache-warmed HTTPS request.
    */
   private maybePrepJoin() {
     const duration = this.active.duration
@@ -229,15 +243,61 @@ export class PlayerController {
    */
   private startTick() {
     this.stopTick()
-    const loop = () => {
+    this.stallWatchdog.reset(this.active.currentTime, performance.now())
+    const loop = (nowMs: number) => {
       if (!this.state.isPlaying) {
         this.tickTimer = null
         return
       }
       this.onTime()
+      this.detectSilentStall(nowMs)
       this.tickTimer = window.requestAnimationFrame(loop)
     }
     this.tickTimer = window.requestAnimationFrame(loop)
+  }
+
+  /**
+   * Mobile Safari can leave an audio element looking playable while its clock
+   * is frozen and emit none of the normal buffering events. Surface buffering
+   * and reproduce the user's effective pause/play workaround automatically.
+   */
+  private detectSilentStall(nowMs: number) {
+    const duration = this.active.duration
+    const isNearEnd =
+      Number.isFinite(duration) && duration > 0 && duration - this.active.currentTime < 0.15
+    const stalled = this.stallWatchdog.observe({
+      positionS: this.active.currentTime,
+      nowMs,
+      isPlaying: this.state.isPlaying,
+      isBuffering: this.state.isBuffering,
+      isVisible: typeof document === 'undefined' || document.visibilityState !== 'hidden',
+      isNearEnd,
+    })
+    if (stalled) void this.recoverSilentStall()
+  }
+
+  private async recoverSilentStall() {
+    if (this.recoveringStall || !this.state.isPlaying) return
+    const token = this.playToken
+    this.recoveringStall = true
+    this.setBuffering(true)
+    try {
+      this.active.pause()
+      await this.active.play()
+      if (token !== this.playToken || !this.state.isPlaying) return
+      this.setBuffering(false)
+      this.stallWatchdog.reset(this.active.currentTime, performance.now())
+    } catch (e) {
+      if (token !== this.playToken) return
+      this.stopTick()
+      this.setBuffering(false)
+      this.patch({
+        isPlaying: false,
+        error: e instanceof Error ? e.message : 'Playback stalled',
+      })
+    } finally {
+      this.recoveringStall = false
+    }
   }
 
   private stopTick() {
@@ -262,6 +322,7 @@ export class PlayerController {
    * Safe to call repeatedly; superseded work is ignored via [prepareToken].
    */
   private async prepareStandby(): Promise<void> {
+    if (!this.standby) return
     const nextIndex = this.peekNextIndex({ forStandby: true })
     if (nextIndex == null) {
       this.clearStandby()
@@ -273,8 +334,7 @@ export class PlayerController {
 
     const token = ++this.prepareToken
     const item = this.playlist[nextIndex]!
-    // Wait for a full blob — assigning a remote URL to standby is a no-op on
-    // many iOS Safari builds (they won't buffer a second element).
+    // Wait for a full blob before assigning the desktop standby element.
     const blobSrc = await this.prefetcher.ensure(item.url)
     if (token !== this.prepareToken) return
     if (!blobSrc) return
@@ -292,6 +352,7 @@ export class PlayerController {
   }
 
   private standbySrcMatches(src: string): boolean {
+    if (!this.standby) return false
     // HTMLAudioElement.src is absolute; compare against resolved currentSrc/src.
     const current = this.standby.currentSrc || this.standby.src
     return current === src || current.endsWith(src) || src.endsWith(current)
@@ -300,6 +361,7 @@ export class PlayerController {
   private clearStandby() {
     this.prepareToken++
     this.standbyIndex = -1
+    if (!this.standby) return
     this.standby.pause()
     this.standby.removeAttribute('src')
     this.standby.load()
@@ -445,6 +507,7 @@ export class PlayerController {
     // Fast path: standby already holds this index — swap and play immediately.
     if (
       autoplay &&
+      this.standby != null &&
       this.standbyIndex === i &&
       this.standby.readyState >= HAVE_FUTURE_DATA
     ) {
@@ -494,13 +557,12 @@ export class PlayerController {
         error: null,
       }
     }
-    // Show the spinner while we fetch a full blob — critical on Safari where
-    // progressive remote buffering of the next ayah is unreliable.
+    // Show the spinner while we fetch the clip before assigning its source.
     if (autoplay && !this.prefetcher.isWarm(item.url)) {
       this.setBuffering(true)
     }
-    // Quiet open: prefer remote src immediately; warm blob in the background.
-    const blobSrc = quiet
+    // Quiet open: prefer the resolved source immediately; warm in background.
+    const warmedSrc = quiet
       ? this.prefetcher.resolveSrc(item.url)
       : (await this.prefetcher.ensure(item.url)) ?? this.prefetcher.resolveSrc(item.url)
     if (token !== this.playToken) return
@@ -509,7 +571,10 @@ export class PlayerController {
       this.setBuffering(false)
       return
     }
-    const src = typeof blobSrc === 'string' ? blobSrc : this.prefetcher.resolveSrc(item.url)
+    // iOS gets one persistent media element and an ordinary HTTPS source.
+    // The read-ahead fetch above warms the browser HTTP cache, while avoiding
+    // WebKit's fragile blob-media and multi-element playback paths.
+    const src = this.singleElementPlayback ? item.url : warmedSrc
 
     // Only suppress the pause→isPlaying:false sync when we intend to keep
     // playing after the src swap. Quiet loads (openSurah) must still clear it.
@@ -601,6 +666,7 @@ export class PlayerController {
 
   /** Promote standby → active; former active becomes the new standby. */
   private swapToStandby() {
+    if (!this.standby) return
     const prev = this.active
     this.active = this.standby
     this.standby = prev
@@ -659,6 +725,7 @@ export class PlayerController {
     this.playToken++
     // User intent to stop wins — never let a pending swap suppress this pause.
     this.suppressPauseSync = false
+    this.recoveringStall = false
     this.active.pause()
     this.setBuffering(false)
     this.stopTick()
@@ -776,7 +843,7 @@ export class PlayerController {
 
   setSpeed(speed: number) {
     this.active.playbackRate = speed
-    this.standby.playbackRate = speed
+    if (this.standby) this.standby.playbackRate = speed
     this.patch({ speed })
   }
 
@@ -790,6 +857,7 @@ export class PlayerController {
   stop() {
     this.playToken++
     this.suppressPauseSync = false
+    this.recoveringStall = false
     this.active.pause()
     this.active.removeAttribute('src')
     this.clearStandby()
@@ -813,8 +881,8 @@ export class PlayerController {
       this.patch({ isPlaying: false })
       return
     }
-    // If the next ayah is not a warm blob yet, keep the play button spinning
-    // rather than going silent at the verse boundary (Safari mobile).
+    // If the next ayah is not warm yet, keep the play button spinning rather
+    // than going silent at the verse boundary.
     const nextUrl = this.playlist[next]?.url
     if (nextUrl && !this.prefetcher.isWarm(nextUrl)) {
       this.setBuffering(true)

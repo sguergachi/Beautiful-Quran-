@@ -179,8 +179,18 @@ fun Modifier.shapedWordBloom(
             val endExclusive = (range.last + 1).coerceIn(start, length)
             if (endExclusive <= start) return@forEach
             val path = textLayout.getPathForRange(start, endExclusive)
-            val bounds = path.getBounds()
-            if (bounds.isEmpty || bounds.width <= 0f) return@forEach
+            val lineBounds = buildList {
+                val firstLine = textLayout.getLineForOffset(start)
+                val lastLine = textLayout.getLineForOffset((endExclusive - 1).coerceAtLeast(start))
+                for (line in firstLine..lastLine) {
+                    val lineStart = maxOf(start, textLayout.getLineStart(line))
+                    val lineEnd = minOf(endExclusive, textLayout.getLineEnd(line, visibleEnd = true))
+                    if (lineEnd <= lineStart) continue
+                    val bounds = textLayout.getPathForRange(lineStart, lineEnd).getBounds()
+                    if (!bounds.isEmpty && bounds.width > 0f) add(bounds)
+                }
+            }
+            if (lineBounds.isEmpty()) return@forEach
 
             when (bloom) {
                 is ShapedWordBloom.UpcomingDim -> {
@@ -191,17 +201,19 @@ fun Modifier.shapedWordBloom(
                     // corners. A small pad covers those without the old
                     // neighbour-bleed rects (18dp).
                     val pad = PaperCoverPad.toPx()
-                    clipRect(
-                        left = bounds.left - pad,
-                        top = bounds.top - pad,
-                        right = bounds.right + pad,
-                        bottom = bounds.bottom + pad,
-                    ) {
-                        drawRect(
-                            color = bloom.paper.copy(alpha = a),
-                            topLeft = Offset(bounds.left - pad, bounds.top - pad),
-                            size = Size(bounds.width + pad * 2f, bounds.height + pad * 2f),
-                        )
+                    lineBounds.forEach { bounds ->
+                        clipRect(
+                            left = bounds.left - pad,
+                            top = bounds.top - pad,
+                            right = bounds.right + pad,
+                            bottom = bounds.bottom + pad,
+                        ) {
+                            drawRect(
+                                color = bloom.paper.copy(alpha = a),
+                                topLeft = Offset(bounds.left - pad, bounds.top - pad),
+                                size = Size(bounds.width + pad * 2f, bounds.height + pad * 2f),
+                            )
+                        }
                     }
                 }
                 is ShapedWordBloom.InkReveal -> {
@@ -210,40 +222,42 @@ fun Modifier.shapedWordBloom(
                     // overhangs (same as UpcomingDim).
                     val p = bloom.progress.coerceIn(0f, 1f)
                     if (p >= 1f) return@forEach
-                    val w = bounds.width
-                    val edge = (w * feather).coerceAtLeast(1f)
-                    val head = p * (w + edge)
                     val paperColors = stops.map { t ->
                         val s = inkSmootherstep(t)
                         val glyphAlpha = bloom.restingAlpha +
                             (1f - bloom.restingAlpha) * (if (rtl) s else 1f - s)
                         bloom.paper.copy(alpha = (1f - glyphAlpha).coerceIn(0f, 1f))
                     }
-                    val brush = if (rtl) {
-                        Brush.horizontalGradient(
-                            colors = paperColors,
-                            startX = bounds.left + (w - head),
-                            endX = bounds.left + (w - head) + edge,
-                        )
-                    } else {
-                        Brush.horizontalGradient(
-                            colors = paperColors,
-                            startX = bounds.left + head - edge,
-                            endX = bounds.left + head,
-                        )
-                    }
                     val pad = PaperCoverPad.toPx()
-                    clipRect(
-                        left = bounds.left - pad,
-                        top = bounds.top - pad,
-                        right = bounds.right + pad,
-                        bottom = bounds.bottom + pad,
-                    ) {
-                        drawRect(
-                            brush = brush,
-                            topLeft = Offset(bounds.left - pad, bounds.top - pad),
-                            size = Size(bounds.width + pad * 2f, bounds.height + pad * 2f),
-                        )
+                    lineBounds.forEach { bounds ->
+                        val w = bounds.width
+                        val edge = (w * feather).coerceAtLeast(1f)
+                        val head = p * (w + edge)
+                        val brush = if (rtl) {
+                            Brush.horizontalGradient(
+                                colors = paperColors,
+                                startX = bounds.left + (w - head),
+                                endX = bounds.left + (w - head) + edge,
+                            )
+                        } else {
+                            Brush.horizontalGradient(
+                                colors = paperColors,
+                                startX = bounds.left + head - edge,
+                                endX = bounds.left + head,
+                            )
+                        }
+                        clipRect(
+                            left = bounds.left - pad,
+                            top = bounds.top - pad,
+                            right = bounds.right + pad,
+                            bottom = bounds.bottom + pad,
+                        ) {
+                            drawRect(
+                                brush = brush,
+                                topLeft = Offset(bounds.left - pad, bounds.top - pad),
+                                size = Size(bounds.width + pad * 2f, bounds.height + pad * 2f),
+                            )
+                        }
                     }
                 }
                 is ShapedWordBloom.ColorReveal -> {
@@ -251,6 +265,7 @@ fun Modifier.shapedWordBloom(
                     // Re-draw the same shaped glyphs, tint them orange with
                     // SrcIn (keeps harf shapes), then DstIn-wash like letterFadeIn.
                     val p = bloom.progress.coerceIn(0f, 1f)
+                    val bounds = path.getBounds()
                     val w = bounds.width
                     val edge = (w * feather).coerceAtLeast(1f)
                     val head = p * (w + edge)
