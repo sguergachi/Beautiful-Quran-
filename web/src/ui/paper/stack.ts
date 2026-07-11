@@ -10,6 +10,22 @@ export const SETTINGS_LAYER = 2
 
 export type StackLayer = 0 | 1 | 2
 
+export type SheetId = 'home' | 'reader' | 'settings'
+
+/**
+ * Whether the reader owns layer 1.
+ *
+ * True while a surah is loaded *or* while peel-first `openSurah` has claimed
+ * the reader sheet before content arrives. Without the sheet check, Settings
+ * briefly steals layer 1 (`sheetAtLayer(1, false)` → `'settings'`).
+ */
+export function hasReaderOpen(
+  content: unknown | null,
+  sheet: SheetId,
+): boolean {
+  return content != null || sheet === 'reader'
+}
+
 export function settingsLayerFor(hasReader: boolean): StackLayer {
   return hasReader ? SETTINGS_LAYER : READER_LAYER
 }
@@ -17,7 +33,7 @@ export function settingsLayerFor(hasReader: boolean): StackLayer {
 export function sheetAtLayer(
   layer: StackLayer,
   hasReader: boolean,
-): 'home' | 'reader' | 'settings' {
+): SheetId {
   if (layer <= COVER_LAYER) return 'home'
   if (layer === READER_LAYER) return hasReader ? 'reader' : 'settings'
   return 'settings'

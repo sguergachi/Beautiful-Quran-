@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { appStore, useAppState } from '../store/appStore'
+import { hasReaderOpen } from './paper/stack'
 import { HomeScreen } from './home/HomeScreen'
 import { ReaderScreen } from './reader/ReaderScreen'
 import { SettingsScreen } from './settings/SettingsScreen'
@@ -68,7 +69,9 @@ export function App() {
   }, [entranceDone])
 
   const stack = state.stackLayer
-  const hasReader = state.content != null
+  // Peel-first open sets content null with sheet 'reader' — still count as
+  // reader so Settings does not flash on layer 1 for a frame.
+  const hasReader = hasReaderOpen(state.content, state.sheet)
   // The cover *is* the loading screen — show the shell underneath only once
   // the book is ready so the open reveals chapters, not an empty page.
   const showStack = state.ready

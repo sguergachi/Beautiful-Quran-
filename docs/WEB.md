@@ -241,6 +241,8 @@ Translate `docs/PERFORMANCE.md` into web terms:
    frame so the icon + CSS recess paint first.
 7. **Sheet peel first.** `openSurah` starts the paper slide on the tap frame
    (blank reader sheet), then loads content after the peel has painted.
+   `hasReaderOpen` treats `sheet === 'reader'` as reader-owned even while
+   `content` is still null — otherwise Settings briefly claims layer 1.
    Long surahs progressive-mount a tight ayah window with scroll padding;
    parked reader sheets use `content-visibility: hidden`. Same-surah reopen
    peels without remount. Sheet glide is ~360ms so the transition is visible.
