@@ -27,6 +27,7 @@ import {
   IconTune,
 } from '../icons/PlaybackIcons'
 import { AyahSelectorRail } from './AyahSelectorRail'
+import { OrnateSurahTitle } from './OrnateSurahTitle'
 import { ReaderFocusController } from './ReaderFocusController'
 import { shouldPauseFollowOnDrag } from './followGesture'
 import { RootViewer } from '../root/RootViewer'
@@ -63,6 +64,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const state = useAppState()
   const content = state.content
   const scrollRef = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLElement>(null)
   const focusRef = useRef(new ReaderFocusController())
   const [focusedAyah, setFocusedAyah] = useState(1)
   const [showReturn, setShowReturn] = useState(false)
@@ -72,6 +74,8 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const [searchActive, setSearchActive] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchIndex, setSearchIndex] = useState(0)
+  /** Android `showTopTitle` — header scrolled fully off the page. */
+  const [showTopTitle, setShowTopTitle] = useState(false)
   const followWasEnabled = useRef(true)
 
   const side = state.settings.ayahSelectorSide
@@ -111,12 +115,31 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     return () => clearTimeout(t)
   }, [playingNow])
 
-  // Reset search when the surah changes.
+  // Reset search / collapsed title when the surah changes.
   useEffect(() => {
     setSearchActive(false)
     setSearchQuery('')
     setSearchIndex(0)
+    setShowTopTitle(false)
   }, [content?.surah.id])
+
+  // Unread-style chrome: once the opening header leaves the scrollport,
+  // the surah name reappears centred in the top bar (Android OrnateSurahTitle).
+  useEffect(() => {
+    const root = scrollRef.current
+    const header = headerRef.current
+    if (!root || !header || !content || !isTop) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0]
+        if (!entry) return
+        setShowTopTitle(!entry.isIntersecting)
+      },
+      { root, threshold: 0 },
+    )
+    io.observe(header)
+    return () => io.disconnect()
+  }, [content?.surah.id, isTop])
 
   // New query → first match.
   useEffect(() => {
@@ -388,8 +411,31 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
             else appStore.revealLayer(COVER_LAYER)
           }}
         >
-          {searchActive ? <IconClose /> : '← Chapters'}
+          {searchActive ? (
+            <IconClose />
+          ) : (
+            <>
+              <span className="back-label-full">← Chapters</span>
+              <span className="back-label-short" aria-hidden="true">
+                ←
+              </span>
+            </>
+          )}
         </button>
+
+        {!searchActive && content ? (
+          <div
+            className="reader-top-title"
+            data-visible={showTopTitle}
+            aria-hidden={!showTopTitle}
+          >
+            <OrnateSurahTitle
+              chapterNumber={content.surah.id}
+              nameArabic={content.surah.nameArabic}
+              nameTransliteration={content.surah.nameTransliteration}
+            />
+          </div>
+        ) : null}
 
         {searchActive ? (
           <div className="reader-search">
@@ -466,7 +512,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
         <div className="reader-main">
           <div className="edge-fade">
             <div className="scroll" ref={scrollRef}>
-              <header className="surah-header">
+              <header className="surah-header" ref={headerRef}>
                 <Rosette />
                 <h2>{content.surah.nameTransliteration}</h2>
                 <p className="ar-title">{content.surah.nameArabic}</p>

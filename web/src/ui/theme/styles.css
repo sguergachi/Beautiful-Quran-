@@ -597,11 +597,81 @@ select {
   position: relative;
   z-index: 7;
   transition: opacity var(--chrome-recede-ms) var(--recede-ease);
+  min-height: 2.85rem;
 }
 
 .reader-top[data-receded='true'] {
   opacity: 0.08;
   pointer-events: none;
+}
+
+/* Collapsed surah title — centred like Android CenterAlignedTopAppBar. */
+.reader-top-title {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(18rem, calc(100% - 9.5rem));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 350ms ease;
+  z-index: 1;
+}
+
+.reader-top-title[data-visible='true'] {
+  opacity: 1;
+}
+
+.reader-top[data-search='true'] .reader-top-title {
+  opacity: 0;
+}
+
+.ornate-surah-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  min-width: 0;
+}
+
+.ornate-surah-title-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 0.65rem;
+  min-width: 0;
+}
+
+.ornate-surah-title .ornate-ar {
+  margin: 0;
+  font-family: var(--font-arabic);
+  font-size: 1.15rem;
+  line-height: 1.35;
+  color: var(--ink);
+  direction: rtl;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.ornate-surah-title .ornate-en {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.56rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ink-muted) 60%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.reader-top-flourish {
+  flex-shrink: 0;
+  display: block;
+  opacity: 0.92;
 }
 
 .reader-top .back {
@@ -615,6 +685,12 @@ select {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+}
+
+.reader-top .back-label-short {
+  display: none;
 }
 
 .reader-top .back:disabled,
@@ -628,6 +704,8 @@ select {
   align-items: center;
   gap: 0.15rem;
   margin-inline-start: auto;
+  position: relative;
+  z-index: 2;
 }
 
 .reader-top .icon-btn {
@@ -1912,6 +1990,34 @@ select {
 
   .home-header h1 {
     font-size: 1.65rem;
+  }
+
+  /* Compact back mark so the collapsed surah title has room to breathe. */
+  .reader-top .back-label-full {
+    display: none;
+  }
+
+  .reader-top .back-label-short {
+    display: inline;
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  .reader-top-title {
+    max-width: calc(100% - 6.5rem);
+  }
+
+  .ornate-surah-title .ornate-ar {
+    font-size: 1.05rem;
+  }
+
+  .ornate-surah-title-text {
+    padding: 0 0.4rem;
+  }
+
+  .reader-top-flourish {
+    width: 28px;
+    height: 10px;
   }
 
   /* Keep inactive sheets fully off-screen on small phones so they don't
