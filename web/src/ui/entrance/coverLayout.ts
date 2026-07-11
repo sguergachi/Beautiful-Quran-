@@ -29,6 +29,8 @@ export interface CoverLayout {
   gapTitlePair: number
   /** Max width for dua / load copy inside the inner rule. */
   copyMax: number
+  /** Radius of the leather's radial shading (0.75 × board height). */
+  leatherRadius: number
   /** Flex weights for the three air bands (top / mid / bot). */
   airTop: number
   airMid: number
@@ -67,34 +69,44 @@ export function coverLayout(width: number, height: number): CoverLayout {
   // not pinpricks. Floor so small boards still read as seals.
   const starSize = clamp(outerInset * 1.42, unit * 2.6, outerInset * 1.65)
 
-  // Medallion: ~44% of board width, but never more than ~26% of height so
-  // the vertical stack (medal → titles → dua) keeps air.
+  // Medallion: Android's ceremonial scale — 52% of board width, capped by
+  // height (~30%) so the vertical stack (medal → titles → dua) keeps air,
+  // and at 240px absolute (Android caps at 240dp).
   const medallion = clamp(
-    Math.min(w * 0.44, h * 0.26, short * 0.48),
+    Math.min(w * 0.52, h * 0.3, 240),
     unit * 12,
-    short * 0.52,
+    short * 0.6,
   )
 
-  // Type scale from board width, capped near Android's 40sp title so the
-  // sheet-column board does not shout. English / dua track the Arabic size.
-  const titleAr = clamp(w * 0.068, unit * 2.6, 40)
-  const titleEn = clamp(titleAr * 0.52, 12, 22)
-  const duaAr = clamp(titleAr * 0.58, 14, 24)
-  const duaEn = clamp(titleAr * 0.38, 11, 16)
+  // Type scale from board width, meeting Android's 40sp title on a phone
+  // board and capped there so the sheet-column board does not shout.
+  // English / dua track the Arabic size (Android: 22sp / 24sp / 14sp).
+  const titleAr = clamp(w * 0.095, unit * 2.6, 40)
+  const titleEn = clamp(titleAr * 0.55, 12, 22)
+  const duaAr = clamp(titleAr * 0.6, 14, 24)
+  const duaEn = clamp(titleAr * 0.35, 11, 14)
   const loadLabel = clamp(titleAr * 0.34, 11, 14)
 
   const padX = innerInset + unit * 0.85
   const padY = innerInset + unit * 0.55
-  const gapMedallionTitle = clamp(unit * 1.7, 18, 36)
+  const gapMedallionTitle = clamp(unit * 3.4, 20, 30)
   const gapTitlePair = clamp(unit * 0.35, 4, 10)
-  const copyMax = Math.min(w - padX * 2, unit * 28)
+  // Wide enough for the isti'adha on one line at dua size (Android gives
+  // the same copy the full board minus its 40dp side padding).
+  const copyMax = Math.min(w - padX * 2, 480)
+
+  // Leather shading — Android's radial: centred a little above the middle,
+  // radius 0.75 × board height, so the glow reads as one lit board rather
+  // than a hotspot ellipse.
+  const leatherRadius = h * 0.75
 
   // Portrait boards get more top air (medal sits high); squat boards
-  // compress mid air so dua/load stay visible above the fold.
+  // compress mid air so dua/load stay visible above the fold. The tall
+  // weights are Android's column weights (0.9 / 0.55 / 0.5).
   const aspect = h / w
-  const airTop = aspect >= 1.35 ? 1.05 : aspect >= 1.05 ? 0.9 : 0.55
-  const airMid = aspect >= 1.35 ? 0.7 : aspect >= 1.05 ? 0.55 : 0.4
-  const airBot = aspect >= 1.35 ? 0.55 : 0.45
+  const airTop = aspect >= 1.35 ? 0.9 : aspect >= 1.05 ? 0.75 : 0.55
+  const airMid = aspect >= 1.35 ? 0.55 : aspect >= 1.05 ? 0.5 : 0.4
+  const airBot = aspect >= 1.35 ? 0.5 : 0.45
 
   return {
     unit,
@@ -114,6 +126,7 @@ export function coverLayout(width: number, height: number): CoverLayout {
     gapMedallionTitle,
     gapTitlePair,
     copyMax,
+    leatherRadius,
     airTop,
     airMid,
     airBot,
@@ -141,6 +154,7 @@ export function coverLayoutCssVars(layout: CoverLayout): Record<string, string> 
     '--cover-gap-medal': px(layout.gapMedallionTitle),
     '--cover-gap-titles': px(layout.gapTitlePair),
     '--cover-copy-max': px(layout.copyMax),
+    '--cover-leather-r': px(layout.leatherRadius),
     '--cover-air-top': String(layout.airTop),
     '--cover-air-mid': String(layout.airMid),
     '--cover-air-bot': String(layout.airBot),
