@@ -125,7 +125,7 @@ Port exactly:
 
 - `State` { Plain, Upcoming, Active, Recited }
 - `word` / `wordState` / `inRepeatChain` / `sweepMs` / `startRevealed` / `prefaceState`
-- `Tuning` defaults (upcoming alpha 0.22, ink/mark/recess fade 700 ms, sweep clamps, feather 1.6, easing CPs)
+- `Tuning` defaults (upcoming alpha 0.22, ink/mark/recess fade 400 ms, sweep clamps, feather 1.6, easing CPs)
 
 Acceptance: `InkEngineTest` parity. Optional Ink Lab later (session-only
 tuning, same as Android).
@@ -258,8 +258,8 @@ Ink wash uses the smootherstep mask from `fade.washMaskImage` (not a blunt
 3-stop wipe). Repeat orange is a second overlay that washes in and dissolves
 over `repeatFadeOutMs`.
 
-Motion: fade + slide only (≤ 420 ms), except chrome recede (1400 ms) and
-verse ink recess (700 ms), plus far ayah jumps (up to 1000 ms via
+Motion: fade + slide only (≤ 420 ms), except chrome recede (520 ms) and
+verse ink recess (400 ms), plus far ayah jumps (up to 1000 ms via
 `FocusEngine.planJump`). The root-viewer ink bleed enter/exit pair is also
 420 ms.
 

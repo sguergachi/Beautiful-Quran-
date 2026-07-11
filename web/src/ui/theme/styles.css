@@ -25,11 +25,11 @@
   --home-max: 40rem;
   --ease-sheet: cubic-bezier(0.22, 0.61, 0.36, 1);
   --upcoming-alpha: 0.22;
-  /* Play-start recess — deliberate and slow (matches Android). */
-  --chrome-recede-ms: 1400ms;
-  --ink-fade-ms: 700ms;
-  --recess-ms: 700ms;
-  --recede-ease: cubic-bezier(0.33, 0, 0.2, 1);
+  /* Play-start recess — even ease-in-out, matched to Android. */
+  --chrome-recede-ms: 520ms;
+  --ink-fade-ms: 400ms;
+  --recess-ms: 400ms;
+  --recede-ease: cubic-bezier(0.4, 0, 0.2, 1);
   color-scheme: light;
 }
 

@@ -35,9 +35,9 @@ export interface InkTuning {
 
 export const DEFAULT_TUNING: InkTuning = {
   upcomingAlpha: 0.22,
-  inkFadeMs: 700,
-  ayahMarkFadeMs: 700,
-  recessMs: 700,
+  inkFadeMs: 400,
+  ayahMarkFadeMs: 400,
+  recessMs: 400,
   minSweepMs: 140,
   maxSweepMs: 8_000,
   repeatSweepMs: 450,

@@ -6,7 +6,7 @@ import android.content.ContextWrapper
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -306,17 +306,16 @@ fun ReaderScreen(
     val scrolledAyahPosition = focusController.focusedPosition
 
     // While reciting, chrome recedes into the paper — the words and core
-    // transport controls stay present. Read inside graphicsLayer blocks so
-    // the fade is draw-phase-only. Soft ease-out over [ChromeRecedeMs] so
-    // play-start feels like a breath, not a blink.
+    // transport controls stay present. Read inside graphicsLayer / Canvas
+    // draw blocks so the fade is draw-phase-only (docs/PERFORMANCE.md).
     val chromeAlpha = animateFloatAsState(
         targetValue = if (recitingActive) 0.08f else 1f,
-        animationSpec = tween(ChromeRecedeMs, easing = ChromeRecedeEasing),
+        animationSpec = tween(ChromeRecedeMs, easing = FastOutSlowInEasing),
         label = "chromeAlpha",
     )
     val topBarAlpha = animateFloatAsState(
         targetValue = if (recitingActive) 0f else 1f,
-        animationSpec = tween(ChromeRecedeMs, easing = ChromeRecedeEasing),
+        animationSpec = tween(ChromeRecedeMs, easing = FastOutSlowInEasing),
         label = "topBarAlpha",
     )
 
@@ -1037,11 +1036,8 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
-/** Chrome / rail / bookmark fade while recitation starts — deliberate and slow. */
-private const val ChromeRecedeMs = 1400
-
-/** Soft ease-out: starts gently, settles without a late rush. */
-private val ChromeRecedeEasing = CubicBezierEasing(0.33f, 0f, 0.2f, 1f)
+/** Chrome / rail / bookmark fade while recitation starts or stops. */
+private const val ChromeRecedeMs = 520
 
 /**
  * In-surah English search state: whether the top bar is in search mode, the

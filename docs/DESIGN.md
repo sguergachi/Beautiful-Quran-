@@ -91,7 +91,7 @@ lyrics treatment, never a background block:
 | **Active (being recited)** | letters ink in one by one (below) |
 | Recited | settles to 80 % over 450 ms |
 | Non-active ayahs during playback | word-level Upcoming ink in every mode (already faint before handoff; no block-alpha brightening) |
-| Ayah number mark (`﴿N﴾`) | Upcoming ink while the verse is recessed; fades to full over 700 ms when that verse is in focus (gloss, English, and Arabic-only) |
+| Ayah number mark (`﴿N﴾`) | Upcoming ink while the verse is recessed; fades to full over 400 ms when that verse is in focus (gloss, English, and Arabic-only) |
 
 The active word doesn't switch on — it is *written*: a soft alpha band
 sweeps across the glyphs (right-to-left for Arabic, left-to-right for the
@@ -110,9 +110,9 @@ a temporary renderer-specific compromise, not a relaxation of the product
 principle.
 
 While reciting, the top bar, reciter name, repeat, and speed fade to 8 % over
-a slow 1400 ms (soft ease-out), leaving the words plus play/pause and
+~520 ms (Material ease-in-out), leaving the words plus play/pause and
 rewind/forward controls on the page. Pause, and it breathes back. Non-active
-verses recess to upcoming ink over the same deliberate ~700 ms breath.
+verses recess to upcoming ink over ~400 ms.
 
 ## Color
 
@@ -253,7 +253,7 @@ weight.
 ## Motion
 
 - Everything ≤ 400 ms except the deliberate slow moves: chrome recede
-  (1400 ms), verse ink recess (700 ms), ayah dim (600 ms), and the
+  (520 ms), verse ink recess (400 ms), ayah dim (600 ms), and the
   hand-initiated ayah-jump scroll
   (≈280 ms nearby → a full **1000 ms** for a ~200-verse jump — a fast
   decelerating rush across a distance-scaled stretch of verses, truncated
