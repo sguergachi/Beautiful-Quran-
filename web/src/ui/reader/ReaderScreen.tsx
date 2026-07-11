@@ -188,7 +188,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content?.surah.id, isTop])
 
-  // Home word-search hit: quick orange fade-in / fade-out twice on the
+  // Home word-search hit: soft orange ink breath (fade in / out × 2) on the
   // matched word once the verse is on screen (Android SearchHitFlash).
   const pendingFlash = state.pendingSearchFlash
   const [flashTarget, setFlashTarget] = useState<{

@@ -437,7 +437,7 @@ fun WordUnit(
     keepInView: Boolean,
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)? = null,
-    /** When true, [flashAlpha] drives a quick orange pulse on Arabic + gloss. */
+    /** When true, [flashAlpha] drives a soft orange ink breath on Arabic + gloss. */
     showFlash: Boolean = false,
     flashAlpha: () -> Float = { 0f },
 ) {
@@ -541,7 +541,7 @@ fun EnglishWordUnit(
     keepInView: Boolean,
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)? = null,
-    /** When true, [flashAlpha] drives a quick orange pulse on the gloss. */
+    /** When true, [flashAlpha] drives a soft orange ink breath on the gloss. */
     showFlash: Boolean = false,
     flashAlpha: () -> Float = { 0f },
 ) {
