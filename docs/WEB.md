@@ -237,9 +237,10 @@ Three sheets, hand-rolled paper stack (no router chrome):
    active verse); bookmark ribbon.
 3. **Settings** — reciter, reading mode, text size, display toggles, theme.
    Opens as a third sheet **over** the reader when a surah is open
-   (`stackLayer` 0→1→2). All three sheets share one centered axis: the top
-   sheet insets equally L/R so content stays centered, and under-sheets keep
-   a smaller left inset so their edges peek. Tap a peek (or Escape) to peel
+   (`stackLayer` 0→1→2). All three sheets share one axis. On phones the top
+   sheet insets only on the left so under-sheets peek for back-nav, while the
+   right edge stays flush (no matching gutter). Wide viewports (≥900px)
+   recenter a column with equal L/R peeks. Tap a peek (or Escape) to peel
    back.
 
 Hard rules from `DESIGN.md` apply unchanged: no dialogs, cards, ripples,

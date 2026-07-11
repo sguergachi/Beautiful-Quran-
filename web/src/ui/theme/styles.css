@@ -159,7 +159,8 @@ select {
     color-mix(in srgb, var(--ink) 6%, var(--paper)) 0%,
     var(--paper) 12%
   );
-  --peek-step: clamp(22px, 5.5vw, 36px);
+  /* Left-only back-nav gutter — keep small so the reader stays wide. */
+  --peek-step: clamp(18px, 4.5vw, 28px);
   /* Half of the desktop sheet cap (56rem) — used to center the column. */
   --sheet-half: 28rem;
 }
@@ -204,13 +205,14 @@ select {
 }
 
 /*
- * Centered paper deck — Home, Reader, and Settings share one axis.
- * The top sheet insets equally on both sides (content stays centered);
- * under-sheets keep a smaller left inset so their edge peeks out.
+ * Left-cascade paper deck — Home, Reader, and Settings share one axis.
+ * Only the left edge insets so under-sheets peek for back-nav; the right
+ * edge stays flush. Matching right gutters wasted phone width and made the
+ * reader feel cramped. (≥900px recenters a column with equal L/R peeks.)
  *
  *   stack 0: Home full
- *   stack 1: Home left=0 · Reader inset 1 step L/R
- *   stack 2: Home left=0 · Reader left=1 step · Settings inset 2 steps L/R
+ *   stack 1: Home left=0 · Reader left=1 step, right=0
+ *   stack 2: Home left=0 · Reader left=1 step · Settings left=2 steps, right=0
  */
 .sheet[data-depth='0'][data-active='true'] {
   left: 0;
@@ -223,19 +225,19 @@ select {
 
 .app-shell[data-stack='1'] .sheet[data-depth='0'][data-active='true'] {
   left: var(--peek-step);
-  right: var(--peek-step);
+  right: 0;
   box-shadow: -12px 0 32px color-mix(in srgb, var(--ink) 14%, transparent);
 }
 
 .app-shell[data-stack='2'] .sheet[data-depth='0'][data-active='true'] {
   left: calc(var(--peek-step) * 2);
-  right: calc(var(--peek-step) * 2);
+  right: 0;
   box-shadow: -12px 0 32px color-mix(in srgb, var(--ink) 14%, transparent);
 }
 
 .app-shell[data-stack='1'] .sheet[data-depth='1'] {
   left: 0;
-  right: var(--peek-step);
+  right: 0;
   transform: translateX(0) scale(1);
   opacity: 0.82;
   pointer-events: none;
@@ -243,7 +245,7 @@ select {
 
 .app-shell[data-stack='2'] .sheet[data-depth='1'] {
   left: var(--peek-step);
-  right: calc(var(--peek-step) * 2);
+  right: 0;
   transform: translateX(0) scale(1);
   opacity: 0.82;
   pointer-events: none;
@@ -251,7 +253,7 @@ select {
 
 .app-shell[data-stack='2'] .sheet[data-depth='2'] {
   left: 0;
-  right: calc(var(--peek-step) * 2);
+  right: 0;
   transform: translateX(0) scale(1);
   opacity: 0.58;
   pointer-events: none;
@@ -1900,8 +1902,9 @@ select {
   }
 
   /*
-   * Center a 56rem column via left/right (no translateX(-50%)), so stack
-   * peek insets compose on the same axis for all three sheets.
+   * Wide screens: center a 56rem column via left/right (no translateX(-50%)).
+   * Equal L/R peeks keep the deck centered in the column; phones stay
+   * left-only (see base rules above).
    */
   .sheet,
   .sheet[data-depth='0'][data-active='true'] {
