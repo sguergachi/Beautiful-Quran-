@@ -1856,12 +1856,17 @@ select {
     font-size: 16px;
   }
 
+  /*
+   * Keep the same drawing width as desktop. The old 4.5rem rail clipped
+   * expanded ayah numbers (especially 2–3 digit labels) against the canvas
+   * edge; layout bias in AyahSelectorRail also guards narrower widths.
+   */
   .ayah-rail {
-    width: 4.5rem;
+    width: 5.5rem;
   }
 
   .ayah-block {
-    padding-inline: 2.4rem;
+    padding-inline: 2.85rem;
   }
 
   .word-arabic {
