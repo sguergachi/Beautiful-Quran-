@@ -683,11 +683,11 @@ private fun ResponsiveEnglishAyah(
                 SpanStyle(
                     color = gold,
                     fontFamily = HafsFontFamily,
-                    // 17/22 keeps the ornament proportional. The 0.78 shift is
+                    // 17/22 keeps the ornament proportional. The 0.75 shift is
                     // calibrated against the rasterized Hafs/EB Garamond pair
                     // and scales with the user's text size.
                     fontSize = 17.sp * fontScale,
-                    baselineShift = BaselineShift(0.78f),
+                    baselineShift = BaselineShift(0.75f),
                 ),
             ) {
                 append("﴿")
