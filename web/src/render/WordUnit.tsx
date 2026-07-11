@@ -197,8 +197,6 @@ export function WordUnit({
   }
 
   const label = englishMode ? word.translation || word.arabic : word.arabic
-  const secondaryAlpha =
-    ink.state === InkState.Active ? 1 : ink.state === InkState.Upcoming ? tuning.upcomingAlpha : 1
 
   const onPointerDown = (e: PointerEvent) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return
@@ -263,15 +261,14 @@ export function WordUnit({
           {label}
         </span>
       </span>
+      {/* Gloss/translit inherit the parent Upcoming fade only — do not set a
+          second opacity here (Android fades each sibling once; compounding
+          left word-for-word English at ~0.05 and nearly invisible). */}
       {!englishMode && showGloss && word.translation ? (
-        <span className="word-gloss" style={{ opacity: secondaryAlpha }}>
-          {word.translation}
-        </span>
+        <span className="word-gloss">{word.translation}</span>
       ) : null}
       {showTransliteration && word.transliteration ? (
-        <span className="word-translit" style={{ opacity: secondaryAlpha * 0.75 }}>
-          {word.transliteration}
-        </span>
+        <span className="word-translit">{word.transliteration}</span>
       ) : null}
     </span>
   )
