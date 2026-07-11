@@ -7,6 +7,8 @@
  * gathers back into the tip.
  */
 import { useEffect, useRef, useCallback, useState, type CSSProperties } from 'react'
+import { animate, type AnimationPlaybackControls } from 'motion'
+import { RETRACT, UNFURL } from '../ui/motion/easing'
 
 const EDGE_INSET = 9
 const RIBBON_WIDTH = 13
@@ -33,55 +35,6 @@ type Props = {
   interactive?: boolean
   /** Returns true when the verse is now bookmarked. */
   onToggle: () => boolean
-}
-
-function easeUnfurl(t: number): number {
-  // CubicBezier(0.45, 0.02, 0.22, 1) — gravity spill
-  return cubicBezier(t, 0.45, 0.02, 0.22, 1)
-}
-
-function easeRetract(t: number): number {
-  // CubicBezier(0.55, 0.05, 0.35, 1)
-  return cubicBezier(t, 0.55, 0.05, 0.35, 1)
-}
-
-function cubicBezier(
-  t: number,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-): number {
-  const cx = 3 * x1
-  const bx = 3 * (x2 - x1) - cx
-  const ax = 1 - cx - bx
-  const cy = 3 * y1
-  const by = 3 * (y2 - y1) - cy
-  const ay = 1 - cy - by
-  let u = t
-  for (let i = 0; i < 6; i++) {
-    const x = ((ax * u + bx) * u + cx) * u - t
-    const d = (3 * ax * u + 2 * bx) * u + cx
-    if (Math.abs(x) < 1e-5 || Math.abs(d) < 1e-6) break
-    u -= x / d
-  }
-  u = Math.min(1, Math.max(0, u))
-  return ((ay * u + by) * u + cy) * u
-}
-
-function springToward(
-  current: number,
-  target: number,
-  velocity: number,
-  dt: number,
-  stiffness: number,
-  damping: number,
-): { value: number; velocity: number } {
-  // Semi-implicit Euler critically-ish damped spring
-  const force = -stiffness * (current - target) - damping * velocity
-  const v = velocity + force * dt
-  const value = current + v * dt
-  return { value, velocity: v }
 }
 
 function parseRuby(cssColor: string): { r: number; g: number; b: number } {
@@ -115,12 +68,16 @@ export function VerseBookmarkRibbon({
   const wrapRef = useRef<HTMLButtonElement>(null)
   const unfurl = useRef(bookmarked ? 1 : 0)
   const sway = useRef(0)
-  const swayVel = useRef(0)
   const animating = useRef(false)
-  const rafRef = useRef(0)
+  const controlsRef = useRef<AnimationPlaybackControls[]>([])
   const rubyRef = useRef({ r: 179, g: 18, b: 47 })
   const userDriven = useRef(false)
   const [ribbonFocused, setRibbonFocused] = useState(false)
+
+  const stopControls = useCallback(() => {
+    for (const c of controlsRef.current) c.stop()
+    controlsRef.current = []
+  }, [])
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current
@@ -320,7 +277,6 @@ export function VerseBookmarkRibbon({
     if (animating.current) return
     unfurl.current = bookmarked ? 1 : 0
     sway.current = 0
-    swayVel.current = 0
     draw()
   }, [bookmarked, draw])
 
@@ -339,7 +295,7 @@ export function VerseBookmarkRibbon({
 
   const runAnimation = useCallback(
     (toMarked: boolean) => {
-      cancelAnimationFrame(rafRef.current)
+      stopControls()
       animating.current = true
       userDriven.current = true
       const wrap = wrapRef.current
@@ -351,82 +307,71 @@ export function VerseBookmarkRibbon({
       if (toMarked) {
         unfurl.current = 0
         sway.current = 0
-        swayVel.current = 0
       }
 
-      const start = performance.now()
       const from = unfurl.current
       const overshootTarget = toMarked ? 1 + OVERSHOOT : 0
-      let phase: 'travel' | 'settle' | 'done' = 'travel'
-      let settleStart = 0
+      const ease = [...(toMarked ? UNFURL : RETRACT)] as [number, number, number, number]
       let flutterArmed = false
 
-      const tick = (now: number) => {
-        if (phase === 'travel') {
-          const t = Math.min(1, (now - start) / durationMs)
-          const eased = toMarked ? easeUnfurl(t) : easeRetract(t)
-          unfurl.current = from + (overshootTarget - from) * eased
-
+      const travel = animate(0, 1, {
+        duration: durationMs / 1000,
+        ease,
+        onUpdate: (t) => {
+          unfurl.current = from + (overshootTarget - from) * t
           if (toMarked && t >= 0.78 && !flutterArmed) {
             flutterArmed = true
             sway.current = 1
-            swayVel.current = 0
           }
-          if (!toMarked) {
-            // Soft gather flutter
-            if (t < 0.2) sway.current = 0.35 * (1 - t / 0.2)
+          if (!toMarked && t < 0.2) {
+            sway.current = 0.35 * (1 - t / 0.2)
           }
-
-          if (t >= 1) {
-            if (toMarked) {
-              phase = 'settle'
-              settleStart = now
-              unfurl.current = 1 + OVERSHOOT
-            } else {
-              phase = 'done'
-              unfurl.current = 0
-              sway.current = 0
-            }
-          }
-        } else if (phase === 'settle') {
-          // Spring unfurl back to 1, and damp the cloth flutter.
-          const dt = Math.min(0.032, (now - settleStart) / 1000)
-          settleStart = now
-          const u = springToward(unfurl.current, 1, swayVel.current * 0.15, dt, 180, 14)
-          unfurl.current = u.value
-          const s = springToward(sway.current, 0, swayVel.current, dt, 220, 18)
-          sway.current = s.value
-          swayVel.current = s.velocity
-
-          if (
-            Math.abs(unfurl.current - 1) < 0.002 &&
-            Math.abs(sway.current) < 0.01 &&
-            Math.abs(swayVel.current) < 0.05
-          ) {
-            unfurl.current = 1
-            sway.current = 0
-            swayVel.current = 0
-            phase = 'done'
-          }
-        }
-
-        draw()
-
-        if (phase !== 'done') {
-          rafRef.current = requestAnimationFrame(tick)
-        } else {
-          animating.current = false
-          userDriven.current = false
           draw()
-        }
-      }
-
-      rafRef.current = requestAnimationFrame(tick)
+        },
+        onComplete: () => {
+          if (!toMarked) {
+            unfurl.current = 0
+            sway.current = 0
+            animating.current = false
+            userDriven.current = false
+            draw()
+            return
+          }
+          unfurl.current = 1 + OVERSHOOT
+          const settleUnfurl = animate(unfurl.current, 1, {
+            type: 'spring',
+            stiffness: 180,
+            damping: 14,
+            onUpdate: (v) => {
+              unfurl.current = v
+              draw()
+            },
+          })
+          const settleSway = animate(sway.current, 0, {
+            type: 'spring',
+            stiffness: 220,
+            damping: 18,
+            onUpdate: (v) => {
+              sway.current = v
+              draw()
+            },
+            onComplete: () => {
+              unfurl.current = 1
+              sway.current = 0
+              animating.current = false
+              userDriven.current = false
+              draw()
+            },
+          })
+          controlsRef.current = [settleUnfurl, settleSway]
+        },
+      })
+      controlsRef.current = [travel]
     },
-    [draw],
+    [draw, stopControls],
   )
 
-  useEffect(() => () => cancelAnimationFrame(rafRef.current), [])
+  useEffect(() => () => stopControls(), [stopControls])
 
   const onClick = () => {
     if (!interactive || chromeAlpha < 0.1) return

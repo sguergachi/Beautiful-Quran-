@@ -196,6 +196,10 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     const focusTarget = playbackFocusTarget(state.activeAyah, state.activeBasmalah)
 
     const update = () => {
+      // Skip heavy DOM readout while Motion is writing scrollTop — per-frame
+      // React updates were the main mobile lag source during verse glides.
+      if (focus.isAnimating()) return
+
       if (pendingJumpAyah.current != null) {
         const pinned = pendingJumpAyah.current
         setFocusedAyah((prev) => (prev === pinned ? prev : pinned))

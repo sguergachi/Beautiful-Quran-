@@ -6,6 +6,8 @@
  * and re-inks from a dry page whenever the direction flips.
  */
 import { useEffect, useRef, useCallback, type CSSProperties } from 'react'
+import { animate, cubicBezier, type AnimationPlaybackControls } from 'motion'
+import { FAST_OUT_SLOW_IN } from '../motion/easing'
 
 const SIZE_PX = 44
 const INK_MS = 1100
@@ -19,34 +21,7 @@ type Props = {
   style?: CSSProperties
 }
 
-/** Material FastOutSlowIn — cubic-bezier(0.4, 0, 0.2, 1). */
-function fastOutSlowIn(t: number): number {
-  return cubicBezier(t, 0.4, 0, 0.2, 1)
-}
-
-function cubicBezier(
-  t: number,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-): number {
-  const cx = 3 * x1
-  const bx = 3 * (x2 - x1) - cx
-  const ax = 1 - cx - bx
-  const cy = 3 * y1
-  const by = 3 * (y2 - y1) - cy
-  const ay = 1 - cy - by
-  let u = t
-  for (let i = 0; i < 6; i++) {
-    const x = ((ax * u + bx) * u + cx) * u - t
-    const d = (3 * ax * u + 2 * bx) * u + cx
-    if (Math.abs(x) < 1e-5 || Math.abs(d) < 1e-6) break
-    u -= x / d
-  }
-  u = Math.min(1, Math.max(0, u))
-  return ((ay * u + by) * u + cy) * u
-}
+const fastOutSlowIn = cubicBezier(...FAST_OUT_SLOW_IN)
 
 function span(progress: number, from: number, to: number): number {
   return fastOutSlowIn(Math.min(1, Math.max(0, (progress - from) / (to - from))))
@@ -214,10 +189,13 @@ export function ReturnToAyahButton({ pointUp, onClick, className, style }: Props
   const inkRef = useRef(0)
   const rotationRef = useRef(pointUp ? 180 : 0)
   const targetRotationRef = useRef(pointUp ? 180 : 0)
-  const rafRef = useRef(0)
-  const inkStartRef = useRef(0)
-  const rotStartRef = useRef(0)
+  const controlsRef = useRef<AnimationPlaybackControls[]>([])
   const rotFromRef = useRef(pointUp ? 180 : 0)
+
+  const stopControls = useCallback(() => {
+    for (const c of controlsRef.current) c.stop()
+    controlsRef.current = []
+  }, [])
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current
@@ -318,53 +296,40 @@ export function ReturnToAyahButton({ pointUp, onClick, className, style }: Props
     ctx.restore()
   }, [])
 
-  const tick = useCallback(
-    (now: number) => {
-      let needsFrame = false
-
-      // Ink: linear wipe after a short delay (Android tween).
-      const inkElapsed = now - inkStartRef.current
-      if (inkElapsed < INK_DELAY_MS) {
-        inkRef.current = 0
-        needsFrame = true
-      } else {
-        const t = Math.min(1, (inkElapsed - INK_DELAY_MS) / INK_MS)
-        inkRef.current = t
-        if (t < 1) needsFrame = true
-      }
-
-      // Rotation: FastOutSlowIn toward target.
-      const rotElapsed = now - rotStartRef.current
-      const rotT = Math.min(1, rotElapsed / ROTATE_MS)
-      const eased = fastOutSlowIn(rotT)
-      rotationRef.current =
-        rotFromRef.current + (targetRotationRef.current - rotFromRef.current) * eased
-      if (rotT < 1) needsFrame = true
-
-      draw()
-      if (needsFrame) {
-        rafRef.current = requestAnimationFrame(tick)
-      } else {
-        rafRef.current = 0
-      }
-    },
-    [draw],
-  )
-
   const startAnim = useCallback(
     (restartInk: boolean) => {
-      const now = performance.now()
+      stopControls()
+      rotFromRef.current = rotationRef.current
+      const fromRot = rotFromRef.current
+      const toRot = targetRotationRef.current
+
+      const rot = animate(0, 1, {
+        duration: ROTATE_MS / 1000,
+        ease: [...FAST_OUT_SLOW_IN] as [number, number, number, number],
+        onUpdate: (t) => {
+          rotationRef.current = fromRot + (toRot - fromRot) * t
+          draw()
+        },
+      })
+
+      const next: AnimationPlaybackControls[] = [rot]
       if (restartInk) {
         inkRef.current = 0
-        inkStartRef.current = now
+        const ink = animate(0, 1, {
+          duration: INK_MS / 1000,
+          delay: INK_DELAY_MS / 1000,
+          ease: 'linear',
+          onUpdate: (t) => {
+            inkRef.current = t
+            draw()
+          },
+        })
+        next.push(ink)
       }
-      rotFromRef.current = rotationRef.current
-      rotStartRef.current = now
-      if (!rafRef.current) {
-        rafRef.current = requestAnimationFrame(tick)
-      }
+      controlsRef.current = next
+      draw()
     },
-    [tick],
+    [draw, stopControls],
   )
 
   // Direction change: rotate + re-ink from dry.
@@ -383,11 +348,7 @@ export function ReturnToAyahButton({ pointUp, onClick, className, style }: Props
     return () => ro.disconnect()
   }, [draw])
 
-  useEffect(() => {
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current)
-    }
-  }, [])
+  useEffect(() => () => stopControls(), [stopControls])
 
   return (
     <button

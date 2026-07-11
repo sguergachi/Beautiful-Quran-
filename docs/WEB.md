@@ -113,14 +113,17 @@ Port exactly:
 
 Acceptance: every case in `FocusEngineTest` ports. DOM controller is
 separate (`web/src/ui/reader/ReaderFocusController.ts` — sole writer to the
-reader `scrollTop`, using `getBoundingClientRect` + rAF `homeScrollStep`;
-resolves ayah 0 to the `.basmalah-block` above ayah 1 on preface chapters).
-Recitation-follow, selector jumps, return-to-ayah, and tall-verse word
-keep-in-view all go through it. Verse advances and tall-verse line follow
-both use continuous `homeScrollStep` re-aiming (never an instant `scrollTop`
-snap) so the next verse and the next line glide smoothly. Word-band math
-lives in pure `wordBandDeltaPx`. Non-active ayahs recess only while audio is
-actually playing (`recitingActive`); at rest every ayah is Plain (full opacity).
+reader `scrollTop`, using Motion `animate` + live geometry + `homeScrollStep`
+with Material FastOutSlowIn `[0.4, 0, 0.2, 1]` — the same curve as Android
+`FastOutSlowInEasing`; resolves ayah 0 to the `.basmalah-block` above ayah 1
+on preface chapters). Recitation-follow, selector jumps, return-to-ayah, and
+tall-verse word keep-in-view all go through it. Verse advances and tall-verse
+line follow both use continuous `homeScrollStep` re-aiming (never an instant
+`scrollTop` snap) so the next verse and the next line glide smoothly. Word-band
+math lives in pure `wordBandDeltaPx`. Non-active ayahs recess only while audio
+is actually playing (`recitingActive`); at rest every ayah is Plain (full
+opacity). JS-driven washes / ribbons / entrance also use the `motion` package
+(`web/src/ui/motion/easing.ts` for shared Android curves).
 
 **Follow pause (Android parity):** lyric follow is paused only by a vertical
 hand drag past touch-slop or a wheel gesture (`followGesture.ts`) — never by

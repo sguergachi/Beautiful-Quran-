@@ -8,7 +8,11 @@
  * Verse advances and tall-verse line follow both use continuous `homeScrollStep`
  * re-aiming (not a one-shot delta or an instant `scrollTop` snap) so motion
  * stays butter-smooth onto the next verse or the next line.
+ *
+ * Progress timelines run through Motion with Material FastOutSlowIn — the same
+ * curve Android uses via `FastOutSlowInEasing`.
  */
+import { animate, type AnimationPlaybackControls } from 'motion'
 import {
   FocusEngine,
   FocusZone,
@@ -16,18 +20,24 @@ import {
   type FocusPlacement,
   type TargetGeometry,
 } from '../../engine/focus'
+import { FAST_OUT_SLOW_IN } from '../motion/easing'
 
-/** Soft recitation-follow / verse-glide duration — Android `GlideSpec` 700ms. */
-const GLIDE_MS = 700
+/**
+ * Soft recitation-follow / verse-glide duration.
+ * Slightly snappier than Android's 700 ms so next-verse feels responsive on
+ * the web (especially mobile), while keeping the same FastOutSlowIn curve.
+ */
+const GLIDE_MS = 520
 /** Tall-verse word-band follow — snappier than a full verse glide. */
-const WORD_GLIDE_MS = 450
+const WORD_GLIDE_MS = 300
+/**
+ * Hand-initiated jump durations from FocusEngine are scaled down a touch so
+ * scroll-to-verse feels faster without changing the pure engine constants.
+ */
+const JUMP_DURATION_SCALE = 0.82
+const JUMP_DURATION_FLOOR_MS = 200
 const ACTIVE_WORD_TOP_MARGIN_PX = 144
 const ACTIVE_WORD_BOTTOM_MARGIN_PX = 132
-
-/** Approximate Android `FastOutSlowInEasing` (path 0.4, 0, 0.2, 1). */
-function easeInOutCubic(t: number): number {
-  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
-}
 
 export class ReaderFocusController {
   private scrollEl: HTMLElement | null = null
@@ -35,11 +45,23 @@ export class ReaderFocusController {
   private lastAyahNumber = 1
   private focusChain: Promise<void> = Promise.resolve()
   private focusEpoch = 0
+  /** True while a Motion home-scroll is writing scrollTop. */
+  private animating = false
+  private activeControls: AnimationPlaybackControls | null = null
 
   bind(scrollEl: HTMLElement | null, lastAyahNumber: number, topGuardPx = 0) {
     this.scrollEl = scrollEl
     this.lastAyahNumber = Math.max(1, lastAyahNumber)
     this.topGuardPx = topGuardPx
+  }
+
+  /**
+   * True while a programmatic glide is in flight. Reader scroll handlers
+   * should skip heavy React readout updates during this window to avoid
+   * per-frame re-renders (the main mobile lag source).
+   */
+  isAnimating(): boolean {
+    return this.animating
   }
 
   /**
@@ -52,18 +74,21 @@ export class ReaderFocusController {
     ayahNumber: number,
     options: { animate?: boolean; preRoll?: boolean } = {},
   ): Promise<void> {
-    const animate = options.animate !== false
+    const animateScroll = options.animate !== false
     const preRoll = options.preRoll === true
     const epoch = ++this.focusEpoch
     this.focusChain = this.focusChain
       .catch(() => undefined)
-      .then(() => this.focusLocked(ayahNumber, animate, preRoll, epoch))
+      .then(() => this.focusLocked(ayahNumber, animateScroll, preRoll, epoch))
     return this.focusChain
   }
 
   /** Cancel any in-flight programmatic scroll (user grabbed the page). */
   cancel() {
     this.focusEpoch++
+    this.activeControls?.stop()
+    this.activeControls = null
+    this.animating = false
   }
 
   placementOf(ayahNumber: number | null | undefined): FocusPlacement {
@@ -260,9 +285,13 @@ export class ReaderFocusController {
     )
   }
 
+  private jumpDurationMs(planMs: number): number {
+    return Math.max(JUMP_DURATION_FLOOR_MS, Math.round(planMs * JUMP_DURATION_SCALE))
+  }
+
   private async focusLocked(
     ayahNumber: number,
-    animate: boolean,
+    shouldAnimate: boolean,
     preRoll: boolean,
     epoch: number,
   ): Promise<void> {
@@ -306,14 +335,14 @@ export class ReaderFocusController {
         const door = blocks[plan.doorstepIndex]
         if (door) this.snapBlockOntoAnchor(door)
       }
-      if (!animate) {
+      if (!shouldAnimate) {
         const delta = this.remainingPxToAnchor(ayahNumber)
         if (epoch === this.focusEpoch && Math.abs(delta) >= 0.5) {
           el.scrollTop = Math.max(0, el.scrollTop + delta)
         }
         return
       }
-      await this.animateHomeOnto(ayahNumber, plan.durationMs, epoch)
+      await this.animateHomeOnto(ayahNumber, this.jumpDurationMs(plan.durationMs), epoch)
       return
     }
 
@@ -330,7 +359,7 @@ export class ReaderFocusController {
     }
 
     if (epoch !== this.focusEpoch) return
-    if (!animate) {
+    if (!shouldAnimate) {
       const delta = this.remainingPxToAnchor(ayahNumber)
       el.scrollTop = Math.max(0, el.scrollTop + delta)
       return
@@ -369,8 +398,8 @@ export class ReaderFocusController {
   }
 
   /**
-   * Shared decelerating glide: each frame scrolls the FastOutSlowIn fraction of
-   * whatever distance [remainingPx] still reports.
+   * Shared decelerating glide via Motion: each update scrolls the FastOutSlowIn
+   * fraction of whatever distance [remainingPx] still reports.
    */
   private animateRemaining(
     remainingPx: () => number,
@@ -381,35 +410,48 @@ export class ReaderFocusController {
     if (!el) return Promise.resolve()
     if (Math.abs(remainingPx()) < 0.5) return Promise.resolve()
 
-    const duration = Math.max(1, durationMs)
-    const start = performance.now()
+    this.activeControls?.stop()
+    this.animating = true
     let lastProgress = 0
 
     return new Promise((resolve) => {
-      const tick = (now: number) => {
-        if (epoch !== this.focusEpoch || !this.scrollEl) {
-          resolve()
-          return
-        }
-        const t = Math.min(1, (now - start) / duration)
-        const progress = easeInOutCubic(t)
-        const remaining = remainingPx()
-        const step = FocusEngine.homeScrollStep(remaining, progress, lastProgress)
-        lastProgress = progress
-        if (Math.abs(step) >= 0.5) {
-          this.scrollEl.scrollTop = Math.max(0, this.scrollEl.scrollTop + step)
-        }
-        if (t < 1) {
-          requestAnimationFrame(tick)
-        } else {
+      const finish = () => {
+        this.animating = false
+        this.activeControls = null
+        if (epoch === this.focusEpoch && this.scrollEl) {
           const leftover = remainingPx()
-          if (Math.abs(leftover) >= 0.5 && this.scrollEl) {
+          if (Math.abs(leftover) >= 0.5) {
             this.scrollEl.scrollTop = Math.max(0, this.scrollEl.scrollTop + leftover)
+          } else {
+            // No leftover write — still notify listeners so rail readout
+            // refreshes after we suppressed mid-glide scroll handlers.
+            this.scrollEl.dispatchEvent(new Event('scroll'))
           }
-          resolve()
         }
+        resolve()
       }
-      requestAnimationFrame(tick)
+
+      const controls = animate(0, 1, {
+        duration: Math.max(0.001, durationMs / 1000),
+        ease: [...FAST_OUT_SLOW_IN] as [number, number, number, number],
+        onUpdate: (progress) => {
+          if (epoch !== this.focusEpoch || !this.scrollEl) {
+            controls.stop()
+            this.animating = false
+            this.activeControls = null
+            resolve()
+            return
+          }
+          const remaining = remainingPx()
+          const step = FocusEngine.homeScrollStep(remaining, progress, lastProgress)
+          lastProgress = progress
+          if (Math.abs(step) >= 0.5) {
+            this.scrollEl.scrollTop = Math.max(0, this.scrollEl.scrollTop + step)
+          }
+        },
+        onComplete: finish,
+      })
+      this.activeControls = controls
     })
   }
 }

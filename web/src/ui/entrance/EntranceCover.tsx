@@ -5,6 +5,7 @@
  * the book is ready.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { animate, type AnimationPlaybackControls } from 'motion'
 import { washMaskImage } from '../../engine/fade'
 import { coverLayout, coverLayoutCssVars } from './coverLayout'
 
@@ -17,7 +18,6 @@ const ARRIVAL_HOLD_MS = 300
 const DUA_WASH_MS = 2_400
 const DUA_HOLD_MS = 900
 const OPEN_MS = 1_150
-const WASH_TICK_MS = 32
 
 type Phase = 'loading' | 'arriving' | 'dua' | 'opening'
 
@@ -70,22 +70,32 @@ function applyWash(
   el.style.opacity = '1'
 }
 
-/** Drive a letter wash from 0→1 over [durationMs], calling [paint] each tick. */
+/** Drive a letter wash from 0→1 over [durationMs] via Motion. */
 async function runWash(
   durationMs: number,
   paint: (progress: number) => void,
   signal: AbortSignal,
 ): Promise<void> {
-  const start = performance.now()
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
   paint(0)
-  while (!signal.aborted) {
-    const t = (performance.now() - start) / durationMs
-    const p = Math.min(1, t)
-    paint(p)
-    if (p >= 1) break
-    await wait(WASH_TICK_MS, signal)
-  }
-  paint(1)
+  let controls: AnimationPlaybackControls | null = null
+  await new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      controls?.stop()
+      reject(new DOMException('Aborted', 'AbortError'))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    controls = animate(0, 1, {
+      duration: Math.max(0.001, durationMs / 1000),
+      ease: 'linear',
+      onUpdate: (p) => paint(p),
+      onComplete: () => {
+        signal.removeEventListener('abort', onAbort)
+        paint(1)
+        resolve()
+      },
+    })
+  })
 }
 
 /** Eight-fold khatam + octagram medallion — ceremonial scale, 1:1. */
