@@ -187,36 +187,22 @@ export function VerseBookmarkRibbon({
       ctx.closePath()
     }
 
-    // Primary silk fill — tube shading baked into the ruby itself
+    // Flat ruby fill — no edge strokes or lateral shading (avoids outline/shadow).
     buildBodyPath()
     const x0 = Math.min(ax(outer), ax(inner))
     const x1 = Math.max(ax(outer), ax(inner))
-    const silk = ctx.createLinearGradient(x0, 0, x1, 0)
-    const dark = `rgba(${Math.max(0, r - 40)},${Math.max(0, g - 28)},${Math.max(0, b - 22)},${alpha})`
-    const mid = `rgba(${r},${g},${b},${alpha})`
-    const lit = `rgba(${Math.min(255, r + 48)},${Math.min(255, g + 32)},${Math.min(255, b + 28)},${alpha})`
-    silk.addColorStop(0, dark)
-    silk.addColorStop(0.2, mid)
-    silk.addColorStop(0.48, lit)
-    silk.addColorStop(0.78, mid)
-    silk.addColorStop(1, dark)
-    ctx.fillStyle = silk
-    ctx.fill()
-
-    // Vertical depth wash (darker toward the tip)
-    ctx.save()
-    buildBodyPath()
-    ctx.clip()
     const tipWash = ctx.createLinearGradient(0, top - TOP_FOLD, 0, bot)
-    tipWash.addColorStop(0, `rgba(255,255,255,${0.14 * alpha})`)
-    tipWash.addColorStop(0.15, `rgba(255,255,255,0)`)
-    tipWash.addColorStop(0.7, `rgba(0,0,0,0)`)
-    tipWash.addColorStop(1, `rgba(0,0,0,${0.22 * alpha})`)
+    tipWash.addColorStop(0, `rgba(${r},${g},${b},${alpha})`)
+    tipWash.addColorStop(0.55, `rgba(${r},${g},${b},${alpha})`)
+    tipWash.addColorStop(1, `rgba(${r},${g},${b},${alpha * 0.82})`)
     ctx.fillStyle = tipWash
-    ctx.fillRect(x0 - 4, top - TOP_FOLD - 2, x1 - x0 + 8, bot - top + TOP_FOLD + 8)
+    ctx.fill()
 
     // Soft weave
     if (span > NUB_LENGTH && alpha > 0.3) {
+      ctx.save()
+      buildBodyPath()
+      ctx.clip()
       ctx.strokeStyle = `rgba(255,255,255,${0.08 * alpha})`
       ctx.lineWidth = 0.7
       for (let y = top - TOP_FOLD; y < bot; y += 4.5) {
@@ -225,32 +211,8 @@ export function VerseBookmarkRibbon({
         ctx.lineTo(x1, y + 3)
         ctx.stroke()
       }
+      ctx.restore()
     }
-    ctx.restore()
-
-    // Outer catch-light
-    ctx.beginPath()
-    ctx.moveTo(ax(outer + lateral(top)), top)
-    for (let i = 1; i <= steps; i++) {
-      const y = top + span * (i / steps)
-      if (y > bot - notchDepth) break
-      ctx.lineTo(ax(outer + lateral(y)), y)
-    }
-    ctx.strokeStyle = `rgba(255,248,242,${0.5 * alpha})`
-    ctx.lineWidth = 1.2
-    ctx.stroke()
-
-    // Inner edge depth
-    ctx.beginPath()
-    ctx.moveTo(ax(inner + lateral(top)), top)
-    for (let i = 1; i <= steps; i++) {
-      const y = top + span * (i / steps)
-      if (y > bot - notchDepth) break
-      ctx.lineTo(ax(inner + lateral(y)), y)
-    }
-    ctx.strokeStyle = `rgba(30,4,10,${0.35 * alpha})`
-    ctx.lineWidth = 1.05
-    ctx.stroke()
   }, [bookmarked, hovered, ribbonFocused, side])
 
   // Keep ruby color in sync with theme tokens.
