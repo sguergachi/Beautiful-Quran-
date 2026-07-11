@@ -201,6 +201,12 @@ summary + occurrences). No network. HighlightEngine is untouched.
 Word tap (short press) keeps today's behaviour: play/seek from that word.
 Only the **hold** opens the lexicon.
 
+Opening the viewer pauses an active chapter recitation. Closing it restores the
+same ayah position, speed, and repeat settings and resumes only when playback
+was active before the viewer opened. Concordance jumps do not resume the old
+location. The isolated word speaker may temporarily replace the playlist; the
+saved reading session is restored on exit.
+
 ### Developer mode
 
 Developer mode is unlocked the existing Settings way (repeated taps on the

@@ -5,7 +5,7 @@ object EnglishTypography {
     private val terminalPunctuation = Regex("[.!?…][\\\"'’”)]*$")
     private val speechCue = Regex("(?:^|\\s)(say|says|said)$", RegexOption.IGNORE_CASE)
     private val nonSentenceCapital = Regex(
-        "^(Allah|God|Lord|He|Him|His|We|Us|Our|I|Me|My|Musa|Firaun|" +
+        "^(Allah|God|Lord|He|Him|His|We|Us|Our|I|Me|My|Musa|Firaun|Guidance|" +
             "Prophet|Messenger|Most|Oft[- ]|All[- ])",
     )
 

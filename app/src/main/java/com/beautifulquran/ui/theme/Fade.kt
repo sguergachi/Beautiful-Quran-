@@ -186,8 +186,21 @@ fun Modifier.shapedWordBloom(
                     val lineStart = maxOf(start, textLayout.getLineStart(line))
                     val lineEnd = minOf(endExclusive, textLayout.getLineEnd(line, visibleEnd = true))
                     if (lineEnd <= lineStart) continue
-                    val bounds = textLayout.getPathForRange(lineStart, lineEnd).getBounds()
-                    if (!bounds.isEmpty && bounds.width > 0f) add(bounds)
+                    val selectionBounds = textLayout.getPathForRange(lineStart, lineEnd).getBounds()
+                    if (!selectionBounds.isEmpty && selectionBounds.width > 0f) {
+                        // Selection paths can stop above a Latin descender at
+                        // a wrapped range edge. Keep the word-local horizontal
+                        // bounds, but cover the text layout's full line height
+                        // so g/j/p/q/y never escape the upcoming-ink mask.
+                        add(
+                            Rect(
+                                left = selectionBounds.left,
+                                top = textLayout.getLineTop(line),
+                                right = selectionBounds.right,
+                                bottom = textLayout.getLineBottom(line),
+                            ),
+                        )
+                    }
                 }
             }
             if (lineBounds.isEmpty()) return@forEach

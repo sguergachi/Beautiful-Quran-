@@ -62,6 +62,7 @@ import com.beautifulquran.ui.home.FloatingPlaybackListClearance
 import com.beautifulquran.ui.home.HomeScreen
 import com.beautifulquran.ui.home.HomeViewModel
 import com.beautifulquran.ui.reader.BackToOriginPill
+import com.beautifulquran.ui.reader.ReaderPlaybackSnapshot
 import com.beautifulquran.ui.reader.ReaderScreen
 import com.beautifulquran.ui.reader.ReaderViewModel
 import com.beautifulquran.ui.reader.RootReturnTarget
@@ -184,6 +185,11 @@ private fun PaperStackApp(
     var rootVisible by remember { mutableStateOf(false) }
     /** Developer-mode chooser after a word hold (Root Viewer vs Timings Lab). */
     var chooserVisible by remember { mutableStateOf(false) }
+    var chooserRendered by remember { mutableStateOf(false) }
+    var rootRendered by remember { mutableStateOf(false) }
+    var labRendered by remember { mutableStateOf(false) }
+    var readerInkOverlayVisible by remember { mutableStateOf(false) }
+    var rootPlaybackSnapshot by remember { mutableStateOf<ReaderPlaybackSnapshot?>(null) }
     var pendingWord by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
     /** Bumped on every concordance jump so the reader remounts even when the
      * target surah/ayah pair is unchanged. */
@@ -198,7 +204,8 @@ private fun PaperStackApp(
     val stackPosition = remember { Animatable(settledLayer.toFloat()) }
     val scope = rememberCoroutineScope()
     val settingsLayer = if (selectedSurahId == 0) AYAH_LAYER else SETTINGS_LAYER
-    val overlayBlocking = labVisible || rootVisible || chooserVisible
+    val overlayBlocking = labVisible || rootVisible || chooserVisible ||
+        labRendered || rootRendered || chooserRendered || readerInkOverlayVisible
     val rootReturnVisible = rootReturnTarget != null && !overlayBlocking
     val onRootReturnUserMovedLatest = rememberUpdatedState {
         if (rootReturnTarget != null) rootReturnDismissArmed = true
@@ -254,14 +261,20 @@ private fun PaperStackApp(
     fun openRootViewer(surahId: Int, ayah: Int, wordPosition: Int) {
         chooserVisible = false
         labVisible = false
+        rootPlaybackSnapshot = readerViewModel.pauseForRootViewer()
         rootViewerViewModel.open(surahId, ayah, wordPosition)
         rootVisible = true
     }
 
-    fun closeRootViewer() {
+    fun closeRootViewer(resumeReading: Boolean = true) {
         if (!rootVisible) return
         rootVisible = false
         rootViewerViewModel.clear()
+        val snapshot = rootPlaybackSnapshot
+        rootPlaybackSnapshot = null
+        if (resumeReading && snapshot != null) {
+            readerViewModel.resumeAfterRootViewer(snapshot)
+        }
     }
 
     fun onWordLongPress(surahId: Int, ayah: Int, wordPosition: Int) {
@@ -285,7 +298,7 @@ private fun PaperStackApp(
                 surahNameTransliteration = origin.surahNameTransliteration,
             )
         }
-        closeRootViewer()
+        closeRootViewer(resumeReading = false)
         if (surahId != selectedSurahId) {
             readerViewModel.load(surahId)
         }
@@ -428,6 +441,7 @@ private fun PaperStackApp(
                         onRootReturnUserMoved = { onRootReturnUserMovedLatest.value() },
                         rootReturnVisible = rootReturnVisible,
                         keepStatusBarVisible = overlayBlocking,
+                        onInkOverlayVisibilityChange = { readerInkOverlayVisible = it },
                     )
                 }
 
@@ -439,6 +453,7 @@ private fun PaperStackApp(
                     visible = chooserVisible,
                     backgroundColor = overlayColors.background,
                     modifier = Modifier.zIndex(3f),
+                    onRenderedChange = { chooserRendered = it },
                 ) {
                     MaterialTheme(colorScheme = overlayColors, typography = MaterialTheme.typography) {
                         CompositionLocalProvider(LocalQuranAccents provides TimingsLabAccents) {
@@ -468,6 +483,7 @@ private fun PaperStackApp(
                     visible = rootVisible,
                     backgroundColor = overlayColors.background,
                     modifier = Modifier.zIndex(4f),
+                    onRenderedChange = { rootRendered = it },
                 ) {
                     MaterialTheme(colorScheme = overlayColors, typography = MaterialTheme.typography) {
                         CompositionLocalProvider(LocalQuranAccents provides TimingsLabAccents) {
@@ -548,6 +564,7 @@ private fun PaperStackApp(
             visible = labVisible,
             backgroundColor = overlayColors.background,
             modifier = Modifier.zIndex(5f),
+            onRenderedChange = { labRendered = it },
         ) {
             MaterialTheme(colorScheme = overlayColors, typography = MaterialTheme.typography) {
                 CompositionLocalProvider(LocalQuranAccents provides TimingsLabAccents) {
