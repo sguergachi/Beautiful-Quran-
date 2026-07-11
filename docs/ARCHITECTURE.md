@@ -232,9 +232,8 @@ Ink-bleed overlays (not paper-stack pages) sit above the stack via
 On a cold start the whole stack sits behind the **entrance cover**
 (`entrance/EntranceCover` on Android; `web/src/ui/entrance/` on web) — the
 closed mushaf: gilded ornament concentric with the display's corner radii,
-and the title, before the cover swings open onto chapter selection. (The web
-port still recites the isti'adha once from the chosen reciter's everyayah
-pack; Android does not.) It is a one-shot ceremony, not a sheet in the
+the title, and the isti'adha fading in as text, before the cover swings open
+onto chapter selection. It is a one-shot ceremony, not a sheet in the
 stack; see the entrance section of [DESIGN.md](DESIGN.md).
 
 ViewModels get their dependencies from `QuranApp` (Application) through

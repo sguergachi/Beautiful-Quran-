@@ -94,7 +94,6 @@ export function App() {
 
   const stack = state.stackLayer
   const hasReader = state.content != null
-  const recitationLive = state.player.isPlaying || state.player.nowPlaying != null
 
   return (
     <div className="app-shell" data-stack={stack} data-has-reader={hasReader}>
@@ -103,12 +102,7 @@ export function App() {
       <SettingsScreen stackLayer={stack} hasReader={hasReader} />
       <RootViewer />
       {!entranceDone && (
-        <EntranceCover
-          reciters={state.reciters}
-          reciterId={state.settings.reciterId}
-          recitationLive={recitationLive}
-          onFinished={() => setEntranceDone(true)}
-        />
+        <EntranceCover onFinished={() => setEntranceDone(true)} />
       )}
     </div>
   )
