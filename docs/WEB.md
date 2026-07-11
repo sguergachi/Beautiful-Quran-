@@ -313,7 +313,8 @@ sans.
 - 33 ms ticker → `PreparedTimings` → `ActiveWord`.
 - `InkEngine` → gloss/English word renderers with real directional wash.
 - Repeat orange wash for repeat-aware reciters.
-- Chrome recede while playing.
+- Chrome recede while playing (top bar + ayah rail → fully hidden like
+  Android `topBarAlpha`; player peripherals whisper at 0.08 like `chromeAlpha`).
 
 ### Phase 3 — Focus + paper stack polish
 - ✅ `ReaderFocusController` (doorstep + `homeScrollStep`, recitation-follow,

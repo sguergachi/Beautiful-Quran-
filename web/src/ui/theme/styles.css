@@ -600,8 +600,10 @@ select {
   min-height: 2.85rem;
 }
 
+/* Android topBarAlpha → 0 while reciting — fully hide, don't leave a ghostly
+ * 0.08 overlay floating over the page. Layout space (safe-area pad) stays. */
 .reader-top[data-receded='true'] {
-  opacity: 0.08;
+  opacity: 0;
   pointer-events: none;
 }
 
@@ -806,8 +808,9 @@ select {
   right: 0;
 }
 
+/* Same as reader-top: Android passes topBarAlpha (→ 0), not chromeAlpha. */
 .ayah-rail[data-receded='true'] {
-  opacity: 0.08;
+  opacity: 0;
   pointer-events: none;
   cursor: default;
 }
