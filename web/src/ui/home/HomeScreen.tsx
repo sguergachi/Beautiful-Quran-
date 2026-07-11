@@ -110,6 +110,10 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
     wordSections.length === 0 &&
     !wordLoading
 
+  const prepareChapter = (surahId: number) => {
+    appStore.prepareSurah(surahId)
+  }
+
   return (
     <div
       className="sheet"
@@ -158,6 +162,9 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
                 <button
                   type="button"
                   className="continue"
+                  onPointerEnter={() => prepareChapter(continueSurah.id)}
+                  onPointerDown={() => prepareChapter(continueSurah.id)}
+                  onFocus={() => prepareChapter(continueSurah.id)}
                   onClick={() =>
                     appStore.openSurah(
                       continueSurah.id,
@@ -191,6 +198,9 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
                   <button
                     type="button"
                     className="surah-row"
+                    onPointerEnter={() => prepareChapter(s.id)}
+                    onPointerDown={() => prepareChapter(s.id)}
+                    onFocus={() => prepareChapter(s.id)}
                     onClick={() =>
                       appStore.openSurah(s.id, ayahTarget ?? 1)
                     }
@@ -221,6 +231,7 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     section={section}
                     query={search}
                     onToggle={() => toggleSection(section.surahId)}
+                    onPrepareHit={(hit) => prepareChapter(hit.surahId)}
                     onOpenHit={(hit) =>
                       appStore.openSurah(
                         hit.surahId,
@@ -312,11 +323,13 @@ function WordSearchSection({
   section,
   query,
   onToggle,
+  onPrepareHit,
   onOpenHit,
 }: {
   section: SurahWordSearchSection
   query: string
   onToggle: () => void
+  onPrepareHit: (hit: WordSearchHit) => void
   onOpenHit: (hit: WordSearchHit) => void
 }) {
   return (
@@ -336,6 +349,9 @@ function WordSearchSection({
             <button
               type="button"
               className="word-search-hit"
+              onPointerEnter={() => onPrepareHit(hit)}
+              onPointerDown={() => onPrepareHit(hit)}
+              onFocus={() => onPrepareHit(hit)}
               onClick={() => onOpenHit(hit)}
             >
               <span className="word-search-ref">

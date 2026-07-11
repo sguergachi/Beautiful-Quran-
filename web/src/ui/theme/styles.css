@@ -266,12 +266,6 @@ select {
   contain: strict;
 }
 
-.sheet[data-loading='true'] {
-  /* Blank paper during peel-first open — visible, no empty-hide. */
-  visibility: visible;
-  pointer-events: none;
-}
-
 /* Left-edge hit target — desktop peek gutter only (phones have no peek). */
 .sheet-edge-back {
   display: none;
@@ -2453,19 +2447,30 @@ select {
 
 .floating-play {
   position: absolute;
-  left: 50%;
+  left: 0;
+  right: 0;
   bottom: calc(0.55rem + env(safe-area-inset-bottom, 0px));
-  transform: translateX(-50%);
   z-index: 8;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.1rem;
-  width: min(22rem, calc(100% - 1.25rem));
-  padding: 0.45rem 0.55rem 0.35rem;
+  width: 100%;
+  padding: 0.45rem var(--sheet-pad) 0.35rem;
   background: var(--paper);
-  animation: float-in 280ms ease;
+  animation: floating-play-in 280ms ease;
   color: var(--accent);
+}
+
+@keyframes floating-play-in {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .floating-play .float-close {
