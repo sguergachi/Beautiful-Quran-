@@ -2,15 +2,18 @@
  * Offline shell for the GitHub Pages reader.
  *
  * Strategy:
- *   - Navigations / HTML → network-first (so deploys always take effect)
+ *   - Navigations / HTML → network-only (never Cache API)
  *   - Hashed JS/CSS, wasm, fonts, quran.db → cache-first
  *   - sw.js itself is never cached through this worker
  *
- * Bump CACHE whenever the shell contract changes. Activate deletes every
- * other cache name and reloads open clients so a poisoned index.html
- * (pointing at deleted hashed assets) cannot leave a blank page.
+ * Caching index.html is what blanked phones after each Pages deploy: a
+ * cache-first (or stale network-first fallback) shell pointed at deleted
+ * hashed assets. HTML must not enter the Cache API.
+ *
+ * Bump CACHE whenever this contract changes. Activate deletes every other
+ * cache name and reloads open clients so a poisoned shell cannot stick.
  */
-const CACHE = 'beautiful-quran-web-v6'
+const CACHE = 'beautiful-quran-web-v7'
 const BASE = self.registration.scope
 
 function isNavigationRequest(req, url) {
@@ -26,9 +29,17 @@ function isServiceWorkerScript(url) {
   return url.pathname.endsWith('/sw.js') || url.pathname.endsWith('sw.js')
 }
 
+function isHtmlRequest(url) {
+  if (url.pathname.endsWith('.html')) return true
+  const path = url.pathname.endsWith('/') ? url.pathname : `${url.pathname}/`
+  const basePath = new URL(BASE).pathname
+  return path === basePath
+}
+
 function shouldCacheAsset(url) {
   if (!url.href.startsWith(BASE)) return false
   if (isServiceWorkerScript(url)) return false
+  if (isHtmlRequest(url)) return false
   return (
     url.pathname.endsWith('.db') ||
     url.pathname.endsWith('.js') ||
@@ -41,22 +52,9 @@ function shouldCacheAsset(url) {
   )
 }
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) =>
-        cache
-          .addAll([
-            BASE,
-            `${BASE}index.html`,
-            `${BASE}quran.db`,
-            `${BASE}manifest.webmanifest`,
-            `${BASE}fonts.css`,
-          ])
-          .catch(() => undefined),
-      ),
-  )
+self.addEventListener('install', () => {
+  // Do not precache HTML or the 27 MB DB — HTML must stay network-only, and
+  // addAll(quran.db) blows mobile cache quotas and can stall install.
   self.skipWaiting()
 })
 
@@ -66,10 +64,27 @@ self.addEventListener('activate', (event) => {
       const keys = await caches.keys()
       const hadStale = keys.some((k) => k !== CACHE)
       await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+
+      // Older workers may have stored index.html under this or prior names.
+      // Strip any HTML out of the current cache so it can never be replayed.
+      let purgedHtml = false
+      try {
+        const cache = await caches.open(CACHE)
+        const reqs = await cache.keys()
+        const htmlReqs = reqs.filter((r) => isHtmlRequest(new URL(r.url)))
+        if (htmlReqs.length > 0) {
+          purgedHtml = true
+          await Promise.all(htmlReqs.map((r) => cache.delete(r)))
+        }
+      } catch {
+        /* ignore */
+      }
+
       await self.clients.claim()
-      // Force a reload so clients that already painted a blank root from a
-      // stale cached index pick up the fresh network-first shell.
-      if (hadStale) {
+
+      // Only force-reload when we actually cleared a poisoned shell — a bare
+      // first install must not bounce the user who just finished booting.
+      if (hadStale || purgedHtml) {
         const clients = await self.clients.matchAll({
           type: 'window',
           includeUncontrolled: true,
@@ -99,32 +114,24 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (isNavigationRequest(req, url)) {
-    event.respondWith(networkFirstNavigation(req))
+    event.respondWith(networkOnlyNavigation(req))
     return
   }
 
   event.respondWith(cacheFirstAsset(req, url))
 })
 
-async function networkFirstNavigation(req) {
+async function networkOnlyNavigation(req) {
   try {
-    const res = await fetch(req)
-    if (res.ok) {
-      const cache = await caches.open(CACHE)
-      await cache.put(req, res.clone())
-      // Also key the bare scope URL so offline fallbacks resolve.
-      if (req.mode === 'navigate') {
-        await cache.put(BASE, res.clone())
-        await cache.put(`${BASE}index.html`, res.clone())
-      }
-    }
-    return res
+    return await fetch(req)
   } catch {
-    const cached =
-      (await caches.match(req)) ||
-      (await caches.match(`${BASE}index.html`)) ||
-      (await caches.match(BASE))
-    return cached || Response.error()
+    return new Response(
+      `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Beautiful Quran</title></head><body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#FAF3E8;color:#1C1B18;font-family:Georgia,serif;text-align:center;padding:2rem"><div><h1 style="font-weight:500;letter-spacing:.02em">Beautiful Quran</h1><p style="opacity:.7">You appear to be offline. Reconnect and reload.</p></div></body></html>`,
+      {
+        status: 503,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      },
+    )
   }
 }
 

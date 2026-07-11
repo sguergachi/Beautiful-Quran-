@@ -132,7 +132,7 @@ fun EntranceCover(
         val d = localDensity.density
         // Match the display silhouette when closed; fall back to the same
         // designed radius coverFrameGeometry invents for sharp screens.
-        val fallback = 24f * d
+        val fallback = 36f * d
         fun r(px: Float) = ((if (screenRadii.max > 0f) px else fallback) / d).dp
         AbsoluteRoundedCornerShape(
             topLeft = r(screenRadii.topLeft),

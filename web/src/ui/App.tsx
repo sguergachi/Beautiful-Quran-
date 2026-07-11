@@ -65,6 +65,29 @@ export function App() {
       <div className="boot">
         <h1>Beautiful Quran</h1>
         <p>{state.error}</p>
+        <button
+          type="button"
+          className="boot-retry"
+          onClick={() => {
+            void (async () => {
+              try {
+                if ('serviceWorker' in navigator) {
+                  const regs = await navigator.serviceWorker.getRegistrations()
+                  await Promise.all(regs.map((r) => r.unregister()))
+                }
+                if (window.caches) {
+                  const keys = await caches.keys()
+                  await Promise.all(keys.map((k) => caches.delete(k)))
+                }
+              } catch {
+                /* still reload */
+              }
+              location.reload()
+            })()
+          }}
+        >
+          Try again
+        </button>
       </div>
     )
   }

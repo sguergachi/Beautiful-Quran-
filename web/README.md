@@ -47,8 +47,9 @@ Engines are DOM-free and unit-tested against the Android JVM suites. See
   list. Tap or Escape skips; autoplay-blocked or offline falls back to a silent
   ink wash.
 - First load downloads `quran.db`; a service worker caches the DB, fonts, and
-  hashed assets (cache-first). Navigations / `index.html` are network-first so
-  a deploy cannot leave phones on a stale shell that points at deleted JS.
+  hashed assets (cache-first) **only after a successful boot**. Navigations /
+  `index.html` are **network-only** (never written to the Cache API) so a
+  deploy cannot leave phones on a stale shell that points at deleted JS.
   Bump `CACHE` in `public/sw.js` when changing that contract.
 - `sql.js`’s browser build requests `sql-wasm-browser.wasm` (copied into
   `public/` on `npm install`). Shipping only `sql-wasm.wasm` 404s on Pages.
