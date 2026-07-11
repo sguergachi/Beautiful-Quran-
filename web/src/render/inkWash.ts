@@ -4,15 +4,72 @@
  *
  * Progress timelines run through Motion (`animate`) so wash easing matches
  * the rest of the reader (and Android's cubic-bezier curves).
+ *
+ * Mask strings are quantized + cached so wash frames avoid rebuilding a
+ * 17-stop gradient on every display refresh.
  */
 import { animate, type AnimationPlaybackControls } from 'motion'
 import { cubicBezierTuple, type CubicBezierEase } from '../ui/motion/easing'
+import { paperCoverMaskImage, washMaskImage } from '../engine/fade'
+
+/** Quantize wash progress to ~48 steps — visually identical, far fewer strings. */
+const WASH_STEPS = 48
+
+const washMaskCache = new Map<string, string>()
+const paperMaskCache = new Map<string, string>()
+
+function quantizeProgress(p: number): number {
+  if (p >= 1) return 1
+  if (p <= 0) return 0
+  return Math.round(p * WASH_STEPS) / WASH_STEPS
+}
+
+export function cachedWashMask(
+  progress: number,
+  restingAlpha: number,
+  rtl: boolean,
+  feather: number,
+): string {
+  const q = quantizeProgress(progress)
+  if (q >= 1) return 'none'
+  const key = `${q}|${restingAlpha}|${rtl ? 1 : 0}|${feather}`
+  let mask = washMaskCache.get(key)
+  if (mask == null) {
+    mask = washMaskImage(q, restingAlpha, rtl, feather)
+    washMaskCache.set(key, mask)
+  }
+  return mask
+}
+
+export function cachedPaperCoverMask(
+  progress: number,
+  restingAlpha: number,
+  rtl: boolean,
+  feather: number,
+): string {
+  const q = quantizeProgress(progress)
+  if (q >= 1) return 'none'
+  const key = `${q}|${restingAlpha}|${rtl ? 1 : 0}|${feather}`
+  let mask = paperMaskCache.get(key)
+  if (mask == null) {
+    mask = paperCoverMaskImage(q, restingAlpha, rtl, feather)
+    paperMaskCache.set(key, mask)
+  }
+  return mask
+}
 
 export function applyMask(el: HTMLElement | SVGElement, mask: string) {
   if (mask === 'none') {
-    el.style.removeProperty('mask-image')
-    el.style.removeProperty('-webkit-mask-image')
+    if (el.style.maskImage || el.style.webkitMaskImage) {
+      el.style.removeProperty('mask-image')
+      el.style.removeProperty('-webkit-mask-image')
+    }
     el.classList.remove('word-wash')
+    return
+  }
+  // Skip redundant writes when the quantized mask hasn't changed.
+  if (el.style.maskImage === mask) {
+    if (!el.classList.contains('word-wash')) el.classList.add('word-wash')
     return
   }
   el.style.setProperty('mask-image', mask)
@@ -46,20 +103,26 @@ export function runWash(
 
   let controls: AnimationPlaybackControls | null = null
   let cancelled = false
+  let lastQuantized = -1
 
   // Motion applies the cubic-bezier to the animated value, so the onUpdate
   // value *is* the eased progress. Pass the same number for both args so
   // existing callers that paint from `eased` keep working.
+  // Skip ticks whose quantized progress matches the previous frame so mask
+  // rebuilds / style writes stay off the critical path.
   controls = animate(0, 1, {
     duration: Math.max(0.001, durationMs / 1000),
     ease: [...curve] as [number, number, number, number],
     onUpdate: (eased) => {
       if (cancelled) return
-      onTick(eased, eased)
+      const q = quantizeProgress(eased)
+      if (q === lastQuantized) return
+      lastQuantized = q
+      onTick(q, q)
     },
     onComplete: () => {
       if (cancelled) return
-      onTick(1, 1)
+      if (lastQuantized !== 1) onTick(1, 1)
       onDone?.()
     },
   })

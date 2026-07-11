@@ -190,4 +190,28 @@ function AyahBlockInner({
   )
 }
 
-export const AyahBlock = memo(AyahBlockInner)
+export const AyahBlock = memo(AyahBlockInner, (prev, next) => {
+  // Ignore callback identity — ReaderScreen stabilizes them, but a custom
+  // comparator keeps inactive ayahs from reconciling on every word tick.
+  return (
+    prev.ayah === next.ayah &&
+    prev.activeWord === next.activeWord &&
+    prev.isActiveAyah === next.isActiveAyah &&
+    prev.dimmed === next.dimmed &&
+    prev.focused === next.focused &&
+    prev.keepActiveWordInView === next.keepActiveWordInView &&
+    prev.readingMode === next.readingMode &&
+    prev.showWordGloss === next.showWordGloss &&
+    prev.showTransliteration === next.showTransliteration &&
+    prev.showTranslation === next.showTranslation &&
+    prev.bookmarked === next.bookmarked &&
+    prev.bookmarkSide === next.bookmarkSide &&
+    prev.bookmarkChromeAlpha === next.bookmarkChromeAlpha &&
+    prev.bookmarkInteractive === next.bookmarkInteractive &&
+    prev.speed === next.speed &&
+    prev.fontScale === next.fontScale &&
+    prev.searchQuery === next.searchQuery &&
+    prev.flashWordPosition === next.flashWordPosition
+  )
+})
+

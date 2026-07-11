@@ -8,7 +8,9 @@ import {
 } from '../../data/settings'
 import type { PlayerState } from '../../playback/player'
 import { settingsLayerFor, type StackLayer } from '../paper/stack'
-import { PaperSelect, PaperSlider, PaperSwitch } from '../kit'
+import { PaperSelect } from '../kit/PaperSelect'
+import { PaperSlider } from '../kit/PaperSlider'
+import { PaperSwitch } from '../kit/PaperSwitch'
 
 const ATTRIBUTIONS = `Quran text (Uthmani script) and Saheeh International translation via the quran-json project, from Tanzil and Al Quran Cloud.
 

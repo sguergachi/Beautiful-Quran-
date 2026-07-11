@@ -1217,6 +1217,7 @@ select {
 .word-stack {
   position: relative;
   display: inline-block;
+  contain: layout style;
 }
 
 /* Orange second fade — same box/typography as the base glyph it covers.
@@ -1244,6 +1245,8 @@ select {
   mask-size: 100% 100%;
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
+  will-change: mask-image;
+  contain: paint;
 }
 
 /* Arabic-only: full-ink glyphs + paper cover (never glyph alpha). */
@@ -1256,6 +1259,7 @@ select {
 .hafs-shell {
   position: relative;
   display: inline-block;
+  contain: layout style;
 }
 
 .hafs-glyph {

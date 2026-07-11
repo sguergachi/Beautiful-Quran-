@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AyahBlock } from '../../render/AyahBlock'
 import { BasmalahCalligraphy } from '../../render/BasmalahCalligraphy'
-import { prefaceState } from '../../engine'
+import { prefaceState } from '../../engine/ink'
 import { isAway, playbackFocusTarget, pointUp } from '../../engine/focus'
 import { ReturnToAyahButton } from './ReturnToAyahButton'
 import { surahOpensWithBasmalahPreface } from '../../engine/basmalah'
@@ -12,7 +12,7 @@ import {
   READER_LAYER,
 } from '../../store/appStore'
 import type { StackLayer } from '../paper/stack'
-import { PaperInput } from '../kit'
+import { PaperInput } from '../kit/PaperInput'
 import {
   IconBuffering,
   IconChevronDown,
@@ -67,7 +67,12 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const content = state.content
   const scrollRef = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLElement>(null)
-  const focusRef = useRef(new ReaderFocusController())
+  const focusRef = useRef<ReaderFocusController | null>(null)
+  if (focusRef.current == null) {
+    focusRef.current = new ReaderFocusController()
+  }
+  // Lazily created once — definite after the null check above.
+  const focus = focusRef.current
   const [focusedAyah, setFocusedAyah] = useState(1)
   /** Continuous readout for the rail marker (Android `focusedPosition`). */
   const [focusedPosition, setFocusedPosition] = useState(1)
@@ -82,6 +87,33 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const followWasEnabled = useRef(true)
   /** While a rail/search jump is in flight, pin focus UI to the commit target. */
   const pendingJumpAyah = useRef<number | null>(null)
+
+  // Stable callbacks so memo(AyahBlock) can skip inactive verses on word ticks.
+  const onKeepWordInView = useCallback((wordEl: HTMLElement) => {
+    focus.keepWordInView(wordEl)
+  }, [])
+  const onPlayWord = useCallback((ayah: number, pos: number) => {
+    void appStore.playFromWord(ayah, pos)
+  }, [])
+  const onToggleBookmark = useCallback((n: number) => appStore.toggleBookmark(n), [])
+  const surahIdRef = useRef(content?.surah.id ?? 0)
+  surahIdRef.current = content?.surah.id ?? 0
+  const onHoldWord = useCallback(
+    (a: number, pos: number, arabic: string, translation: string) => {
+      appStore.openRootViewer(surahIdRef.current, a, pos, arabic, translation)
+    },
+    [],
+  )
+
+  const bookmarkedAyahs = useMemo(() => {
+    const id = content?.surah.id
+    if (id == null) return new Set<number>()
+    const set = new Set<number>()
+    for (const b of state.bookmarks) {
+      if (b.surahId === id) set.add(b.ayah)
+    }
+    return set
+  }, [state.bookmarks, content?.surah.id])
 
   const side = state.settings.ayahSelectorSide
   const depth = content ? Math.max(0, stackLayer - READER_LAYER) : 0
@@ -101,13 +133,16 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const searchMatches = useMemo(() => {
     if (!activeQuery || !content) return [] as number[]
     const q = activeQuery.toLowerCase()
-    return content.ayahs
-      .filter(
-        (a) =>
-          a.translation.toLowerCase().includes(q) ||
-          a.words.some((w) => w.translation.toLowerCase().includes(q)),
-      )
-      .map((a) => a.number)
+    const matches: number[] = []
+    for (const a of content.ayahs) {
+      if (
+        a.translation.toLowerCase().includes(q) ||
+        a.words.some((w) => w.translation.toLowerCase().includes(q))
+      ) {
+        matches.push(a.number)
+      }
+    }
+    return matches
   }, [content, activeQuery])
   const matchIndex = Math.min(
     Math.max(0, searchIndex),
@@ -163,7 +198,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     pendingJumpAyah.current = target
     setFocusedAyah(target)
     setFocusedPosition(target)
-    void focusRef.current.focus(target, { animate: true, preRoll: true }).finally(() => {
+    void focus.focus(target, { animate: true, preRoll: true }).finally(() => {
       setFocusedAyah(target)
       setFocusedPosition(target)
       pendingJumpAyah.current = null
@@ -174,15 +209,15 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   useEffect(() => {
     const el = scrollRef.current
     const count = content?.surah.ayahCount ?? 1
-    focusRef.current.bind(el, count, 0)
+    focus.bind(el, count, 0)
   }, [content?.surah.id, content?.surah.ayahCount, isTop])
 
   // Initial settle on the saved ayah (no animation).
   useEffect(() => {
     if (!content || !isTop) return
     const ayah = state.settings.lastAyah || 1
-    void focusRef.current.focus(ayah, { animate: false, preRoll: false }).then(() => {
-      setFocusedAyah(focusRef.current.focusedAyah())
+    void focus.focus(ayah, { animate: false, preRoll: false }).then(() => {
+      setFocusedAyah(focus.focusedAyah())
     })
     // Only on surah open / becoming top sheet.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -239,7 +274,6 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   useEffect(() => {
     const el = scrollRef.current
     if (!el || !content || !isTop) return
-    const focus = focusRef.current
     const focusTarget = playbackFocusTarget(state.activeAyah, state.activeBasmalah)
 
     const update = () => {
@@ -279,6 +313,16 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       }
     }
 
+    // Coalesce scroll → one readout per animation frame (mobile scroll storms).
+    let raf = 0
+    const onScroll = () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        update()
+      })
+    }
+
     const pauseFollowFromUser = () => {
       focus.cancel()
       if (state.followEnabled) appStore.setFollowEnabled(false)
@@ -314,7 +358,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       pauseFollowFromUser()
     }
 
-    el.addEventListener('scroll', update, { passive: true })
+    el.addEventListener('scroll', onScroll, { passive: true })
     el.addEventListener('pointerdown', onPointerDown)
     el.addEventListener('pointermove', onPointerMove)
     el.addEventListener('pointerup', onPointerUp)
@@ -322,7 +366,8 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     el.addEventListener('wheel', onWheel, { passive: true })
     update()
     return () => {
-      el.removeEventListener('scroll', update)
+      if (raf) cancelAnimationFrame(raf)
+      el.removeEventListener('scroll', onScroll)
       el.removeEventListener('pointerdown', onPointerDown)
       el.removeEventListener('pointermove', onPointerMove)
       el.removeEventListener('pointerup', onPointerUp)
@@ -344,10 +389,10 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     }
     const justEnabled = !followWasEnabled.current
     followWasEnabled.current = true
-    void focusRef.current.focus(target, { animate: true, preRoll: justEnabled }).then(() => {
+    void focus.focus(target, { animate: true, preRoll: justEnabled }).then(() => {
       setShowReturn(false)
-      setFocusedAyah(focusRef.current.focusedAyah())
-      setActiveExceedsViewport(focusRef.current.exceedsViewport(state.activeAyah))
+      setFocusedAyah(focus.focusedAyah())
+      setActiveExceedsViewport(focus.exceedsViewport(state.activeAyah))
     })
   }, [
     state.activeAyah,
@@ -366,12 +411,13 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       layoutReady.current = true
       return
     }
+    focus.invalidateLayout()
     const focusTarget = playbackFocusTarget(state.activeAyah, state.activeBasmalah)
     const pin =
       state.followEnabled && focusTarget != null
         ? focusTarget
         : focusedAyah
-    void focusRef.current.focus(pin, { animate: true, preRoll: false })
+    void focus.focus(pin, { animate: true, preRoll: false })
     // Intentionally keyed on layout-affecting settings only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -403,7 +449,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     pendingJumpAyah.current = targetAyah
     setFocusedAyah(targetAyah)
     setFocusedPosition(targetAyah)
-    void focusRef.current.focus(targetAyah, { animate: true, preRoll: true }).finally(() => {
+    void focus.focus(targetAyah, { animate: true, preRoll: true }).finally(() => {
       // Keep the committed jump target — readout can briefly report the
       // previous ayah while the home-scroll settles on the anchor.
       setFocusedAyah(targetAyah)
@@ -646,22 +692,20 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     dimmed={dimmed}
                     focused={focusedAyah === ayah.number}
                     keepActiveWordInView={keepWordInView && isActive}
-                    onKeepWordInView={(wordEl) => focusRef.current.keepWordInView(wordEl)}
+                    onKeepWordInView={onKeepWordInView}
                     readingMode={state.settings.readingMode}
                     showWordGloss={state.settings.showWordGloss}
                     showTransliteration={state.settings.showTransliteration}
                     showTranslation={state.settings.showTranslation}
-                    bookmarked={appStore.isBookmarked(ayah.number)}
+                    bookmarked={bookmarkedAyahs.has(ayah.number)}
                     bookmarkSide={side === 'left' ? 'right' : 'left'}
                     bookmarkChromeAlpha={receded ? 0 : 1}
                     bookmarkInteractive={!receded}
                     speed={state.settings.playbackSpeed}
                     fontScale={state.settings.fontScale}
-                    onPlayWord={(ayah, pos) => void appStore.playFromWord(ayah, pos)}
-                    onToggleBookmark={(n) => appStore.toggleBookmark(n)}
-                    onHoldWord={(a, pos, arabic, translation) =>
-                      appStore.openRootViewer(content.surah.id, a, pos, arabic, translation)
-                    }
+                    onPlayWord={onPlayWord}
+                    onToggleBookmark={onToggleBookmark}
+                    onHoldWord={onHoldWord}
                     searchQuery={activeQuery}
                     flashWordPosition={
                       flashTarget?.ayah === ayah.number

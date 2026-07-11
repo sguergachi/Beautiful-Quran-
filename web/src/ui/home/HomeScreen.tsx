@@ -7,7 +7,7 @@ import {
   IconPlay,
   IconPrev,
 } from '../icons/PlaybackIcons'
-import { PaperInput } from '../kit'
+import { PaperInput } from '../kit/PaperInput'
 import { appStore, useAppState, COVER_LAYER, READER_LAYER } from '../../store/appStore'
 import { QuranRepository } from '../../data/repository'
 import {

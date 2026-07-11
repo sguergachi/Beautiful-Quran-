@@ -106,14 +106,17 @@ export function surahContent(surahId: number): SurahContent {
 export function parseSegments(raw: string): Segment[] {
   try {
     const parsed = JSON.parse(raw) as number[][]
-    return parsed
-      .filter((row) => row.length >= 3)
-      .map((row) => ({
+    const segments: Segment[] = []
+    for (const row of parsed) {
+      if (row.length < 3) continue
+      segments.push({
         position: Number(row[0]),
         startMs: Number(row[1]),
         endMs: Number(row[2]),
-      }))
-      .sort((a, b) => a.startMs - b.startMs)
+      })
+    }
+    segments.sort((a, b) => a.startMs - b.startMs)
+    return segments
   } catch {
     return []
   }
