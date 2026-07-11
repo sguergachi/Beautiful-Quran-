@@ -1529,6 +1529,8 @@ select {
 }
 
 /* —— Ink bleed / root viewer ——
+ * Hosted inside the reader `.sheet` so the wash soaks that paper only —
+ * not a full-viewport layer over the under-paper / peeking deck.
  * Contrasting workbench (mirrors Android contrastingOverlayColorScheme):
  * Royal Green over paper/night themes; Nightfall when the reader is already
  * Royal Green so the bloom still reads against the page.

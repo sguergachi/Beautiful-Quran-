@@ -44,10 +44,10 @@ Hard rules:
 When the app must present something the system would normally raise as a
 floating dialog or overlay sheet, it never floats a box. Instead **the sheet
 you are already on becomes the message.** Ink bleeds outward from a point of
-origin (the play control, a held word, …) as a soft-edged circle, soaking the
-whole paper, and when it settles the same surface reads as the new content.
-Closing opens a hole back to whatever sat beneath — no push, no stack, no
-window.
+origin (the play control, a held word, …) as a soft-edged circle, soaking
+**that sheet** (not a full-screen layer above the paper stack), and when it
+settles the same surface reads as the new content. Closing opens a hole back
+to whatever sat beneath — no push, no stack, no window.
 
 The shared composable is `InkRevealOverlay` (`ui/theme/InkReveal.kt`). Three
 surfaces use it today / by design:

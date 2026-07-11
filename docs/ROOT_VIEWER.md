@@ -7,9 +7,11 @@ a **concordance** of every other place that root appears — with counts and
 one-tap jumps into those ayahs.
 
 It is **not** a floating popup, dialog, or sheet in the Material sense. It
-is an **ink bleed** — the same surface primitive as the notification-permission
-prompt and the Timings Lab. See [DESIGN.md](DESIGN.md) ("The ink bleed") and
-the shared composable `InkRevealOverlay` in `ui/theme/InkReveal.kt`.
+is an **ink bleed on the reader sheet** — the same surface primitive as the
+notification-permission prompt. The wash soaks *that* paper only (hosted
+inside the reader `PaperPage` / web `.sheet`), never a full-screen layer
+above the stack. See [DESIGN.md](DESIGN.md) ("The ink bleed") and the shared
+composable `InkRevealOverlay` in `ui/theme/InkReveal.kt`.
 
 ## Why it exists
 
@@ -25,9 +27,9 @@ ayahs, in which chapters — and jump straight there.
 
 Long-press a word in the reader. Ink blooms outward from that word as an
 expanding circle (`InkRevealOverlay`), the held word is the origin, and when
-the bloom settles the revealed surface *is* the lexicon page. Closing opens
-a hole back onto the exact reader page underneath — no stack push, no
-window, no card.
+the bloom settles the revealed surface *is* the lexicon page — still the
+same reader sheet of paper. Closing opens a hole back onto the exact reader
+page underneath — no stack push, no window, no card, no full-screen float.
 
 Palette follows the Timings Lab convention: a **contrasting** workbench
 (Royal Green on paper themes; Nightfall when the reader is already Royal
@@ -237,9 +239,11 @@ Reader onWordLongClick
   ├─ !developerMode → openRootViewer(surah, ayah, position, origin)
   └─  developerMode → ink chooser → Root Viewer | Timings Lab
 
-MainActivity
-  InkRevealOverlay(rootVisible) → RootViewerScreen
-  InkRevealOverlay(labVisible)  → TimingsLabScreen   // gated
+Reader PaperPage / web reader .sheet
+  InkRevealOverlay(rootVisible) → RootViewerScreen   // on the sheet
+  InkRevealOverlay(chooser)     → WordHoldChooser    // on the sheet
+MainActivity (stack-level)
+  InkRevealOverlay(labVisible)  → TimingsLabScreen   // also from Settings
 ```
 
 Suggested modules: `ui/rootviewer/` for the Compose surface; repository
