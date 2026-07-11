@@ -1,20 +1,20 @@
 import { useEffect, useState } from 'react'
 
-/** First paint window around the landing ayah — enough to fill a phone screen. */
-const INITIAL_BEFORE = 2
-const INITIAL_AFTER = 14
-/** How many ayahs to reveal per animation frame while filling the surah. */
-const EXPAND_STEP = 28
+/** First paint — just enough ayahs to fill a phone viewport. */
+const INITIAL_BEFORE = 1
+const INITIAL_AFTER = 5
+/** Expand in larger idle chunks so open/close aren't fighting rAF thrash. */
+const EXPAND_STEP = 48
 
 export interface AyahMountRange {
   lo: number
   hi: number
-  /** True once every ayah in the surah is a real block (no spacers). */
+  /** True once every ayah in the surah is a real block (no pad spacers). */
   complete: boolean
 }
 
-/** Estimated spacer height so scroll position stays stable while expanding. */
-export const AYAH_SPACER_EST_PX = 112
+/** Estimated height per unmounted ayah for top/bottom scroll padding. */
+export const AYAH_SPACER_EST_PX = 104
 
 /** Pure initial window — unit-tested; used by the hook on surah open. */
 export function initialAyahMountRange(
@@ -31,9 +31,8 @@ export function initialAyahMountRange(
 /**
  * Progressive ayah mount window for the reader.
  *
- * Opening a long surah must not commit thousands of WordUnits on the same
- * frame as the paper peel. Mount a tight window around [anchorAyah] first,
- * then expand both directions on successive animation frames.
+ * Mount a tight window around [anchorAyah] first, then expand on idle
+ * callbacks (not every animation frame) so the paper peel stays smooth.
  */
 export function useProgressiveAyahWindow(
   ayahCount: number,
@@ -54,7 +53,22 @@ export function useProgressiveAyahWindow(
     if (first.complete) return
 
     let cancelled = false
-    let raf = 0
+    let idleId = 0
+    let timeoutId = 0
+
+    const schedule = (cb: () => void) => {
+      const ric = (
+        globalThis as unknown as {
+          requestIdleCallback?: (fn: () => void, opts?: { timeout: number }) => number
+        }
+      ).requestIdleCallback
+      if (typeof ric === 'function') {
+        idleId = ric(() => cb(), { timeout: 120 })
+      } else {
+        timeoutId = window.setTimeout(cb, 32)
+      }
+    }
+
     const expand = () => {
       if (cancelled) return
       setRange((prev) => {
@@ -62,14 +76,18 @@ export function useProgressiveAyahWindow(
         const lo = Math.max(1, prev.lo - EXPAND_STEP)
         const hi = Math.min(ayahCount, prev.hi + EXPAND_STEP)
         const complete = lo === 1 && hi === ayahCount
-        if (!complete) raf = requestAnimationFrame(expand)
+        if (!complete) schedule(expand)
         return { lo, hi, complete }
       })
     }
-    raf = requestAnimationFrame(expand)
+    schedule(expand)
     return () => {
       cancelled = true
-      cancelAnimationFrame(raf)
+      const cic = (
+        globalThis as unknown as { cancelIdleCallback?: (id: number) => void }
+      ).cancelIdleCallback
+      if (idleId && typeof cic === 'function') cic(idleId)
+      if (timeoutId) window.clearTimeout(timeoutId)
     }
     // Re-window only when the surah identity changes — not on every lastAyah tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps

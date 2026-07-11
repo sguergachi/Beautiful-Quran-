@@ -319,8 +319,10 @@ class AppStore {
     const flash =
       flashWord != null ? { ayah, wordPosition: flashWord } : null
     const rootViewerClosing = this.state.rootViewer != null ? true : false
+    queueMicrotask(() => saveSettings(settings))
 
-    // Same chapter already loaded — peel only (no DB / remount).
+    // Same chapter already loaded — peel only (no remount). The CSS sheet
+    // glide is the whole point of this path.
     if (this.state.content?.surah.id === surahId) {
       this.set({
         stackLayer: READER_LAYER,
@@ -331,13 +333,13 @@ class AppStore {
         rootViewerClosing,
         pendingSearchFlash: flash,
       })
-      queueMicrotask(() => saveSettings(settings))
       return
     }
 
     const token = ++this.openToken
 
-    // Phase 1: start the paper peel on this frame (blank reader sheet).
+    // Phase 1 — start the paper peel on this frame with a blank reader sheet.
+    // Mounting ayahs here would steal frames from the CSS transition.
     this.set({
       stackLayer: READER_LAYER,
       sheet: 'reader',
@@ -352,31 +354,39 @@ class AppStore {
       rootViewerClosing,
       pendingSearchFlash: flash,
     })
-    queueMicrotask(() => saveSettings(settings))
 
-    // Phase 2: after the peel paints, load data and mount ayahs as a
-    // transition so the CSS slide stays at ≥60 fps.
+    // Phase 2 — after the peel has painted, load + mount a tight ayah window.
+    // Double rAF: commit stackLayer, paint one transition frame, then work.
     requestAnimationFrame(() => {
-      if (token !== this.openToken) return
-      const content = QuranRepository.surahContent(surahId)
-      const map = QuranRepository.timings(reciter.id, surahId)
-      this.timingSegments = map
-      this.prepared = new Map()
-      this.ensurePrepared(ayah)
-      this.ensurePrepared(ayah + 1)
-
-      startTransition(() => {
+      requestAnimationFrame(() => {
         if (token !== this.openToken) return
-        this.set({
-          content,
-          hasTimings: reciter.hasTimings && map.size > 0,
+        const content = QuranRepository.surahContent(surahId)
+        const map = QuranRepository.timings(reciter.id, surahId)
+        this.timingSegments = map
+        this.prepared = new Map()
+        this.ensurePrepared(ayah)
+        this.ensurePrepared(ayah + 1)
+
+        startTransition(() => {
+          if (token !== this.openToken) return
+          this.set({
+            content,
+            hasTimings: reciter.hasTimings && map.size > 0,
+          })
         })
-      })
 
-      // Audio after the content commit — read-ahead only, no whole-surah warm.
-      queueMicrotask(() => {
-        if (token !== this.openToken) return
-        player.loadSurah(content, reciter, ayah, { warm: false })
+        // Audio after the peel is underway — quiet so it does not re-emit mid-slide.
+        const runAudio = () => {
+          if (token !== this.openToken) return
+          player.loadSurah(content, reciter, ayah, { warm: false, quiet: true })
+        }
+        const ric = (
+          globalThis as unknown as {
+            requestIdleCallback?: (fn: () => void, opts?: { timeout: number }) => number
+          }
+        ).requestIdleCallback
+        if (typeof ric === 'function') ric(runAudio, { timeout: 500 })
+        else setTimeout(runAudio, 0)
       })
     })
   }

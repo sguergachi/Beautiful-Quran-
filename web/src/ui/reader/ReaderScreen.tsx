@@ -30,7 +30,7 @@ import {
 import { AyahSelectorRail } from './AyahSelectorRail'
 import { OrnateSurahTitle } from './OrnateSurahTitle'
 import { PageBreak } from './PageBreak'
-import { buildReaderItems } from './readerItems'
+import { buildReaderItems, sliceReaderItems } from './readerItems'
 import { ReaderFocusController } from './ReaderFocusController'
 import { selectedPlaybackAyah } from './selectedPlaybackAyah'
 import { shouldPauseFollowOnDrag } from './followGesture'
@@ -235,36 +235,32 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     focus.bind(el, count, 0)
   }, [content?.surah.id, content?.surah.ayahCount, isTop])
 
-  // Initial settle on the saved ayah — wait two frames so the paper peel and
-  // the first progressive ayah window paint before the layout pass.
+  // Initial settle when a surah's content arrives — one frame after mount so
+  // the peel keeps its first paint. Same-surah reopen (isTop only) keeps scroll.
   useEffect(() => {
     if (!content || !isTop) return
     const ayah = state.settings.lastAyah || 1
     let cancelled = false
-    let raf2 = 0
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
+    const raf = requestAnimationFrame(() => {
+      if (cancelled) return
+      void focus.focus(ayah, { animate: false, preRoll: false }).then(() => {
         if (cancelled) return
-        void focus.focus(ayah, { animate: false, preRoll: false }).then(() => {
-          if (cancelled) return
-          setFocusedAyah(focus.focusedAyah())
-        })
+        setFocusedAyah(focus.focusedAyah())
       })
     })
     return () => {
       cancelled = true
-      cancelAnimationFrame(raf1)
-      cancelAnimationFrame(raf2)
+      cancelAnimationFrame(raf)
     }
-    // Only on surah open / becoming top sheet.
+    // Only when content identity changes — not every peel of the same surah.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content?.surah.id, isTop])
+  }, [content?.surah.id])
 
   // Progressive mount expands — refresh focus geometry without re-homing.
   useEffect(() => {
-    if (!content || !isTop) return
+    if (!content || !isTop || mountRange.complete) return
     focus.invalidateLayout()
-  }, [mountRange.lo, mountRange.hi, mountRange.complete, content?.surah.id, isTop])
+  }, [mountRange.lo, mountRange.hi, content?.surah.id, isTop])
 
   // Home word-search hit: orange repeat wash (wash in → dissolve × 2) on the
   // matched word once the verse is on screen (Android SearchHitFlash).
@@ -541,6 +537,18 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     () => (content ? buildReaderItems(content.ayahs) : []),
     [content],
   )
+  const visibleItems = useMemo(() => {
+    if (!content || mountRange.complete) return readerItems
+    return sliceReaderItems(readerItems, mountRange.lo, mountRange.hi)
+  }, [content, readerItems, mountRange.lo, mountRange.hi, mountRange.complete])
+  const topPad =
+    !mountRange.complete && mountRange.lo > 1
+      ? (mountRange.lo - 1) * AYAH_SPACER_EST_PX
+      : 0
+  const bottomPad =
+    content && !mountRange.complete && mountRange.hi < content.surah.ayahCount
+      ? (content.surah.ayahCount - mountRange.hi) * AYAH_SPACER_EST_PX
+      : 0
 
   if (!content) {
     // Peel-first open: show a blank paper sheet (not visibility:hidden) so the
@@ -755,7 +763,15 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                 </div>
               ) : null}
 
-              {readerItems.map((item) => {
+              {topPad > 0 ? (
+                <div
+                  className="ayah-mount-pad"
+                  style={{ height: topPad }}
+                  aria-hidden
+                />
+              ) : null}
+
+              {visibleItems.map((item) => {
                 if (item.kind === 'pageBreak') {
                   return (
                     <PageBreak
@@ -766,23 +782,6 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                   )
                 }
                 const ayah = item.ayah
-                // Progressive mount — spacers keep scroll geometry while the
-                // window expands after the paper peel.
-                if (
-                  !mountRange.complete &&
-                  (ayah.number < mountRange.lo || ayah.number > mountRange.hi)
-                ) {
-                  return (
-                    <div
-                      key={ayah.number}
-                      className="ayah-block ayah-block--spacer"
-                      data-ayah={ayah.number}
-                      id={`ayah-${ayah.number}`}
-                      style={{ height: AYAH_SPACER_EST_PX }}
-                      aria-hidden
-                    />
-                  )
-                }
                 const isActive = state.activeAyah === ayah.number
                 // Karaoke ink only while audio is moving. Global recess is CSS
                 // on `.scroll[data-reciting]` — keep dimmed false so inactive
@@ -828,6 +827,14 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                   />
                 )
               })}
+
+              {bottomPad > 0 ? (
+                <div
+                  className="ayah-mount-pad"
+                  style={{ height: bottomPad }}
+                  aria-hidden
+                />
+              ) : null}
             </div>
           </div>
 
