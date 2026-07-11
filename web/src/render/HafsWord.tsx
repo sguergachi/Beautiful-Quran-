@@ -57,7 +57,8 @@ export function HafsWord({
   const overlayRef = useRef<HTMLSpanElement>(null)
   const prevState = useRef(ink.state)
   const revealedOnEntry = useRef(false)
-  const prevRepeat = useRef(ink.repeat)
+  // false so a word that mounts already in the chain still washes orange in.
+  const prevRepeat = useRef(false)
   const holdTimer = useRef<number | null>(null)
   const startXY = useRef<{ x: number; y: number } | null>(null)
   const held = useRef(false)
@@ -270,7 +271,7 @@ export function HafsWord({
         <span ref={coverRef} className="hafs-paper-cover" aria-hidden="true" />
         <span
           ref={overlayRef}
-          className="hafs-repeat-overlay"
+          className="hafs-repeat-overlay hafs-glyph"
           aria-hidden="true"
           style={{ opacity: 0 }}
         >
