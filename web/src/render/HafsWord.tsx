@@ -258,24 +258,26 @@ export function HafsWord({
       }}
     >
       <span className="hafs-shell">
-        <span className="hafs-glyph">{word.arabic}</span>
+        <span className="word-ink-slot">
+          <span className="hafs-glyph">{word.arabic}</span>
+          <span
+            ref={overlayRef}
+            className="hafs-repeat-overlay hafs-glyph"
+            aria-hidden="true"
+            style={{ opacity: 0 }}
+          >
+            {word.arabic}
+          </span>
+          <span
+            ref={flashRef}
+            className="hafs-repeat-overlay hafs-glyph"
+            aria-hidden="true"
+            style={{ opacity: 0 }}
+          >
+            {word.arabic}
+          </span>
+        </span>
         <span ref={coverRef} className="ink-paper-cover" aria-hidden="true" />
-        <span
-          ref={overlayRef}
-          className="hafs-repeat-overlay hafs-glyph"
-          aria-hidden="true"
-          style={{ opacity: 0 }}
-        >
-          {word.arabic}
-        </span>
-        <span
-          ref={flashRef}
-          className="hafs-repeat-overlay hafs-glyph"
-          aria-hidden="true"
-          style={{ opacity: 0 }}
-        >
-          {word.arabic}
-        </span>
       </span>
       {' '}
     </span>

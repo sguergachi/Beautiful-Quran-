@@ -426,38 +426,38 @@ export function WordUnit({
       }}
     >
       <span className="word-stack" dir={rtl ? 'rtl' : 'ltr'}>
-        <span
-          ref={baseRef}
-          className={baseClass}
-          data-search-hit={englishMode && searchHit ? 'true' : undefined}
-        >
-          {label}
+        {/* Base + orange overlays share one tight slot so abspos ink sits on
+            the same border box as the glyphs (top:0 on the stack was half-
+            leading above the inline baseline). */}
+        <span className="word-ink-slot">
+          <span
+            ref={baseRef}
+            className={baseClass}
+            data-search-hit={englishMode && searchHit ? 'true' : undefined}
+          >
+            {label}
+          </span>
+          <span
+            ref={overlayRef}
+            className={`word-repeat-overlay ${baseClass}`}
+            aria-hidden="true"
+            style={{ opacity: 0 }}
+          >
+            {label}
+          </span>
+          <span
+            ref={flashRef}
+            className={`word-repeat-overlay ${baseClass}`}
+            aria-hidden="true"
+            style={{ opacity: 0 }}
+          >
+            {label}
+          </span>
         </span>
         {/* Arabic only: opaque full-ink glyphs + paper cover (never glyph alpha). */}
         {!englishMode ? (
           <span ref={coverRef} className="ink-paper-cover" aria-hidden="true" />
         ) : null}
-        {/* Same typography as the base glyph — without word-arabic/word-gloss
-            the orange layer inherited body size and read as tiny text. */}
-        <span
-          ref={overlayRef}
-          className={`word-repeat-overlay ${baseClass}`}
-          aria-hidden="true"
-          style={{ opacity: 0 }}
-        >
-          {label}
-        </span>
-        {/* Search-hit pulse twin — same classes/box as the karaoke repeat
-            overlay so the ink-engine mask sizes to the glyphs (left/top, not
-            inset:0). Always mounted at opacity 0; never fights real repeat. */}
-        <span
-          ref={flashRef}
-          className={`word-repeat-overlay ${baseClass}`}
-          aria-hidden="true"
-          style={{ opacity: 0 }}
-        >
-          {label}
-        </span>
       </span>
       {/* Gloss/translit are siblings of the glyph stack (not nested under the
           wash mask). Arabic path: they own Upcoming dim. English path: parent
