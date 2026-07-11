@@ -1195,16 +1195,29 @@ select {
   overflow: visible;
 }
 
-/* Orange second fade — same box/typography as the base glyph it covers.
-   left/top (not inset:0 + flex) so the overlay sizes to its own text and
-   sits flush on the base; inset+flex with mismatched font looked like tiny
-   orange text in the corner of the word box. */
+/* Tight box around the base glyph. Orange overlays fill this slot (inset:0)
+   so they share the same border box — `top:0` on the stack sat on the line-
+   box top, half-leading above the inline baseline. */
+.word-ink-slot {
+  position: relative;
+  display: inline-block;
+}
+
+.word-ink-slot > .word-arabic,
+.word-ink-slot > .word-gloss,
+.word-ink-slot > .hafs-glyph {
+  display: block;
+  position: static;
+}
+
+/* Orange second fade — fill the ink slot (same border box as the base glyph).
+   No flex: font size must come from the glyph class alone. */
 .word-repeat-overlay {
   position: absolute;
-  left: 0;
-  top: 0;
+  inset: 0;
   pointer-events: none;
   white-space: nowrap;
+  margin: 0;
 }
 
 /* Beat .word-gloss / .word-arabic (and their hover accent) when both classes
@@ -1212,11 +1225,18 @@ select {
 .word-repeat-overlay.word-arabic,
 .word-repeat-overlay.word-gloss {
   color: var(--repeat);
+  /* Keep absolute from .word-repeat-overlay; beat .word-arabic's relative. */
+  position: absolute;
 }
 
 .word-gloss-flash {
   position: relative;
   display: inline-block;
+}
+
+.word-gloss-flash > .word-gloss:not(.word-repeat-overlay) {
+  display: block;
+  position: static;
 }
 
 .word-wash {
@@ -1286,15 +1306,16 @@ select {
 
 .hafs-repeat-overlay {
   position: absolute;
-  left: 0;
-  top: 0;
+  inset: 0;
   pointer-events: none;
   white-space: nowrap;
+  margin: 0;
 }
 
 /* Beat .hafs-glyph ink (and hover accent) on the shared overlay node. */
 .hafs-repeat-overlay.hafs-glyph {
   color: var(--repeat);
+  position: absolute;
 }
 
 .ayah-translation {
