@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Ayah } from '../../../data/models'
-import { buildReaderItems } from '../readerItems'
+import { buildReaderItems, sliceReaderItems } from '../readerItems'
 
 function ayah(number: number, page: number): Ayah {
   return {
@@ -53,6 +53,24 @@ describe('buildReaderItems', () => {
     expect(items.filter((i) => i.kind === 'pageBreak')).toEqual([
       { kind: 'pageBreak', page: 2 },
       { kind: 'pageBreak', page: 3 },
+    ])
+  })
+})
+
+describe('sliceReaderItems', () => {
+  it('keeps only the mount window and preceding page breaks', () => {
+    const items = buildReaderItems([
+      ayah(1, 1),
+      ayah(2, 2),
+      ayah(3, 2),
+      ayah(4, 3),
+      ayah(5, 3),
+    ])
+    const sliced = sliceReaderItems(items, 3, 4)
+    expect(sliced.map((i) => (i.kind === 'ayah' ? i.ayah.number : `p${i.page}`))).toEqual([
+      3,
+      'p3',
+      4,
     ])
   })
 })

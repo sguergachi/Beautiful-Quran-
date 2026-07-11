@@ -31,11 +31,15 @@ import {
 import { AyahSelectorRail } from './AyahSelectorRail'
 import { OrnateSurahTitle } from './OrnateSurahTitle'
 import { PageBreak } from './PageBreak'
-import { buildReaderItems } from './readerItems'
+import { buildReaderItems, sliceReaderItems } from './readerItems'
 import { ReaderFocusController } from './focus/ReaderFocusController'
 import { selectedPlaybackAyah } from './selectedPlaybackAyah'
 import { shouldPauseFollowOnDrag } from './followGesture'
 import { isRecitingSession } from './recitingActive'
+import {
+  AYAH_SPACER_EST_PX,
+  useProgressiveAyahWindow,
+} from './useProgressiveAyahWindow'
 import { RootViewer } from '../root/RootViewer'
 import { SearchHitFlash, searchHitFlashTotalMs } from './SearchHitFlash'
 
@@ -119,9 +123,10 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   }, [state.bookmarks, content?.surah.id])
 
   const side = state.settings.ayahSelectorSide
-  const depth = content ? Math.max(0, stackLayer - READER_LAYER) : 0
-  const isTop = content != null && stackLayer === READER_LAYER
-  const peeking = content != null && stackLayer > READER_LAYER
+  // Keep depth/active correct while content is still loading (peel-first open).
+  const depth = Math.max(0, stackLayer - READER_LAYER)
+  const isTop = stackLayer === READER_LAYER
+  const peeking = stackLayer > READER_LAYER
   const active = isTop || peeking
   // Instant recess — hold across ayah-join buffering, release on user pause
   // in the same tick (no 350 ms debounce lag on the transport).
@@ -131,6 +136,13 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     isBuffering: state.player.isBuffering,
   })
   const receded = recitingActive && !searchActive
+
+  const mountAnchor = state.settings.lastAyah || 1
+  const mountRange = useProgressiveAyahWindow(
+    content?.surah.ayahCount ?? 0,
+    mountAnchor,
+    content?.surah.id,
+  )
 
   const activeQuery = activeSearchQuery(searchActive, searchQuery)
   // Keep the input snappy — match/highlight work trails by a frame or two.
@@ -225,16 +237,32 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     focus.bind(el, count, 0)
   }, [content?.surah.id, content?.surah.ayahCount, isTop])
 
-  // Initial settle on the saved ayah (no animation).
+  // Initial settle when a surah's content arrives — one frame after mount so
+  // the peel keeps its first paint. Same-surah reopen (isTop only) keeps scroll.
   useEffect(() => {
     if (!content || !isTop) return
     const ayah = state.settings.lastAyah || 1
-    void focus.focus(ayah, { animate: false, preRoll: false }).then(() => {
-      setFocusedAyah(focus.focusedAyah())
+    let cancelled = false
+    const raf = requestAnimationFrame(() => {
+      if (cancelled) return
+      void focus.focus(ayah, { animate: false, preRoll: false }).then(() => {
+        if (cancelled) return
+        setFocusedAyah(focus.focusedAyah())
+      })
     })
-    // Only on surah open / becoming top sheet.
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(raf)
+    }
+    // Only when content identity changes — not every peel of the same surah.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content?.surah.id, isTop])
+  }, [content?.surah.id])
+
+  // Progressive mount expands — refresh focus geometry without re-homing.
+  useEffect(() => {
+    if (!content || !isTop || mountRange.complete) return
+    focus.invalidateLayout()
+  }, [mountRange.lo, mountRange.hi, content?.surah.id, isTop])
 
   // Home word-search hit: orange repeat wash (wash in → dissolve × 2) on the
   // matched word once the verse is on screen (Android SearchHitFlash).
@@ -511,16 +539,31 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     () => (content ? buildReaderItems(content.ayahs) : []),
     [content],
   )
+  const visibleItems = useMemo(() => {
+    if (!content || mountRange.complete) return readerItems
+    return sliceReaderItems(readerItems, mountRange.lo, mountRange.hi)
+  }, [content, readerItems, mountRange.lo, mountRange.hi, mountRange.complete])
+  const topPad =
+    !mountRange.complete && mountRange.lo > 1
+      ? (mountRange.lo - 1) * AYAH_SPACER_EST_PX
+      : 0
+  const bottomPad =
+    content && !mountRange.complete && mountRange.hi < content.surah.ayahCount
+      ? (content.surah.ayahCount - mountRange.hi) * AYAH_SPACER_EST_PX
+      : 0
 
   if (!content) {
+    // Peel-first open: show a blank paper sheet (not visibility:hidden) so the
+    // slide-in animation is visible while sql.js / timings load.
     return (
       <div
         className="sheet"
         data-name="reader"
         data-layer={READER_LAYER}
-        data-depth={0}
-        data-active="false"
-        data-empty="true"
+        data-depth={depth}
+        data-active={active}
+        data-loading={isTop ? 'true' : undefined}
+        data-empty={!isTop && !peeking ? 'true' : undefined}
       />
     )
   }
@@ -538,7 +581,9 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const railPosition =
     recitingActive && state.activeAyah != null ? state.activeAyah : focusedPosition
 
-  const rail = (
+  // Keep the rail off under-sheets — when Settings (or any sheet above) is
+  // open, a peek of the reader must not show the dial hanging beside it.
+  const rail = isTop ? (
     <AyahSelectorRail
       ayahCount={ayahCount}
       currentAyah={railAyah}
@@ -547,7 +592,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       receded={receded}
       onJump={jumpToAyah}
     />
-  )
+  ) : null
 
   const repeatMode = state.player.repeatMode
   const keepWordInView =
@@ -727,7 +772,15 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                 </div>
               ) : null}
 
-              {readerItems.map((item) => {
+              {topPad > 0 ? (
+                <div
+                  className="ayah-mount-pad"
+                  style={{ height: topPad }}
+                  aria-hidden
+                />
+              ) : null}
+
+              {visibleItems.map((item) => {
                 if (item.kind === 'pageBreak') {
                   return (
                     <PageBreak
@@ -783,6 +836,14 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                   />
                 )
               })}
+
+              {bottomPad > 0 ? (
+                <div
+                  className="ayah-mount-pad"
+                  style={{ height: bottomPad }}
+                  aria-hidden
+                />
+              ) : null}
             </div>
           </div>
 

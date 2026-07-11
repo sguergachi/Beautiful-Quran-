@@ -1,7 +1,6 @@
 package com.beautifulquran.ui.settings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,8 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -24,12 +23,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
@@ -52,6 +46,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.BuildConfig
@@ -151,38 +148,19 @@ fun SettingsScreen(
                 Spacer(Modifier.height(32.dp))
 
                 SectionLabel("Reciter")
+                Spacer(Modifier.height(4.dp))
                 reciters.forEach { reciter ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .quietClickable { viewModel.selectReciter(reciter) }
-                            .padding(vertical = 4.dp),
-                    ) {
-                        RadioButton(
-                            selected = reciter.id == settings.reciterId,
-                            onClick = { viewModel.selectReciter(reciter) },
-                            colors = RadioButtonDefaults.colors(
-                                selectedColor = MaterialTheme.colorScheme.primary,
-                                unselectedColor = MaterialTheme.colorScheme.outline,
-                            ),
-                        )
-                        Column {
-                            Text(reciter.name, style = MaterialTheme.typography.bodyLarge)
-                            if (!reciter.hasTimings) {
-                                Text(
-                                    "No word highlighting",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                )
-                            }
-                        }
-                    }
+                    ChoiceRow(
+                        label = reciter.name,
+                        description = if (!reciter.hasTimings) "No word highlighting" else null,
+                        selected = reciter.id == settings.reciterId,
+                        onClick = { viewModel.selectReciter(reciter) },
+                    )
                 }
 
                 Spacer(Modifier.height(32.dp))
                 SectionLabel("Reading")
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(6.dp))
                 EnumSegmentedRow(
                     entries = ReadingMode.entries,
                     selected = settings.readingMode,
@@ -232,14 +210,14 @@ fun SettingsScreen(
 
                 Spacer(Modifier.height(24.dp))
                 SectionLabel("Ayah selector")
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(6.dp))
                 EnumSegmentedRow(
                     entries = AyahSelectorSide.entries,
                     selected = settings.ayahSelectorSide,
                     label = { side ->
                         when (side) {
-                            AyahSelectorSide.LEFT -> "Left side"
-                            AyahSelectorSide.RIGHT -> "Right side"
+                            AyahSelectorSide.LEFT -> "Left"
+                            AyahSelectorSide.RIGHT -> "Right"
                         }
                     },
                     onSelect = { side -> viewModel.settings.update { it.copy(ayahSelectorSide = side) } },
@@ -247,7 +225,7 @@ fun SettingsScreen(
 
                 Spacer(Modifier.height(32.dp))
                 SectionLabel("Theme")
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
                 ThemeMode.entries.forEach { mode ->
                     ThemeOptionRow(
                         mode = mode,
@@ -371,18 +349,12 @@ private fun AppHeader(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
-            .padding(horizontal = 18.dp, vertical = 16.dp),
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(52.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f))
                 .quietClickable(
                     onClick = onLogoClick,
                     onLongClick = onLogoLongClick,
@@ -394,7 +366,7 @@ private fun AppHeader(
                 modifier = Modifier.size(34.dp),
             )
         }
-        Column(modifier = Modifier.padding(start = 16.dp)) {
+        Column(modifier = Modifier.padding(start = 12.dp)) {
             Text(
                 text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.titleLarge,
@@ -417,48 +389,90 @@ private fun ThemeOptionRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    ChoiceRow(
+        label = mode.label,
+        selected = selected,
+        onClick = onClick,
+        trailing = { ThemeColorPreview(colors = themePreviewColors(mode)) },
+    )
+}
+
+/** Ink choice row — accent when selected, no Material radio chrome. */
+@Composable
+private fun ChoiceRow(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    description: String? = null,
+    trailing: (@Composable () -> Unit)? = null,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .quietClickable(onClick = onClick)
-            .padding(vertical = 4.dp),
+            .semantics { this.selected = selected }
+            .quietClickable(role = Role.RadioButton, onClick = onClick)
+            .padding(vertical = 10.dp),
     ) {
-        RadioButton(
-            selected = selected,
-            onClick = onClick,
-            colors = RadioButtonDefaults.colors(
-                selectedColor = MaterialTheme.colorScheme.primary,
-                unselectedColor = MaterialTheme.colorScheme.outline,
-            ),
+        InkMark(selected = selected)
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 14.dp),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
+            if (description != null) {
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                )
+            }
+        }
+        if (trailing != null) {
+            Spacer(Modifier.size(12.dp))
+            trailing()
+        }
+    }
+}
+
+/** Soft ink disc — filled when selected, whisper ring when not. */
+@Composable
+private fun InkMark(selected: Boolean) {
+    val accent = MaterialTheme.colorScheme.primary
+    val muted = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f)
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(18.dp)
+            .clip(CircleShape)
+            .background(if (selected) accent.copy(alpha = 0.18f) else Color.Transparent),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(if (selected) 8.dp else 7.dp)
+                .clip(CircleShape)
+                .background(if (selected) accent else muted),
         )
-        Text(
-            text = mode.label,
-            style = MaterialTheme.typography.bodyLarge,
-        )
-        Spacer(Modifier.weight(1f))
-        ThemeColorPreview(colors = themePreviewColors(mode))
     }
 }
 
 @Composable
 private fun ThemeColorPreview(colors: List<Color>) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
-                shape = RoundedCornerShape(8.dp),
-            )
-            .padding(3.dp),
-    ) {
+    Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
         colors.forEach { color ->
             Box(
                 modifier = Modifier
                     .size(width = 16.dp, height = 22.dp)
-                    .clip(RoundedCornerShape(5.dp))
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(5.dp))
                     .background(color),
             )
         }
@@ -507,8 +521,10 @@ private fun SettingToggle(label: String, checked: Boolean, onChange: (Boolean) -
     }
 }
 
-/** One segmented row per enum setting: entries in declaration order, the
- * app's green selection colors, quiet labels. */
+/**
+ * Ink segmented row for short enums — selected option in accent ink, others
+ * quiet. No borders, tracks, or Material segmented chrome.
+ */
 @Composable
 private fun <T> EnumSegmentedRow(
     entries: List<T>,
@@ -516,26 +532,25 @@ private fun <T> EnumSegmentedRow(
     label: (T) -> String,
     onSelect: (T) -> Unit,
 ) {
-    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-        entries.forEachIndexed { index, entry ->
-            SegmentedButton(
-                selected = selected == entry,
-                onClick = { onSelect(entry) },
-                shape = SegmentedButtonDefaults.itemShape(index, entries.size),
-                colors = greenSegmentedButtonColors(),
-            ) {
-                Text(text = label(entry), style = MaterialTheme.typography.labelMedium)
-            }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        entries.forEach { entry ->
+            val isSelected = selected == entry
+            Text(
+                text = label(entry),
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.42f)
+                },
+                modifier = Modifier
+                    .quietClickable(role = Role.RadioButton, onClick = { onSelect(entry) })
+                    .semantics { this.selected = isSelected }
+                    .padding(vertical = 10.dp, horizontal = 4.dp),
+            )
         }
     }
 }
-
-@Composable
-private fun greenSegmentedButtonColors() = SegmentedButtonDefaults.colors(
-    activeContainerColor = MaterialTheme.colorScheme.primaryContainer,
-    activeContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-    activeBorderColor = MaterialTheme.colorScheme.outline,
-    inactiveContainerColor = MaterialTheme.colorScheme.surface,
-    inactiveContentColor = MaterialTheme.colorScheme.onSurface,
-    inactiveBorderColor = MaterialTheme.colorScheme.outline,
-)

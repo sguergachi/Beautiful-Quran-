@@ -4,8 +4,8 @@
  * Paper stack: stackLayer 0=Chapters, 1=Reader, 2=Settings (over reader).
  * When no surah is open, Settings occupies layer 1.
  */
-import { useSyncExternalStore } from 'react'
-import type { ActiveWord, Reciter, Surah, SurahContent } from '../data/models'
+import { startTransition, useSyncExternalStore } from 'react'
+import type { ActiveWord, Reciter, Surah, SurahContent, Segment } from '../data/models'
 import { QuranRepository } from '../data/repository'
 import {
   loadBookmarks,
@@ -101,9 +101,13 @@ function deriveSheet(stackLayer: StackLayer, hasReader: boolean): Sheet {
 class AppStore {
   private listeners = new Set<Listener>()
   private prepared = new Map<number, PreparedTimings>()
+  /** Raw timing segments for the open surah — PreparedTimings built on demand. */
+  private timingSegments = new Map<number, Segment[]>()
   private lastActiveKey = ''
   private lastEmitKey = ''
   private readonly highlightClock = new HighlightClock()
+  /** Bumps when a newer openSurah supersedes an in-flight peel→load. */
+  private openToken = 0
 
   state: AppState = {
     ready: false,
@@ -280,55 +284,113 @@ class AppStore {
   private reloadTimingsAndReciter(reciter: Reciter) {
     if (!this.state.content) return
     const map = QuranRepository.timings(reciter.id, this.state.content.surah.id)
+    this.timingSegments = map
     this.prepared = new Map()
-    for (const [ayah, segs] of map) {
-      this.prepared.set(ayah, HighlightEngine.PreparedTimings.prepare(segs))
-    }
     const ayah = this.state.player.nowPlaying?.ayah ?? this.state.settings.lastAyah
     const start = ayah > 0 ? ayah : 1
-    player.loadSurah(this.state.content, reciter, start)
+    this.ensurePrepared(start)
+    this.ensurePrepared(start + 1)
+    player.loadSurah(this.state.content, reciter, start, { warm: false })
     this.set({ hasTimings: reciter.hasTimings && map.size > 0 })
   }
 
+  /** Build PreparedTimings for [ayah] on first use (open must not prep the whole surah). */
+  private ensurePrepared(ayah: number): PreparedTimings | null {
+    if (ayah < 1) return null
+    const existing = this.prepared.get(ayah)
+    if (existing) return existing
+    const segs = this.timingSegments.get(ayah)
+    if (!segs || segs.length === 0) return null
+    const prepared = HighlightEngine.PreparedTimings.prepare(segs)
+    this.prepared.set(ayah, prepared)
+    return prepared
+  }
+
   openSurah(surahId: number, ayah = 1, wordPosition?: number) {
-    const content = QuranRepository.surahContent(surahId)
     const reciter =
       this.state.reciters.find((r) => r.id === this.state.settings.reciterId) ??
       this.state.reciters[0]
     if (!reciter) return
-
-    const map = QuranRepository.timings(reciter.id, surahId)
-    this.prepared = new Map()
-    for (const [a, segs] of map) {
-      this.prepared.set(a, HighlightEngine.PreparedTimings.prepare(segs))
-    }
 
     const settings = {
       ...this.state.settings,
       lastSurah: surahId,
       lastAyah: ayah,
     }
-    saveSettings(settings)
-
     const flashWord =
       wordPosition != null && wordPosition > 0 ? wordPosition : null
+    const flash =
+      flashWord != null ? { ayah, wordPosition: flashWord } : null
+    const rootViewerClosing = this.state.rootViewer != null ? true : false
+    queueMicrotask(() => saveSettings(settings))
 
-    player.loadSurah(content, reciter, ayah)
+    // Same chapter already loaded — peel only (no remount). The CSS sheet
+    // glide is the whole point of this path.
+    if (this.state.content?.surah.id === surahId) {
+      this.set({
+        stackLayer: READER_LAYER,
+        sheet: 'reader',
+        settings,
+        followEnabled: true,
+        rootViewer: this.state.rootViewer,
+        rootViewerClosing,
+        pendingSearchFlash: flash,
+      })
+      return
+    }
+
+    const token = ++this.openToken
+
+    // Phase 1 — start the paper peel on this frame with a blank reader sheet.
+    // Mounting ayahs here would steal frames from the CSS transition.
     this.set({
-      content,
       stackLayer: READER_LAYER,
       sheet: 'reader',
+      content: null,
       settings,
-      hasTimings: reciter.hasTimings && map.size > 0,
+      hasTimings: false,
       activeWord: null,
       activeAyah: null,
       activeBasmalah: false,
       followEnabled: true,
-      // Keep the bleed mounted so the exit hole can finish (Android InkReveal).
       rootViewer: this.state.rootViewer,
-      rootViewerClosing: this.state.rootViewer != null ? true : false,
-      pendingSearchFlash:
-        flashWord != null ? { ayah, wordPosition: flashWord } : null,
+      rootViewerClosing,
+      pendingSearchFlash: flash,
+    })
+
+    // Phase 2 — after the peel has painted, load + mount a tight ayah window.
+    // Double rAF: commit stackLayer, paint one transition frame, then work.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (token !== this.openToken) return
+        const content = QuranRepository.surahContent(surahId)
+        const map = QuranRepository.timings(reciter.id, surahId)
+        this.timingSegments = map
+        this.prepared = new Map()
+        this.ensurePrepared(ayah)
+        this.ensurePrepared(ayah + 1)
+
+        startTransition(() => {
+          if (token !== this.openToken) return
+          this.set({
+            content,
+            hasTimings: reciter.hasTimings && map.size > 0,
+          })
+        })
+
+        // Audio after the peel is underway — quiet so it does not re-emit mid-slide.
+        const runAudio = () => {
+          if (token !== this.openToken) return
+          player.loadSurah(content, reciter, ayah, { warm: false, quiet: true })
+        }
+        const ric = (
+          globalThis as unknown as {
+            requestIdleCallback?: (fn: () => void, opts?: { timeout: number }) => number
+          }
+        ).requestIdleCallback
+        if (typeof ric === 'function') ric(runAudio, { timeout: 500 })
+        else setTimeout(runAudio, 0)
+      })
     })
   }
 
@@ -449,7 +511,7 @@ class AppStore {
 
   /** First timing segment start for [ayah]/[wordPosition], if timings are loaded. */
   segmentStartMs(ayah: number, wordPosition: number): number | null {
-    const prepared = this.prepared.get(ayah)
+    const prepared = this.ensurePrepared(ayah)
     const segment = prepared?.segments.find((s) => s.position === wordPosition)
     return segment != null ? segment.startMs : null
   }
@@ -513,7 +575,7 @@ class AppStore {
   }
 
   private midpointForLongAyah(ayah: number): number | null {
-    const prepared = this.prepared.get(ayah)
+    const prepared = this.ensurePrepared(ayah)
     const segments = prepared?.segments
     if (!segments || segments.length < LONG_AYAH_MIN_WORDS) return null
     return segments[Math.floor(segments.length / 2)]!.startMs
@@ -632,7 +694,7 @@ class AppStore {
         ayahCount: this.state.content?.surah.ayahCount ?? 0,
         repeatRange: ps.repeatRange,
       },
-      this.prepared.get(np.ayah),
+      this.ensurePrepared(np.ayah) ?? undefined,
     )
     const key = readerHighlightKey(next)
     if (key === this.lastActiveKey) return
