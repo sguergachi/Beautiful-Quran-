@@ -681,19 +681,14 @@ select {
   opacity: 0;
 }
 
-/* Fade-in / fade-out twice — 250 ms per pulse, ~500 ms total
-   (Android SearchHitFlash). */
+/* Soft ink breath — fade in / out over 500 ms, twice.
+   Ease applies between keyframes so each half breathes in and out.
+   (Android SearchHitFlash.BreathEasing.) */
 @keyframes search-hit-flash-pulse {
   0% {
     opacity: 0;
   }
-  25% {
-    opacity: 1;
-  }
   50% {
-    opacity: 0;
-  }
-  75% {
     opacity: 1;
   }
   100% {
@@ -703,7 +698,8 @@ select {
 
 .word-search-flash-overlay[data-pulse='true'],
 .hafs-search-flash-overlay[data-pulse='true'] {
-  animation: search-hit-flash-pulse 500ms ease-in-out forwards;
+  animation: search-hit-flash-pulse 500ms cubic-bezier(0.37, 0, 0.63, 1) 2
+    forwards;
 }
 
 .surah-row {

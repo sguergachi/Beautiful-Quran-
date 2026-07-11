@@ -417,7 +417,7 @@ fun ReaderScreen(
         }
     }
 
-    // Home word-search hit: quick orange fade-in / fade-out twice on the
+    // Home word-search hit: soft orange ink breath (fade in / out × 2) on the
     // matched word once the verse is on screen.
     val searchFlashAlpha = remember { Animatable(0f) }
     var searchFlashAyah by remember { mutableStateOf<Int?>(null) }
@@ -439,11 +439,11 @@ fun ReaderScreen(
         repeat(SearchHitFlash.PULSES) {
             searchFlashAlpha.animateTo(
                 1f,
-                tween(SearchHitFlash.FADE_IN_MS, easing = FastOutSlowInEasing),
+                tween(SearchHitFlash.FADE_IN_MS, easing = SearchHitFlash.BreathEasing),
             )
             searchFlashAlpha.animateTo(
                 0f,
-                tween(SearchHitFlash.FADE_OUT_MS, easing = FastOutSlowInEasing),
+                tween(SearchHitFlash.FADE_OUT_MS, easing = SearchHitFlash.BreathEasing),
             )
         }
         searchFlashAyah = null

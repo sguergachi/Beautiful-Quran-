@@ -5,12 +5,14 @@ export const WORD_SEARCH_MIN_QUERY_LENGTH = 2
 export const WORD_SEARCH_PREVIEW_LIMIT = 3
 
 /** Timing for the reader search-hit orange pulse (Android `SearchHitFlash`).
- *  Two pulses total ~500 ms (250 ms each). */
+ *  Each breath is 500 ms (250 in + 250 out) with a soft ease-in-out; twice. */
 export const SearchHitFlash = {
   START_DELAY_MS: 140,
-  FADE_IN_MS: 125,
-  FADE_OUT_MS: 125,
+  FADE_IN_MS: 250,
+  FADE_OUT_MS: 250,
   PULSES: 2,
+  /** Soft ease-in-out — mirrors Android `SearchHitFlash.BreathEasing`. */
+  BREATH_EASE: 'cubic-bezier(0.37, 0, 0.63, 1)',
 } as const
 
 export interface WordSearchHit {
