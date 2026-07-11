@@ -153,14 +153,8 @@ select {
   height: 100%;
   overflow: hidden;
   background: var(--paper);
-  /* Soft under-paper so peeks read as sheets, not empty void */
-  background-image: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--ink) 6%, var(--paper)) 0%,
-    var(--paper) 12%
-  );
-  /* Left-only back-nav gutter — keep small so the reader stays wide. */
-  --peek-step: clamp(18px, 4.5vw, 28px);
+  /* Peek gutters are desktop-only; phones are full-bleed (back buttons). */
+  --peek-step: 0px;
   /* Half of the desktop sheet cap (56rem) — used to center the column. */
   --sheet-half: 28rem;
 }
@@ -205,14 +199,9 @@ select {
 }
 
 /*
- * Left-cascade paper deck — Home, Reader, and Settings share one axis.
- * Only the left edge insets so under-sheets peek for back-nav; the right
- * edge stays flush. Matching right gutters wasted phone width and made the
- * reader feel cramped. (≥900px recenters a column with equal L/R peeks.)
- *
- *   stack 0: Home full
- *   stack 1: Home left=0 · Reader left=1 step, right=0
- *   stack 2: Home left=0 · Reader left=1 step · Settings left=2 steps, right=0
+ * Phone paper deck — full-bleed. Back buttons (and Escape) peel the stack;
+ * no left/right peek gutters. Desktop (≥900px) recenters a column and
+ * restores equal L/R peeks for the under-sheet cascade.
  */
 .sheet[data-depth='0'][data-active='true'] {
   left: 0;
@@ -223,40 +212,29 @@ select {
   box-shadow: none;
 }
 
-.app-shell[data-stack='1'] .sheet[data-depth='0'][data-active='true'] {
-  left: var(--peek-step);
-  right: 0;
-  box-shadow: -12px 0 32px color-mix(in srgb, var(--ink) 14%, transparent);
-}
-
+.app-shell[data-stack='1'] .sheet[data-depth='0'][data-active='true'],
 .app-shell[data-stack='2'] .sheet[data-depth='0'][data-active='true'] {
-  left: calc(var(--peek-step) * 2);
-  right: 0;
-  box-shadow: -12px 0 32px color-mix(in srgb, var(--ink) 14%, transparent);
-}
-
-.app-shell[data-stack='1'] .sheet[data-depth='1'] {
   left: 0;
   right: 0;
-  transform: translateX(0) scale(1);
-  opacity: 0.82;
-  pointer-events: none;
+  box-shadow: none;
 }
 
-.app-shell[data-stack='2'] .sheet[data-depth='1'] {
-  left: var(--peek-step);
-  right: 0;
-  transform: translateX(0) scale(1);
-  opacity: 0.82;
-  pointer-events: none;
-}
-
+.app-shell[data-stack='1'] .sheet[data-depth='1'],
+.app-shell[data-stack='2'] .sheet[data-depth='1'],
 .app-shell[data-stack='2'] .sheet[data-depth='2'] {
   left: 0;
   right: 0;
   transform: translateX(0) scale(1);
-  opacity: 0.58;
   pointer-events: none;
+}
+
+.app-shell[data-stack='1'] .sheet[data-depth='1'],
+.app-shell[data-stack='2'] .sheet[data-depth='1'] {
+  opacity: 0.82;
+}
+
+.app-shell[data-stack='2'] .sheet[data-depth='2'] {
+  opacity: 0.58;
 }
 
 /* Sheets above the current stack — park off to the right */
@@ -270,8 +248,9 @@ select {
   box-shadow: none;
 }
 
-/* Left-edge hit target — covers the exposed gutter of the peeking sheet */
+/* Left-edge hit target — desktop peek gutter only (phones have no peek). */
 .sheet-edge-back {
+  display: none;
   position: absolute;
   top: 0;
   bottom: 0;
@@ -1931,13 +1910,22 @@ select {
   .app-shell {
     /* Soft page margins on wide screens — still one sheet, not a card */
     background: color-mix(in srgb, var(--paper) 92%, var(--ink));
+    /* Soft under-paper so peeks read as sheets, not empty void */
+    background-image: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--ink) 6%, var(--paper)) 0%,
+      var(--paper) 12%
+    );
     --peek-step: clamp(28px, 3.5vw, 44px);
+  }
+
+  .sheet-edge-back {
+    display: block;
   }
 
   /*
    * Wide screens: center a 56rem column via left/right (no translateX(-50%)).
-   * Equal L/R peeks keep the deck centered in the column; phones stay
-   * left-only (see base rules above).
+   * Equal L/R peeks keep the deck centered; phones stay full-bleed above.
    */
   .sheet,
   .sheet[data-depth='0'][data-active='true'] {
@@ -1949,6 +1937,7 @@ select {
   .app-shell[data-stack='1'] .sheet[data-depth='0'][data-active='true'] {
     left: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
     right: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
+    box-shadow: -12px 0 32px color-mix(in srgb, var(--ink) 14%, transparent);
   }
 
   .app-shell[data-stack='2'] .sheet[data-depth='0'][data-active='true'] {
@@ -1960,6 +1949,7 @@ select {
       calc(var(--peek-step) * 2),
       calc(50% - var(--sheet-half) + var(--peek-step) * 2)
     );
+    box-shadow: -12px 0 32px color-mix(in srgb, var(--ink) 14%, transparent);
   }
 
   .app-shell[data-stack='1'] .sheet[data-depth='1'] {
