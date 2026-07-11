@@ -1431,9 +1431,9 @@ fun OrnateSurahTitle(
 }
 
 /**
- * Subtle page break: a thin gold line across the sheet with the page number
- * set in small digits on the right — marking the division
- * between mushaf pages without breaking the continuous scroll.
+ * Subtle page break: Arabic modes place Western and Arabic-Indic page numbers
+ * at opposite ends of a thin gold line. English-only centers one Western page
+ * number between equal rules, matching the web reader.
  */
 @Composable
 fun PageBreak(page: Int, useArabicIndicDigits: Boolean = true) {
@@ -1449,6 +1449,14 @@ fun PageBreak(page: Int, useArabicIndicDigits: Boolean = true) {
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (!useArabicIndicDigits) {
+                HorizontalDivider(
+                    modifier = Modifier.weight(1f),
+                    thickness = 1.dp,
+                    color = accents.gold.copy(alpha = 0.36f),
+                )
+                Spacer(Modifier.width(8.dp))
+            }
             Text(
                 text = page.toString(),
                 style = MaterialTheme.typography.labelSmall,
@@ -1459,20 +1467,22 @@ fun PageBreak(page: Int, useArabicIndicDigits: Boolean = true) {
             HorizontalDivider(
                 modifier = Modifier.weight(1f),
                 thickness = 0.5.dp,
-                color = accents.gold.copy(alpha = 0.2f),
+                color = accents.gold.copy(alpha = if (useArabicIndicDigits) 0.2f else 0.36f),
             )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = if (useArabicIndicDigits) page.toArabicIndic() else page.toString(),
-                // Keep the Arabic-Indic digits at the same 12sp as the Western
-                // numeral, but ask for a serif fallback so they stay in the
-                // same family class as the EB Garamond label.
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontFamily = FontFamily.Serif,
-                ),
-                fontSize = pageNumberSize,
-                color = pageNumberColor,
-            )
+            if (useArabicIndicDigits) {
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = page.toArabicIndic(),
+                    // Keep the Arabic-Indic digits at the same 12sp as the Western
+                    // numeral, but ask for a serif fallback so they stay in the
+                    // same family class as the EB Garamond label.
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = FontFamily.Serif,
+                    ),
+                    fontSize = pageNumberSize,
+                    color = pageNumberColor,
+                )
+            }
         }
     }
 }

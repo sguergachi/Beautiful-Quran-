@@ -6,9 +6,10 @@
  * dedicated Cache API store (separate from the PWA shell cache) and an
  * in-memory blob-URL map so `<audio>` can start from a local object URL.
  *
- * Safari/iOS often refuses to deeply buffer remote progressive MP3s on a
- * standby element — full blob fetches are the reliable path there. Prefetch
- * is best-effort; failures never block playback.
+ * Desktop playback uses the blob URL for its standby element. iOS playback
+ * keeps one element on the original HTTPS URLs; the same full fetches warm its
+ * HTTP cache without putting blob media into WebKit. Prefetch is best-effort;
+ * failures never block playback.
  */
 
 const AUDIO_CACHE = 'beautiful-quran-audio-v1'
@@ -252,7 +253,7 @@ export class AudioPrefetcher {
 
   private evictMemory(): void {
     // Prefer evicting unpinned entries. If everything is pinned, stop — better
-    // to hold a few extra blobs than revoke the next ayah mid-join (Safari).
+    // to hold a few extra blobs than revoke the next ayah mid-join.
     while (this.memory.size > this.memoryCap) {
       let evicted = false
       for (const oldest of this.memory.keys()) {
