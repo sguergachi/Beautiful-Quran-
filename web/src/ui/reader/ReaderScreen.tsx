@@ -29,6 +29,8 @@ import {
 } from '../icons/PlaybackIcons'
 import { AyahSelectorRail } from './AyahSelectorRail'
 import { OrnateSurahTitle } from './OrnateSurahTitle'
+import { PageBreak } from './PageBreak'
+import { buildReaderItems } from './readerItems'
 import { ReaderFocusController } from './ReaderFocusController'
 import { selectedPlaybackAyah } from './selectedPlaybackAyah'
 import { shouldPauseFollowOnDrag } from './followGesture'
@@ -484,6 +486,11 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     )
   }
 
+  const readerItems = useMemo(
+    () => (content ? buildReaderItems(content.ayahs) : []),
+    [content],
+  )
+
   if (!content) {
     return (
       <div
@@ -503,6 +510,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const preface = prefaceState(state.activeBasmalah, dimmedGlobal && !state.activeBasmalah)
   const showBasmalah = surahOpensWithBasmalahPreface(content.surah.id)
   const ayahCount = content.surah.ayahCount
+  const useArabicIndicDigits = state.settings.readingMode !== 'english_only'
   // Rail tracks the recitation only while playing; otherwise the reading line.
   const railAyah =
     recitingActive && state.activeAyah != null ? state.activeAyah : focusedAyah
@@ -686,7 +694,17 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                 </div>
               ) : null}
 
-              {content.ayahs.map((ayah) => {
+              {readerItems.map((item) => {
+                if (item.kind === 'pageBreak') {
+                  return (
+                    <PageBreak
+                      key={`page-${item.page}`}
+                      page={item.page}
+                      useArabicIndicDigits={useArabicIndicDigits}
+                    />
+                  )
+                }
+                const ayah = item.ayah
                 const isActive = state.activeAyah === ayah.number
                 const dimmed = dimmedGlobal && !isActive
                 // Karaoke ink only while audio is moving. At rest every ayah is

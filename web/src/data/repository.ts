@@ -86,7 +86,7 @@ export function surahContent(surahId: number): SurahContent {
   )
 
   const ayahs: Ayah[] = queryAll(
-    'SELECT ayah_number, text_uthmani, translation_en FROM ayahs WHERE surah_id = ? ORDER BY ayah_number',
+    'SELECT ayah_number, text_uthmani, translation_en, page FROM ayahs WHERE surah_id = ? ORDER BY ayah_number',
     [surahId],
     (r) => {
       const n = Number(r.ayah_number)
@@ -95,6 +95,7 @@ export function surahContent(surahId: number): SurahContent {
         number: n,
         text: String(r.text_uthmani),
         translation: String(r.translation_en),
+        page: Number(r.page),
         words: wordsByAyah.get(n) ?? [],
       }
     },

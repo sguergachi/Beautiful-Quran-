@@ -1029,6 +1029,35 @@ select {
   --word-arabic-line: 1.9;
 }
 
+/*
+ * Mushaf page break — Android `PageBreak`: whisper-gold hairline with Western
+ * digits left and Arabic-Indic right (both Western in English-only mode).
+ */
+.page-break {
+  max-width: var(--reader-max);
+  margin: 0 auto;
+  padding: 0.625rem 2.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-sizing: border-box;
+}
+
+.page-break__num {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  line-height: 1;
+  color: color-mix(in srgb, var(--gold) 68%, transparent);
+  flex-shrink: 0;
+}
+
+.page-break__line {
+  flex: 1;
+  height: 0.5px;
+  background: color-mix(in srgb, var(--gold) 20%, transparent);
+  min-width: 0;
+}
+
 .ayah-mark {
   font-family: var(--font-arabic);
   color: var(--gold);
@@ -2311,6 +2340,10 @@ select {
   .ayah-block {
     padding-inline: 2.85rem;
     --word-arabic-size: calc(1.65rem * var(--font-scale, 1));
+  }
+
+  .page-break {
+    padding-inline: 2.85rem;
   }
 
   .hafs-ayah {

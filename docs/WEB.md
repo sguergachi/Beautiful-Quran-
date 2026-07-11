@@ -267,8 +267,10 @@ Three sheets, hand-rolled paper stack (no router chrome):
    ayah label, transport, quiet Close that stops the session — Android
    parity). Opening a word hit flashes that Arabic (and English gloss) word
    twice with the orange repeat wash (directional wash in, dissolve out).
-2. **Reader** — header + ayahs + icon player bar; once the opening surah
-   header scrolls off, a compact ornate title (Arabic + chapter ·
+2. **Reader** — header + ayahs + icon player bar; mushaf page breaks
+   (whisper-gold hairline with Western + Arabic-Indic page numbers, Android
+   `PageBreak` parity) between ayahs that start a new Madinah page; once the
+   opening surah header scrolls off, a compact ornate title (Arabic + chapter ·
    transliteration) reappears in the top bar; ayah selector rail
    (hover-magnified dashes with gold focal tick under the cursor; centered on desktop, Android-
    style edge-flush on mobile ≤640px so bars grow from the screen edge;
@@ -356,6 +358,8 @@ sans.
 - ✅ Collapsed surah title in the reader top bar once the opening header
   scrolls off (Android `OrnateSurahTitle` parity — Arabic + chapter ·
   transliteration, flanked by gilded flourishes).
+- ✅ Mushaf page breaks (Android `PageBreak` — gold hairline + Western /
+  Arabic-Indic page numbers from `ayahs.page`).
 - Visual QA against Android screenshots (`docs/ss*.png`).
 - CI: Vitest on every PR; optional Playwright on `master`.
 
