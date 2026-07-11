@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AyahBlock } from '../../render/AyahBlock'
 import { BasmalahCalligraphy } from '../../render/BasmalahCalligraphy'
 import { prefaceState, InkState } from '../../engine'
@@ -19,29 +19,11 @@ import {
   IconRepeat,
   IconRepeatOne,
 } from '../icons/PlaybackIcons'
+import { AyahSelectorRail } from './AyahSelectorRail'
 import { ReaderFocusController } from './ReaderFocusController'
-
-/** Matches `.ayah-rail .track` inset — keep marker + hit mapping in sync. */
-const RAIL_TRACK_TOP = 0.08
-const RAIL_TRACK_BOTTOM = 0.12
-const RAIL_TRACK_SPAN = 1 - RAIL_TRACK_TOP - RAIL_TRACK_BOTTOM
 
 /** Android `recitingActive` debounce — hold recess across brief pause blips. */
 const RECITING_RELEASE_MS = 350
-
-function ayahFromRailY(clientY: number, railTop: number, railHeight: number, count: number): number {
-  if (count <= 1) return 1
-  const y = (clientY - railTop) / Math.max(1, railHeight)
-  const t = (y - RAIL_TRACK_TOP) / RAIL_TRACK_SPAN
-  const clamped = Math.min(1, Math.max(0, t))
-  return Math.min(count, Math.max(1, Math.round(clamped * (count - 1)) + 1))
-}
-
-function markerTopPct(ayah: number, count: number): number {
-  if (count <= 1) return (RAIL_TRACK_TOP + RAIL_TRACK_SPAN / 2) * 100
-  const t = (ayah - 1) / (count - 1)
-  return (RAIL_TRACK_TOP + t * RAIL_TRACK_SPAN) * 100
-}
 
 function Rosette() {
   return (
@@ -73,7 +55,6 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const [activeExceedsViewport, setActiveExceedsViewport] = useState(false)
   const followWasEnabled = useRef(true)
   const programmaticScroll = useRef(false)
-  const railDragging = useRef(false)
 
   const side = state.settings.ayahSelectorSide
   const receded = state.chromeReceded
@@ -241,56 +222,16 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   // Rail tracks the recitation only while playing; otherwise the reading line.
   const railAyah =
     recitingActive && state.activeAyah != null ? state.activeAyah : focusedAyah
-  const markerPct = markerTopPct(railAyah, ayahCount)
-
-  const scrubRail = (clientY: number, rail: HTMLElement, behavior: ScrollBehavior) => {
-    const rect = rail.getBoundingClientRect()
-    const ayah = ayahFromRailY(clientY, rect.top, rect.height, ayahCount)
-    jumpToAyah(ayah, behavior)
-  }
-
-  const onRailPointerDown = (e: PointerEvent<HTMLDivElement>) => {
-    if (receded) return
-    if (e.pointerType === 'mouse' && e.button !== 0) return
-    e.preventDefault()
-    railDragging.current = true
-    e.currentTarget.setPointerCapture(e.pointerId)
-    scrubRail(e.clientY, e.currentTarget, 'auto')
-  }
-
-  const onRailPointerMove = (e: PointerEvent<HTMLDivElement>) => {
-    if (!railDragging.current) return
-    scrubRail(e.clientY, e.currentTarget, 'auto')
-  }
-
-  const onRailPointerUp = (e: PointerEvent<HTMLDivElement>) => {
-    if (!railDragging.current) return
-    railDragging.current = false
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId)
-    }
-    scrubRail(e.clientY, e.currentTarget, 'smooth')
-  }
 
   const rail = (
-    <div
-      className="ayah-rail"
-      data-receded={receded}
-      onPointerDown={onRailPointerDown}
-      onPointerMove={onRailPointerMove}
-      onPointerUp={onRailPointerUp}
-      onPointerCancel={onRailPointerUp}
-      title="Jump to ayah"
-      role="slider"
-      aria-valuemin={1}
-      aria-valuemax={ayahCount}
-      aria-valuenow={railAyah}
-      aria-label="Ayah position"
-      aria-disabled={receded}
-    >
-      <div className="track" />
-      <div className="marker" style={{ top: `${markerPct}%` }} />
-    </div>
+    <AyahSelectorRail
+      ayahCount={ayahCount}
+      currentAyah={railAyah}
+      currentPosition={railAyah}
+      receded={receded}
+      onScrub={(ayah) => jumpToAyah(ayah, 'auto')}
+      onJump={(ayah) => jumpToAyah(ayah, 'smooth')}
+    />
   )
 
   const repeatMode = state.player.repeatMode
