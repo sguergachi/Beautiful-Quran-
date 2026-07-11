@@ -138,6 +138,13 @@ keep the active target anchored without clearing `followEnabled`.
 `seekToWordAndPlay` with that word's timing `startMs` (no basmalah preface),
 matching Android `onWordClick` → `playFromWord`.
 
+**Rail jump → Play starts there:** committing an ayah on the selector rail
+(Android `requestedJumpAyah`) persists `lastAyah`, seeks the loaded playlist
+to that ayah when the surah is already parked, and keeps a pending-jump latch
+until focus + seek settle. The reader Play button uses `selectedPlaybackAyah`
++ `playLoadedFromAyah` when that latch is set so playback does not resume the
+chapter-opening clip left by `openSurah` / `loadSurah`.
+
 ### 5.3 `InkEngine` (pure policy)
 
 Port exactly:

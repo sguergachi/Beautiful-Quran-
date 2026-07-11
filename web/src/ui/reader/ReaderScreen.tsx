@@ -30,6 +30,7 @@ import {
 import { AyahSelectorRail } from './AyahSelectorRail'
 import { OrnateSurahTitle } from './OrnateSurahTitle'
 import { ReaderFocusController } from './ReaderFocusController'
+import { selectedPlaybackAyah } from './selectedPlaybackAyah'
 import { shouldPauseFollowOnDrag } from './followGesture'
 import { RootViewer } from '../root/RootViewer'
 import { SearchHitFlash } from '../../engine/wordSearch'
@@ -437,24 +438,39 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
    * Always uses FocusEngine `planJump` (preRoll) so near verses glide the
    * full path and far verses teleport to a doorstep then home-scroll.
    * The rail must not call this while dragging; only on commit.
+   *
+   * Also parks playback on the jumped ayah (seek while loaded) and persists
+   * lastAyah so Play starts here — not at the chapter opening left by loadSurah.
+   * pendingJump stays set until focus *and* seek settle so an early Play still
+   * routes through playLoadedFromAyah (web audio fetch can outlast the glide).
    */
   const jumpToAyah = (ayah: number) => {
     if (!content) return
     const count = content.surah.ayahCount
     const targetAyah = Math.min(count, Math.max(1, Math.round(ayah)))
-    const playingThisSurah =
+    const thisSurahLoaded =
       state.player.nowPlaying?.surahId === content.surah.id
-    appStore.setFollowEnabled(playingThisSurah)
-    followWasEnabled.current = playingThisSurah
+    appStore.setFollowEnabled(thisSurahLoaded)
+    followWasEnabled.current = thisSurahLoaded
+    appStore.onAyahBecameActive(targetAyah)
     pendingJumpAyah.current = targetAyah
     setFocusedAyah(targetAyah)
     setFocusedPosition(targetAyah)
-    void focus.focus(targetAyah, { animate: true, preRoll: true }).finally(() => {
+    const seekPromise = thisSurahLoaded
+      ? appStore.seekToAyah(targetAyah)
+      : Promise.resolve()
+    void Promise.all([
+      focus.focus(targetAyah, { animate: true, preRoll: true }),
+      seekPromise,
+    ]).finally(() => {
       // Keep the committed jump target — readout can briefly report the
       // previous ayah while the home-scroll settles on the anchor.
       setFocusedAyah(targetAyah)
       setFocusedPosition(targetAyah)
-      pendingJumpAyah.current = null
+      // Clear only if no newer jump superseded this one (Android finally guard).
+      if (pendingJumpAyah.current === targetAyah) {
+        pendingJumpAyah.current = null
+      }
     })
   }
 
@@ -774,11 +790,22 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                 aria-busy={state.player.isBuffering || undefined}
                 onClick={() => {
                   if (state.player.isBuffering) return
+                  const thisSurahLoaded =
+                    state.player.nowPlaying?.surahId === content.surah.id
+                  const selected = selectedPlaybackAyah({
+                    ayahCount,
+                    requestedJumpAyah: pendingJumpAyah.current,
+                    isThisSurahLoaded: thisSurahLoaded,
+                    followEnabled: state.followEnabled,
+                    activeAyah: state.activeAyah,
+                    scrolledAyah: focusedAyah,
+                  })
+                  const pendingJump = pendingJumpAyah.current != null
                   if (!state.player.isPlaying) {
                     followWasEnabled.current = false
                     appStore.setFollowEnabled(true)
                   }
-                  void appStore.playPause()
+                  void appStore.playPause({ selectedAyah: selected, pendingJump })
                 }}
               >
                 {state.player.isBuffering ? (

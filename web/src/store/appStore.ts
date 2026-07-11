@@ -338,18 +338,70 @@ class AppStore {
     this.set({ pendingSearchFlash: null })
   }
 
-  async playPause() {
-    if (!this.state.content) return
-    const ps = this.state.player
-    if (!ps.nowPlaying) {
-      const reciter =
-        this.state.reciters.find((r) => r.id === this.state.settings.reciterId) ??
-        this.state.reciters[0]
-      if (!reciter) return
-      await player.playFrom(this.state.settings.lastAyah || 1, true)
+  /**
+   * Persist the reading / jump position — Android `onAyahBecameActive`.
+   * Rail jumps and follow advances call this so Play / Continue resume here.
+   */
+  onAyahBecameActive(ayah: number) {
+    if (!this.state.content || ayah < 1) return
+    const surahId = this.state.content.surah.id
+    const clamped = Math.min(this.state.content.surah.ayahCount, Math.max(1, ayah))
+    if (
+      this.state.settings.lastSurah === surahId &&
+      this.state.settings.lastAyah === clamped
+    ) {
       return
     }
-    await player.toggle()
+    const settings = {
+      ...this.state.settings,
+      lastSurah: surahId,
+      lastAyah: clamped,
+    }
+    saveSettings(settings)
+    this.set({ settings })
+  }
+
+  /**
+   * Play / pause — Android reader `onPlayPause` parity when [opts] is passed.
+   *
+   * Without opts (home float): toggle the loaded clip, or start from lastAyah.
+   * With opts from the reader: start at the selected / jumped ayah instead of
+   * resuming the chapter-opening clip left by `openSurah` / `loadSurah`.
+   */
+  async playPause(opts?: { selectedAyah?: number; pendingJump?: boolean }) {
+    if (!this.state.content) return
+    const ps = this.state.player
+    const content = this.state.content
+    const np = ps.nowPlaying
+    const thisSurahLoaded = np?.surahId === content.surah.id
+    const selected =
+      opts?.selectedAyah != null && opts.selectedAyah > 0
+        ? opts.selectedAyah
+        : this.state.settings.lastAyah || 1
+
+    if (thisSurahLoaded) {
+      if (ps.isPlaying) {
+        await player.toggle()
+        return
+      }
+      // Paused but loaded: a pending rail jump must start there — not resume
+      // the chapter-opening clip parked by loadSurah.
+      if (opts?.pendingJump) {
+        await player.playLoadedFromAyah(selected)
+        this.onAyahBecameActive(selected)
+        this.set({ followEnabled: true })
+        return
+      }
+      await player.toggle()
+      return
+    }
+
+    await this.playAyah(selected)
+  }
+
+  /** Seek within the loaded playlist without forcing play (rail jump while loaded). */
+  async seekToAyah(ayah: number) {
+    await player.seekToAyah(ayah)
   }
 
   async playAyah(ayah: number, includeBasmalah = ayah === 1) {
