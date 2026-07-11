@@ -33,4 +33,14 @@ class EnglishTypographyTest {
             ),
         )
     }
+
+    @Test
+    fun `capitalized guidance remains part of its prepositional phrase`() {
+        assertEquals(
+            listOf("Those", "(are) on", "Guidance", "from their Lord."),
+            EnglishTypography.punctuate(
+                listOf("Those", "(are) on", "Guidance", "from their Lord"),
+            ),
+        )
+    }
 }

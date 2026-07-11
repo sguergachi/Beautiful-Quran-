@@ -7,10 +7,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
@@ -94,11 +96,18 @@ fun InkRevealOverlay(
     originX: Float = 0.5f,
     originY: Float = 0.5f,
     durationMillis: Int = 620,
+    onRenderedChange: (Boolean) -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     var rendered by remember { mutableStateOf(visible) }
     val spread = remember { Animatable(if (visible) 1f else 0f) }
     val hole = remember { Animatable(0f) }
+    val onRenderedChangeLatest = rememberUpdatedState(onRenderedChange)
+
+    LaunchedEffect(rendered) { onRenderedChangeLatest.value(rendered) }
+    DisposableEffect(Unit) {
+        onDispose { onRenderedChangeLatest.value(false) }
+    }
 
     LaunchedEffect(visible) {
         if (visible) {

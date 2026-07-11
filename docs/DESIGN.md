@@ -48,6 +48,10 @@ origin (the play control, a held word, …) as a soft-edged circle, soaking
 settles the same surface reads as the new content. Closing opens a hole back
 to whatever sat beneath — no push, no stack, no window.
 
+While an ink bleed is entering, open, or receding, paper-stack swipes are
+disabled. The gesture gate follows the overlay's rendered lifetime rather than
+only its requested visibility, so a page cannot turn underneath a closing wash.
+
 The shared composable is `InkRevealOverlay` (`ui/theme/InkReveal.kt`). Three
 surfaces use it today / by design:
 
@@ -157,7 +161,8 @@ or as a control — a bookmark is the reader's own ink, not the app's.
   metrics for the same Hafs ornament.
 - **English gloss punctuation**: display-only periods close each ayah and
   precede genuine capitalized sentence starts. Proper and reverential capitals
-  (Allah, His, Lord, etc.) and speech cues are excluded. This policy never
+  (Allah, His, Lord, etc.), speech cues, and known source-capitalization
+  artifacts such as mid-phrase “Guidance” are excluded. This policy never
   mutates the database text or the timing/search identity of a word.
 - **Translations**: EB Garamond, 17 sp, 26 sp leading, at 66 % ink.
 - **UI text**: the same serif at small sizes with letterspacing and reduced
