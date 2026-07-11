@@ -262,9 +262,9 @@ Three sheets, hand-rolled paper stack (no router chrome):
 2. **Reader** — header + ayahs + icon player bar; once the opening surah
    header scrolls off, a compact ornate title (Arabic + chapter ·
    transliteration) reappears in the top bar; ayah selector rail
-   (hover-magnified dashes, gold focal tick; centered on desktop, Android-
+   (hover-magnified dashes with gold focal tick under the cursor; centered on desktop, Android-
    style edge-flush on mobile ≤640px so bars grow from the screen edge;
-   wheel scrub by tick spacing so the visible label is the commit target);
+   drag uses tick-spaced wheel scrub so the visible label is the commit target);
    return-to-ayah roundel (gilt corolla, qalam arrow painted toward the
    active verse); bookmark ribbon.
 3. **Settings** — reciter, reading mode, text size, display toggles, theme.

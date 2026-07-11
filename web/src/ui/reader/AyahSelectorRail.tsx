@@ -8,6 +8,7 @@ import {
 import {
   dialDeltaFromPointerDy,
   dialFromTickY,
+  dialFromTrackY,
   focusRadiusForHeight,
   isMajorAyah,
   MOBILE_RAIL_MEDIA,
@@ -90,14 +91,15 @@ function railGrowFrom(): RailGrowFrom {
  * Collapsed: a symbolic stack of dashes tracking reading progress.
  * Hover / press: blooms into a magnification dial — bars grow widthwise under
  * the pointer, taper at the top and bottom edges, and the focal ayah is the
- * widest (gold).
+ * widest (gold). Hover maps pointer Y along the track so the gold tick stays
+ * under the cursor.
  *
  * Desktop keeps a centered midline. Mobile (≤640px) matches Android: bars
  * grow flush from the screen edge with the outer rounded cap hidden, and
  * ayah numbers hang inward toward the page.
  *
- * Dragging only moves the dial by tick spacing (Android wheel scrub). The
- * page stays put until release, when [onJump] fires so the reader can run a
+ * Dragging moves the dial by tick spacing (Android wheel scrub). The page
+ * stays put until release, when [onJump] fires so the reader can run a
  * FocusEngine pre-roll slide — same commit model as Android's
  * `AyahSelectorRail`. A no-drag tap selects the visible tick under the
  * pointer, not an absolute track fraction.
@@ -315,8 +317,8 @@ export function AyahSelectorRail({
   /**
    * Scrub the magnification wheel by pointer delta — one tickSpacingPx of
    * movement = one ayah, matching the drawn tick spacing (Android parity).
-   * Absolute Y→ayah mapping is wrong here: nearby tick labels are 14px apart
-   * while a long surah packs the full range into the track.
+   * Absolute Y→ayah mapping is wrong for drag: nearby tick labels are 14px
+   * apart while a long surah packs the full range into the track.
    */
   const scrubDialByClientY = (clientY: number, rubberBand: boolean) => {
     const lastY = lastClientYRef.current
@@ -330,6 +332,19 @@ export function AyahSelectorRail({
       ? rubberBandDialPosition(raw, 1, ayahCount)
       : Math.min(ayahCount, Math.max(1, raw))
     commitDial(next)
+  }
+
+  /**
+   * Hover follow: map pointer Y along the track so the gold focal tick sits
+   * under the cursor. Drag uses tick-spaced wheel scrub instead.
+   */
+  const followDialToClientY = (clientY: number) => {
+    const root = rootRef.current
+    if (!root) return
+    const rect = root.getBoundingClientRect()
+    const y = clientY - rect.top
+    const next = dialFromTrackY(y, rect.height, ayahCount, TOP_FRAC, BOTTOM_FRAC)
+    commitDial(Math.min(ayahCount, Math.max(1, next)))
   }
 
   /** Pick the visible tick under [clientY] without moving the page. */
@@ -352,8 +367,7 @@ export function AyahSelectorRail({
     hoverRef.current = true
     lastClientYRef.current = e.clientY
     if (!draggingRef.current) {
-      dialRef.current = readingPosRef.current
-      setAriaAyah(Math.min(ayahCount, Math.max(1, Math.round(dialRef.current))))
+      followDialToClientY(e.clientY)
     }
     setExpanded(true)
   }
@@ -390,7 +404,7 @@ export function AyahSelectorRail({
       return
     }
     if (hoverRef.current) {
-      scrubDialByClientY(e.clientY, false)
+      followDialToClientY(e.clientY)
     }
   }
 
