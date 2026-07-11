@@ -2,8 +2,7 @@
  * Visual word-ink policy — port of Android `ui/reader/InkEngine.kt`.
  * Pure decision functions; no DOM.
  */
-import type { ActiveWord } from '../data/models'
-import { normalizeActiveWord } from '../data/models'
+import type { ActiveWord } from '../../data/models'
 
 export enum InkState {
   Plain = 'Plain',
@@ -75,10 +74,9 @@ export function wordState(
 ): InkState {
   if (!isActiveAyah) return dimmed ? InkState.Upcoming : InkState.Plain
   if (!activeWord) return InkState.Upcoming
-  const aw = normalizeActiveWord(activeWord)
-  if (position === aw.wordPosition) return InkState.Active
-  if (position < aw.wordPosition) return InkState.Recited
-  if (position <= aw.highWater) return InkState.Recited
+  if (position === activeWord.wordPosition) return InkState.Active
+  if (position < activeWord.wordPosition) return InkState.Recited
+  if (position <= activeWord.highWater) return InkState.Recited
   return InkState.Upcoming
 }
 
@@ -87,8 +85,9 @@ export function inRepeatChain(
   activeWord: ActiveWord | null | undefined,
 ): boolean {
   if (!activeWord) return false
-  const aw = normalizeActiveWord(activeWord)
-  return aw.isRepeat && position >= aw.repeatStart && position <= aw.wordPosition
+  return activeWord.isRepeat &&
+    position >= activeWord.repeatStart &&
+    position <= activeWord.wordPosition
 }
 
 export function word(
@@ -108,7 +107,8 @@ export function sweepMs(
   playbackSpeed: number,
 ): number | null {
   if (!activeWord) return null
-  const raw = Math.max(0, Math.round(activeWord.durationMs / playbackSpeed))
+  // Kotlin `toInt()` truncates; use the same boundary semantics on web.
+  const raw = Math.max(0, Math.trunc(activeWord.durationMs / playbackSpeed))
   if (raw <= 0) return 1
   // Never clamp the floor above the lit lifetime — that left the wash running
   // past handoff and flickered Arabic-only's paper cover on the completed word.
@@ -135,51 +135,13 @@ export function prefaceState(isActive: boolean, dimmed: boolean): InkState {
 export function prefaceWashProgress(positionMs: number, durationMs: number): number {
   if (durationMs <= 0) return 0
   if (positionMs <= 0) return 0
-  const settleAt = Math.max(1, Math.round(durationMs * PREFACE_WASH_SETTLE_FRACTION))
+  const settleAt = Math.max(1, Math.trunc(durationMs * PREFACE_WASH_SETTLE_FRACTION))
   if (positionMs >= settleAt) return 1
   return Math.min(1, Math.max(0, positionMs / settleAt))
 }
 
 /** Fraction of the lead-in clip at which the SVG wash must be fully settled. */
 export const PREFACE_WASH_SETTLE_FRACTION = 0.88
-
-/**
- * Lerp Upcoming → Active ink with wash progress.
- * Port of Android `wordFadeAlpha` (ReaderComponents) — used for secondary
- * gloss/transliteration lines that fade with the sweep but never letter-reveal.
- */
-export function wordFadeAlpha(progress: number): number {
-  const resting = inkAlpha(InkState.Upcoming)
-  const full = inkAlpha(InkState.Active)
-  const p = Math.min(1, Math.max(0, progress))
-  return resting + (full - resting) * p
-}
-
-/**
- * Alpha for secondary lines (gloss, transliteration).
- * While Active and not repeating, tracks the letter sweep; otherwise the
- * lyric ink for the word's state. Port of Android `WordHighlight.secondaryAlpha`.
- */
-export function secondaryAlpha(
-  state: InkState,
-  repeat: boolean,
-  sweepProgress: number,
-): number {
-  if (state === InkState.Active && !repeat) return wordFadeAlpha(sweepProgress)
-  return inkAlpha(state)
-}
-
-/**
- * Block ayah-translation ink strength. Android uses `onSurface` at 0.66, and
- * multiplies by Upcoming alpha when the verse is recessed.
- */
-export function ayahTranslationAlpha(dimmed: boolean): number {
-  const base = 0.66
-  return dimmed ? base * inkAlpha(InkState.Upcoming) : base
-}
-
-/** Transliteration color strength under secondary alpha (Android 0.55). */
-export const TRANSLITERATION_COLOR_ALPHA = 0.55
 
 export const InkEngine = {
   State: InkState,
@@ -197,10 +159,6 @@ export const InkEngine = {
   prefaceState,
   prefaceWashProgress,
   PREFACE_WASH_SETTLE_FRACTION,
-  wordFadeAlpha,
-  secondaryAlpha,
-  ayahTranslationAlpha,
-  TRANSLITERATION_COLOR_ALPHA,
   inkAlpha,
   resetTuning,
   setTuning,

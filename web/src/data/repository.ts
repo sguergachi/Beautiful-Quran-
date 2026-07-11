@@ -18,7 +18,7 @@ import {
   WORD_SEARCH_MAX_HITS,
   type WordSearchHit,
   type WordSearchIndexEntry,
-} from '../engine/wordSearch'
+} from '../domain/WordSearch'
 
 let surahsCache: Surah[] | null = null
 let recitersCache: Reciter[] | null = null

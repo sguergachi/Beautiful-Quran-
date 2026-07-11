@@ -33,11 +33,11 @@ copied from the Android app assets — no separate data pipeline.
 ## Architecture
 
 ```
-src/engine/     pure TS ports of HighlightEngine, FocusEngine, InkEngine, fade math
+src/domain/     HighlightEngine, HighlightClock, basmalah and search policy
 src/data/       WASM SQLite (sql.js) over quran.db + settings/bookmarks
-src/playback/   Dual HTMLAudioElement + Cache API prefetch + Media Session + 33 ms tick
+src/playback/   Dual HTMLAudioElement + Cache API prefetch + Media Session + rAF clock
 src/render/     WordUnit / HafsWord / AyahBlock (directional ink + paper-cover bloom)
-src/ui/         paper stack: Home | Reader | Settings + entrance cover + root viewer
+src/ui/         paper stack plus Android-mirrored reader/focus/Ink/Fade policy
                 ReaderFocusController keeps the playing ayah on its anchor
 src/store/      hand-rolled app store (boundary-only React updates)
 ```

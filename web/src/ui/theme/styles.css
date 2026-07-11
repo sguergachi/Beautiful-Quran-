@@ -31,6 +31,7 @@
   /* Play-start recess — even ease-in-out, matched to Android. */
   --chrome-recede-ms: 520ms;
   --ink-fade-ms: 400ms;
+  --ayah-mark-fade-ms: 400ms;
   --recess-ms: 400ms;
   --recede-ease: cubic-bezier(0.4, 0, 0.2, 1);
   color-scheme: light;
@@ -1106,7 +1107,7 @@ select {
   color: var(--gold);
   font-size: 0.95rem;
   margin-inline-start: 0.35rem;
-  transition: opacity var(--ink-fade-ms) var(--recede-ease);
+  transition: opacity var(--ayah-mark-fade-ms) var(--recede-ease);
   line-height: 1;
 }
 
@@ -1394,7 +1395,7 @@ select {
 }
 
 .scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .ayah-mark {
-  opacity: 0.22;
+  opacity: var(--upcoming-alpha, 0.22);
 }
 
 .scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .ayah-translation {

@@ -89,7 +89,7 @@ export function activeInfo(segments: Segment[], positionMs: number): ActiveInfo 
 }
 
 /** Index of the last segment whose start <= positionMs, or null when nothing should be lit. */
-export function activeIndex(segments: Segment[], positionMs: number): number | null {
+function activeIndex(segments: Segment[], positionMs: number): number | null {
   if (segments.length === 0) return null
   if (positionMs < segments[0]!.startMs) return null
   if (positionMs >= segments[segments.length - 1]!.endMs) return null
@@ -109,5 +109,4 @@ export const HighlightEngine = {
   activeWord,
   activeSegment,
   activeInfo,
-  activeIndex,
 }

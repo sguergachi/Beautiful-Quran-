@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HighlightEngine } from '../../engine/highlight'
+import { HighlightEngine } from '../../domain/HighlightEngine'
 import type { Segment } from '../../data/models'
 
 /** Mirror of AppStore.segmentStartMs lookup — first segment for a word position. */

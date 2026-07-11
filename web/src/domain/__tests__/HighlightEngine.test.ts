@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HighlightEngine, type ActiveInfo } from '../highlight'
+import { HighlightEngine, type ActiveInfo } from '../HighlightEngine'
 import type { Segment } from '../../data/models'
 
 const segments: Segment[] = [

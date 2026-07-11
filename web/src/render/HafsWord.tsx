@@ -13,9 +13,9 @@ import {
   type MutableRefObject,
   type PointerEvent,
 } from 'react'
-import type { ActiveWord, Word } from '../data/models'
-import { InkEngine, InkState, getTuning, startRevealed, sweepMs } from '../engine/ink'
-import { cubicBezierEase } from '../engine/fade'
+import type { Word } from '../data/models'
+import { InkState, getTuning, startRevealed, type InkWord } from '../ui/reader/InkEngine'
+import { cubicBezierEase } from '../ui/theme/Fade'
 import {
   applyMask,
   cachedPaperCoverMask,
@@ -24,14 +24,12 @@ import {
   runSearchHitDoubleWash,
   runWash,
 } from './inkWash'
-import { SearchHitFlash } from '../engine/wordSearch'
+import { SearchHitFlash } from '../ui/reader/SearchHitFlash'
 
 interface Props {
   word: Word
-  activeWord: ActiveWord | null
-  isActiveAyah: boolean
-  dimmed: boolean
-  speed: number
+  ink: InkWord
+  sweepMs: number | null
   /** When true, pulse the orange search-hit flash on this Arabic word. */
   searchFlash?: boolean
   rootRef?: MutableRefObject<HTMLElement | null>
@@ -55,17 +53,14 @@ function clearCover(cover: HTMLElement) {
 
 export function HafsWord({
   word,
-  activeWord,
-  isActiveAyah,
-  dimmed,
-  speed,
+  ink,
+  sweepMs: activeSweepMs,
   searchFlash = false,
   rootRef: externalRootRef,
   onPlay,
   onHold,
   onContextMenu,
 }: Props) {
-  const ink = InkEngine.word(word.position, activeWord, isActiveAyah, dimmed)
   const localRootRef = useRef<HTMLSpanElement>(null)
   const coverRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
@@ -147,7 +142,7 @@ export function HafsWord({
     // Still Active after a layout echo (same word) — do not restart.
     if (!enteredActive) return
 
-    const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
+    const duration = activeSweepMs ?? t.repeatSweepMs
     cover.style.transition = 'none'
     cover.style.opacity = '1'
     applyMask(cover, cachedPaperCoverMask(0, resting, true, t.washFeather))
@@ -169,7 +164,7 @@ export function HafsWord({
     )
     // Duration/speed captured at Active entry only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.state, ink.repeat, activeWord?.wordPosition])
+  }, [ink.state, ink.repeat])
 
   // Orange repeat overlay: wash in on chain entry, dissolve on release.
   // Key only on `ink.repeat` — advancing within the chain must not cancel
@@ -183,7 +178,7 @@ export function HafsWord({
     prevRepeat.current = ink.repeat
 
     if (enteredRepeat) {
-      const duration = sweepMs(activeWord, speed) ?? getTuning().repeatSweepMs
+      const duration = activeSweepMs ?? getTuning().repeatSweepMs
       return runRepeatWashIn(overlay, true, duration)
     }
     if (leftRepeat) {

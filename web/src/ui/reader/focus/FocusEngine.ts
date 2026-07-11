@@ -6,7 +6,7 @@
  * adaptive anchor / placement path as any short verse.
  */
 
-import { BASMALAH_PLAYLIST_AYAH } from './basmalah'
+import { BASMALAH_PLAYLIST_AYAH } from '../../../domain/Basmalah'
 
 export const FIT_TOP_MARGIN_FRACTION = 0.1
 export const TALL_TOP_MARGIN_FRACTION = 0.04
@@ -221,29 +221,6 @@ export function readoutPosition(readout: ReadoutSnapshot): number {
   return Math.min(readout.lastAyahNumber, Math.max(1, base))
 }
 
-/**
- * Signed pixels to scroll so an active word sits inside the comfortable
- * reading band. Negative = scroll up (word is above the band); positive =
- * scroll down (word is below). Zero when already comfortable.
- *
- * Used by the DOM controller's tall-verse line follow — pure so the band
- * math stays unit-tested without a layout tree.
- */
-export function wordBandDeltaPx(
-  wordTopPx: number,
-  wordBottomPx: number,
-  viewportHeightPx: number,
-  topGuardPx: number,
-  bandTopMarginPx: number,
-  bandBottomMarginPx: number,
-): number {
-  const bandTop = topGuardPx + bandTopMarginPx
-  const bandBottom = viewportHeightPx - bandBottomMarginPx
-  if (wordTopPx < bandTop) return wordTopPx - bandTop
-  if (wordBottomPx > bandBottom) return wordBottomPx - bandBottom
-  return 0
-}
-
 export const FocusEngine = {
   CHAPTER_TOP_FOCUS_AYAH,
   playbackFocusTarget,
@@ -257,5 +234,4 @@ export const FocusEngine = {
   glideDeltaPx,
   placement,
   readoutPosition,
-  wordBandDeltaPx,
 }

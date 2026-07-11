@@ -1,29 +1,8 @@
 /** Quran-wide word search — mirrors Android `domain/WordSearch.kt`. */
 
-import { getTuning } from './ink'
-
 export const WORD_SEARCH_MAX_HITS = 400
 export const WORD_SEARCH_MIN_QUERY_LENGTH = 2
 export const WORD_SEARCH_PREVIEW_LIMIT = 3
-
-/** Timing for the reader search-hit orange pulse (Android `SearchHitFlash`).
- *  Uses the ink-engine repeat wash + fade durations — wash in, dissolve out,
- *  twice — so the flash matches real repetition highlighting. */
-export const SearchHitFlash = {
-  START_DELAY_MS: 140,
-  PULSES: 2,
-} as const
-
-/** One wash-in + dissolve cycle from current ink tuning. */
-export function searchHitFlashCycleMs(): number {
-  const t = getTuning()
-  return t.repeatSweepMs + t.repeatFadeOutMs
-}
-
-/** Total animation time after `START_DELAY_MS` (both pulses). */
-export function searchHitFlashTotalMs(): number {
-  return SearchHitFlash.PULSES * searchHitFlashCycleMs()
-}
 
 export interface WordSearchHit {
   surahId: number

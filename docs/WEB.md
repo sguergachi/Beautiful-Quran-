@@ -27,9 +27,9 @@ and ink — offline-first, no accounts, no backend.
 
 | Layer | Android source of truth | Web starting point |
 |---|---|---|
-| Highlight timing | `domain/HighlightEngine.kt` + `HighlightEngineTest` | Port 1:1 to TypeScript; port tests |
-| Focus / scroll | `ui/reader/focus/FocusEngine.kt` + `ReaderFocusController` | Port pure engine 1:1; rewrite controller for DOM scroll |
-| Ink policy | `ui/reader/InkEngine.kt` + `InkEngineTest` | Port 1:1 (policy + `Tuning`); no Compose |
+| Highlight timing | `domain/HighlightEngine.kt` + `HighlightEngineTest` | `web/src/domain/HighlightEngine.ts` + shared cases |
+| Focus / scroll | `ui/reader/focus/FocusEngine.kt` + `ReaderFocusController` | Mirrored under `web/src/ui/reader/focus/`; DOM controller stays platform-specific |
+| Ink policy | `ui/reader/InkEngine.kt` + `InkEngineTest` | `web/src/ui/reader/InkEngine.ts`; render policy stays outside the engine |
 | Draw primitives | `ui/theme/Fade.kt` (`letterFadeIn`, `shapedWordBloom`, `inkSmootherstep`) | Port math; reimplement wash with CSS mask / Canvas |
 | Marketing ink demo | `docs/ink-fade.js`, `docs/reveal.js` | **Prototype only** — whole-word opacity, not product-grade directional wash |
 | Data | `app/src/main/assets/quran.db` (27 MB, committed) | Same DB; load via WASM SQLite |
@@ -47,10 +47,11 @@ the marketing compromise as the highlight.
 tools/build_db.py  ──►  quran.db  (shared asset; optional web export step)
                               │
 web/                          ▼
-  engine/          pure TS: HighlightEngine, FocusEngine, InkEngine, fade math
+  domain/          HighlightEngine / HighlightClock + domain policy
   data/            WASM SQLite wrapper + typed queries (same schema)
   playback/        HTMLAudioElement / Media Session + Cache API LRU
-  ui/              paper stack: Home | Reader | Settings + ink-bleed overlays
+  ui/reader/       InkEngine + focus engine/controller + reader state policy
+  ui/theme/        shared fade math; DOM masks remain render adapters
   render/          mode-specific word drawing (gloss / English / Arabic-only)
 ```
 
@@ -112,7 +113,7 @@ Port exactly:
   placement path as any short verse — not the taller surah header)
 
 Acceptance: every case in `FocusEngineTest` ports. DOM controller is
-separate (`web/src/ui/reader/ReaderFocusController.ts` — sole writer to the
+separate (`web/src/ui/reader/focus/ReaderFocusController.ts` — sole writer to the
 reader `scrollTop`, using Motion `animate` + cached content-space geometry +
 `homeScrollStep` with Material FastOutSlowIn `[0.4, 0, 0.2, 1]` — the same
 curve as Android `FastOutSlowInEasing`; resolves ayah 0 to the
@@ -395,7 +396,7 @@ sans.
 - Exact Media3 preload configuration
 - Sharing / accounts / analytics (never)
 
-## 11. Repo layout (proposed)
+## 11. Repo layout
 
 ```text
 web/
@@ -406,11 +407,11 @@ web/
     quran.db          # copy or CI-synced from app assets
     fonts/            # hafs, eb-garamond, cormorant
   src/
-    engine/
-      highlight.ts
-      focus.ts
-      ink.ts
-      fade.ts
+    domain/
+      HighlightEngine.ts
+      HighlightClock.ts
+      Basmalah.ts
+      WordSearch.ts
     data/
       database.ts
       repository.ts
@@ -423,6 +424,12 @@ web/
       entrance/         # closed mushaf cover (arrive → du'a text fade → open)
       home/
       reader/
+        InkEngine.ts
+        ReaderHighlightState.ts
+        WordHighlight.ts
+        focus/
+          FocusEngine.ts
+          ReaderFocusController.ts
       settings/
       theme/
     render/
@@ -430,7 +437,7 @@ web/
       EnglishWordUnit.tsx
       HafsAyah.tsx      # Phase 4
     main.tsx
-  src/engine/__tests__/   # ports of JVM tests
+  # Tests live beside the matching domain / reader / theme policy.
 ```
 
 Android stays the product of record for mobile. Web is a sibling package in

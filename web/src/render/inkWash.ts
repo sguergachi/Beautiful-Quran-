@@ -9,8 +9,8 @@
  * 17-stop gradient on every display refresh.
  */
 import { animate, type AnimationPlaybackControls } from 'motion'
-import { cubicBezierEase, paperCoverMaskImage, washMaskImage } from '../engine/fade'
-import { getTuning } from '../engine/ink'
+import { cubicBezierEase, paperCoverMaskImage, washMaskImage } from '../ui/theme/Fade'
+import { getTuning } from '../ui/reader/InkEngine'
 import { cubicBezierTuple, type CubicBezierEase } from '../ui/motion/easing'
 
 /** Quantize wash progress to ~48 steps — visually identical, far fewer strings. */

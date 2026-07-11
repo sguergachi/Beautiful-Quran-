@@ -6,17 +6,15 @@ import {
   type MutableRefObject,
   type PointerEvent,
 } from 'react'
-import type { ActiveWord, Word } from '../data/models'
+import type { Word } from '../data/models'
 import {
-  InkEngine,
   InkState,
   getTuning,
-  secondaryAlpha,
   startRevealed,
-  sweepMs,
-  TRANSLITERATION_COLOR_ALPHA,
-} from '../engine/ink'
-import { cubicBezierEase } from '../engine/fade'
+  type InkWord,
+} from '../ui/reader/InkEngine'
+import { secondaryAlpha, TRANSLITERATION_COLOR_ALPHA } from '../ui/reader/WordHighlight'
+import { cubicBezierEase } from '../ui/theme/Fade'
 import {
   applyMask,
   cachedPaperCoverMask,
@@ -26,20 +24,18 @@ import {
   runSearchHitDoubleWash,
   runWash,
 } from './inkWash'
-import { SearchHitFlash } from '../engine/wordSearch'
+import { SearchHitFlash } from '../ui/reader/SearchHitFlash'
 
 interface Props {
   word: Word
-  activeWord: ActiveWord | null
-  isActiveAyah: boolean
-  dimmed: boolean
+  ink: InkWord
+  sweepMs: number | null
   showGloss: boolean
   showTransliteration: boolean
   englishMode?: boolean
   searchHit?: boolean
   /** When true, pulse the orange search-hit flash on Arabic + gloss. */
   searchFlash?: boolean
-  speed: number
   /** Optional external ref so the ayah can keep the active word in view. */
   rootRef?: MutableRefObject<HTMLElement | null>
   onPlay: () => void
@@ -108,21 +104,18 @@ function paintSecondary(
 
 export function WordUnit({
   word,
-  activeWord,
-  isActiveAyah,
-  dimmed,
+  ink,
+  sweepMs: activeSweepMs,
   showGloss,
   showTransliteration,
   englishMode = false,
   searchHit = false,
   searchFlash = false,
-  speed,
   rootRef: externalRootRef,
   onPlay,
   onHold,
   onContextMenu,
 }: Props) {
-  const ink = InkEngine.word(word.position, activeWord, isActiveAyah, dimmed)
   const localRootRef = useRef<HTMLSpanElement>(null)
   /** Base glyph layer — Active wash targets this (English) or the paper cover (Arabic). */
   const baseRef = useRef<HTMLSpanElement>(null)
@@ -225,7 +218,7 @@ export function WordUnit({
 
       if (!enteredActive) return
 
-      const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
+      const duration = activeSweepMs ?? t.repeatSweepMs
       cover.style.transition = 'none'
       cover.style.opacity = '1'
       applyMask(cover, cachedPaperCoverMask(0, resting, true, t.washFeather))
@@ -275,7 +268,7 @@ export function WordUnit({
 
     if (!enteredActive) return
 
-    const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
+    const duration = activeSweepMs ?? t.repeatSweepMs
     applyMask(el, cachedWashMask(0, resting, rtl, t.washFeather))
     paintSecondary(glossRef.current, translitRef.current, ink, 0, true)
 
@@ -295,7 +288,7 @@ export function WordUnit({
     // speed/duration captured at Active entry only — mid-word setting changes
     // must not cancel and restart the sweep (that is itself a flicker).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.state, ink.repeat, activeWord?.wordPosition, englishMode])
+  }, [ink.state, ink.repeat, englishMode])
 
   // Keep secondary alpha in sync when gloss/translit mount or ink leaves Active
   // without a wash restart (e.g. settings toggle mid-verse).
@@ -326,7 +319,7 @@ export function WordUnit({
     const rtl = !englishMode
 
     if (enteredRepeat) {
-      const duration = sweepMs(activeWord, speed) ?? getTuning().repeatSweepMs
+      const duration = activeSweepMs ?? getTuning().repeatSweepMs
       return runRepeatWashIn(overlay, rtl, duration)
     }
     if (leftRepeat) {

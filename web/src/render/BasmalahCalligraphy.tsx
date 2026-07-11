@@ -9,8 +9,8 @@ import {
   prefaceState,
   prefaceWashProgress,
   InkState,
-} from '../engine/ink'
-import { BASMALAH_UTHMANI } from '../engine/basmalah'
+} from '../ui/reader/InkEngine'
+import { BASMALAH_UTHMANI } from '../domain/Basmalah'
 import { player } from '../playback/player'
 import { applyMask, cachedPaperCoverMask } from './inkWash'
 

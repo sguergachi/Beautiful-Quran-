@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   inkSmootherstep,
   inkWashAlpha,
+  INK_PROFILE_STOPS,
   paperCoverMaskImage,
   washMaskImage,
   wholeWordInkAlpha,
-} from '../fade'
+} from '../Fade'
 
 describe('fade math', () => {
   it('smootherstep is 0 at 0 and 1 at 1', () => {
@@ -24,6 +25,19 @@ describe('fade math', () => {
     expect(inkWashAlpha(1, 1, 0.22, false)).toBe(1)
   })
 
+  it('ahead of the wash rests at upcoming ink', () => {
+    expect(inkWashAlpha(0.9, 0.1, 0.22, false)).toBeCloseTo(0.22, 4)
+  })
+
+  it('the first revealed letter leads the last in each direction', () => {
+    expect(inkWashAlpha(0, 0.4, 0.22, false)).toBeGreaterThan(
+      inkWashAlpha(1, 0.4, 0.22, false),
+    )
+    expect(inkWashAlpha(1, 0.4, 0.22, true)).toBeGreaterThan(
+      inkWashAlpha(0, 0.4, 0.22, true),
+    )
+  })
+
   it('washMaskImage returns none when complete', () => {
     expect(washMaskImage(1, 0.22, true)).toBe('none')
   })
@@ -31,7 +45,7 @@ describe('fade math', () => {
   it('washMaskImage builds a multi-stop gradient at mid progress', () => {
     const mask = washMaskImage(0.4, 0.22, true)
     expect(mask.startsWith('linear-gradient(to right,')).toBe(true)
-    expect(mask.split('rgba').length).toBeGreaterThan(8)
+    expect(mask.split('rgba').length - 1).toBe(INK_PROFILE_STOPS)
   })
 
   it('paperCoverMaskImage is the inverse of glyph wash alpha', () => {
