@@ -20,8 +20,10 @@ import {
   applyMask,
   cachedPaperCoverMask,
   cachedWashMask,
+  runSearchHitDoubleWash,
   runWash,
 } from './inkWash'
+import { SearchHitFlash } from '../engine/wordSearch'
 
 interface Props {
   word: Word
@@ -63,6 +65,7 @@ export function HafsWord({
   const localRootRef = useRef<HTMLSpanElement>(null)
   const coverRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
+  const flashRef = useRef<HTMLSpanElement>(null)
   const prevState = useRef(ink.state)
   const revealedOnEntry = useRef(false)
   // false so a word that mounts already in the chain still washes orange in.
@@ -221,6 +224,12 @@ export function HafsWord({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ink.repeat])
 
+  // Search-hit flash: same orange directional wash as the repeat overlay.
+  useLayoutEffect(() => {
+    if (!searchFlash || !flashRef.current) return
+    return runSearchHitDoubleWash(flashRef.current, true, SearchHitFlash.PULSES)
+  }, [searchFlash])
+
   const onPointerDown = (e: PointerEvent) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return
     held.current = false
@@ -286,9 +295,9 @@ export function HafsWord({
         </span>
         {searchFlash ? (
           <span
+            ref={flashRef}
             className="hafs-search-flash-overlay hafs-glyph"
             aria-hidden="true"
-            data-pulse="true"
           >
             {word.arabic}
           </span>

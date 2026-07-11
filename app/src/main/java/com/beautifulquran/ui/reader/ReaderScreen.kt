@@ -417,13 +417,12 @@ fun ReaderScreen(
         }
     }
 
-    // Home word-search hit: soft orange ink breath (fade in / out × 2) on the
-    // matched word once the verse is on screen.
-    val searchFlashAlpha = remember { Animatable(0f) }
+    // Home word-search hit: orange repeat wash (wash in → dissolve × 2) on the
+    // matched word once the verse is on screen. The wash itself lives in the
+    // word unit / Hafs bloom; this effect only gates which word is active.
     var searchFlashAyah by remember { mutableStateOf<Int?>(null) }
     var searchFlashWord by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(uiState.content?.surah?.id, startAyah, startWordPosition) {
-        searchFlashAlpha.snapTo(0f)
         searchFlashAyah = null
         searchFlashWord = null
         val ayah = startAyah
@@ -436,16 +435,7 @@ fun ReaderScreen(
         delay(SearchHitFlash.START_DELAY_MS)
         searchFlashAyah = ayah
         searchFlashWord = word
-        repeat(SearchHitFlash.PULSES) {
-            searchFlashAlpha.animateTo(
-                1f,
-                tween(SearchHitFlash.FADE_IN_MS, easing = SearchHitFlash.BreathEasing),
-            )
-            searchFlashAlpha.animateTo(
-                0f,
-                tween(SearchHitFlash.FADE_OUT_MS, easing = SearchHitFlash.BreathEasing),
-            )
-        }
+        delay(SearchHitFlash.totalMs())
         searchFlashAyah = null
         searchFlashWord = null
     }
@@ -871,13 +861,6 @@ fun ReaderScreen(
                                 searchQuery = activeQuery,
                                 flashWordPosition = searchFlashWord
                                     ?.takeIf { searchFlashAyah == ayah.number },
-                                flashAlpha = {
-                                    if (searchFlashAyah == ayah.number) {
-                                        searchFlashAlpha.value
-                                    } else {
-                                        0f
-                                    }
-                                },
                                 // Word-level following is the focus engine's
                                 // secondary constraint: it only takes over inside
                                 // a verse taller than the screen (where the

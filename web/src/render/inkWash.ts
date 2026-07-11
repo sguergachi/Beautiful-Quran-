@@ -9,8 +9,9 @@
  * 17-stop gradient on every display refresh.
  */
 import { animate, type AnimationPlaybackControls } from 'motion'
+import { cubicBezierEase, paperCoverMaskImage, washMaskImage } from '../engine/fade'
+import { getTuning } from '../engine/ink'
 import { cubicBezierTuple, type CubicBezierEase } from '../ui/motion/easing'
-import { paperCoverMaskImage, washMaskImage } from '../engine/fade'
 
 /** Quantize wash progress to ~48 steps — visually identical, far fewer strings. */
 const WASH_STEPS = 48
@@ -130,5 +131,73 @@ export function runWash(
   return () => {
     cancelled = true
     controls?.stop()
+  }
+}
+
+/**
+ * Search-hit flash: the same orange directional wash as the repeat overlay,
+ * run [pulses] times (wash in → dissolve out → …). Independent of karaoke
+ * `ink.repeat` so a real repeat chain is never cancelled.
+ */
+export function runSearchHitDoubleWash(
+  el: HTMLElement,
+  rtl: boolean,
+  pulses: number,
+): () => void {
+  const t = getTuning()
+  const ease = {
+    x1: t.sweepEaseX1,
+    y1: t.sweepEaseY1,
+    x2: t.sweepEaseX2,
+    y2: t.sweepEaseY2,
+  }
+  let cancelled = false
+  let cancelCurrent: (() => void) | null = null
+
+  const finish = () => {
+    el.style.opacity = '0'
+    applyMask(el, 'none')
+  }
+
+  const runPulse = (remaining: number) => {
+    if (cancelled || remaining <= 0) {
+      finish()
+      return
+    }
+    el.style.opacity = '1'
+    applyMask(el, cachedWashMask(0, 0, rtl, t.washFeather))
+    cancelCurrent = runWash(
+      t.repeatSweepMs,
+      ease,
+      cubicBezierEase,
+      (_p, eased) => {
+        applyMask(el, cachedWashMask(eased, 0, rtl, t.washFeather))
+      },
+      () => {
+        if (cancelled) return
+        applyMask(el, 'none')
+        cancelCurrent = runWash(
+          t.repeatFadeOutMs,
+          ease,
+          cubicBezierEase,
+          (_p, eased) => {
+            el.style.opacity = String(1 - eased)
+          },
+          () => {
+            if (cancelled) return
+            el.style.opacity = '0'
+            runPulse(remaining - 1)
+          },
+        )
+      },
+    )
+  }
+
+  runPulse(pulses)
+
+  return () => {
+    cancelled = true
+    cancelCurrent?.()
+    finish()
   }
 }
