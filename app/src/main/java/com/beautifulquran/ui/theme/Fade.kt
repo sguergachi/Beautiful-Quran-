@@ -115,8 +115,8 @@ fun Modifier.letterFadeIn(
  *
  * So every bloom operates on the ayah's already-shaped [TextLayoutResult],
  * clipped to [TextLayoutResult.getPathForRange]:
- * - [UpcomingDim]: static paper cover (padded beyond the selection box so
- *   Hafs marks/AA edges do not peek through as white corners).
+ * - [UpcomingDim]: static paper cover (padded horizontally beyond the
+ *   selection box, but confined to its line so it cannot wash adjacent text).
  * - [InkReveal]: paper coverage of `1 − glyphAlpha` along the wash curve
  *   (same pad as UpcomingDim).
  * - [ColorReveal]: re-draw shaped glyphs, [BlendMode.SrcIn]-tint orange,
@@ -209,22 +209,23 @@ fun Modifier.shapedWordBloom(
                 is ShapedWordBloom.UpcomingDim -> {
                     val a = bloom.coverAlpha.coerceIn(0f, 1f)
                     if (a <= 0f) return@forEach
-                    // getPathForRange is a selection box — Hafs marks and AA
-                    // edges sit outside it, so a tight clipPath leaves white
-                    // corners. A small pad covers those without the old
-                    // neighbour-bleed rects (18dp).
+                    // The bounds already span the layout's full line height.
+                    // Bleed only horizontally: vertical padding lets an
+                    // unread line's paper mask climb into the preceding line
+                    // and fade a read word's descender (g/j/p/q/y).
                     val pad = PaperCoverPad.toPx()
                     lineBounds.forEach { bounds ->
+                        val cover = linePaperCoverBounds(bounds, pad)
                         clipRect(
-                            left = bounds.left - pad,
-                            top = bounds.top - pad,
-                            right = bounds.right + pad,
-                            bottom = bounds.bottom + pad,
+                            left = cover.left,
+                            top = cover.top,
+                            right = cover.right,
+                            bottom = cover.bottom,
                         ) {
                             drawRect(
                                 color = bloom.paper.copy(alpha = a),
-                                topLeft = Offset(bounds.left - pad, bounds.top - pad),
-                                size = Size(bounds.width + pad * 2f, bounds.height + pad * 2f),
+                                topLeft = Offset(cover.left, cover.top),
+                                size = Size(cover.width, cover.height),
                             )
                         }
                     }
@@ -243,14 +244,15 @@ fun Modifier.shapedWordBloom(
                     }
                     val pad = PaperCoverPad.toPx()
                     lineBounds.forEach { bounds ->
+                        val cover = linePaperCoverBounds(bounds, pad)
                         // The clip/draw rect already includes [pad] for glyph
                         // overhang, so the wash must use that same geometry.
                         // Otherwise an end glyph such as EB Garamond's “g”
                         // sits outside the calculated width: its bowl reveals
                         // while the right-swept descender remains faint until
                         // progress snaps to 1.
-                        val washLeft = bounds.left - pad
-                        val w = bounds.width + pad * 2f
+                        val washLeft = cover.left
+                        val w = cover.width
                         val edge = (w * feather).coerceAtLeast(1f)
                         val head = p * (w + edge)
                         val brush = if (rtl) {
@@ -267,15 +269,15 @@ fun Modifier.shapedWordBloom(
                             )
                         }
                         clipRect(
-                            left = bounds.left - pad,
-                            top = bounds.top - pad,
-                            right = bounds.right + pad,
-                            bottom = bounds.bottom + pad,
+                            left = cover.left,
+                            top = cover.top,
+                            right = cover.right,
+                            bottom = cover.bottom,
                         ) {
                             drawRect(
                                 brush = brush,
-                                topLeft = Offset(washLeft, bounds.top - pad),
-                                size = Size(w, bounds.height + pad * 2f),
+                                topLeft = Offset(washLeft, cover.top),
+                                size = Size(w, cover.height),
                             )
                         }
                     }
@@ -351,10 +353,19 @@ private const val InkProfileStops = 9
  * the word's draw scope — does not paint onto neighbours. */
 private val FadeLayerBleed = 14.dp
 
-/** Pad beyond [TextLayoutResult.getPathForRange] when painting paper covers.
- * Selection boxes miss Hafs mark/AA overhangs; a few dp closes the white
- * corner peek without the old neighbour-bleed rects. */
+/** Horizontal pad beyond [TextLayoutResult.getPathForRange] when painting
+ * paper covers. Vertical expansion is forbidden because it masks glyphs on
+ * adjacent lines. */
 private val PaperCoverPad = 4.dp
+
+/** Expands a word mask for horizontal glyph overhang without crossing its line. */
+internal fun linePaperCoverBounds(lineBounds: Rect, horizontalPad: Float): Rect =
+    Rect(
+        left = lineBounds.left - horizontalPad,
+        top = lineBounds.top,
+        right = lineBounds.right + horizontalPad,
+        bottom = lineBounds.bottom,
+    )
 
 // The ink wash feathers over 1.6× the word's own width, so the reveal reads as a
 // whole-word breath with a gentle directional lead rather than a hard moving

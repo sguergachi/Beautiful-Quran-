@@ -40,6 +40,9 @@ for gloss/English; paper cover for Arabic-only). First-pass pulls the cover back
 on the ink-wash curve; repeat SrcIn-tints the same shaped glyphs orange then
 DstIn-washes. Progress is read only at draw time, so the sweep never reshapes
 the ayah or paints onto neighbouring words.
+Paper-cover bleed is horizontal-only and clipped to each text line's measured
+top/bottom; an unread line therefore cannot fade descenders belonging to the
+read line above it.
 
 ### 2. Recomposition confined to one ayah
 
