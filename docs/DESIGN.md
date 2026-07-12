@@ -13,7 +13,7 @@ no trays — only paper, and ink on paper.
 
 ## The sheet
 
-The whole app is **three flat sheets** — Chapters, Reader, Settings — viewed
+The whole app is **four flat sheets** — Bookmarks, Chapters, Reader, Settings — viewed
 one at a time. Navigation glides the next sheet in from the side (a
 quarter-width slide softened with a fade, 380 ms); nothing stacks, nothing
 floats, nothing casts a shadow.
@@ -378,6 +378,14 @@ Implementation: `ui/reader/VerseBookmarkRibbon.kt`, drawn per verse inside
 `AyahBlock` (`ReaderComponents.kt`). Bookmarks persist in their own
 SharedPreferences store (`data/BookmarkRepository.kt`), never in the read-only
 `quran.db`.
+
+Once the first verse is marked, a narrow ruby ribbon remains exposed on the
+left edge of the Chapters sheet. Tapping it—or pulling the Chapters sheet to
+the right—reveals the Bookmarks sheet beneath. This is a real page in the paper
+stack, not an overlay: results are grouped by surah, show Arabic and translation
+snippets with their chapter:ayah reference, and can be searched by reference,
+chapter name, or verse text. The small ruby strip beside each result removes the
+mark; tapping the verse returns to it in the reader.
 
 ## Reading modes
 

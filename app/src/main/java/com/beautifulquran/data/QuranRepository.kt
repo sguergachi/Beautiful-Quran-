@@ -2,6 +2,7 @@ package com.beautifulquran.data
 
 import android.database.Cursor
 import com.beautifulquran.data.model.Ayah
+import com.beautifulquran.data.model.BookmarkedAyah
 import com.beautifulquran.data.model.Reciter
 import com.beautifulquran.data.model.RootOccurrence
 import com.beautifulquran.data.model.RootSummary
@@ -112,6 +113,51 @@ class QuranRepository(
         }
         SurahContent(surah, ayahs)
     }
+
+    /**
+     * Resolves user bookmark keys to their immutable Quran text and chapter
+     * metadata. Keys are queried in bounded batches to stay below SQLite's
+     * bind-argument limit even when a reader has marked hundreds of verses.
+     */
+    suspend fun bookmarkedAyahs(bookmarks: List<Bookmark>): List<BookmarkedAyah> =
+        withContext(Dispatchers.IO) {
+            if (bookmarks.isEmpty()) return@withContext emptyList()
+            val createdAtByKey = bookmarks.associate { (it.surahId to it.ayah) to it.createdAt }
+            bookmarks.chunked(400).flatMap { batch ->
+                val placeholders = batch.joinToString(",") { "(?,?)" }
+                val args = batch.flatMap { listOf(it.surahId.toString(), it.ayah.toString()) }
+                    .toTypedArray()
+                queryList(
+                    """
+                    SELECT s.id, s.name_arabic, s.name_transliteration,
+                           s.name_translation, s.revelation_place, s.ayah_count,
+                           a.ayah_number, a.text_uthmani, a.translation_en
+                    FROM ayahs a
+                    JOIN surahs s ON s.id = a.surah_id
+                    WHERE (a.surah_id, a.ayah_number) IN ($placeholders)
+                    ORDER BY a.surah_id, a.ayah_number
+                    """.trimIndent(),
+                    args,
+                ) { c ->
+                    val surah = Surah(
+                        id = c.getInt(0),
+                        nameArabic = c.getString(1),
+                        nameTransliteration = c.getString(2),
+                        nameTranslation = c.getString(3),
+                        revelationPlace = c.getString(4),
+                        ayahCount = c.getInt(5),
+                    )
+                    val ayah = c.getInt(6)
+                    BookmarkedAyah(
+                        surah = surah,
+                        ayahNumber = ayah,
+                        text = c.getString(7),
+                        translation = c.getString(8),
+                        createdAt = createdAtByKey[surah.id to ayah] ?: 0L,
+                    )
+                }
+            }.sortedWith(compareBy({ it.surah.id }, { it.ayahNumber }))
+        }
 
     /** Morphology for one reader word, or null when QAC had no row for that
      *  position (the known word-count mismatch ayahs). */
