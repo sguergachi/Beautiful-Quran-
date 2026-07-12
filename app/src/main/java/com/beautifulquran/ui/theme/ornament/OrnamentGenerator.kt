@@ -745,3 +745,24 @@ fun generateCoverOrnament(seed: Int): CoverOrnament {
     val field = generateField(rng)
     return CoverOrnament(seed, medallion, seal, border, field)
 }
+
+/**
+ * Seed for a chapter's surah-header rosette. Ayah count is the dominant
+ * term — chapters of similar length grow kin-looking rosettes, so length
+ * reads as the ornament's "fingerprint" — folded with the chapter number
+ * (always < 114) so it acts as a low digit the multiply-by-114 term never
+ * touches: `seed % 114` always recovers the chapter number, so all 114
+ * chapters get distinct rosettes even though only 77 of them have a
+ * distinct ayah count (37 chapters share a count with another chapter).
+ */
+fun chapterOrnamentSeed(chapterNumber: Int, ayahCount: Int): Int =
+    ayahCount * 114 + chapterNumber
+
+/**
+ * Grow a standalone rosette — no corner seal, border, or field — from
+ * [seed]. Used for the surah-header ornament, where only the medallion is
+ * wanted; generating the rest of [generateCoverOrnament] would waste work
+ * across 114 chapters. Same star-polygon vocabulary and RNG rules (never a
+ * hexagram) as the medallion inside a full cover ornament.
+ */
+fun generateChapterRosette(seed: Int): RosetteSpec = generateMedallion(Mulberry32(seed))

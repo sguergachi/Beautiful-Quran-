@@ -154,6 +154,52 @@ fun GeneratedMedallion(
     )
 }
 
+/**
+ * A chapter's own rosette — the surah-header ornament, grown from
+ * [chapterOrnamentSeed] so every one of the 114 chapters carries a
+ * distinct star composition, its length in verses the dominant term. Part
+ * of the page's fixed typography rather than a ceremony, so it is static:
+ * complete on first composition, no build wash. Same stroke-weight recipe
+ * as [GeneratedCornerSeals] (1dp uniform) — both render at a similar,
+ * small physical size.
+ */
+@Composable
+fun GeneratedChapterRosette(
+    spec: RosetteSpec,
+    size: Dp,
+    brightGold: Color,
+    deepGold: Color,
+    embossDark: Color,
+    embossLight: Color,
+    sheen: State<Float>,
+    modifier: Modifier = Modifier,
+) {
+    Spacer(
+        modifier
+            .size(size)
+            .drawWithCache {
+                val d = min(this.size.width, this.size.height)
+                val paths = RosettePaths(
+                    spec,
+                    d,
+                    ruleWidth = 1.dp.toPx(),
+                    hairWidth = 1.dp.toPx(),
+                )
+                onDrawBehind {
+                    val gold = goldBrush(brightGold, deepGold, sheen.value.coerceIn(0f, 1f))
+                    drawRosette(
+                        paths,
+                        Offset(this.size.width / 2f, this.size.height / 2f),
+                        gold,
+                        embossDark,
+                        embossLight,
+                        1f,
+                    )
+                }
+            },
+    )
+}
+
 /** Centre of the border band's cross-section, from the frame geometry. */
 private fun bandCenter(geometry: CoverFrameGeometry): Float =
     (geometry.outerInsetPx + geometry.innerInsetPx) / 2f
