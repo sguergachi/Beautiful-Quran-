@@ -48,6 +48,11 @@ export interface RootViewerState {
   pos: string
   features: string
   occurrenceCount: number
+  lemmas: {
+    lemma: string
+    pos: string
+    occurrenceCount: number
+  }[]
   occurrences: {
     surahId: number
     ayahNumber: number
@@ -660,6 +665,7 @@ class AppStore {
           pos: morph?.pos ?? '',
           features: morph?.features ?? '',
           occurrenceCount: 0,
+          lemmas: [],
           occurrences: [],
         },
       })
@@ -679,6 +685,7 @@ class AppStore {
         pos: morph.pos,
         features: morph.features,
         occurrenceCount: summary?.occurrenceCount ?? 0,
+        lemmas: summary?.lemmas ?? [],
         occurrences: summary?.occurrences ?? [],
       },
     })

@@ -403,7 +403,9 @@ sans.
 - ✅ Arabic paper-cover bloom for gloss `WordUnit` and Arabic-only `HafsWord`
   (`ink-paper-cover` / `paperCoverMaskImage` — glyphs stay full opaque ink;
   never CSS opacity on overlapping Hafs marks).
-- Root Word Viewer (ink bleed) + morphology queries.
+- Root Word Viewer (ink bleed) + corpus-backed morphology, lemma-frequency
+  analyses, and per-chapter concordance lists truncated to five references
+  until expanded.
 - PWA installability; offline shell + DB + audio cache.
 - Optional Ink Lab (developer unlock).
 
