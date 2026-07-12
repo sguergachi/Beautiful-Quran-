@@ -11,7 +11,6 @@ import {
   useRef,
   type MouseEvent,
   type MutableRefObject,
-  type PointerEvent,
 } from 'react'
 import type { Word } from '../data/models'
 import { InkState, getTuning, startRevealed, type InkWord } from '../ui/reader/InkEngine'
@@ -19,12 +18,14 @@ import { cubicBezierEase } from '../ui/theme/Fade'
 import {
   applyMask,
   cachedPaperCoverMask,
+  clearPaperCover,
   runRepeatFadeOut,
   runRepeatWashIn,
   runSearchHitDoubleWash,
   runWash,
 } from './inkWash'
 import { SearchHitFlash } from '../ui/reader/SearchHitFlash'
+import { useWordInteraction } from './useWordInteraction'
 
 interface Props {
   word: Word
@@ -36,19 +37,6 @@ interface Props {
   onPlay: () => void
   onHold: () => void
   onContextMenu?: (e: MouseEvent) => void
-}
-
-const HOLD_MS = 450
-const MOVE_CANCEL_PX = 10
-
-/**
- * Snap-clear the paper cover — never CSS-transition a solid rect away.
- * Clears inline opacity so parent `[data-reciting]` CSS can paint global recess.
- */
-function clearCover(cover: HTMLElement) {
-  cover.style.transition = 'none'
-  applyMask(cover, 'none')
-  cover.style.removeProperty('opacity')
 }
 
 export function HafsWord({
@@ -69,18 +57,9 @@ export function HafsWord({
   const revealedOnEntry = useRef(false)
   // false so a word that mounts already in the chain still washes orange in.
   const prevRepeat = useRef(false)
-  const holdTimer = useRef<number | null>(null)
-  const startXY = useRef<{ x: number; y: number } | null>(null)
-  const held = useRef(false)
   const tuning = getTuning()
   const upcomingCover = 1 - tuning.upcomingAlpha
-
-  const clearHold = () => {
-    if (holdTimer.current != null) {
-      clearTimeout(holdTimer.current)
-      holdTimer.current = null
-    }
-  }
+  const interaction = useWordInteraction(onPlay, onHold)
 
   /*
    * Paper-cover bloom on Active entry (Android shapedWordBloom InkReveal).
@@ -124,18 +103,18 @@ export function HafsWord({
     }
 
     if (ink.state !== InkState.Active) {
-      clearCover(cover)
+      clearPaperCover(cover)
       return
     }
 
     // Repeat chain: orange overlay carries the motion (Android skips InkReveal).
     if (ink.repeat) {
-      clearCover(cover)
+      clearPaperCover(cover)
       return
     }
 
     if (revealedOnEntry.current) {
-      clearCover(cover)
+      clearPaperCover(cover)
       return
     }
 
@@ -153,13 +132,13 @@ export function HafsWord({
       cubicBezierEase,
       (p, eased) => {
         if (p >= 1) {
-          clearCover(cover)
+          clearPaperCover(cover)
           return
         }
         applyMask(cover, cachedPaperCoverMask(eased, resting, true, t.washFeather))
       },
       () => {
-        clearCover(cover)
+        clearPaperCover(cover)
       },
     )
     // Duration/speed captured at Active entry only.
@@ -200,30 +179,6 @@ export function HafsWord({
     return runSearchHitDoubleWash(flashRef.current, true, SearchHitFlash.PULSES)
   }, [searchFlash])
 
-  const onPointerDown = (e: PointerEvent) => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return
-    held.current = false
-    startXY.current = { x: e.clientX, y: e.clientY }
-    clearHold()
-    holdTimer.current = window.setTimeout(() => {
-      held.current = true
-      holdTimer.current = null
-      onHold()
-    }, HOLD_MS)
-  }
-
-  const onPointerMove = (e: PointerEvent) => {
-    if (!startXY.current || holdTimer.current == null) return
-    const dx = Math.abs(e.clientX - startXY.current.x)
-    const dy = Math.abs(e.clientY - startXY.current.y)
-    if (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX) clearHold()
-  }
-
-  const onPointerEnd = () => {
-    clearHold()
-    startXY.current = null
-  }
-
   return (
     <span
       ref={(node) => {
@@ -233,24 +188,10 @@ export function HafsWord({
       className="hafs-word"
       data-state={ink.state}
       style={{ ['--upcoming-cover' as string]: String(upcomingCover) }}
-      onClick={() => {
-        if (held.current) {
-          held.current = false
-          return
-        }
-        onPlay()
-      }}
+      {...interaction}
       onContextMenu={onContextMenu}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerEnd}
-      onPointerCancel={onPointerEnd}
-      onPointerLeave={onPointerEnd}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') onPlay()
-      }}
     >
       <span className="hafs-shell">
         <span className="word-ink-slot">
