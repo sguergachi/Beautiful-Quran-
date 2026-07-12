@@ -1,7 +1,7 @@
 /**
  * Verse bookmark ribbon — port of Android `VerseBookmarkRibbon.kt`.
  *
- * Idle: opaque playback-green outlined tip hidden until the verse is hovered (or the ribbon is
+ * Idle: opaque playback-ink outlined tip hidden until the verse is hovered (or the ribbon is
  * keyboard-focused). Saved: the same ruby strip grown nearly the full
  * verse height. Click unfurls with a cloth wave + overshoot; unmark
  * gathers back into the tip.
@@ -71,7 +71,7 @@ export function VerseBookmarkRibbon({
   const animating = useRef(false)
   const controlsRef = useRef<AnimationPlaybackControls[]>([])
   const rubyRef = useRef({ r: 179, g: 18, b: 47 })
-  const playbackAccentRef = useRef({ r: 14, g: 92, b: 74 })
+  const playbackInkRef = useRef({ r: 110, g: 104, b: 88 })
   const userDriven = useRef(false)
   const [ribbonFocused, setRibbonFocused] = useState(false)
 
@@ -189,8 +189,8 @@ export function VerseBookmarkRibbon({
       ctx.closePath()
     }
 
-    // Ruby fill belongs only to a saved mark. The idle affordance is the same
-    // opaque green as playback controls, so it cannot read as an active bookmark.
+    // Ruby fill belongs only to a saved mark. The idle affordance uses the
+    // same opaque monochrome ink as playback controls.
     buildBodyPath()
     const x0 = Math.min(ax(outer), ax(inner))
     const x1 = Math.max(ax(outer), ax(inner))
@@ -202,8 +202,8 @@ export function VerseBookmarkRibbon({
       ctx.fillStyle = tipWash
       ctx.fill()
     } else {
-      const accent = playbackAccentRef.current
-      ctx.strokeStyle = `rgb(${accent.r},${accent.g},${accent.b})`
+      const ink = playbackInkRef.current
+      ctx.strokeStyle = `rgb(${ink.r},${ink.g},${ink.b})`
       ctx.lineWidth = 1.25
       ctx.lineJoin = 'round'
       ctx.lineCap = 'round'
@@ -227,14 +227,14 @@ export function VerseBookmarkRibbon({
     }
   }, [bookmarked, hovered, ribbonFocused, side])
 
-  // Keep ruby color in sync with theme tokens.
+  // Keep bookmark and playback-ink colors in sync with theme tokens.
   useEffect(() => {
     const read = () => {
       const raw = getComputedStyle(document.documentElement)
       const bookmark = raw.getPropertyValue('--bookmark').trim()
-      const accent = raw.getPropertyValue('--accent').trim()
+      const inkMuted = raw.getPropertyValue('--ink-muted').trim()
       if (bookmark) rubyRef.current = parseRuby(bookmark)
-      if (accent) playbackAccentRef.current = parseRuby(accent)
+      if (inkMuted) playbackInkRef.current = parseRuby(inkMuted)
       draw()
     }
     read()
