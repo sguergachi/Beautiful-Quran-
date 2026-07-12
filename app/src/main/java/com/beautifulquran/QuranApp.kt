@@ -23,6 +23,7 @@ class QuranApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        DevProfiling.install(this)
         val overrides = TimingOverrides(this)
         repository = QuranRepository(QuranDatabase(this), overrides)
         settings = SettingsRepository(this)

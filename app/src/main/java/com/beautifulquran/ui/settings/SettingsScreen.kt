@@ -1,5 +1,6 @@
 package com.beautifulquran.ui.settings
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -85,6 +86,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel,
     onBack: () -> Unit,
     onOpenTimingsLab: () -> Unit = {},
+    onRecordSystemTrace: () -> Unit = {},
 ) {
     val settings by viewModel.settings.settings.collectAsStateWithLifecycle()
     val reciters by viewModel.reciters.collectAsStateWithLifecycle()
@@ -240,6 +242,7 @@ fun SettingsScreen(
                         viewModel = viewModel,
                         settings = settings,
                         onOpenTimingsLab = onOpenTimingsLab,
+                        onRecordSystemTrace = onRecordSystemTrace,
                     )
                 }
 
@@ -263,6 +266,7 @@ private fun DeveloperSection(
     viewModel: SettingsViewModel,
     settings: Settings,
     onOpenTimingsLab: () -> Unit,
+    onRecordSystemTrace: () -> Unit,
 ) {
     val context = LocalContext.current
     // Created on first audition tap: a SoundPool with nine loaded samples is
@@ -279,6 +283,25 @@ private fun DeveloperSection(
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
     )
+
+    if (BuildConfig.DEBUG && Build.VERSION.SDK_INT >= 37) {
+        Spacer(Modifier.height(20.dp))
+        Text(
+            text = "Record 10-second system trace",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier
+                .fillMaxWidth()
+                .quietClickable(onClick = onRecordSystemTrace)
+                .padding(vertical = 8.dp),
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = "Android 17 ProfilingManager writes a Perfetto trace locally. " +
+                "The result path is printed to logcat under BeautifulQuranProfile.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+        )
+    }
 
     Spacer(Modifier.height(20.dp))
     Text(
