@@ -36,11 +36,18 @@ export interface OrnamentDot {
   birth: number
 }
 
-/** A rosette (medallion or corner seal) in the unit square, centre 0.5. */
+/**
+ * A rosette (medallion or corner seal) in the unit square, centre 0.5.
+ * Corner seals carry a four-petal bezel whose tips lie on the compass axes
+ * at `tipRadius` (0 for the medallion, which has no bezel); the border
+ * band's runs start exactly at those tips, so a seal's petals may extend
+ * past the unit box.
+ */
 export interface RosetteSpec {
   fold: number
   strokes: OrnamentStroke[]
   dots: OrnamentDot[]
+  tipRadius: number
 }
 
 /** One translational unit cell of a periodic Hankin field. */
@@ -190,13 +197,22 @@ function sampleCubicInto(
   for (let s = 1; s <= CUBIC_SAMPLES; s++) out.push(bezier(p0, c1, c2, p1, s / CUBIC_SAMPLES))
 }
 
-/** The mushaf corolla: n ogee petals as one closed polyline. */
-function corollaStroke(n: number, cuspR: number, tipR: number): OrnamentStroke {
+/**
+ * The mushaf corolla: n ogee petals as one closed polyline. `rotation` is
+ * the first cusp's angle; tips sit half a step past cusps.
+ */
+function corollaStroke(
+  n: number,
+  cuspR: number,
+  tipR: number,
+  rotation: number,
+  weight: StrokeWeight,
+): OrnamentStroke {
   const step = TAU / n
   const reach = tipR - cuspR
-  const points: OrnamentPoint[] = [polar(ROT0, cuspR)]
+  const points: OrnamentPoint[] = [polar(rotation, cuspR)]
   for (let k = 0; k < n; k++) {
-    const cuspA = ROT0 + k * step
+    const cuspA = rotation + k * step
     const tipA = cuspA + step / 2
     const nextA = cuspA + step
     const cusp = polar(cuspA, cuspR)
@@ -205,7 +221,7 @@ function corollaStroke(n: number, cuspR: number, tipR: number): OrnamentStroke {
     sampleCubicInto(points, cusp, polar(cuspA, cuspR + reach * 0.55), polar(tipA, tipR - reach * 0.45), tip)
     sampleCubicInto(points, tip, polar(tipA, tipR - reach * 0.45), polar(nextA, cuspR + reach * 0.55), next)
   }
-  return { points, closed: true, weight: 'rule', birth: 0, span: 1 }
+  return { points, closed: true, weight, birth: 0, span: 1 }
 }
 
 function timed(s: OrnamentStroke, birth: number, span: number): OrnamentStroke {
@@ -248,7 +264,7 @@ function generateMedallion(rng: Mulberry32): RosetteSpec {
   } else if (variant === 1) {
     const cusp = rng.range(0.16, 0.19)
     const tip = rng.range(0.24, 0.285)
-    strokes.push(corollaStroke(fold, cusp, tip))
+    strokes.push(corollaStroke(fold, cusp, tip, ROT0, 'rule'))
   } else {
     // A ring of kites between the star tips, points outward.
     const rTip = rng.range(0.26, 0.295)
@@ -289,13 +305,16 @@ function generateMedallion(rng: Mulberry32): RosetteSpec {
   }
   dots.push({ x: 0.5, y: 0.5, radius: 0.028, birth: 0.93 })
 
-  return { fold, strokes: assignBirths(strokes), dots }
+  return { fold, strokes: assignBirths(strokes), dots, tipRadius: 0 }
 }
 
 /**
  * The corner seal — a late-inking small star of the medallion's family
  * (never 6-fold: that would force the hexagram) inside a mandatory ring,
- * the hub the border band's runs terminate against.
+ * wrapped in a four-petal ogee bezel whose tips lie on the compass axes.
+ * Two of those tips aim straight down the border band's two runs at each
+ * corner — the band's channel tapers onto them — so seal and border are
+ * one piece of geometry, not a stamp over a strip.
  */
 function generateSeal(rng: Mulberry32, fold: number): RosetteSpec {
   let m = fold >= 12 ? fold / 2 : fold
@@ -303,16 +322,24 @@ function generateSeal(rng: Mulberry32, fold: number): RosetteSpec {
   const ks = allowedStarKs(m)
   const k = ks[rng.int(ks.length)]!
   const starR = rng.range(0.32, 0.37)
+  const tip = rng.range(0.58, 0.66)
 
   const strokes: OrnamentStroke[] = []
   strokes.push(circleStroke(SEAL_RING_RADIUS, m * 12, 'hairline'))
+  // Bezel cusps on the diagonals, on the ring itself; tips on the axes.
+  strokes.push(corollaStroke(4, SEAL_RING_RADIUS, tip, ROT0 - Math.PI / 4, 'hairline'))
   strokes.push(...starPolygons(m, k, starR, ROT0, 'hairline'))
   const n = strokes.length
   const stamped = strokes.map((s, i) => {
     const birth = 0.55 + (0.3 * i) / n
     return timed(s, birth, Math.min(0.25, 0.97 - birth))
   })
-  return { fold: m, strokes: stamped, dots: [{ x: 0.5, y: 0.5, radius: 0.058, birth: 0.88 }] }
+  return {
+    fold: m,
+    strokes: stamped,
+    dots: [{ x: 0.5, y: 0.5, radius: 0.058, birth: 0.88 }],
+    tipRadius: tip,
+  }
 }
 
 /** The border band — one of four binding frieze grammars. */
@@ -386,6 +413,20 @@ function generateBorder(rng: Mulberry32): BorderSpec {
       span: 1,
     })
     dots.push({ x: period / 2, y: 0.5, radius: rng.range(0.06, 0.09), birth: 0 })
+  }
+  // Edge rails bound every recipe into one channel; renderers taper the
+  // channel's mouth onto the corner seals' petal tips.
+  for (const y of [0, 1]) {
+    strokes.push({
+      points: [
+        { x: 0, y },
+        { x: period, y },
+      ],
+      closed: false,
+      weight: 'hairline',
+      birth: 0,
+      span: 1,
+    })
   }
   return { period, strokes, dots }
 }

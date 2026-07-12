@@ -2973,16 +2973,17 @@ select {
   transform: scaleX(-1);
 }
 
-/* Stems: hairline connectors on the band's centre axis, from each corner
-   seal's ring to the adjacent band run — positioned inline. */
-.entrance-stem {
+/* Channel mouths: the band's two rails converging onto each corner seal's
+   petal tip (SVG backgrounds and positions arrive inline). */
+.entrance-chamfer {
   position: absolute;
-  background: rgba(217, 180, 74, 0.85);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
   opacity: 0;
   transition: opacity 1190ms linear 1360ms;
 }
 
-.entrance-stem--on {
+.entrance-chamfer--on {
   opacity: 1;
 }
 

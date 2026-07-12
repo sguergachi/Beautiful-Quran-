@@ -22,7 +22,6 @@ import com.beautifulquran.ui.entrance.CoverFrameGeometry
 import com.beautifulquran.ui.theme.ornament.BorderSpec
 import com.beautifulquran.ui.theme.ornament.FieldSpec
 import com.beautifulquran.ui.theme.ornament.RosetteSpec
-import com.beautifulquran.ui.theme.ornament.SEAL_RING_RADIUS
 import com.beautifulquran.ui.theme.ornament.StrokeWeight
 import kotlin.math.max
 import kotlin.math.min
@@ -209,16 +208,18 @@ private fun borderAlpha(build: Float): Float = ((build - 0.40f) / 0.35f).coerceI
 
 /**
  * The generated border frieze: the band pattern runs along all four sides
- * between the two gilt rules, terminating against each corner seal's ring.
- * Each run fits a whole number of periods (the period stretches a little
- * to fit), so the pattern arrives at every corner at the same phase, and a
- * short gold stem on the band's axis ties each ring to the band's first
- * node — one continuous design, not a band with stamps dropped on top.
- * Washes in as the build passes the medallion's crescendo.
+ * between the two gilt rules as a railed channel whose mouth tapers onto
+ * the corner seal's petal tip — the seal's bezel points down the band's
+ * axis and the band's rails converge onto that point, so border and corner
+ * ornament are one continuous piece of geometry. Each run fits a whole
+ * number of periods (the period stretches a little to fit), so the pattern
+ * arrives at every corner at the same phase. Washes in as the build passes
+ * the medallion's crescendo. [seal] supplies the petal-tip radius.
  */
 @Composable
 fun GeneratedBorderBand(
     spec: BorderSpec,
+    seal: RosetteSpec,
     geometry: CoverFrameGeometry,
     brightGold: Color,
     deepGold: Color,
@@ -237,11 +238,13 @@ fun GeneratedBorderBand(
                 val c = bandCenter(geometry)
                 val w = size.width
                 val h = size.height
-                // The band's run starts where the seal's ring ends.
-                val rim = geometry.starRadiusPx * 2f * SEAL_RING_RADIUS.toFloat()
-                val bandStart = c + rim
+                // The seal's petal tip aims down the band's axis; the run
+                // begins one taper past it, and the channel mouth converges
+                // onto the tip.
+                val tipU = c + geometry.starRadiusPx * 2f * seal.tipRadius.toFloat()
+                val taper = bandH * 0.8f
+                val bandStart = tipU + taper
                 val periodPx = (spec.period * bandH).toFloat()
-                val stemLen = bandH * 0.7f
 
                 // (u along the side, v across the band) → screen, per side;
                 // v mirrored on the far sides so the pattern faces inward.
@@ -277,15 +280,17 @@ fun GeneratedBorderBand(
                             )
                         }
                     }
-                    // Stems: ring → first node, on the band's centre axis.
-                    for ((from, to) in listOf(
-                        bandStart - 1f to bandStart + stemLen,
-                        sideLen - bandStart - stemLen to sideLen - bandStart + 1f,
+                    // Channel mouths: both rails converge onto the petal tip.
+                    for ((mouth, point) in listOf(
+                        bandStart to tipU,
+                        sideLen - bandStart to sideLen - tipU,
                     )) {
-                        val a = place(from, 0.5f)
-                        val b = place(to, 0.5f)
-                        band.moveTo(a.x, a.y)
-                        band.lineTo(b.x, b.y)
+                        val tipAt = place(point, 0.5f)
+                        for (v in floatArrayOf(0f, 1f)) {
+                            val railEnd = place(mouth, v)
+                            band.moveTo(railEnd.x, railEnd.y)
+                            band.lineTo(tipAt.x, tipAt.y)
+                        }
                     }
                 }
                 val stroke = Stroke(width = 1.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)

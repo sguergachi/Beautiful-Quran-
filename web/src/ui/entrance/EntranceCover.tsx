@@ -352,6 +352,7 @@ export function EntranceCover({
         />
         <GeneratedBorder
           border={ornament.border}
+          sealTip={ornament.cornerSeal.tipRadius}
           built={built}
           layout={board.layout}
           width={board.w}
