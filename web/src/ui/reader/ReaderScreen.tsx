@@ -43,6 +43,8 @@ import {
 } from './useProgressiveAyahWindow'
 import { RootViewer } from '../root/RootViewer'
 import { SearchHitFlash, searchHitFlashTotalMs } from './SearchHitFlash'
+import { GeneratedRosette } from '../theme/GeneratedOrnament'
+import { chapterOrnamentSeed, generateChapterRosette } from '../theme/ornamentGenerator'
 
 /** Usable in-surah query — mirrors Android `SurahSearchState.activeQuery`. */
 function activeSearchQuery(active: boolean, query: string): string | null {
@@ -50,22 +52,32 @@ function activeSearchQuery(active: boolean, query: string): string | null {
   return active && trimmed.length >= 2 ? trimmed : null
 }
 
-function Rosette() {
+/**
+ * A distinct rosette per chapter: ayah count is the dominant seed term
+ * (length as fingerprint), folded with the chapter number so all 114
+ * chapters render distinctly even though many share an ayah count. Static
+ * — part of the page's fixed typography, not a ceremony — and themed off
+ * the reader's own gold/emboss custom properties rather than the entrance
+ * cover's fixed leather gold, since this sits on the page background.
+ */
+function ChapterRosette({ chapterNumber, ayahCount }: { chapterNumber: number; ayahCount: number }) {
+  const spec = useMemo(
+    () => generateChapterRosette(chapterOrnamentSeed(chapterNumber, ayahCount)),
+    [chapterNumber, ayahCount],
+  )
   return (
-    <svg className="rosette" viewBox="0 0 100 100" fill="none" aria-hidden="true">
-      <defs>
-        <linearGradient id="goldg" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="var(--gold-deep)" />
-          <stop offset="0.5" stopColor="var(--gold-bright)" />
-          <stop offset="1" stopColor="var(--gold-deep)" />
-        </linearGradient>
-      </defs>
-      <g stroke="url(#goldg)" strokeWidth="1.6" fill="none">
-        <path d="M17.47 17.47 L82.53 17.47 L82.53 82.53 L17.47 82.53 Z M50 4 L96 50 L50 96 L4 50 Z" />
-        <path d="M80.49 62.63 L19.51 62.63 L62.63 19.51 L62.63 80.49 L37.37 19.51 L80.49 37.37 L37.37 80.49 L19.51 37.37 Z" />
-      </g>
-      <circle cx="50" cy="50" r="3.5" fill="url(#goldg)" />
-    </svg>
+    <GeneratedRosette
+      spec={spec}
+      className="rosette"
+      built
+      animated={false}
+      ruleWidth={4.6}
+      hairWidth={4.6}
+      brightGold="var(--gold-bright)"
+      deepGold="var(--gold-deep)"
+      embossDark="var(--emboss-dark)"
+      embossLight="var(--emboss-light)"
+    />
   )
 }
 
@@ -775,7 +787,10 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
               }}
             >
               <header className="surah-header" ref={headerRef}>
-                <Rosette />
+                <ChapterRosette
+                  chapterNumber={content.surah.id}
+                  ayahCount={content.surah.ayahCount}
+                />
                 <h2>{content.surah.nameTransliteration}</h2>
                 <p className="ar-title">{content.surah.nameArabic}</p>
                 <p className="sub">

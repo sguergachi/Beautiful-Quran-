@@ -176,4 +176,51 @@ class OrnamentGeneratorTest {
         assertEquals(3, tilingCells.size)
         assertTrue("expected several border grammars, got $borderShapes", borderShapes.size >= 3)
     }
+
+    @Test
+    fun `chapter seed recovers the chapter number regardless of ayah count`() {
+        // Chapters are numbered 1..114 (not 0-indexed), so the recovered
+        // digit is ((seed - 1) mod 114) + 1, not a plain mod 114.
+        for (chapter in 1..114) {
+            for (ayahCount in intArrayOf(3, 6, 11, 88, 286)) {
+                val seed = chapterOrnamentSeed(chapter, ayahCount)
+                assertEquals(chapter, (seed - 1) % 114 + 1)
+            }
+        }
+    }
+
+    @Test
+    fun `chapter seed is unique across all 114 chapters even at a shared ayah count`() {
+        // A real duplicate: 62, 63, 93, 100, 101 all have exactly 11 ayahs.
+        val seeds = (1..114).map { chapterOrnamentSeed(it, 11) }
+        assertEquals(114, seeds.toSet().size)
+    }
+
+    @Test
+    fun `same chapter and ayah count reproduce the same rosette`() {
+        val seed = chapterOrnamentSeed(2, 286)
+        assertEquals(generateChapterRosette(seed), generateChapterRosette(seed))
+    }
+
+    @Test
+    fun `chapters sharing an ayah count still render different rosettes`() {
+        val elevenAyahChapters = intArrayOf(62, 63, 93, 100, 101)
+        val rosettes = elevenAyahChapters.map { generateChapterRosette(chapterOrnamentSeed(it, 11)) }
+        assertEquals(elevenAyahChapters.size, rosettes.toSet().size)
+    }
+
+    @Test
+    fun `chapter rosette never draws a hexagram`() {
+        for (chapter in 1..114) {
+            for (ayahCount in intArrayOf(3, 6, 11, 88, 286)) {
+                val rosette = generateChapterRosette(chapterOrnamentSeed(chapter, ayahCount))
+                for (s in rosette.strokes) {
+                    assertTrue(
+                        "closed triangle found (chapter $chapter, $ayahCount ayahs)",
+                        !(s.closed && s.points.size == 3),
+                    )
+                }
+            }
+        }
+    }
 }

@@ -77,8 +77,8 @@ import com.beautifulquran.data.model.Word
 import com.beautifulquran.domain.EnglishTypography
 import com.beautifulquran.ui.theme.ArabicTitleStyle
 import com.beautifulquran.ui.theme.ArabicWordStyle
+import com.beautifulquran.ui.theme.GeneratedChapterRosette
 import com.beautifulquran.ui.theme.GildedFlourish
-import com.beautifulquran.ui.theme.GildedRosette
 import com.beautifulquran.ui.theme.HafsFontFamily
 import com.beautifulquran.ui.theme.IslamicBackToOriginCapsule
 import com.beautifulquran.ui.theme.LocalQuranAccents
@@ -86,6 +86,8 @@ import com.beautifulquran.ui.theme.ShapedWordBloom
 import com.beautifulquran.ui.theme.TranslationFontFamily
 import com.beautifulquran.ui.theme.gilded
 import com.beautifulquran.ui.theme.letterFadeIn
+import com.beautifulquran.ui.theme.ornament.chapterOrnamentSeed
+import com.beautifulquran.ui.theme.ornament.generateChapterRosette
 import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.shapedWordBloom
 import com.beautifulquran.ui.theme.starAndCrossWeave
@@ -1303,6 +1305,12 @@ fun SurahHeader(
     val accents = LocalQuranAccents.current
     val weaveFade = MaterialTheme.colorScheme.background
     val hasBasmalahBelow = surahOpensWithBasmalahPreface(chapterNumber)
+    // A distinct rosette per chapter: ayah count is the dominant seed term
+    // (length as fingerprint), folded with the chapter number so all 114
+    // chapters render distinctly even though many share an ayah count.
+    val rosette = remember(chapterNumber, ayahCount) {
+        generateChapterRosette(chapterOrnamentSeed(chapterNumber, ayahCount))
+    }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -1320,7 +1328,8 @@ fun SurahHeader(
                 end = 24.dp,
             ),
     ) {
-        GildedRosette(
+        GeneratedChapterRosette(
+            spec = rosette,
             size = 44.dp,
             brightGold = accents.goldBright,
             deepGold = accents.goldDeep,

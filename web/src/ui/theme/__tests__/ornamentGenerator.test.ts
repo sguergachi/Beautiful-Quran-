@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  chapterOrnamentSeed,
+  generateChapterRosette,
   generateCoverOrnament,
   Mulberry32,
   SEAL_RING_RADIUS,
@@ -168,5 +170,50 @@ describe('ornamentGenerator', () => {
     expect([...folds].sort((a, b) => a - b)).toEqual([8, 10, 12, 16])
     expect(tilings.size).toBe(3)
     expect(borders.size).toBeGreaterThanOrEqual(3)
+  })
+
+  it('chapter seed recovers the chapter number regardless of ayah count', () => {
+    // Chapters are numbered 1..114 (not 0-indexed), so the recovered digit
+    // is ((seed - 1) mod 114) + 1, not a plain mod 114.
+    for (let chapter = 1; chapter <= 114; chapter++) {
+      for (const ayahCount of [3, 6, 11, 88, 286]) {
+        const seed = chapterOrnamentSeed(chapter, ayahCount)
+        expect(((seed - 1) % 114) + 1).toBe(chapter)
+      }
+    }
+  })
+
+  it('chapter seed is unique across all 114 chapters even at a shared ayah count', () => {
+    // A real duplicate: 62, 63, 93, 100, 101 all have exactly 11 ayahs.
+    const seeds = new Set<number>()
+    for (let chapter = 1; chapter <= 114; chapter++) seeds.add(chapterOrnamentSeed(chapter, 11))
+    expect(seeds.size).toBe(114)
+  })
+
+  it('reproduces the same rosette for the same chapter and ayah count', () => {
+    const seed = chapterOrnamentSeed(2, 286)
+    expect(generateChapterRosette(seed)).toEqual(generateChapterRosette(seed))
+  })
+
+  it('renders different rosettes for chapters that share an ayah count', () => {
+    const elevenAyahChapters = [62, 63, 93, 100, 101]
+    const rosettes = elevenAyahChapters.map((c) => generateChapterRosette(chapterOrnamentSeed(c, 11)))
+    const unique = new Set(rosettes.map((r) => JSON.stringify(r)))
+    expect(unique.size).toBe(elevenAyahChapters.length)
+  })
+
+  it('chapter rosette never draws a hexagram', () => {
+    const violations: string[] = []
+    for (let chapter = 1; chapter <= 114; chapter++) {
+      for (const ayahCount of [3, 6, 11, 88, 286]) {
+        const rosette = generateChapterRosette(chapterOrnamentSeed(chapter, ayahCount))
+        for (const s of rosette.strokes) {
+          if (s.closed && s.points.length === 3) {
+            violations.push(`chapter ${chapter}, ${ayahCount} ayahs: triangle`)
+          }
+        }
+      }
+    }
+    expect(violations).toEqual([])
   })
 })

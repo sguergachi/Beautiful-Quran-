@@ -8,13 +8,13 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { animate, type AnimationPlaybackControls } from 'motion'
 import { washMaskImage } from '../theme/Fade'
 import { coverLayout, coverLayoutCssVars } from './coverLayout'
-import { generateCoverOrnament, type CoverOrnament, type RosetteSpec } from './ornamentGenerator'
+import { generateCoverOrnament, type CoverOrnament, type RosetteSpec } from '../theme/ornamentGenerator'
 import {
   fieldWeaveBackground,
   GeneratedBorder,
   GeneratedRosette,
   useOrnamentBuilt,
-} from './GeneratedOrnament'
+} from '../theme/GeneratedOrnament'
 
 const ISTIADHA_ARABIC = 'أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَٰنِ ٱلرَّجِيمِ'
 const ISTIADHA_ENGLISH = 'I seek refuge in Allah from Shaytan, the accursed'

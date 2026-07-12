@@ -183,32 +183,38 @@ Traditional, geometric, and nearly invisible — ornament whispers, never
 speaks. All of it is drawn procedurally (`ui/theme/Ornament.kt`), never an
 image, so it is crisp at any density and nearly free to render.
 
-- **Khatam geometry.** The vocabulary on the open book is the classical
-  eight-fold star: two overlapped squares, and the {8/3} octagram — the
-  same figures that generate star-and-cross tessellation in traditional
+- **Khatam geometry.** The vocabulary throughout is the classical star:
+  {n/k} star polygons (8/10/12/16-fold; gcd(n, k) > 1 yields the interlaced
+  polygons — the khatam is {8/2}) and Hankin's polygons-in-contact method
+  (rays from tile-edge midpoints at a sampled contact angle) — the same
+  figures that generate star-and-cross tessellation in traditional
   tilework.
-- **The generating machine.** The entrance cover's ornament is not fixed:
-  a seeded generator (`ui/theme/ornament/OrnamentGenerator.kt`, mirrored
-  line-for-line in `web/src/ui/entrance/ornamentGenerator.ts` over an
-  identical mulberry32 stream) composes a new medallion, corner seals,
-  border frieze, and leather field on every launch, from the tradition's
-  own construction grammar: {n/k} star polygons (8/10/12/16-fold; gcd > 1
-  yields the interlaced polygons — the khatam is {8/2}) and Hankin's
-  polygons-in-contact method (rays from tile-edge midpoints at a sampled
-  contact angle, over square, octagon-square 4.8.8, and diamond tilings).
-  Border friezes come from five band grammars of tooled bindings: a zigzag
-  lattice with pearls in its diamonds, a two-strand cable with pearl eyes,
-  a Hankin strip, a nested lozenge chain, and a khatam chain of small
-  eight-fold stars linked by diamonds. The **medallion and field build in
-  real time** — strokes ink themselves in along their length across ~3.4 s,
-  field first, then medallion outside-in — so the illumination is drawn
-  before the reader's eyes, not stamped. The **border and corner seals are
-  static**: they are the binding's tooling, not illumination, so they read
-  complete from the very first frame, the same way the leather and its
-  gilt rules already do. One absolute rule: no composition may read as a
-  hexagram — star indices that decompose into triangles ({12/4}), 6-fold
-  seals, and 6-fold field tilings are all excluded by construction and
-  guarded by tests on both platforms.
+- **The generating machine.** Ornament on both the entrance cover and the
+  open book is not fixed: a seeded generator
+  (`ui/theme/ornament/OrnamentGenerator.kt`, mirrored line-for-line in
+  `web/src/ui/theme/ornamentGenerator.ts` over an identical mulberry32
+  stream) composes the geometry from that vocabulary. The cover's medallion,
+  corner seals, border frieze, and leather field all grow from one random
+  seed per launch. The **surah rosette is seeded per chapter** instead —
+  `chapterOrnamentSeed(chapterNumber, ayahCount)` folds the chapter's verse
+  count (the dominant term, so a chapter's length reads as its ornament's
+  fingerprint — chapters of similar length grow kin-looking rosettes) with
+  its number (so all 114 chapters render distinctly even though only 77 of
+  them have a verse count no other chapter shares); the same chapter always
+  regrows the same rosette. Border friezes (cover only) come from five band
+  grammars of tooled bindings: a zigzag lattice with pearls in its diamonds,
+  a two-strand cable with pearl eyes, a Hankin strip, a nested lozenge
+  chain, and a khatam chain of small eight-fold stars linked by diamonds.
+  On the cover, the **medallion and field build in real time** — strokes
+  ink themselves in along their length across ~3.4 s, field first, then
+  medallion outside-in — so the illumination is drawn before the reader's
+  eyes, not stamped; the **border and corner seals are static**, complete
+  from the very first frame, the binding's tooling rather than illumination.
+  The **surah rosette is likewise static** — fixed page typography, not a
+  ceremony. One absolute rule, enforced everywhere this generator draws: no
+  composition may read as a hexagram — star indices that decompose into
+  triangles ({12/4}), 6-fold seals, and 6-fold field tilings are all
+  excluded by construction and guarded by tests on both platforms.
 - **Gilding.** Gold is never a flat color. Gilded elements (the surah
   rosette, ayah number marks, the home mark) carry a three-stop leaf
   gradient (deep bronze → bright gilt → deep bronze). On the reader, the

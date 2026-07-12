@@ -1,10 +1,10 @@
 /**
- * Renderers for the generated cover ornament (ornamentGenerator.ts) — the
- * web twins of Android's GeneratedOrnament.kt. Same material language as
- * the rest of the cover (embossed relief copies under a gold-leaf face) but
- * the geometry arrives from the generator, and every stroke draws itself in
- * (SVG dash reveal) as the build clock runs, so the cover is inked before
- * the reader's eyes rather than appearing stamped.
+ * Renderers for the generated ornament (ornamentGenerator.ts) — the web
+ * twins of Android's GeneratedOrnament.kt. Same material language
+ * (embossed relief copies under a gold-leaf face) but the geometry arrives
+ * from the generator. [GeneratedRosette] is shared by the entrance cover's
+ * medallion/corner-seals and the reader's per-chapter surah header; the
+ * border/field pieces below it (cover-only) pull in the cover's layout type.
  */
 import { useEffect, useId, useMemo, useState } from 'react'
 import type {
@@ -13,7 +13,7 @@ import type {
   OrnamentStroke,
   RosetteSpec,
 } from './ornamentGenerator'
-import type { CoverLayout } from './coverLayout'
+import type { CoverLayout } from '../entrance/coverLayout'
 
 /** One build clock for the whole cover; Android uses the same schedule. */
 export const ORNAMENT_BUILD_MS = 3_400
@@ -64,25 +64,36 @@ interface RosetteProps {
   className: string
   /**
    * Ink-in the medallion stroke by stroke as `built` flips (the ceremony's
-   * illumination). Corner seals are part of the tooled binding instead —
-   * pass `animated={false}` to render them complete from the first frame,
-   * matching Android's static `GeneratedCornerSeals`.
+   * illumination). Corner seals and the reader's per-chapter rosette are
+   * part of fixed tooling/typography instead — pass `animated={false}` to
+   * render them complete from the first frame, matching Android's static
+   * `GeneratedCornerSeals` / `GeneratedChapterRosette`.
    */
   built: boolean
   animated?: boolean
   /** Stroke widths in viewBox (200) units — seals render small, so thicker. */
   ruleWidth?: number
   hairWidth?: number
+  /**
+   * Leaf gradient stops and relief shadow colors. Default to the entrance
+   * cover's fixed leather-gold values; the reader passes the theme-aware
+   * `--gold-*` / `--emboss-*` custom properties instead, since the surah
+   * header sits on the page background, which changes with the app theme.
+   */
+  brightGold?: string
+  deepGold?: string
+  embossDark?: string
+  embossLight?: string
 }
 
 /**
- * A generated rosette (medallion or corner seal) as an SVG. When [animated]
- * (the default), each stroke is a unit-dash path whose offset transitions
- * 1 → 0 inside its own [birth, birth+span] window of the build, and pearls
- * pop in on opacity at their birth — the medallion's illumination. Corner
- * seals render with `animated={false}`: fully formed, no transition, part
- * of the binding rather than the ink wash. Emboss copies ride the same
- * reveal either way.
+ * A generated rosette (medallion, corner seal, or chapter header ornament)
+ * as an SVG. When [animated] (the default), each stroke is a unit-dash path
+ * whose offset transitions 1 → 0 inside its own [birth, birth+span] window
+ * of the build, and pearls pop in on opacity at their birth — the
+ * medallion's illumination. Corner seals and chapter rosettes render with
+ * `animated={false}`: fully formed, no transition. Emboss copies ride the
+ * same reveal either way.
  */
 export function GeneratedRosette({
   spec,
@@ -91,6 +102,10 @@ export function GeneratedRosette({
   animated = true,
   ruleWidth = 2.2,
   hairWidth = 1,
+  brightGold = '#edd188',
+  deepGold = '#9a7b2a',
+  embossDark = 'rgba(0, 0, 0, 0.4)',
+  embossLight = 'rgba(255, 255, 255, 0.12)',
 }: RosetteProps) {
   const gradId = useId()
   const reduced = prefersReducedMotion() || !animated
@@ -129,14 +144,14 @@ export function GeneratedRosette({
     <svg className={className} viewBox="0 0 200 200" aria-hidden="true">
       <defs>
         <linearGradient id={gradId} x1="0%" y1="22%" x2="100%" y2="78%">
-          <stop offset="0%" stopColor="#9a7b2a" />
-          <stop offset="50%" stopColor="#edd188" />
-          <stop offset="100%" stopColor="#9a7b2a" />
+          <stop offset="0%" stopColor={deepGold} />
+          <stop offset="50%" stopColor={brightGold} />
+          <stop offset="100%" stopColor={deepGold} />
         </linearGradient>
       </defs>
-      {/* Relief first, face last — pressed into the leather. */}
-      {layer('rgba(0, 0, 0, 0.4)', 0.9)}
-      {layer('rgba(255, 255, 255, 0.12)', -0.9)}
+      {/* Relief first, face last — pressed into the page/leather. */}
+      {layer(embossDark, 0.9)}
+      {layer(embossLight, -0.9)}
       {layer(`url(#${gradId})`, 0)}
       {spec.dots.map((d, i) => (
         <circle
