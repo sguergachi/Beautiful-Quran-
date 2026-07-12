@@ -12,8 +12,6 @@
  * Polls position for HighlightEngine; publishes only on word boundaries upstream.
  */
 import {
-  audioUrl,
-  basmalahAudioUrl,
   type Reciter,
   type SurahContent,
 } from '../data/models'
@@ -33,6 +31,8 @@ import {
 import { isIOSMediaEnvironment } from './iosMedia'
 import { PlaybackStallWatchdog } from './playbackStallWatchdog'
 import { peekPlaylistNextIndex } from './playlistNext'
+import { MediaSessionBridge, browserMediaSession } from './mediaSessionBridge'
+import { buildPlaylist, type PlaylistItem } from './playlistPlan'
 
 export interface NowPlaying {
   surahId: number
@@ -80,7 +80,7 @@ export class PlayerController {
   private standby: HTMLAudioElement | null
   private state: PlayerState = { ...initial }
   private listeners = new Set<Listener>()
-  private playlist: { ayah: number; url: string }[] = []
+  private playlist: PlaylistItem[] = []
   private index = 0
   private surahId = 0
   private reciter: Reciter | null = null
@@ -97,6 +97,7 @@ export class PlayerController {
   /** Bumps on every playIndex entry so a superseded load aborts after awaits. */
   private playToken = 0
   private readonly stallWatchdog = new PlaybackStallWatchdog()
+  private readonly mediaSession: MediaSessionBridge
   /** True while performing the pause/play cycle that revives frozen Safari audio. */
   private recoveringStall = false
   /** Prevents rAF + `ended` from advancing the same audible boundary twice. */
@@ -116,11 +117,21 @@ export class PlayerController {
   constructor(
     prefetcher: AudioPrefetcher = new AudioPrefetcher(),
     singleElementPlayback = isIOSMediaEnvironment(),
+    mediaSession: MediaSession | null = browserMediaSession(),
   ) {
     this.prefetcher = prefetcher
     this.singleElementPlayback = singleElementPlayback
     this.active = this.createAudio()
     this.standby = singleElementPlayback ? null : this.createAudio()
+    this.mediaSession = new MediaSessionBridge(
+      {
+        play: () => void this.play(),
+        pause: () => this.pause(),
+        previous: () => void this.prev(),
+        next: () => void this.next(),
+      },
+      mediaSession,
+    )
     this.bindAudio(this.active)
     if (this.standby) this.bindAudio(this.standby)
   }
@@ -553,18 +564,7 @@ export class PlayerController {
     this.content = content
     this.reciter = reciter
     this.surahId = content.surah.id
-    this.playlist = []
-    if (startAyah <= 1 && surahOpensWithBasmalahPreface(content.surah.id)) {
-      this.playlist.push({ ayah: BASMALAH_PLAYLIST_AYAH, url: basmalahAudioUrl(reciter) })
-    }
-    for (const ayah of content.ayahs) {
-      if (ayah.number >= Math.max(1, startAyah)) {
-        this.playlist.push({
-          ayah: ayah.number,
-          url: audioUrl(reciter, content.surah.id, ayah.number),
-        })
-      }
-    }
+    this.playlist = buildPlaylist(content, reciter, startAyah)
     this.index = 0
     this.clearStandby()
     const urls = this.playlistUrls()
@@ -1074,21 +1074,17 @@ export class PlayerController {
   }
 
   private updateMediaSession() {
-    if (!('mediaSession' in navigator) || !this.content || !this.reciter) return
+    if (!this.content || !this.reciter) return
     const ayah = this.state.nowPlaying?.ayah
     const title =
       ayah === BASMALAH_PLAYLIST_AYAH
         ? `${this.content.surah.nameTransliteration} — Basmalah`
         : `${this.content.surah.nameTransliteration} ${ayah ?? ''}`
-    navigator.mediaSession.metadata = new MediaMetadata({
+    this.mediaSession.update({
       title,
       artist: this.reciter.name,
       album: 'Beautiful Quran',
     })
-    navigator.mediaSession.setActionHandler('play', () => void this.play())
-    navigator.mediaSession.setActionHandler('pause', () => this.pause())
-    navigator.mediaSession.setActionHandler('previoustrack', () => void this.prev())
-    navigator.mediaSession.setActionHandler('nexttrack', () => void this.next())
   }
 }
 

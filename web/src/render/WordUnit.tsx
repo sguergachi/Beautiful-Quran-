@@ -4,7 +4,6 @@ import {
   type CSSProperties,
   type MouseEvent,
   type MutableRefObject,
-  type PointerEvent,
 } from 'react'
 import type { Word } from '../data/models'
 import {
@@ -19,12 +18,14 @@ import {
   applyMask,
   cachedPaperCoverMask,
   cachedWashMask,
+  clearPaperCover,
   runRepeatFadeOut,
   runRepeatWashIn,
   runSearchHitDoubleWash,
   runWash,
 } from './inkWash'
 import { SearchHitFlash } from '../ui/reader/SearchHitFlash'
+import { useWordInteraction } from './useWordInteraction'
 
 interface Props {
   word: Word
@@ -43,20 +44,6 @@ interface Props {
   onPlay: () => void
   onHold: () => void
   onContextMenu?: (e: MouseEvent) => void
-}
-
-const HOLD_MS = 450
-const MOVE_CANCEL_PX = 10
-
-/**
- * Snap-clear the paper cover — never CSS-transition a solid rect away.
- * Clears inline opacity so parent `[data-reciting]` CSS can paint global recess
- * without fighting an opacity:0 leftover from the last Active wash.
- */
-function clearCover(cover: HTMLElement) {
-  cover.style.transition = 'none'
-  applyMask(cover, 'none')
-  cover.style.removeProperty('opacity')
 }
 
 /**
@@ -134,19 +121,10 @@ export function WordUnit({
   // false so a word that mounts already in the chain still washes orange in
   // (Android Animatable starts at progress 0 when repeat is true on first compose).
   const prevRepeat = useRef(false)
-  const holdTimer = useRef<number | null>(null)
-  const startXY = useRef<{ x: number; y: number } | null>(null)
-  const held = useRef(false)
   const tuning = getTuning()
   const baseClass = englishMode ? 'word-gloss' : 'word-arabic'
   const upcomingCover = 1 - tuning.upcomingAlpha
-
-  const clearHold = () => {
-    if (holdTimer.current != null) {
-      clearTimeout(holdTimer.current)
-      holdTimer.current = null
-    }
-  }
+  const interaction = useWordInteraction(onPlay, onHold)
 
   /*
    * Active-entry wash.
@@ -202,19 +180,19 @@ export function WordUnit({
       }
 
       if (ink.state !== InkState.Active) {
-        clearCover(cover)
+        clearPaperCover(cover)
         paintSecondary(glossRef.current, translitRef.current, ink, null, false)
         return
       }
 
       if (ink.repeat) {
-        clearCover(cover)
+        clearPaperCover(cover)
         paintSecondary(glossRef.current, translitRef.current, ink, null, false)
         return
       }
 
       if (revealedOnEntry.current) {
-        clearCover(cover)
+        clearPaperCover(cover)
         paintSecondary(glossRef.current, translitRef.current, ink, 1, false)
         return
       }
@@ -234,14 +212,14 @@ export function WordUnit({
         (p, eased) => {
           paintSecondary(glossRef.current, translitRef.current, ink, eased, false)
           if (p >= 1) {
-            clearCover(cover)
+            clearPaperCover(cover)
             paintSecondary(glossRef.current, translitRef.current, ink, 1, false)
             return
           }
           applyMask(cover, cachedPaperCoverMask(eased, resting, true, t.washFeather))
         },
         () => {
-          clearCover(cover)
+          clearPaperCover(cover)
           paintSecondary(glossRef.current, translitRef.current, ink, 1, false)
         },
       )
@@ -369,30 +347,6 @@ export function WordUnit({
 
   const label = englishMode ? englishText || word.translation || word.arabic : word.arabic
 
-  const onPointerDown = (e: PointerEvent) => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return
-    held.current = false
-    startXY.current = { x: e.clientX, y: e.clientY }
-    clearHold()
-    holdTimer.current = window.setTimeout(() => {
-      held.current = true
-      holdTimer.current = null
-      onHold()
-    }, HOLD_MS)
-  }
-
-  const onPointerMove = (e: PointerEvent) => {
-    if (!startXY.current || holdTimer.current == null) return
-    const dx = Math.abs(e.clientX - startXY.current.x)
-    const dy = Math.abs(e.clientY - startXY.current.y)
-    if (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX) clearHold()
-  }
-
-  const onPointerEnd = () => {
-    clearHold()
-    startXY.current = null
-  }
-
   return (
     <span
       ref={(node) => {
@@ -402,24 +356,10 @@ export function WordUnit({
       className={englishMode ? 'word-unit word-ink' : 'word-unit word-arabic-ink'}
       data-state={ink.state}
       style={style}
-      onClick={() => {
-        if (held.current) {
-          held.current = false
-          return
-        }
-        onPlay()
-      }}
+      {...interaction}
       onContextMenu={onContextMenu}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerEnd}
-      onPointerCancel={onPointerEnd}
-      onPointerLeave={onPointerEnd}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') onPlay()
-      }}
     >
       <span className="word-stack" dir={rtl ? 'rtl' : 'ltr'}>
         {/* Base + orange overlays share one tight slot so abspos ink sits on

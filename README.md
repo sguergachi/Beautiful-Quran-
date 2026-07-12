@@ -79,6 +79,7 @@ source scripts/android_env.sh
 
 - [PLAN.md](PLAN.md) — the original product/engineering plan and research
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how the app is put together: pipeline, sync engine, modules, conventions
+- [docs/COMPLEXITY.md](docs/COMPLEXITY.md) — subsystem-by-subsystem complexity map and safe simplification roadmap
 - [docs/DESIGN.md](docs/DESIGN.md) — the design language: the sheet, ink, color, type, motion
 - [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — every smoothness technique in use and why
 - [docs/REPEAT_HIGHLIGHTING.md](docs/REPEAT_HIGHLIGHTING.md) — the orange second fade for words a reciter repeats, and where the repeat-aware timing data comes from
