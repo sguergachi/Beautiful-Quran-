@@ -57,11 +57,18 @@ data class OrnamentDot(
     val birth: Double,
 )
 
-/** A rosette (medallion or corner seal) in the unit square, centre 0.5. */
+/**
+ * A rosette (medallion or corner seal) in the unit square, centre 0.5.
+ * Corner seals carry a four-petal bezel whose tips lie on the compass axes
+ * at [tipRadius] (0 for the medallion, which has no bezel); the border
+ * band's runs start exactly at those tips, so a seal's petals may extend
+ * past the unit box.
+ */
 data class RosetteSpec(
     val fold: Int,
     val strokes: List<OrnamentStroke>,
     val dots: List<OrnamentDot>,
+    val tipRadius: Double = 0.0,
 )
 
 /**
@@ -223,14 +230,21 @@ private fun sampleCubicInto(
  * The mushaf corolla: n ogee petals, cusp-to-tip-to-cusp, each edge leaving
  * the notch radially and arriving at the tip radially — the soft lobes every
  * illuminated marker carries. One closed polyline so it inks in around.
+ * [rotation] is the first cusp's angle; tips sit half a step past cusps.
  */
-private fun corollaStroke(n: Int, cuspR: Double, tipR: Double): OrnamentStroke {
+private fun corollaStroke(
+    n: Int,
+    cuspR: Double,
+    tipR: Double,
+    rotation: Double,
+    weight: StrokeWeight,
+): OrnamentStroke {
     val step = TAU / n
     val reach = tipR - cuspR
     val pts = ArrayList<OrnamentPoint>(n * CUBIC_SAMPLES * 2 + 1)
-    pts.add(polar(ROT0, cuspR))
+    pts.add(polar(rotation, cuspR))
     for (k in 0 until n) {
-        val cuspA = ROT0 + k * step
+        val cuspA = rotation + k * step
         val tipA = cuspA + step / 2.0
         val nextA = cuspA + step
         val cusp = polar(cuspA, cuspR)
@@ -239,7 +253,7 @@ private fun corollaStroke(n: Int, cuspR: Double, tipR: Double): OrnamentStroke {
         sampleCubicInto(pts, cusp, polar(cuspA, cuspR + reach * 0.55), polar(tipA, tipR - reach * 0.45), tip)
         sampleCubicInto(pts, tip, polar(tipA, tipR - reach * 0.45), polar(nextA, cuspR + reach * 0.55), next)
     }
-    return OrnamentStroke(pts, closed = true, weight = StrokeWeight.Rule, birth = 0.0, span = 1.0)
+    return OrnamentStroke(pts, closed = true, weight = weight, birth = 0.0, span = 1.0)
 }
 
 /** Restamp a stroke with its slot in the build timeline. */
@@ -287,7 +301,7 @@ private fun generateMedallion(rng: Mulberry32): RosetteSpec {
         1 -> {
             val cusp = rng.range(0.16, 0.19)
             val tip = rng.range(0.24, 0.285)
-            strokes.add(corollaStroke(fold, cusp, tip))
+            strokes.add(corollaStroke(fold, cusp, tip, ROT0, StrokeWeight.Rule))
         }
         else -> {
             // A ring of kites between the star tips, points outward.
@@ -338,9 +352,11 @@ private fun generateMedallion(rng: Mulberry32): RosetteSpec {
 /**
  * The corner seal: a smaller star of the medallion's family (halved above
  * 12 so seals stay legible at seal size — never to 6, which would force
- * the hexagram), inside a mandatory hairline ring, with a pearl at the
- * heart. The ring is the hub the border band's runs terminate against, so
- * it is never optional. Seals ink in late — after the medallion has formed.
+ * the hexagram) inside a mandatory hairline ring, wrapped in a four-petal
+ * ogee bezel whose tips lie on the compass axes. Two of those tips aim
+ * straight down the border band's two runs at each corner — the band's
+ * channel tapers onto them — so seal and border are one piece of geometry,
+ * not a stamp over a strip. Seals ink in late, after the medallion.
  */
 private fun generateSeal(rng: Mulberry32, fold: Int): RosetteSpec {
     var m = if (fold >= 12) fold / 2 else fold
@@ -348,16 +364,19 @@ private fun generateSeal(rng: Mulberry32, fold: Int): RosetteSpec {
     val ks = allowedStarKs(m)
     val k = ks[rng.int(ks.size)]
     val starR = rng.range(0.32, 0.37)
+    val tip = rng.range(0.58, 0.66)
 
     val strokes = ArrayList<OrnamentStroke>()
     strokes.add(circleStroke(SEAL_RING_RADIUS, m * 12, StrokeWeight.Hairline))
+    // Bezel cusps on the diagonals, on the ring itself; tips on the axes.
+    strokes.add(corollaStroke(4, SEAL_RING_RADIUS, tip, ROT0 - PI / 4.0, StrokeWeight.Hairline))
     strokes.addAll(starPolygons(m, k, starR, ROT0, StrokeWeight.Hairline))
     val n = strokes.size
     val stamped = strokes.mapIndexed { i, s ->
         val birth = 0.55 + 0.30 * i / n
         timed(s, birth, min(0.25, 0.97 - birth))
     }
-    return RosetteSpec(m, stamped, listOf(OrnamentDot(0.5, 0.5, 0.058, 0.88)))
+    return RosetteSpec(m, stamped, listOf(OrnamentDot(0.5, 0.5, 0.058, 0.88)), tipRadius = tip)
 }
 
 /**
@@ -444,6 +463,19 @@ private fun generateBorder(rng: Mulberry32): BorderSpec {
             )
             dots.add(OrnamentDot(period / 2.0, 0.5, rng.range(0.06, 0.09), 0.0))
         }
+    }
+    // Edge rails bound every recipe into one channel; renderers taper the
+    // channel's mouth onto the corner seals' petal tips.
+    for (y in doubleArrayOf(0.0, 1.0)) {
+        strokes.add(
+            OrnamentStroke(
+                listOf(OrnamentPoint(0.0, y), OrnamentPoint(period, y)),
+                closed = false,
+                weight = StrokeWeight.Hairline,
+                birth = 0.0,
+                span = 1.0,
+            ),
+        )
     }
     return BorderSpec(period, strokes, dots)
 }

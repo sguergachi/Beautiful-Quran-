@@ -7,12 +7,11 @@
  * the reader's eyes rather than appearing stamped.
  */
 import { useEffect, useId, useMemo, useState } from 'react'
-import {
-  SEAL_RING_RADIUS,
-  type BorderSpec,
-  type FieldSpec,
-  type OrnamentStroke,
-  type RosetteSpec,
+import type {
+  BorderSpec,
+  FieldSpec,
+  OrnamentStroke,
+  RosetteSpec,
 } from './ornamentGenerator'
 import type { CoverLayout } from './coverLayout'
 
@@ -237,23 +236,41 @@ export function borderBandBackground(border: BorderSpec, vertical: boolean): {
   return { backgroundImage: svgDataUri(svg) }
 }
 
+/** Channel-mouth taper: both rails converging onto the petal tip. */
+function chamferBackground(taper: number, bandH: number, vertical: boolean): string {
+  const [w, h] = vertical ? [bandH, taper] : [taper, bandH]
+  // Horizontal mouth converges left onto (0, mid); vertical converges up.
+  const d = vertical
+    ? `M 0 ${taper.toFixed(2)} L ${(bandH / 2).toFixed(2)} 0 L ${bandH.toFixed(2)} ${taper.toFixed(2)}`
+    : `M ${taper.toFixed(2)} 0 L 0 ${(bandH / 2).toFixed(2)} L ${taper.toFixed(2)} ${bandH.toFixed(2)}`
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${w.toFixed(2)} ${h.toFixed(2)}'>` +
+    `<path d='${d}' fill='none' stroke='rgba(217,180,74,0.85)' stroke-width='1' stroke-linejoin='round' stroke-linecap='round'/>` +
+    `</svg>`
+  return svgDataUri(svg)
+}
+
 /**
  * The border frieze between the frame's two gilt rules: each side's band
- * runs rim-to-rim between the corner seals' rings, fitting a whole number
- * of periods (the period stretches a little), so the pattern arrives at
- * every corner at the same phase; a short gold stem on the band's axis
- * ties each ring to the band's first node — one continuous design, not a
- * band with stamps dropped on top. Far sides are mirrored so the pattern
- * faces inward. Washes in as the build passes the medallion's crescendo.
+ * is a railed channel whose mouth tapers onto the corner seal's petal tip
+ * — the seal's bezel points down the band's axis and the rails converge
+ * onto that point, so border and corner ornament are one continuous piece
+ * of geometry. Each run fits a whole number of periods (the period
+ * stretches a little), so the pattern arrives at every corner at the same
+ * phase. Far sides are mirrored so the pattern faces inward. Washes in as
+ * the build passes the medallion's crescendo.
  */
 export function GeneratedBorder({
   border,
+  sealTip,
   built,
   layout,
   width,
   height,
 }: {
   border: BorderSpec
+  /** Petal-tip radius of the corner seal (RosetteSpec.tipRadius). */
+  sealTip: number
   built: boolean
   layout: CoverLayout
   width: number
@@ -263,7 +280,9 @@ export function GeneratedBorder({
   const verticalBg = useMemo(() => borderBandBackground(border, true), [border])
 
   const bandH = layout.bandHeight
-  const bandStart = layout.bandCenter + layout.starSize * SEAL_RING_RADIUS
+  const tipU = layout.bandCenter + layout.starSize * sealTip
+  const taper = bandH * 0.8
+  const bandStart = tipU + taper
   const periodPx = border.period * bandH
   const fitted = (side: number): number | null => {
     const run = side - 2 * bandStart
@@ -275,19 +294,28 @@ export function GeneratedBorder({
   const on = built ? ' entrance-border--on' : ''
   const start = `${bandStart.toFixed(2)}px`
 
-  const stemLen = bandH * 0.7 + 1
-  const axis = `${(layout.bandCenter - 0.5).toFixed(2)}px`
-  const near = `${(bandStart - 1).toFixed(2)}px`
-  const stems: React.CSSProperties[] = []
+  const hChamfer = chamferBackground(taper, bandH, false)
+  const vChamfer = chamferBackground(taper, bandH, true)
+  const across = `${(layout.bandCenter - bandH / 2).toFixed(2)}px`
+  const atTip = `${tipU.toFixed(2)}px`
+  const mouths: Array<{ style: React.CSSProperties; flip?: string }> = []
   for (const ax of ['top', 'bottom'] as const) {
-    for (const end of ['left', 'right'] as const) {
-      stems.push({ [ax]: axis, [end]: near, width: stemLen, height: 1 })
-    }
+    mouths.push({
+      style: { [ax]: across, left: atTip, width: taper, height: bandH, backgroundImage: hChamfer },
+    })
+    mouths.push({
+      style: { [ax]: across, right: atTip, width: taper, height: bandH, backgroundImage: hChamfer },
+      flip: 'scaleX(-1)',
+    })
   }
   for (const ax of ['left', 'right'] as const) {
-    for (const end of ['top', 'bottom'] as const) {
-      stems.push({ [ax]: axis, [end]: near, width: 1, height: stemLen })
-    }
+    mouths.push({
+      style: { [ax]: across, top: atTip, width: bandH, height: taper, backgroundImage: vChamfer },
+    })
+    mouths.push({
+      style: { [ax]: across, bottom: atTip, width: bandH, height: taper, backgroundImage: vChamfer },
+      flip: 'scaleY(-1)',
+    })
   }
 
   return (
@@ -324,8 +352,12 @@ export function GeneratedBorder({
           ))}
         </>
       )}
-      {stems.map((style, i) => (
-        <div key={i} className={`entrance-stem${built ? ' entrance-stem--on' : ''}`} style={style} />
+      {mouths.map(({ style, flip }, i) => (
+        <div
+          key={i}
+          className={`entrance-chamfer${built ? ' entrance-chamfer--on' : ''}`}
+          style={flip ? { ...style, transform: flip } : style}
+        />
       ))}
     </div>
   )

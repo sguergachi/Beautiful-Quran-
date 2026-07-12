@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   generateCoverOrnament,
   Mulberry32,
+  SEAL_RING_RADIUS,
   type OrnamentPoint,
 } from '../ornamentGenerator'
 
@@ -58,13 +59,31 @@ describe('ornamentGenerator', () => {
       check(o.field.strokes.length >= 8, `${at}: field strokes`)
       check(o.field.cellW > 0 && o.field.cellH > 0, `${at}: field cell`)
 
-      for (const s of [...o.medallion.strokes, ...o.cornerSeal.strokes]) {
+      // The medallion has no bezel; the seal's petal tips must aim down
+      // the band axes just past the ring, and its bezel may reach past
+      // the unit box by at most (tip − 0.5).
+      check(o.medallion.tipRadius === 0, `${at}: medallion tipRadius`)
+      check(
+        o.cornerSeal.tipRadius > SEAL_RING_RADIUS && o.cornerSeal.tipRadius <= 0.7,
+        `${at}: seal tipRadius ${o.cornerSeal.tipRadius}`,
+      )
+      for (const s of o.medallion.strokes) {
         check(s.points.length >= 2, `${at}: short stroke`)
         check(s.birth >= 0 && s.birth + s.span <= 1.0001, `${at}: build window`)
         for (const p of s.points) {
           check(
             p.x >= -0.001 && p.x <= 1.001 && p.y >= -0.001 && p.y <= 1.001,
-            `${at}: rosette point outside unit box (${p.x}, ${p.y})`,
+            `${at}: medallion point outside unit box (${p.x}, ${p.y})`,
+          )
+        }
+      }
+      for (const s of o.cornerSeal.strokes) {
+        check(s.points.length >= 2, `${at}: short stroke`)
+        check(s.birth >= 0 && s.birth + s.span <= 1.0001, `${at}: build window`)
+        for (const p of s.points) {
+          check(
+            p.x >= -0.2 && p.x <= 1.2 && p.y >= -0.2 && p.y <= 1.2,
+            `${at}: seal point too far out (${p.x}, ${p.y})`,
           )
         }
       }

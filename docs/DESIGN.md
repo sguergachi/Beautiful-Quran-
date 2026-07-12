@@ -251,9 +251,11 @@ three moments:
    in `Theme.kt`'s `Cover*` values), tooled with this launch's generated
    Hankin field at whisper ink, framed in a doubled gilt rule
    (`MushafCoverFrame`) with the generated border frieze running between
-   the rules — each side fits a whole number of pattern periods and
-   terminates against the corner seals' rings, tied in by short gold stems,
-   so band and seals read as one continuous design — and carrying the
+   the rules — each side is a railed channel fitting a whole number of
+   pattern periods, and its mouth tapers onto the corner seal's petal tip
+   (each seal wears a four-petal ogee bezel whose tips aim down the band
+   axes), so border and corner ornaments are one continuous piece of
+   geometry — and carrying the
    generated medallion (`GeneratedMedallion`) with the title
    **القرآن الكريم** beneath it in the Hafs hand, leafed in gold and
    written in with the letter wash. The whole ornament inks itself onto

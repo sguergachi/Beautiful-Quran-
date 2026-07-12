@@ -58,12 +58,26 @@ class OrnamentGeneratorTest {
             assertTrue(o.field.cellW > 0 && o.field.cellH > 0)
             assertTrue(o.field.cellWidthDp in 40.0..200.0)
 
-            for (s in o.medallion.strokes + o.cornerSeal.strokes) {
+            // The medallion has no bezel; the seal's petal tips must aim
+            // down the band axes just past the ring, and its bezel may
+            // reach past the unit box by at most (tip − 0.5).
+            assertEquals(0.0, o.medallion.tipRadius, 1e-9)
+            assertTrue(o.cornerSeal.tipRadius > SEAL_RING_RADIUS)
+            assertTrue(o.cornerSeal.tipRadius <= 0.7)
+            for (s in o.medallion.strokes) {
                 assertTrue(s.points.size >= 2)
                 assertTrue(s.birth >= 0.0 && s.birth + s.span <= 1.0001)
                 for (p in s.points) {
                     assertTrue("medallion point out of unit box: $p", p.x in -0.001..1.001)
                     assertTrue("medallion point out of unit box: $p", p.y in -0.001..1.001)
+                }
+            }
+            for (s in o.cornerSeal.strokes) {
+                assertTrue(s.points.size >= 2)
+                assertTrue(s.birth >= 0.0 && s.birth + s.span <= 1.0001)
+                for (p in s.points) {
+                    assertTrue("seal point too far out: $p", p.x in -0.2..1.2)
+                    assertTrue("seal point too far out: $p", p.y in -0.2..1.2)
                 }
             }
             for (s in o.border.strokes) {
