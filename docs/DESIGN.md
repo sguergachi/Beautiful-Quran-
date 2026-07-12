@@ -341,9 +341,9 @@ with the rest of the chrome and vanishes entirely while reciting.
   cannot drift, lag, or sit mid-block — the tip begins 24 dp below the block
   edge, aligned with that verse's first line of ink, left or right.
 - **Every verse carries a tip; a saved verse carries the whole ribbon.** An
-  idle verse shows only the short, ruby-outlined swallowtail **tip** beside the
-  first line — the same shape as a saved mark, but empty so ruby fill remains
-  exclusive to saved verses. (On web, that tip stays hidden until the verse is hovered,
+  idle verse shows only the short, opaque playback-green outlined swallowtail
+  **tip** beside the first line — the same shape as a saved mark, but empty so
+  ruby fill remains exclusive to saved verses. (On web, that tip stays hidden until the verse is hovered,
   then click to unfurl.) Bookmark it and that tip grows nearly the **full
   vertical length** of the block at full ink, stopping **48 dp** above the next
   verse's tip so consecutive ribbons never touch.

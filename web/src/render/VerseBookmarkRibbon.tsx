@@ -1,7 +1,7 @@
 /**
  * Verse bookmark ribbon — port of Android `VerseBookmarkRibbon.kt`.
  *
- * Idle: outlined tip hidden until the verse is hovered (or the ribbon is
+ * Idle: opaque playback-green outlined tip hidden until the verse is hovered (or the ribbon is
  * keyboard-focused). Saved: the same ruby strip grown nearly the full
  * verse height. Click unfurls with a cloth wave + overshoot; unmark
  * gathers back into the tip.
@@ -18,7 +18,6 @@ const NOTCH = 6.5
 const WAVE_AMP = 4.5
 const SETTLE_AMP = 3.2
 const OVERSHOOT = 0.06
-const NUB_FOCUSED_ALPHA = 0.4
 const SOLID_ALPHA = 0.94
 const TOP_INSET = 24
 const TOP_FOLD = 3.5
@@ -72,6 +71,7 @@ export function VerseBookmarkRibbon({
   const animating = useRef(false)
   const controlsRef = useRef<AnimationPlaybackControls[]>([])
   const rubyRef = useRef({ r: 179, g: 18, b: 47 })
+  const playbackAccentRef = useRef({ r: 14, g: 92, b: 74 })
   const userDriven = useRef(false)
   const [ribbonFocused, setRibbonFocused] = useState(false)
 
@@ -127,7 +127,7 @@ export function VerseBookmarkRibbon({
     if (showingRibbon && progress > 0.5) alpha = SOLID_ALPHA
     else if (showingRibbon) alpha = SOLID_ALPHA * (0.55 + 0.45 * Math.min(1, progress))
     else if (!revealTip) alpha = 0
-    else alpha = NUB_FOCUSED_ALPHA
+    else alpha = 1
 
     // Nothing to paint — skip path work so idle verses stay blank.
     if (alpha <= 0.001) return
@@ -189,8 +189,8 @@ export function VerseBookmarkRibbon({
       ctx.closePath()
     }
 
-    // Ruby fill belongs only to a saved mark. The idle affordance remains an
-    // empty swallowtail outline, so it cannot read as an active bookmark.
+    // Ruby fill belongs only to a saved mark. The idle affordance is the same
+    // opaque green as playback controls, so it cannot read as an active bookmark.
     buildBodyPath()
     const x0 = Math.min(ax(outer), ax(inner))
     const x1 = Math.max(ax(outer), ax(inner))
@@ -202,7 +202,8 @@ export function VerseBookmarkRibbon({
       ctx.fillStyle = tipWash
       ctx.fill()
     } else {
-      ctx.strokeStyle = `rgba(${r},${g},${b},${alpha})`
+      const accent = playbackAccentRef.current
+      ctx.strokeStyle = `rgb(${accent.r},${accent.g},${accent.b})`
       ctx.lineWidth = 1.25
       ctx.lineJoin = 'round'
       ctx.lineCap = 'round'
@@ -230,9 +231,10 @@ export function VerseBookmarkRibbon({
   useEffect(() => {
     const read = () => {
       const raw = getComputedStyle(document.documentElement)
-        .getPropertyValue('--bookmark')
-        .trim()
-      if (raw) rubyRef.current = parseRuby(raw)
+      const bookmark = raw.getPropertyValue('--bookmark').trim()
+      const accent = raw.getPropertyValue('--accent').trim()
+      if (bookmark) rubyRef.current = parseRuby(bookmark)
+      if (accent) playbackAccentRef.current = parseRuby(accent)
       draw()
     }
     read()
