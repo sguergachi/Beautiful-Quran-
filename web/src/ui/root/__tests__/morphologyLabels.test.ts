@@ -17,6 +17,12 @@ describe('featureSummary', () => {
     expect(featureSummary('')).toBe('')
   })
 
+  it('decodes explicit corpus mood and definiteness tags', () => {
+    expect(featureSummary('IMPF|INDEF|MOOD:JUS|3MD')).toBe(
+      'imperfect · indefinite · jussive mood · 3rd person masculine dual',
+    )
+  })
+
   it('drops unrecognized tags and de-duplicates', () => {
     expect(featureSummary('PERF|NOPE|PERF')).toBe('perfect')
   })
