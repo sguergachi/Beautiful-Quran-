@@ -137,7 +137,13 @@ class MainActivity : ComponentActivity() {
                     themeMode = settings.themeMode,
                     developerModeEnabled = settings.developerModeEnabled,
                     entranceVisible = !entranceDone,
-                    onEntranceFinished = { entranceDone = true },
+                    onRecordSystemTrace = {
+                        DevProfiling.recordSystemTrace(this@MainActivity)
+                    },
+                    onEntranceFinished = {
+                        entranceDone = true
+                        DevProfiling.reportFullyDrawn(this@MainActivity)
+                    },
                 )
             }
         }
@@ -163,6 +169,7 @@ private fun PaperStackApp(
     themeMode: ThemeMode,
     developerModeEnabled: Boolean,
     entranceVisible: Boolean,
+    onRecordSystemTrace: () -> Unit,
     onEntranceFinished: () -> Unit,
 ) {
     val homeViewModel: HomeViewModel = viewModel(factory = AppViewModelFactory)
@@ -430,6 +437,7 @@ private fun PaperStackApp(
                     animateTo(if (selectedSurahId == 0) COVER_LAYER else AYAH_LAYER)
                 },
                 onOpenTimingsLab = { openTimingsLab() },
+                onRecordSystemTrace = onRecordSystemTrace,
             )
         }
 

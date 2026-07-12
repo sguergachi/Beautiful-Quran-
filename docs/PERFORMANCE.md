@@ -143,6 +143,19 @@ ExoPlayer does its own threading; the UI only ever reads
 callbacks. Audio is cached through a 1 GB LRU `CacheDataSource`, so repeat
 listening doesn't touch the network at all.
 
+### 9. Baseline + Startup Profiles
+
+Release APKs ship an ART Baseline Profile (`assets/dexopt/baseline.prof`) and a
+narrow Startup Profile that guides R8's DEX layout. The baseline covers startup,
+paper navigation, reader/focus/ink, data load, and playback startup; the startup
+subset is intentionally limited to the application, entrance cover, theme, and
+first chapter sheet so it does not crowd the primary DEX.
+
+The committed rules are a conservative seed because this repository's headless
+emulator renderer terminates during instrumentation. The `:baselineprofile`
+module is the source of truth for regenerating both profiles from real critical
+user journeys on stable hardware. See [Profiling](PROFILING.md).
+
 ## Deliberate trade-offs
 
 - **The 33 ms poll** instead of frame-callback syncing: audio position is
@@ -155,9 +168,9 @@ listening doesn't touch the network at all.
 
 ## Future headroom (not yet done)
 
-- **Baseline Profiles** via macrobenchmark for faster cold start and
-  pre-JIT'd scroll paths (needs a device farm run; add
-  `androidx.profileinstaller` + `baseline-prof.txt` when available).
+- Replace the conservative seed Baseline/Startup rules with output captured on
+  a stable physical Android 17 device, then retain them only if Macrobenchmark
+  confirms an improvement.
 - Per-word `contentType` hints if word counts per screen grow (e.g. a future
   mushaf mode).
 - Gapless surah-file playback (single MediaItem + absolute-offset segments)

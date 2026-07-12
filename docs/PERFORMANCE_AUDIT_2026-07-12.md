@@ -88,6 +88,44 @@ as an app regression and so no fabricated before/after frame metric enters the
 performance history. Repeat the comparison on a stable hardware-backed emulator
 or physical 90/120 Hz device before attaching numerical frame claims.
 
+### Android 17 ProfilingManager validation
+
+A separate API 37 x86_64 AVD with a 16 KB page-size system image remained
+stable with the GPU disabled and Android's software renderer. Both development
+capture paths worked:
+
+- the registered cold-start trigger produced a 5.5 MB Perfetto trace;
+- the Settings action produced a 9.2-second, 1.6 MB system trace and returned
+  its app-private path through the registered result listener;
+- the explicit request initially failed because Android 17 requires a
+  per-request executor and listener even when a process-wide listener is
+  registered. Supplying a no-op request listener while retaining the global
+  result listener fixed the request and prevented duplicate completion logs.
+
+The manual trace covered a settings-to-paper transition and home-list
+scrolling, not reader playback. Perfetto attributed 130 app FrameTimeline
+entries with a 21.00 ms median, 44.78 ms p90, 68.14 ms p99, and 105.97 ms
+maximum; 35 were classified as full jank and 8 as partial. These absolute frame
+numbers are not product measurements: the AVD used lavapipe/software rendering,
+the APK was debuggable, and the host has no KVM.
+
+Attribution was still useful. The main thread ran for 1,558.88 ms during the
+capture, with a 55.58 ms longest uninterrupted scheduled run. The largest
+Compose work was lazy-list prefetch (`idle_frame` maximum 44.74 ms,
+`execute:urgent` 44.62 ms, and prefetch composition 25.99 ms) plus
+measure/layout (50.98 ms maximum). ART also performed 162 JIT compilations
+totalling 149.58 ms; the largest was a 38.06 ms Compose runtime compile. That
+confirms the trace is representative of debug warm-up and explains why it
+cannot be used to judge the packaged Baseline Profile.
+
+The release APK's embedded profile was then installed explicitly and compiled
+with `speed-profile`; `dumpsys package` reported `status=speed-profile`. This
+validates the precompilation pipeline independently of the debug-only profiler.
+No second rendering change is justified by this emulator trace. A physical
+device capture should next isolate reader playback and compare
+`CompilationMode.None()` with `CompilationMode.Partial()` through the included
+Macrobenchmark.
+
 Suggested reproducible device run:
 
 ```bash
@@ -120,8 +158,7 @@ show remaining pressure, investigate these in measured order:
   lists and gradient construction);
 - the number and retained memory of per-word graphics layers in gloss mode;
 - long-ayah text shaping/prefetch on first exposure;
-- a dedicated Macrobenchmark + Baseline Profile module for startup and scroll
-  compilation.
+- device-generated refinement of the committed Baseline/Startup Profile seed.
 
 Each can trade memory, shaping correctness, or animation appearance for speed,
 so none should change without a representative device trace and pixel/motion

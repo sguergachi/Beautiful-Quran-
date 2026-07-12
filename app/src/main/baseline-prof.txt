@@ -1,0 +1,29 @@
+# Conservative seed profile. Regenerate from :baselineprofile on a stable device.
+# Startup and first-sheet composition.
+HSPLcom/beautifulquran/QuranApp;->**(**)**
+HSPLcom/beautifulquran/MainActivity;->**(**)**
+HSPLcom/beautifulquran/MainActivityKt;->**(**)**
+HSPLcom/beautifulquran/data/SettingsRepository;->**(**)**
+HSPLcom/beautifulquran/ui/home/HomeViewModel;->**(**)**
+HSPLcom/beautifulquran/ui/home/HomeScreenKt;->**(**)**
+HSPLcom/beautifulquran/ui/entrance/EntranceCoverKt;->**(**)**
+HSPLcom/beautifulquran/ui/theme/ThemeKt;->**(**)**
+HSPLcom/beautifulquran/ui/theme/TypeKt;->**(**)**
+HSPLcom/beautifulquran/ui/theme/GeneratedOrnamentKt;->**(**)**
+
+# Reader, focus, ink, and paper-navigation critical journeys.
+HSPLcom/beautifulquran/ui/reader/ReaderViewModel;->**(**)**
+HSPLcom/beautifulquran/ui/reader/ReaderScreenKt;->**(**)**
+HSPLcom/beautifulquran/ui/reader/ReaderComponentsKt;->**(**)**
+HSPLcom/beautifulquran/ui/reader/InkEngine;->**(**)**
+HSPLcom/beautifulquran/ui/reader/focus/FocusEngine;->**(**)**
+HSPLcom/beautifulquran/ui/reader/focus/ReaderFocusController;->**(**)**
+HSPLcom/beautifulquran/domain/HighlightClock;->**(**)**
+HSPLcom/beautifulquran/domain/HighlightEngine;->**(**)**
+
+# Data load and playback startup.
+HSPLcom/beautifulquran/data/QuranDatabase;->**(**)**
+HSPLcom/beautifulquran/data/QuranRepository;->**(**)**
+HSPLcom/beautifulquran/playback/PlayerController;->**(**)**
+HSPLcom/beautifulquran/playback/PlaybackService;->**(**)**
+HSPLcom/beautifulquran/playback/AudioPrefetcher;->**(**)**

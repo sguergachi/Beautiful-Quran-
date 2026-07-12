@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "BeautifulQuran"
 include(":app")
+include(":baselineprofile")
