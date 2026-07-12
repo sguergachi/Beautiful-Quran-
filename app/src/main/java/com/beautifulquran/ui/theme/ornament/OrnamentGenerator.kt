@@ -380,33 +380,41 @@ private fun generateSeal(rng: Mulberry32, fold: Int): RosetteSpec {
 }
 
 /**
- * The border band — one of the four frieze grammars found on tooled mushaf
- * bindings: a doubled chevron, an interlaced two-strand cable with pearl
- * eyes (guilloche), a Hankin star-and-cross strip, or a lozenge chain with
- * a pearl in each diamond. Historical bindings run exactly these between
- * their gilt fillets ("bordered by geometric braiding").
+ * The border band — one of the five frieze grammars found on tooled mushaf
+ * bindings: a zigzag lattice with pearls in its diamonds, an interlaced
+ * two-strand cable with pearl eyes (guilloche), a Hankin star-and-cross
+ * strip, a nested lozenge chain, or a khatam chain — small eight-fold
+ * stars linked by diamonds. Historical bindings run exactly these between
+ * their gilt fillets ("bordered by geometric braiding"). Every recipe is
+ * bounded by rule-weight edge rails so the band reads as one tooled
+ * channel; renderers taper the channel's mouth onto the corner seals'
+ * petal tips.
  */
 private fun generateBorder(rng: Mulberry32): BorderSpec {
     val strokes = ArrayList<OrnamentStroke>()
     val dots = ArrayList<OrnamentDot>()
     val period: Double
-    when (rng.int(4)) {
+    when (rng.int(5)) {
         0 -> {
-            // Doubled chevron — two parallel zigzags, one period per peak.
-            period = rng.range(1.1, 1.6)
-            fun zig(hi: Double, lo: Double) = OrnamentStroke(
+            // Zigzag lattice — two zigzags half a period out of phase make
+            // an X-crossing diamond trellis; a pearl rests in each diamond.
+            period = rng.range(1.2, 1.7)
+            fun zig(a: Double, b: Double) = OrnamentStroke(
                 listOf(
-                    OrnamentPoint(0.0, hi),
-                    OrnamentPoint(period / 2.0, lo),
-                    OrnamentPoint(period, hi),
+                    OrnamentPoint(0.0, a),
+                    OrnamentPoint(period / 2.0, b),
+                    OrnamentPoint(period, a),
                 ),
                 closed = false,
                 weight = StrokeWeight.Hairline,
                 birth = 0.0,
                 span = 1.0,
             )
-            strokes.add(zig(0.88, 0.26))
-            strokes.add(zig(0.74, 0.12))
+            strokes.add(zig(0.86, 0.14))
+            strokes.add(zig(0.14, 0.86))
+            val pearl = rng.range(0.05, 0.075)
+            dots.add(OrnamentDot(period / 4.0, 0.5, pearl, 0.0))
+            dots.add(OrnamentDot(3.0 * period / 4.0, 0.5, pearl, 0.0))
         }
         1 -> {
             // Cable: two phase-opposed strands crossing twice per period,
@@ -444,16 +452,39 @@ private fun generateBorder(rng: Mulberry32): BorderSpec {
                 ),
             )
         }
-        else -> {
-            // Lozenge chain — diamonds tip-to-tip, a pearl in each.
+        3 -> {
+            // Nested lozenge chain — a diamond in a diamond, tip-to-tip,
+            // a pearl at each heart.
             period = rng.range(1.7, 2.3)
+            fun diamond(halfW: Double, halfH: Double) = OrnamentStroke(
+                listOf(
+                    OrnamentPoint(period / 2.0 - halfW, 0.5),
+                    OrnamentPoint(period / 2.0, 0.5 - halfH),
+                    OrnamentPoint(period / 2.0 + halfW, 0.5),
+                    OrnamentPoint(period / 2.0, 0.5 + halfH),
+                ),
+                closed = true,
+                weight = StrokeWeight.Hairline,
+                birth = 0.0,
+                span = 1.0,
+            )
+            strokes.add(diamond(period / 2.0, 0.38))
+            strokes.add(diamond(period / 4.0, 0.19))
+            dots.add(OrnamentDot(period / 2.0, 0.5, rng.range(0.05, 0.08), 0.0))
+        }
+        else -> {
+            // Khatam chain — small eight-fold stars (two overlapped
+            // squares) linked by diamonds at the period boundaries.
+            period = rng.range(1.35, 1.75)
+            val r = rng.range(0.26, 0.31)
+            val a = r * 0.7071
             strokes.add(
                 OrnamentStroke(
                     listOf(
-                        OrnamentPoint(0.0, 0.5),
-                        OrnamentPoint(period / 2.0, 0.12),
-                        OrnamentPoint(period, 0.5),
-                        OrnamentPoint(period / 2.0, 0.88),
+                        OrnamentPoint(period / 2.0 - a, 0.5 - a),
+                        OrnamentPoint(period / 2.0 + a, 0.5 - a),
+                        OrnamentPoint(period / 2.0 + a, 0.5 + a),
+                        OrnamentPoint(period / 2.0 - a, 0.5 + a),
                     ),
                     closed = true,
                     weight = StrokeWeight.Hairline,
@@ -461,17 +492,48 @@ private fun generateBorder(rng: Mulberry32): BorderSpec {
                     span = 1.0,
                 ),
             )
-            dots.add(OrnamentDot(period / 2.0, 0.5, rng.range(0.06, 0.09), 0.0))
+            strokes.add(
+                OrnamentStroke(
+                    listOf(
+                        OrnamentPoint(period / 2.0 - r, 0.5),
+                        OrnamentPoint(period / 2.0, 0.5 - r),
+                        OrnamentPoint(period / 2.0 + r, 0.5),
+                        OrnamentPoint(period / 2.0, 0.5 + r),
+                    ),
+                    closed = true,
+                    weight = StrokeWeight.Hairline,
+                    birth = 0.0,
+                    span = 1.0,
+                ),
+            )
+            // Link diamond straddling the period boundary; when tiled, the
+            // half past x = 0 is completed by the neighbouring tile.
+            val cw = rng.range(0.10, 0.14)
+            strokes.add(
+                OrnamentStroke(
+                    listOf(
+                        OrnamentPoint(-cw, 0.5),
+                        OrnamentPoint(0.0, 0.5 - cw * 0.85),
+                        OrnamentPoint(cw, 0.5),
+                        OrnamentPoint(0.0, 0.5 + cw * 0.85),
+                    ),
+                    closed = true,
+                    weight = StrokeWeight.Hairline,
+                    birth = 0.0,
+                    span = 1.0,
+                ),
+            )
+            dots.add(OrnamentDot(period / 2.0, 0.5, 0.05, 0.0))
         }
     }
-    // Edge rails bound every recipe into one channel; renderers taper the
-    // channel's mouth onto the corner seals' petal tips.
+    // Rule-weight edge rails bound every recipe into one tooled channel;
+    // renderers taper the channel's mouth onto the corner seals' petal tips.
     for (y in doubleArrayOf(0.0, 1.0)) {
         strokes.add(
             OrnamentStroke(
                 listOf(OrnamentPoint(0.0, y), OrnamentPoint(period, y)),
                 closed = false,
-                weight = StrokeWeight.Hairline,
+                weight = StrokeWeight.Rule,
                 birth = 0.0,
                 span = 1.0,
             ),

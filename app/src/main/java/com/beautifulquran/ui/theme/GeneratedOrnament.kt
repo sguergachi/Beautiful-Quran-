@@ -159,9 +159,11 @@ private fun bandCenter(geometry: CoverFrameGeometry): Float =
     (geometry.outerInsetPx + geometry.innerInsetPx) / 2f
 
 /**
- * The four corner seals — small stars of the medallion's family, stamped
- * over the border band's corner joints the way bindings have always hidden
- * the miter. Fills the cover; positions come from [geometry].
+ * The four corner seals — small stars of the medallion's family, the hubs
+ * the border band's channels taper onto. Part of the tooled binding, so
+ * they are complete from the first frame: the board arrives already bound,
+ * only the illumination (medallion, field) inks in. Fills the cover;
+ * positions come from [geometry].
  */
 @Composable
 fun GeneratedCornerSeals(
@@ -172,7 +174,6 @@ fun GeneratedCornerSeals(
     embossDark: Color,
     embossLight: Color,
     sheen: State<Float>,
-    build: State<Float>,
     modifier: Modifier = Modifier,
 ) {
     Spacer(
@@ -196,15 +197,12 @@ fun GeneratedCornerSeals(
                 onDrawBehind {
                     val gold = goldBrush(brightGold, deepGold, sheen.value.coerceIn(0f, 1f))
                     for (corner in corners) {
-                        drawRosette(paths, corner, gold, embossDark, embossLight, build.value)
+                        drawRosette(paths, corner, gold, embossDark, embossLight, 1f)
                     }
                 }
             },
     )
 }
-
-/** The border fades up between 40% and 75% of the build. */
-private fun borderAlpha(build: Float): Float = ((build - 0.40f) / 0.35f).coerceIn(0f, 1f)
 
 /**
  * The generated border frieze: the band pattern runs along all four sides
@@ -213,8 +211,9 @@ private fun borderAlpha(build: Float): Float = ((build - 0.40f) / 0.35f).coerceI
  * axis and the band's rails converge onto that point, so border and corner
  * ornament are one continuous piece of geometry. Each run fits a whole
  * number of periods (the period stretches a little to fit), so the pattern
- * arrives at every corner at the same phase. Washes in as the build passes
- * the medallion's crescendo. [seal] supplies the petal-tip radius.
+ * arrives at every corner at the same phase. The band is the binding's
+ * tooling, not illumination — it is complete from the first frame, never
+ * animated. [seal] supplies the petal-tip radius.
  */
 @Composable
 fun GeneratedBorderBand(
@@ -226,15 +225,14 @@ fun GeneratedBorderBand(
     embossDark: Color,
     embossLight: Color,
     sheen: State<Float>,
-    build: State<Float>,
     modifier: Modifier = Modifier,
 ) {
     Spacer(
         modifier
             .fillMaxSize()
             .drawWithCache {
-                val bandH = ((geometry.innerInsetPx - geometry.outerInsetPx) * 0.60f)
-                    .coerceIn(4.dp.toPx(), 12.dp.toPx())
+                val bandH = ((geometry.innerInsetPx - geometry.outerInsetPx) * 0.72f)
+                    .coerceIn(10.dp.toPx(), 20.dp.toPx())
                 val c = bandCenter(geometry)
                 val w = size.width
                 val h = size.height
@@ -255,7 +253,10 @@ fun GeneratedBorderBand(
                     h to { u, v -> Offset(w - c - (v - 0.5f) * bandH, u) },
                 )
 
-                val band = Path()
+                // Pattern strokes stay hairline; rails and channel mouths
+                // carry rule weight so the band reads as a tooled channel.
+                val hairBand = Path()
+                val ruleBand = Path()
                 val dotCenters = ArrayList<Pair<Offset, Float>>()
                 for ((sideLen, place) in sides) {
                     // Whole periods between the two seals; the period
@@ -267,11 +268,12 @@ fun GeneratedBorderBand(
                     for (k in 0 until tiles) {
                         val u0 = bandStart + k * (run / tiles)
                         for (s in spec.strokes) {
+                            val path = if (s.weight == StrokeWeight.Rule) ruleBand else hairBand
                             s.points.forEachIndexed { i, p ->
                                 val pt = place(u0 + (p.x * stretch).toFloat(), p.y.toFloat())
-                                if (i == 0) band.moveTo(pt.x, pt.y) else band.lineTo(pt.x, pt.y)
+                                if (i == 0) path.moveTo(pt.x, pt.y) else path.lineTo(pt.x, pt.y)
                             }
-                            if (s.closed) band.close()
+                            if (s.closed) path.close()
                         }
                         for (d in spec.dots) {
                             dotCenters.add(
@@ -288,21 +290,22 @@ fun GeneratedBorderBand(
                         val tipAt = place(point, 0.5f)
                         for (v in floatArrayOf(0f, 1f)) {
                             val railEnd = place(mouth, v)
-                            band.moveTo(railEnd.x, railEnd.y)
-                            band.lineTo(tipAt.x, tipAt.y)
+                            ruleBand.moveTo(railEnd.x, railEnd.y)
+                            ruleBand.lineTo(tipAt.x, tipAt.y)
                         }
                     }
                 }
-                val stroke = Stroke(width = 1.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val hairStroke = Stroke(width = 1.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val ruleStroke = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
 
                 onDrawBehind {
-                    val a = borderAlpha(build.value)
-                    if (a <= 0f) return@onDrawBehind
                     val gold = goldBrush(brightGold, deepGold, sheen.value.coerceIn(0f, 1f))
-                    translate(0.6f, 0.6f) { drawPath(band, embossDark, style = stroke, alpha = a * 0.7f) }
-                    translate(-0.6f, -0.6f) { drawPath(band, embossLight, style = stroke, alpha = a * 0.7f) }
-                    drawPath(band, gold, style = stroke, alpha = a)
-                    for ((center, r) in dotCenters) drawCircle(gold, radius = r, center = center, alpha = a)
+                    for ((band, stroke) in listOf(hairBand to hairStroke, ruleBand to ruleStroke)) {
+                        translate(0.6f, 0.6f) { drawPath(band, embossDark, style = stroke, alpha = 0.7f) }
+                        translate(-0.6f, -0.6f) { drawPath(band, embossLight, style = stroke, alpha = 0.7f) }
+                        drawPath(band, gold, style = stroke)
+                    }
+                    for ((center, r) in dotCenters) drawCircle(gold, radius = r, center = center)
                 }
             },
     )
