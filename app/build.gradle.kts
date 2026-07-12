@@ -18,8 +18,8 @@ android {
 
     defaultConfig {
         applicationId = "com.beautifulquran"
-        minSdk = 26
-        targetSdk = 35
+        minSdk = 30
+        targetSdk = 37
         versionCode = 3
         versionName = "0.2"
     }
