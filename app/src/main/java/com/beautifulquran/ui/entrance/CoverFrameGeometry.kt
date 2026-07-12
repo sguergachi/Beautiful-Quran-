@@ -54,7 +54,9 @@ fun coverFrameGeometry(
 ): CoverFrameGeometry {
     val minInset = 22f * density
     val maxInset = 40f * density
-    val ruleGap = 14f * density
+    // The border zone between the two rules carries the generated frieze —
+    // a real mushaf border band, not a pinstripe — so the gap is generous.
+    val ruleGap = 26f * density
     // Sharp-cornered surfaces still need a designed frame; invent a modest
     // radius so the gilt rule does not collapse to a hard rectangle.
     val fallbackR = 36f * density
@@ -65,9 +67,9 @@ fun coverFrameGeometry(
     val outerInset = (designR * 0.48f)
         .coerceIn(minInset, maxInset)
         .coerceAtMost(designR * 0.55f)
-    // Keep the inner rule concentric too: never eat the whole remaining curve.
-    val innerInset = (outerInset + ruleGap)
-        .coerceAtMost(maxOf(outerInset + density, designR * 0.85f))
+    // The inner rule sits the full band gap inside; concentric() floors its
+    // corner radius at zero when the curve is used up.
+    val innerInset = outerInset + ruleGap
 
     // Corner seals: ~70% of the outer margin. Floor at 18 dp when the
     // margin can hold it; on tight radii, stay inside the available inset.

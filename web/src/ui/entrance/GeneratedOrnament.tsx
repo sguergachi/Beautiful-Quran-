@@ -62,31 +62,42 @@ function pathD(stroke: OrnamentStroke, scale: number): string {
 interface RosetteProps {
   spec: RosetteSpec
   className: string
+  /**
+   * Ink-in the medallion stroke by stroke as `built` flips (the ceremony's
+   * illumination). Corner seals are part of the tooled binding instead —
+   * pass `animated={false}` to render them complete from the first frame,
+   * matching Android's static `GeneratedCornerSeals`.
+   */
   built: boolean
+  animated?: boolean
   /** Stroke widths in viewBox (200) units — seals render small, so thicker. */
   ruleWidth?: number
   hairWidth?: number
 }
 
 /**
- * A generated rosette (medallion or corner seal) as an SVG that inks itself
- * in: each stroke is a unit-dash path whose offset transitions 1 → 0 inside
- * its own [birth, birth+span] window of the build; pearls pop in on opacity
- * at their birth. Emboss copies ride the same reveal.
+ * A generated rosette (medallion or corner seal) as an SVG. When [animated]
+ * (the default), each stroke is a unit-dash path whose offset transitions
+ * 1 → 0 inside its own [birth, birth+span] window of the build, and pearls
+ * pop in on opacity at their birth — the medallion's illumination. Corner
+ * seals render with `animated={false}`: fully formed, no transition, part
+ * of the binding rather than the ink wash. Emboss copies ride the same
+ * reveal either way.
  */
 export function GeneratedRosette({
   spec,
   className,
   built,
+  animated = true,
   ruleWidth = 2.2,
   hairWidth = 1,
 }: RosetteProps) {
   const gradId = useId()
-  const reduced = prefersReducedMotion()
+  const reduced = prefersReducedMotion() || !animated
 
   const strokeStyle = (s: OrnamentStroke): React.CSSProperties => ({
     strokeDasharray: 1,
-    strokeDashoffset: built ? 0 : 1,
+    strokeDashoffset: !animated || built ? 0 : 1,
     transition: reduced
       ? undefined
       : `stroke-dashoffset ${Math.round(s.span * ORNAMENT_BUILD_MS)}ms linear ${Math.round(
@@ -135,7 +146,7 @@ export function GeneratedRosette({
           r={d.radius * 200}
           fill={`url(#${gradId})`}
           style={{
-            opacity: built ? 1 : 0,
+            opacity: !animated || built ? 1 : 0,
             transition: reduced
               ? undefined
               : `opacity 200ms linear ${Math.round(d.birth * ORNAMENT_BUILD_MS)}ms`,
@@ -199,15 +210,18 @@ export function borderBandBackground(border: BorderSpec, vertical: boolean): {
   backgroundImage: string
 } {
   const p = border.period
-  // Hairline ≈ 1px at a ~11px band, in band units.
-  const lw = 0.09
+  // Pattern strokes stay hairline; the rule-weight edge rails run heavier
+  // so the band reads as a tooled channel (Android: 1dp vs 1.5dp).
+  const hairW = 0.09
+  const ruleW = 0.135
   const map = (x: number, y: number) =>
     vertical ? `${y.toFixed(4)} ${x.toFixed(4)}` : `${x.toFixed(4)} ${y.toFixed(4)}`
   const paths = border.strokes
     .map((s) => {
       const parts = s.points.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${map(pt.x, pt.y)}`)
       if (s.closed) parts.push('Z')
-      return `<path d='${parts.join(' ')}'/>`
+      const w = s.weight === 'rule' ? ruleW : hairW
+      return `<path d='${parts.join(' ')}' stroke-width='${w}'/>`
     })
     .join('')
   const dots = border.dots
@@ -230,7 +244,7 @@ export function borderBandBackground(border: BorderSpec, vertical: boolean): {
   }
   const svg =
     `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${w} ${h}'>` +
-    `<defs><g id='b' fill='none' stroke-width='${lw}' stroke-linejoin='round' stroke-linecap='round'>${paths}${dots}</g></defs>` +
+    `<defs><g id='b' fill='none' stroke-linejoin='round' stroke-linecap='round'>${paths}${dots}</g></defs>` +
     uses.join('') +
     `</svg>`
   return { backgroundImage: svgDataUri(svg) }
@@ -245,7 +259,7 @@ function chamferBackground(taper: number, bandH: number, vertical: boolean): str
     : `M ${taper.toFixed(2)} 0 L 0 ${(bandH / 2).toFixed(2)} L ${taper.toFixed(2)} ${bandH.toFixed(2)}`
   const svg =
     `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${w.toFixed(2)} ${h.toFixed(2)}'>` +
-    `<path d='${d}' fill='none' stroke='rgba(217,180,74,0.85)' stroke-width='1' stroke-linejoin='round' stroke-linecap='round'/>` +
+    `<path d='${d}' fill='none' stroke='rgba(217,180,74,0.85)' stroke-width='1.4' stroke-linejoin='round' stroke-linecap='round'/>` +
     `</svg>`
   return svgDataUri(svg)
 }
@@ -257,13 +271,13 @@ function chamferBackground(taper: number, bandH: number, vertical: boolean): str
  * onto that point, so border and corner ornament are one continuous piece
  * of geometry. Each run fits a whole number of periods (the period
  * stretches a little), so the pattern arrives at every corner at the same
- * phase. Far sides are mirrored so the pattern faces inward. Washes in as
- * the build passes the medallion's crescendo.
+ * phase. Far sides are mirrored so the pattern faces inward. The band is
+ * the binding's tooling, not illumination — it is complete from the first
+ * frame, never animated (matches Android's static `GeneratedBorderBand`).
  */
 export function GeneratedBorder({
   border,
   sealTip,
-  built,
   layout,
   width,
   height,
@@ -271,7 +285,6 @@ export function GeneratedBorder({
   border: BorderSpec
   /** Petal-tip radius of the corner seal (RosetteSpec.tipRadius). */
   sealTip: number
-  built: boolean
   layout: CoverLayout
   width: number
   height: number
@@ -291,7 +304,6 @@ export function GeneratedBorder({
   }
   const hPeriod = fitted(width)
   const vPeriod = fitted(height)
-  const on = built ? ' entrance-border--on' : ''
   const start = `${bandStart.toFixed(2)}px`
 
   const hChamfer = chamferBackground(taper, bandH, false)
@@ -325,7 +337,7 @@ export function GeneratedBorder({
           {(['top', 'bottom'] as const).map((side) => (
             <div
               key={side}
-              className={`entrance-border entrance-border--${side}${on}`}
+              className={`entrance-border entrance-border--${side}`}
               style={{
                 ...horizontal,
                 left: start,
@@ -341,7 +353,7 @@ export function GeneratedBorder({
           {(['left', 'right'] as const).map((side) => (
             <div
               key={side}
-              className={`entrance-border entrance-border--${side}${on}`}
+              className={`entrance-border entrance-border--${side}`}
               style={{
                 ...verticalBg,
                 top: start,
@@ -355,7 +367,7 @@ export function GeneratedBorder({
       {mouths.map(({ style, flip }, i) => (
         <div
           key={i}
-          className={`entrance-chamfer${built ? ' entrance-chamfer--on' : ''}`}
+          className="entrance-chamfer"
           style={flip ? { ...style, transform: flip } : style}
         />
       ))}

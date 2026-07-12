@@ -196,15 +196,19 @@ image, so it is crisp at any density and nearly free to render.
   yields the interlaced polygons — the khatam is {8/2}) and Hankin's
   polygons-in-contact method (rays from tile-edge midpoints at a sampled
   contact angle, over square, octagon-square 4.8.8, and diamond tilings).
-  Border friezes come from the four band grammars of tooled bindings:
-  doubled chevron, two-strand cable with pearl eyes, Hankin strip, and
-  lozenge chain. The ornament **builds in real time** — strokes ink
-  themselves in along their length across ~3.4 s, field first, medallion
-  outside-in, then border and seals — so the cover is drawn before the
-  reader's eyes, not stamped. One absolute rule: no composition may read
-  as a hexagram — star indices that decompose into triangles ({12/4}),
-  6-fold seals, and 6-fold field tilings are all excluded by construction
-  and guarded by tests on both platforms.
+  Border friezes come from five band grammars of tooled bindings: a zigzag
+  lattice with pearls in its diamonds, a two-strand cable with pearl eyes,
+  a Hankin strip, a nested lozenge chain, and a khatam chain of small
+  eight-fold stars linked by diamonds. The **medallion and field build in
+  real time** — strokes ink themselves in along their length across ~3.4 s,
+  field first, then medallion outside-in — so the illumination is drawn
+  before the reader's eyes, not stamped. The **border and corner seals are
+  static**: they are the binding's tooling, not illumination, so they read
+  complete from the very first frame, the same way the leather and its
+  gilt rules already do. One absolute rule: no composition may read as a
+  hexagram — star indices that decompose into triangles ({12/4}), 6-fold
+  seals, and 6-fold field tilings are all excluded by construction and
+  guarded by tests on both platforms.
 - **Gilding.** Gold is never a flat color. Gilded elements (the surah
   rosette, ayah number marks, the home mark) carry a three-stop leaf
   gradient (deep bronze → bright gilt → deep bronze). On the reader, the
@@ -248,18 +252,19 @@ three moments:
 
 1. **Arrival.** The board fades in from the system splash: deep-green
    leather (fixed across themes — a bound book keeps its own boards, colors
-   in `Theme.kt`'s `Cover*` values), tooled with this launch's generated
-   Hankin field at whisper ink, framed in a doubled gilt rule
+   in `Theme.kt`'s `Cover*` values), framed in a doubled gilt rule
    (`MushafCoverFrame`) with the generated border frieze running between
    the rules — each side is a railed channel fitting a whole number of
    pattern periods, and its mouth tapers onto the corner seal's petal tip
    (each seal wears a four-petal ogee bezel whose tips aim down the band
    axes), so border and corner ornaments are one continuous piece of
-   geometry — and carrying the
-   generated medallion (`GeneratedMedallion`) with the title
-   **القرآن الكريم** beneath it in the Hafs hand, leafed in gold and
-   written in with the letter wash. The whole ornament inks itself onto
-   the leather in real time during arrival.
+   geometry. The frame, border, and seals are the binding's tooling and
+   render complete on the very first frame — no wash, no fade. Tooled
+   *inside* that frame, this launch's generated Hankin field (whisper ink)
+   and the generated medallion (`GeneratedMedallion`) with the title
+   **القرآن الكريم** beneath it in the Hafs hand, leafed in gold, ink
+   themselves onto the leather in real time as the ceremony arrives —
+   the illumination, drawn before the reader's eyes.
    The frame's inset and corner radii are derived from the display's
    rounded corners (`WindowInsets.getRoundedCorner`, via
    `coverFrameGeometry`) so the gilt rule is concentric with the phone's

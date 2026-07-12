@@ -2920,12 +2920,13 @@ select {
   opacity: 1;
 }
 
-/* The generated border frieze between the two gilt rules. Each side's
-   band runs rim-to-rim between the corner seals' rings (inline left/right
-   or top/bottom from GeneratedBorder, which also fits a whole number of
-   pattern periods into the run); far sides are mirrored so the pattern
-   faces inward; short gold stems tie the rings to the bands' first nodes.
-   Fades up as the medallion's build crescendos. */
+/* The generated border frieze between the two gilt rules — the binding's
+   tooling, not illumination, so it is complete from the first frame, never
+   animated (matches Android's static GeneratedBorderBand). Each side's band
+   is a railed channel (inline left/right or top/bottom from GeneratedBorder,
+   which fits a whole number of pattern periods into the run) whose mouth
+   tapers onto the corner seal's petal tip; far sides are mirrored so the
+   pattern faces inward. */
 .entrance-borderband {
   position: absolute;
   inset: 0;
@@ -2935,12 +2936,6 @@ select {
 .entrance-border {
   position: absolute;
   background-position: 0 0;
-  opacity: 0;
-  transition: opacity 1190ms linear 1360ms;
-}
-
-.entrance-border--on {
-  opacity: 1;
 }
 
 .entrance-border--top,
@@ -2974,17 +2969,12 @@ select {
 }
 
 /* Channel mouths: the band's two rails converging onto each corner seal's
-   petal tip (SVG backgrounds and positions arrive inline). */
+   petal tip (SVG backgrounds and positions arrive inline). Static, like
+   the rest of the border. */
 .entrance-chamfer {
   position: absolute;
   background-repeat: no-repeat;
   background-size: 100% 100%;
-  opacity: 0;
-  transition: opacity 1190ms linear 1360ms;
-}
-
-.entrance-chamfer--on {
-  opacity: 1;
 }
 
 .entrance-frame {

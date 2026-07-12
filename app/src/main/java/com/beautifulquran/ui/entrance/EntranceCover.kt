@@ -318,7 +318,6 @@ fun EntranceCover(
                 embossDark = accents.embossDark,
                 embossLight = accents.embossLight,
                 sheen = sheen,
-                build = buildState,
             )
             GeneratedCornerSeals(
                 spec = ornament.cornerSeal,
@@ -328,7 +327,6 @@ fun EntranceCover(
                 embossDark = accents.embossDark,
                 embossLight = accents.embossLight,
                 sheen = sheen,
-                build = buildState,
             )
 
             val medallionSize =

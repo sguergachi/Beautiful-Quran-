@@ -97,6 +97,7 @@ Requires **JDK 21**. No Android device/emulator is needed for tests.
 | Doc | Read it when |
 |---|---|
 | `docs/ARCHITECTURE.md` | First stop for any change — pipeline, sync engine, modules, conventions |
+| `docs/COMPLEXITY.md` | Complexity hotspots, subsystem ownership, and safe simplification roadmap |
 | `docs/HIGHLIGHT_ENGINE.md` | The pure word-sync engine — karaoke model, binary search, repeat/high-water logic |
 | `docs/DESIGN.md` | Any UI/visual change — the paper metaphor and its hard rules |
 | `docs/PERFORMANCE.md` | Anything touching the reader, scrolling, or the highlight loop |
