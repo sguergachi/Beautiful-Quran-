@@ -2352,14 +2352,14 @@ select {
 }
 
 .ink-bleed-inner {
-  max-width: 34rem;
+  max-width: 42rem;
   margin: 0 auto;
 }
 
 .ink-bleed-chrome {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 0.5rem;
+  margin-bottom: clamp(0.25rem, 2vh, 1rem);
 }
 
 @keyframes bleed-in {
@@ -2385,139 +2385,195 @@ select {
   }
 }
 
-/*
- * Root Word Viewer typography. Hierarchy mirrors the Android reference
- * (ui/rootviewer/RootViewerScreen.kt): a centred "this word" moment up top,
- * then start-aligned, labelled reference sections below — spacing, size,
- * and ink strength only (no rules/cards). Quiet uppercase eyebrow labels
- * match the existing `.settings-section h2` convention.
- */
-.ink-bleed-word {
+/* Root lexicon: an editorial page, never a dashboard. */
+.root-opening {
   text-align: center;
-  padding: 0.15rem 0 0.4rem;
+  max-width: 35rem;
+  margin: 0 auto;
+  padding: clamp(0.25rem, 2vh, 1.2rem) 0 0;
 }
 
 .ink-bleed .arabic-lg {
   font-family: var(--font-arabic);
-  font-size: clamp(2.1rem, 7vw, 2.6rem);
-  line-height: 1.5;
+  font-size: clamp(3rem, 10vw, 4.8rem);
+  line-height: 1.3;
   direction: rtl;
   margin: 0;
 }
 
 .ink-bleed-word-translation {
-  margin: 0.25rem 0 0;
-  color: color-mix(in srgb, var(--ink) 78%, transparent);
-  font-size: 1.05rem;
+  margin: 0.15rem 0 0;
+  color: color-mix(in srgb, var(--ink) 68%, transparent);
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 4vw, 1.55rem);
+  font-style: italic;
 }
 
-.ink-bleed-section {
-  margin-top: 2rem;
+.root-opening-analysis {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.75fr) minmax(0, 1.25fr);
+  align-items: center;
+  gap: clamp(1.25rem, 5vw, 3rem);
+  margin-top: clamp(2rem, 6vh, 3.5rem);
+  text-align: start;
 }
 
 .ink-bleed-label {
-  margin: 0 0 0.4rem;
+  display: block;
+  margin: 0 0 0.25rem;
   color: var(--ink-muted);
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
   font-weight: 500;
 }
 
+.root-opening-radicals {
+  text-align: end;
+}
+
 .ink-bleed-root {
+  display: block;
   font-family: var(--font-arabic);
   font-weight: 400;
-  font-size: clamp(1.75rem, 5.5vw, 2.15rem);
+  font-size: clamp(1.65rem, 5vw, 2.15rem);
   line-height: 1.4;
   direction: rtl;
-  margin: 0;
   color: var(--ink);
 }
 
-.ink-bleed-form-pos {
+.root-opening-form p {
   margin: 0;
-  font-size: 1.1rem;
-  color: var(--ink);
+  color: color-mix(in srgb, var(--ink) 72%, transparent);
+  font-size: 0.95rem;
+  line-height: 1.55;
 }
 
-.ink-bleed-lemma {
-  margin: 0.6rem 0 0;
-  display: flex;
-  align-items: baseline;
-  gap: 0.55rem;
-}
-
-.ink-bleed-lemma-label {
-  flex-shrink: 0;
-  color: var(--ink-muted);
-  font-size: 0.78rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.ink-bleed-lemma-ar {
-  font-family: var(--font-arabic);
-  font-size: 1.1rem;
-  direction: rtl;
-  color: color-mix(in srgb, var(--ink) 78%, transparent);
-}
-
-.ink-bleed-lemma-count,
-.ink-bleed-analysis-count {
-  margin: 0.2rem 0 0;
+.root-opening-form p + p {
   color: var(--ink-muted);
   font-size: 0.84rem;
 }
 
+.root-opening-lemma {
+  margin-inline-end: 0.65rem;
+  color: var(--ink);
+  font-family: var(--font-arabic);
+  font-size: 1.25rem;
+}
+
+.root-opening-frequency {
+  margin: clamp(1.5rem, 4vh, 2.4rem) 0 0;
+  color: color-mix(in srgb, var(--ink-muted) 78%, transparent);
+  font-size: 0.78rem;
+  letter-spacing: 0.015em;
+}
+
+.root-opening-frequency span {
+  padding: 0 0.35rem;
+  color: var(--gold-deep);
+}
+
+.root-trail {
+  margin-top: clamp(3.5rem, 9vh, 5.5rem);
+}
+
+.root-section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1.35rem;
+}
+
+.root-section-heading h2 {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: clamp(1.65rem, 5vw, 2.15rem);
+  font-weight: 400;
+  line-height: 1.05;
+}
+
+.root-section-heading > p {
+  margin: 0 0 0.1rem;
+  flex-shrink: 0;
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+}
+
 .root-lemma-list {
-  margin-top: 0.55rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: clamp(1.5rem, 6vw, 3.5rem);
+  row-gap: 1.15rem;
 }
 
 .root-lemma-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.45rem 0;
-  color: color-mix(in srgb, var(--ink) 82%, transparent);
+  position: relative;
+  min-width: 0;
+  padding-inline-end: 2.5rem;
+}
+
+.root-lemma-row[data-current='true']::before {
+  content: '';
+  position: absolute;
+  top: 0.45rem;
+  inset-inline-start: -0.65rem;
+  width: 0.22rem;
+  height: 0.22rem;
+  border-radius: 50%;
+  background: var(--gold);
 }
 
 .root-lemma-ar {
+  overflow: hidden;
+  color: color-mix(in srgb, var(--ink) 84%, transparent);
   font-family: var(--font-arabic);
-  font-size: 1.25rem;
+  font-size: 1.3rem;
   line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .root-lemma-pos {
+  overflow: hidden;
   color: var(--ink-muted);
-  font-size: 0.78rem;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .root-lemma-row[data-current='true'] .root-lemma-pos {
-  color: var(--gold);
+  color: color-mix(in srgb, var(--gold) 82%, transparent);
 }
 
 .root-lemma-frequency {
-  color: var(--ink-muted);
-  font-size: 0.88rem;
+  position: absolute;
+  top: 0.25rem;
+  inset-inline-end: 0;
+  color: color-mix(in srgb, var(--ink-muted) 75%, transparent);
+  font-size: 0.75rem;
 }
 
-.ink-bleed-count {
-  margin: 0;
-  font-size: 1.1rem;
-  color: var(--ink);
-}
-
-.ink-bleed .muted {
-  margin: 0.2rem 0 0;
-  color: var(--ink-muted);
+.root-text-action {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  margin-top: 0.8rem;
+  padding: 0.35rem 0;
+  color: color-mix(in srgb, var(--gold) 82%, transparent);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-style: italic;
+  text-align: start;
 }
 
 .ink-bleed-attribution {
-  margin: 2.5rem 0 0;
-  color: color-mix(in srgb, var(--ink-muted) 85%, transparent);
-  font-size: 0.82rem;
+  margin: 5rem 0 0;
+  color: color-mix(in srgb, var(--ink-muted) 68%, transparent);
+  font-size: 0.76rem;
   line-height: 1.5;
+  text-align: center;
 }
 
 .ink-bleed-attribution a {
@@ -2543,11 +2599,11 @@ select {
 }
 
 .occurrence-list {
-  margin-top: 0.9rem;
+  margin-top: 0;
 }
 
 .occurrence-surah {
-  margin-top: 1.15rem;
+  margin-top: 2.2rem;
 }
 
 .occurrence-surah-heading {
@@ -2555,21 +2611,33 @@ select {
   justify-content: space-between;
   align-items: baseline;
   gap: 1rem;
-  color: color-mix(in srgb, var(--ink) 78%, transparent);
-  font-size: 0.95rem;
+  color: color-mix(in srgb, var(--ink) 82%, transparent);
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+}
+
+.occurrence-surah-heading i {
+  margin-inline-end: 0.35rem;
+  color: var(--gold);
+  font-size: 0.8rem;
+  font-style: normal;
 }
 
 .occurrence-surah-heading span:last-child {
   color: var(--ink-muted);
-  font-size: 0.76rem;
+  font-family: var(--font-body);
+  font-size: 0.7rem;
   white-space: nowrap;
 }
 
 .occurrence {
-  display: block;
+  display: grid;
+  grid-template-columns: 4.2rem minmax(0, 1fr);
+  gap: 1rem;
+  align-items: baseline;
   width: 100%;
   text-align: start;
-  padding: 0.75rem 0;
+  padding: 0.65rem 0;
   min-height: 48px;
 }
 
@@ -2578,11 +2646,7 @@ select {
 }
 
 .occurrence-expand {
-  min-height: 44px;
-  padding: 0.6rem 0;
-  color: var(--gold);
-  font-size: 0.88rem;
-  text-align: start;
+  margin-top: 0.25rem;
 }
 
 @media (hover: hover) {
@@ -2592,8 +2656,9 @@ select {
 }
 
 .occurrence .ref {
-  color: var(--gold);
-  font-size: 0.85rem;
+  color: color-mix(in srgb, var(--gold) 80%, transparent);
+  font-size: 0.78rem;
+  white-space: nowrap;
 }
 
 .occurrence-row {
@@ -2601,7 +2666,8 @@ select {
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
-  margin-top: 0.2rem;
+  min-width: 0;
+  margin: 0;
 }
 
 .occurrence-ar {
@@ -2623,6 +2689,34 @@ select {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .root-opening-analysis {
+    grid-template-columns: 6rem minmax(0, 1fr);
+    gap: 1.25rem;
+  }
+
+  .root-lemma-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .root-section-heading {
+    align-items: start;
+  }
+
+  .root-section-heading > p {
+    margin-top: 1.35rem;
+  }
+
+  .occurrence {
+    grid-template-columns: 3.5rem minmax(0, 1fr);
+    gap: 0.65rem;
+  }
+
+  .occurrence-row {
+    gap: 0.65rem;
+  }
 }
 
 .scroll-with-float {

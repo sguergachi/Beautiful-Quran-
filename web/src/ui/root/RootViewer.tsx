@@ -6,6 +6,7 @@ import { featureSummary, posLabel, spacedRoot } from './morphologyLabels'
 /** Exit hole duration — keep in sync with `.ink-bleed[data-closing]` in styles.css. */
 const BLEED_OUT_MS = 420
 export const ROOT_OCCURRENCE_PREVIEW_LIMIT = 5
+const ROOT_LEMMA_PREVIEW_LIMIT = 6
 
 export interface RootOccurrenceSection {
   surahId: number
@@ -58,12 +59,20 @@ export function RootViewer() {
 
 function RootViewerBleed({ closing, rv }: { closing: boolean; rv: RootViewerState }) {
   const [expandedSurahs, setExpandedSurahs] = useState<Set<number>>(() => new Set())
+  const [lemmasExpanded, setLemmasExpanded] = useState(false)
   const sections = useMemo(() => rootOccurrenceSections(rv.occurrences), [rv.occurrences])
   const lemmaCount = rv.lemmas
     .filter((entry) => entry.lemma === rv.lemma)
     .reduce((total, entry) => total + entry.occurrenceCount, 0)
 
-  useEffect(() => setExpandedSurahs(new Set()), [rv.root])
+  useEffect(() => {
+    setExpandedSurahs(new Set())
+    setLemmasExpanded(false)
+  }, [rv.root])
+
+  const visibleLemmas = lemmasExpanded
+    ? rv.lemmas
+    : rv.lemmas.slice(0, ROOT_LEMMA_PREVIEW_LIMIT)
 
   return (
     <div
@@ -89,84 +98,83 @@ function RootViewerBleed({ closing, rv }: { closing: boolean; rv: RootViewerStat
           </button>
         </div>
 
-        <div className="ink-bleed-word">
+        <header className="root-opening">
           <p className="arabic-lg" lang="ar" dir="rtl">
             {rv.arabic}
           </p>
           {rv.translation ? (
             <p className="ink-bleed-word-translation">{rv.translation}</p>
           ) : null}
-        </div>
-
-        {rv.root ? (
-          <section className="ink-bleed-section">
-            <p className="ink-bleed-label">Root</p>
-            <h2 className="ink-bleed-root" lang="ar" dir="rtl">
-              {spacedRoot(rv.root)}
-            </h2>
-          </section>
-        ) : null}
-
-        {rv.pos || rv.lemma ? (
-          <section className="ink-bleed-section">
-            <p className="ink-bleed-label">This form</p>
-            {rv.pos ? <p className="ink-bleed-form-pos">{posLabel(rv.pos)}</p> : null}
-            {featureSummary(rv.features) ? (
-              <p className="muted">{featureSummary(rv.features)}</p>
-            ) : null}
-            {rv.lemma ? (
-              <>
-                <p className="ink-bleed-lemma">
-                  <span className="ink-bleed-lemma-label">Lemma</span>
-                  <span className="ink-bleed-lemma-ar" lang="ar" dir="rtl">
-                    {rv.lemma}
-                  </span>
+          {(rv.root || rv.lemma || rv.pos) ? (
+            <div className="root-opening-analysis">
+              {rv.root ? (
+                <div className="root-opening-radicals">
+                  <span className="ink-bleed-label">Root</span>
+                  <span className="ink-bleed-root" lang="ar" dir="rtl">{spacedRoot(rv.root)}</span>
+                </div>
+              ) : null}
+              <div className="root-opening-form">
+                <p>
+                  {rv.lemma ? <span className="root-opening-lemma" lang="ar" dir="rtl">{rv.lemma}</span> : null}
+                  {rv.pos ? <span>{posLabel(rv.pos)}</span> : null}
                 </p>
-                {lemmaCount > 0 ? (
-                  <p className="ink-bleed-lemma-count">
-                    {lemmaCount === 1
-                      ? 'This lemma occurs once under this root'
-                      : `This lemma occurs ${lemmaCount} times under this root`}
-                  </p>
-                ) : null}
-              </>
-            ) : null}
-          </section>
-        ) : null}
+                {featureSummary(rv.features) ? <p>{featureSummary(rv.features)}</p> : null}
+              </div>
+            </div>
+          ) : null}
+          {(rv.occurrenceCount > 0 || lemmaCount > 0) ? (
+            <p className="root-opening-frequency">
+              {rv.occurrenceCount > 0
+                ? `Root annotated ${rv.occurrenceCount === 1 ? 'once' : `${rv.occurrenceCount} times`}`
+                : ''}
+              {rv.occurrenceCount > 0 && lemmaCount > 0 ? <span aria-hidden="true"> · </span> : null}
+              {lemmaCount > 0
+                ? `this lemma ${lemmaCount === 1 ? 'once' : `${lemmaCount} times`}`
+                : ''}
+            </p>
+          ) : null}
+        </header>
 
         {rv.lemmas.length > 0 ? (
-          <section className="ink-bleed-section">
-            <p className="ink-bleed-label">Lemmas under this root</p>
-            <p className="ink-bleed-analysis-count">
-              {rv.lemmas.length} corpus {rv.lemmas.length === 1 ? 'analysis' : 'analyses'}
-            </p>
+          <section className="root-trail root-lemma-section">
+            <div className="root-section-heading">
+              <div>
+                <p className="ink-bleed-label">Word family</p>
+                <h2>Forms traced to this root</h2>
+              </div>
+              <p>{rv.lemmas.length} corpus {rv.lemmas.length === 1 ? 'analysis' : 'analyses'}</p>
+            </div>
             <div className="root-lemma-list">
-              {rv.lemmas.map((entry) => {
+              {visibleLemmas.map((entry) => {
                 const current = entry.lemma === rv.lemma && entry.pos === rv.pos
                 return (
                   <div className="root-lemma-row" data-current={current ? 'true' : undefined} key={`${entry.lemma}:${entry.pos}`}>
-                    <div>
-                      <div className="root-lemma-ar" lang="ar" dir="rtl">{entry.lemma}</div>
-                      <div className="root-lemma-pos">
-                        {posLabel(entry.pos)}{current ? ' · This word' : ''}
-                      </div>
-                    </div>
-                    <span className="root-lemma-frequency">{entry.occurrenceCount}</span>
+                    <div className="root-lemma-ar" lang="ar" dir="rtl">{entry.lemma}</div>
+                    <div className="root-lemma-pos">{posLabel(entry.pos)}{current ? ' · selected' : ''}</div>
+                    <span className="root-lemma-frequency">
+                      {entry.occurrenceCount === 1 ? 'once' : `${entry.occurrenceCount}×`}
+                    </span>
                   </div>
                 )
               })}
             </div>
+            {rv.lemmas.length > ROOT_LEMMA_PREVIEW_LIMIT ? (
+              <button type="button" className="root-text-action" onClick={() => setLemmasExpanded((value) => !value)}>
+                {lemmasExpanded ? 'Gather the family' : `Follow ${rv.lemmas.length - ROOT_LEMMA_PREVIEW_LIMIT} more forms`}
+              </button>
+            ) : null}
           </section>
         ) : null}
 
         {rv.occurrenceCount > 0 ? (
-          <section className="ink-bleed-section">
-            <p className="ink-bleed-label">In the Quran</p>
-            <p className="ink-bleed-count">
-              {rv.occurrenceCount === 1
-                ? 'Appears once'
-                : `Appears ${rv.occurrenceCount} times`}
-            </p>
+          <section className="root-trail root-concordance">
+            <div className="root-section-heading">
+              <div>
+                <p className="ink-bleed-label">Concordance</p>
+                <h2>Where the root appears</h2>
+              </div>
+              <p>{rv.occurrenceCount === 1 ? 'one reference' : `${rv.occurrenceCount} references`}</p>
+            </div>
             <div className="occurrence-list">
               {sections.map((section) => {
                 const expanded = expandedSurahs.has(section.surahId)
@@ -177,8 +185,8 @@ function RootViewerBleed({ closing, rv }: { closing: boolean; rv: RootViewerStat
                 return (
                   <section className="occurrence-surah" key={section.surahId}>
                     <div className="occurrence-surah-heading">
-                      <span>{section.surahId} · {section.surahName}</span>
-                      <span>{section.occurrences.length} {section.occurrences.length === 1 ? 'reference' : 'references'}</span>
+                      <span><i>{section.surahId}</i> {section.surahName}</span>
+                      <span>{section.occurrences.length}</span>
                     </div>
                     {visible.map((o) => {
                       const current = o.surahId === rv.surahId && o.ayahNumber === rv.ayah && o.position === rv.position
@@ -193,9 +201,7 @@ function RootViewerBleed({ closing, rv }: { closing: boolean; rv: RootViewerStat
                             appStore.openSurah(o.surahId, o.ayahNumber)
                           }}
                         >
-                          <div className="ref">
-                            Ayah {o.surahId}:{o.ayahNumber}{current ? ' · Opened word' : ''}
-                          </div>
+                          <div className="ref">{o.surahId}:{o.ayahNumber}{current ? ' · here' : ''}</div>
                           <div className="occurrence-row">
                             <span className="occurrence-ar" lang="ar" dir="rtl">{o.arabic}</span>
                             {o.translation ? <span className="occurrence-tr">{o.translation}</span> : null}
@@ -206,7 +212,7 @@ function RootViewerBleed({ closing, rv }: { closing: boolean; rv: RootViewerStat
                     {hiddenCount > 0 || (expanded && section.occurrences.length > ROOT_OCCURRENCE_PREVIEW_LIMIT) ? (
                       <button
                         type="button"
-                        className="occurrence-expand"
+                        className="root-text-action occurrence-expand"
                         onClick={() => setExpandedSurahs((current) => {
                           const next = new Set(current)
                           if (expanded) next.delete(section.surahId)
@@ -214,7 +220,7 @@ function RootViewerBleed({ closing, rv }: { closing: boolean; rv: RootViewerStat
                           return next
                         })}
                       >
-                        {hiddenCount > 0 ? `Show ${hiddenCount} more` : 'Show fewer'}
+                        {hiddenCount > 0 ? `Read ${hiddenCount} more in ${section.surahName}` : 'Fold this chapter'}
                       </button>
                     ) : null}
                   </section>
