@@ -65,6 +65,7 @@ private const val SETTLE_AMP_DP = 3.2f  // final flutter amplitude
 private const val NUB_STROKE_DP = 1.25f // idle outline: affordance, not a mark
 private const val OVERSHOOT = 0.06f     // tip past the resting length, then spring back
 private const val SOLID_ALPHA = 0.92f
+private const val IDLE_NUB_ALPHA = 0.4f // quiet affordance when just the tail is showing
 
 /** Gravity spill: slow peel, then accelerates, eases as length runs out. */
 private val UnfurlEasing = CubicBezierEasing(0.45f, 0.02f, 0.22f, 1f)
@@ -226,9 +227,9 @@ internal fun VerseBookmarkRibbon(
             val alpha = chrome * when {
                 showingRibbon && progress > 0.5f -> SOLID_ALPHA
                 showingRibbon -> SOLID_ALPHA * (0.55f + 0.45f * progress.coerceIn(0f, 1f))
-                // The inactive outline uses the opaque monochrome playback ink.
-                // Ruby remains exclusive to saved bookmarks.
-                else -> 1f
+                // The inactive outline uses the monochrome playback ink, faded
+                // to a quiet affordance. Ruby remains exclusive to saved bookmarks.
+                else -> IDLE_NUB_ALPHA
             }
 
             // Cloth wave while unfurling; settle flutter once the tip lands.
