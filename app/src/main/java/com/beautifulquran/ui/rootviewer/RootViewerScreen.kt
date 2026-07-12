@@ -33,7 +33,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.role
@@ -47,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.data.model.RootOccurrence
+import com.beautifulquran.data.model.RootLemmaSummary
 import com.beautifulquran.data.model.Word
 import com.beautifulquran.ui.theme.HafsFontFamily
 import com.beautifulquran.ui.theme.quietClickable
@@ -75,6 +78,9 @@ fun RootViewerScreen(
         derivedStateOf { listState.firstVisibleItemIndex > 0 }
     }
     val word = ui.word
+    var expandedSurahIds by remember(ui.morphology?.root) {
+        mutableStateOf(emptySet<Int>())
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -212,7 +218,49 @@ fun RootViewerScreen(
                                     fontSize = 18.sp,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                 )
+                                val lemmaCount = ui.lemmas
+                                    .filter { it.lemma == morph.lemma }
+                                    .sumOf { it.occurrenceCount }
+                                if (lemmaCount > 0) {
+                                    Spacer(Modifier.height(3.dp))
+                                    Text(
+                                        text = if (lemmaCount == 1) {
+                                            "This lemma occurs once under this root"
+                                        } else {
+                                            "This lemma occurs $lemmaCount times under this root"
+                                        },
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                                    )
+                                }
                             }
+                        }
+                    }
+
+                    if (ui.lemmas.isNotEmpty()) {
+                        item(key = "lemma-header") {
+                            Spacer(Modifier.height(32.dp))
+                            Text(
+                                text = "Lemmas under this root",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                            )
+                            Spacer(Modifier.height(5.dp))
+                            Text(
+                                text = "${ui.lemmas.size} corpus ${if (ui.lemmas.size == 1) "analysis" else "analyses"}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f),
+                            )
+                            Spacer(Modifier.height(8.dp))
+                        }
+                        items(
+                            items = ui.lemmas,
+                            key = { "lemma-${it.lemma}-${it.pos}" },
+                        ) { lemma ->
+                            LemmaRow(
+                                lemma = lemma,
+                                isCurrent = lemma.lemma == morph?.lemma && lemma.pos == morph.pos,
+                            )
                         }
                     }
 
@@ -236,17 +284,38 @@ fun RootViewerScreen(
                             )
                             Spacer(Modifier.height(16.dp))
                         }
-                        items(
-                            items = ui.occurrences,
-                            key = { "${it.surahId}:${it.ayahNumber}:${it.position}" },
-                        ) { occ ->
-                            OccurrenceRow(
-                                occurrence = occ,
-                                isCurrent = occ.surahId == ui.surahId &&
-                                    occ.ayahNumber == ui.ayah &&
-                                    occ.position == ui.word?.position,
-                                onClick = { onJumpToOccurrence(occ.surahId, occ.ayahNumber) },
-                            )
+                        rootOccurrenceSections(ui.occurrences, expandedSurahIds).forEach { section ->
+                            item(key = "surah-header-${section.surahId}") {
+                                OccurrenceSurahHeader(section)
+                            }
+                            items(
+                                items = section.visibleOccurrences,
+                                key = { "${it.surahId}:${it.ayahNumber}:${it.position}" },
+                            ) { occ ->
+                                OccurrenceRow(
+                                    occurrence = occ,
+                                    isCurrent = occ.surahId == ui.surahId &&
+                                        occ.ayahNumber == ui.ayah &&
+                                        occ.position == ui.word?.position,
+                                    onClick = { onJumpToOccurrence(occ.surahId, occ.ayahNumber) },
+                                )
+                            }
+                            if (section.hiddenCount > 0) {
+                                item(key = "surah-more-${section.surahId}") {
+                                    OccurrenceExpandRow(
+                                        text = "Show ${section.hiddenCount} more",
+                                        onClick = { expandedSurahIds = expandedSurahIds + section.surahId },
+                                    )
+                                }
+                            } else if (section.totalCount > ROOT_OCCURRENCE_PREVIEW_LIMIT) {
+                                item(key = "surah-less-${section.surahId}") {
+                                    OccurrenceExpandRow(
+                                        text = "Show fewer",
+                                        quiet = true,
+                                        onClick = { expandedSurahIds = expandedSurahIds - section.surahId },
+                                    )
+                                }
+                            }
                         }
                     }
 
@@ -263,6 +332,120 @@ fun RootViewerScreen(
             }
         }
     }
+}
+
+@Composable
+private fun LemmaRow(
+    lemma: RootLemmaSummary,
+    isCurrent: Boolean,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 7.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = lemma.lemma,
+                fontFamily = HafsFontFamily,
+                fontSize = 20.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isCurrent) 1f else 0.82f),
+            )
+            Text(
+                text = buildString {
+                    append(MorphologyLabels.posLabel(lemma.pos))
+                    if (isCurrent) append("  ·  This word")
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = if (isCurrent) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.42f)
+                },
+            )
+        }
+        Text(
+            text = lemma.occurrenceCount.toString(),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+        )
+    }
+}
+
+internal const val ROOT_OCCURRENCE_PREVIEW_LIMIT = 5
+
+internal data class RootOccurrenceSection(
+    val surahId: Int,
+    val surahName: String,
+    val totalCount: Int,
+    val visibleOccurrences: List<RootOccurrence>,
+) {
+    val hiddenCount: Int get() = totalCount - visibleOccurrences.size
+}
+
+/** Groups a concordance by chapter and limits each chapter independently. */
+internal fun rootOccurrenceSections(
+    occurrences: List<RootOccurrence>,
+    expandedSurahIds: Set<Int>,
+    previewLimit: Int = ROOT_OCCURRENCE_PREVIEW_LIMIT,
+): List<RootOccurrenceSection> = occurrences
+    .groupBy { it.surahId }
+    .map { (surahId, chapterOccurrences) ->
+        RootOccurrenceSection(
+            surahId = surahId,
+            surahName = chapterOccurrences.first().surahNameTransliteration,
+            totalCount = chapterOccurrences.size,
+            visibleOccurrences = if (surahId in expandedSurahIds) {
+                chapterOccurrences
+            } else {
+                chapterOccurrences.take(previewLimit)
+            },
+        )
+    }
+
+@Composable
+private fun OccurrenceSurahHeader(section: RootOccurrenceSection) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 18.dp, bottom = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        Text(
+            text = "${section.surahId} · ${section.surahName}",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
+        )
+        Text(
+            text = "${section.totalCount} ${if (section.totalCount == 1) "reference" else "references"}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+        )
+    }
+}
+
+@Composable
+private fun OccurrenceExpandRow(
+    text: String,
+    quiet: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = if (quiet) {
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+        } else {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .quietClickable(role = Role.Button, onClick = onClick)
+            .padding(vertical = 12.dp),
+    )
 }
 
 /** In-page opening: the large word the hold landed on, with a speaker to hear it. */
@@ -374,11 +557,20 @@ private fun OccurrenceRow(
             .quietClickable(onClick = onClick)
             .padding(vertical = 10.dp),
     ) {
-        Text(
-            text = "${occurrence.surahId}:${occurrence.ayahNumber}  ·  ${occurrence.surahNameTransliteration}",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f * ink / 0.9f),
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Ayah ${occurrence.surahId}:${occurrence.ayahNumber}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f * ink / 0.9f),
+            )
+            if (isCurrent) {
+                Text(
+                    text = "  ·  Opened word",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f),
+                )
+            }
+        }
         Spacer(Modifier.height(2.dp))
         Row(
             horizontalArrangement = Arrangement.SpaceBetween,

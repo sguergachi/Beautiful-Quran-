@@ -24,6 +24,14 @@ class MorphologyLabelsTest {
     }
 
     @Test
+    fun `feature summary decodes explicit corpus mood and definiteness tags`() {
+        assertEquals(
+            "imperfect · indefinite · jussive mood · 3rd person masculine dual",
+            MorphologyLabels.featureSummary("IMPF|INDEF|MOOD:JUS|3MD"),
+        )
+    }
+
+    @Test
     fun `spaced root inserts letter gaps`() {
         assertEquals("ك ت ب", MorphologyLabels.spacedRoot("كتب"))
         assertEquals("س م و", MorphologyLabels.spacedRoot("سمو"))
