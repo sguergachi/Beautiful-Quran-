@@ -106,6 +106,18 @@ data class CoverOrnament(
 )
 
 /**
+ * A chapter's surah-header ornament: the rosette and the field pattern
+ * tooled faintly behind it, grown from the same seed's stream — so the
+ * backdrop is drawn from the same chapter fingerprint as the rosette
+ * sitting on it, not the fixed weave every chapter used to share.
+ */
+data class ChapterOrnament(
+    val seed: Int,
+    val rosette: RosetteSpec,
+    val field: FieldSpec,
+)
+
+/**
  * mulberry32 — chosen because it is implementable bit-for-bit in both Kotlin
  * (wrapping Int arithmetic) and JavaScript (Math.imul), so web and Android
  * draw from the same stream. Do not "improve" the mixing.
@@ -759,10 +771,14 @@ fun chapterOrnamentSeed(chapterNumber: Int, ayahCount: Int): Int =
     ayahCount * 114 + chapterNumber
 
 /**
- * Grow a standalone rosette — no corner seal, border, or field — from
- * [seed]. Used for the surah-header ornament, where only the medallion is
- * wanted; generating the rest of [generateCoverOrnament] would waste work
- * across 114 chapters. Same star-polygon vocabulary and RNG rules (never a
- * hexagram) as the medallion inside a full cover ornament.
+ * Grow a chapter's rosette and backing field — no corner seal or border,
+ * which the header has no use for — from [seed]. Same star-polygon and
+ * Hankin-field vocabulary and RNG rules (never a hexagram) as the medallion
+ * and field inside a full cover ornament.
  */
-fun generateChapterRosette(seed: Int): RosetteSpec = generateMedallion(Mulberry32(seed))
+fun generateChapterOrnament(seed: Int): ChapterOrnament {
+    val rng = Mulberry32(seed)
+    val rosette = generateMedallion(rng)
+    val field = generateField(rng)
+    return ChapterOrnament(seed, rosette, field)
+}

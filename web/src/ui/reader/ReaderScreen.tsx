@@ -43,8 +43,9 @@ import {
 } from './useProgressiveAyahWindow'
 import { RootViewer } from '../root/RootViewer'
 import { SearchHitFlash, searchHitFlashTotalMs } from './SearchHitFlash'
-import { GeneratedRosette } from '../theme/GeneratedOrnament'
-import { chapterOrnamentSeed, generateChapterRosette } from '../theme/ornamentGenerator'
+import { fieldWeaveBackground, GeneratedRosette } from '../theme/GeneratedOrnament'
+import { chapterOrnamentSeed, generateChapterOrnament } from '../theme/ornamentGenerator'
+import { resolveTheme } from '../App'
 
 /** Usable in-surah query — mirrors Android `SurahSearchState.activeQuery`. */
 function activeSearchQuery(active: boolean, query: string): string | null {
@@ -53,31 +54,58 @@ function activeSearchQuery(active: boolean, query: string): string | null {
 }
 
 /**
- * A distinct rosette per chapter: ayah count is the dominant seed term
- * (length as fingerprint), folded with the chapter number so all 114
- * chapters render distinctly even though many share an ayah count. Static
- * — part of the page's fixed typography, not a ceremony — and themed off
- * the reader's own gold/emboss custom properties rather than the entrance
+ * A data-URI SVG background can't resolve `var(--ink)` (it isn't part of
+ * the live cascade), so the whisper-faint field weave needs a literal
+ * color resolved from the reader's own theme instead — same `--ink` values
+ * as styles.css, at the same ~4% alpha Android's `onBackground.copy(alpha
+ * = 0.04f)` uses. `--emboss-light` is white at low alpha in every theme.
+ */
+function chapterWeaveInk(themeMode: string): string {
+  return resolveTheme(themeMode) === 'light' ? 'rgba(28, 27, 24, 0.04)' : 'rgba(232, 226, 213, 0.04)'
+}
+
+/**
+ * The surah header's own ornament: a distinct rosette and backing field per
+ * chapter, grown from one seed — ayah count is the dominant term (length as
+ * fingerprint), folded with the chapter number so all 114 chapters render
+ * distinctly even though many share an ayah count. Both are static — part
+ * of the page's fixed typography, not a ceremony — and themed off the
+ * reader's own gold/emboss/ink custom properties rather than the entrance
  * cover's fixed leather gold, since this sits on the page background.
  */
-function ChapterRosette({ chapterNumber, ayahCount }: { chapterNumber: number; ayahCount: number }) {
-  const spec = useMemo(
-    () => generateChapterRosette(chapterOrnamentSeed(chapterNumber, ayahCount)),
+function SurahHeaderOrnament({
+  chapterNumber,
+  ayahCount,
+  themeMode,
+}: {
+  chapterNumber: number
+  ayahCount: number
+  themeMode: string
+}) {
+  const ornament = useMemo(
+    () => generateChapterOrnament(chapterOrnamentSeed(chapterNumber, ayahCount)),
     [chapterNumber, ayahCount],
   )
+  const weave = useMemo(
+    () => fieldWeaveBackground(ornament.field, chapterWeaveInk(themeMode), 'rgba(255, 255, 255, 0.05)'),
+    [ornament.field, themeMode],
+  )
   return (
-    <GeneratedRosette
-      spec={spec}
-      className="rosette"
-      built
-      animated={false}
-      ruleWidth={4.6}
-      hairWidth={4.6}
-      brightGold="var(--gold-bright)"
-      deepGold="var(--gold-deep)"
-      embossDark="var(--emboss-dark)"
-      embossLight="var(--emboss-light)"
-    />
+    <>
+      <div className="surah-header-weave" style={weave} aria-hidden="true" />
+      <GeneratedRosette
+        spec={ornament.rosette}
+        className="rosette"
+        built
+        animated={false}
+        ruleWidth={4.6}
+        hairWidth={4.6}
+        brightGold="var(--gold-bright)"
+        deepGold="var(--gold-deep)"
+        embossDark="var(--emboss-dark)"
+        embossLight="var(--emboss-light)"
+      />
+    </>
   )
 }
 
@@ -787,9 +815,10 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
               }}
             >
               <header className="surah-header" ref={headerRef}>
-                <ChapterRosette
+                <SurahHeaderOrnament
                   chapterNumber={content.surah.id}
                   ayahCount={content.surah.ayahCount}
+                  themeMode={state.settings.themeMode}
                 />
                 <h2>{content.surah.nameTransliteration}</h2>
                 <p className="ar-title">{content.surah.nameArabic}</p>

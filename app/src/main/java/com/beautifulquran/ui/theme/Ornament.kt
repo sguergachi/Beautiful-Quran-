@@ -282,38 +282,6 @@ fun GildedFlourish(
 }
 
 /**
- * A whisper-faint star-and-cross weave: khatam stars on a grid with small
- * diamonds between them, embossed at ~4% ink. Geometry is built once per
- * size (drawWithCache) — scrolling never rebuilds it.
- */
-fun Modifier.starAndCrossWeave(
-    ink: Color,
-    embossLight: Color,
-    cell: Dp = 64.dp,
-): Modifier = drawWithCache {
-    val cellPx = cell.toPx()
-    val weave = Path()
-    var y = 0f
-    var row = 0
-    while (y < size.height + cellPx) {
-        val xOffset = if (row % 2 == 0) 0f else cellPx / 2f
-        var x = -cellPx / 2f + xOffset
-        while (x < size.width + cellPx) {
-            weave.addKhatam(x, y, cellPx * 0.27f)
-            weave.addKhatam(x + cellPx / 2f, y + cellPx / 2f, cellPx * 0.10f)
-            x += cellPx
-        }
-        y += cellPx
-        row++
-    }
-    val stroke = Stroke(width = 1.dp.toPx())
-    onDrawBehind {
-        translate(-0.6f, -0.6f) { drawPath(weave, embossLight, style = stroke) }
-        drawPath(weave, ink, style = stroke)
-    }
-}
-
-/**
  * Gilds the content it wraps: a vertical gold-leaf gradient is composited
  * onto the rendered glyphs (SrcAtop), so text itself reads as leafed gold.
  * The offscreen layer is only the size of the mark — a few dp — so this is

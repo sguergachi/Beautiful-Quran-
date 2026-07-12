@@ -197,24 +197,25 @@ class OrnamentGeneratorTest {
     }
 
     @Test
-    fun `same chapter and ayah count reproduce the same rosette`() {
+    fun `same chapter and ayah count reproduce the same ornament`() {
         val seed = chapterOrnamentSeed(2, 286)
-        assertEquals(generateChapterRosette(seed), generateChapterRosette(seed))
+        assertEquals(generateChapterOrnament(seed), generateChapterOrnament(seed))
     }
 
     @Test
-    fun `chapters sharing an ayah count still render different rosettes`() {
+    fun `chapters sharing an ayah count still render different rosettes and fields`() {
         val elevenAyahChapters = intArrayOf(62, 63, 93, 100, 101)
-        val rosettes = elevenAyahChapters.map { generateChapterRosette(chapterOrnamentSeed(it, 11)) }
-        assertEquals(elevenAyahChapters.size, rosettes.toSet().size)
+        val ornaments = elevenAyahChapters.map { generateChapterOrnament(chapterOrnamentSeed(it, 11)) }
+        assertEquals(elevenAyahChapters.size, ornaments.map { it.rosette }.toSet().size)
+        assertEquals(elevenAyahChapters.size, ornaments.map { it.field }.toSet().size)
     }
 
     @Test
-    fun `chapter rosette never draws a hexagram`() {
+    fun `chapter ornament never draws a hexagram`() {
         for (chapter in 1..114) {
             for (ayahCount in intArrayOf(3, 6, 11, 88, 286)) {
-                val rosette = generateChapterRosette(chapterOrnamentSeed(chapter, ayahCount))
-                for (s in rosette.strokes) {
+                val ornament = generateChapterOrnament(chapterOrnamentSeed(chapter, ayahCount))
+                for (s in ornament.rosette.strokes + ornament.field.strokes) {
                     assertTrue(
                         "closed triangle found (chapter $chapter, $ayahCount ayahs)",
                         !(s.closed && s.points.size == 3),

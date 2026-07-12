@@ -181,8 +181,17 @@ function svgDataUri(svg: string): string {
  * strokes are drawn once and reused in a 3 × 3 grid of offsets per ink
  * layer, so strokes straddling the cell boundary are completed by their
  * neighbours' copies — same trick as the old fixed weave, generalized.
+ *
+ * [ink] and [embossLight] default to the entrance cover's fixed gold-leaf
+ * tint; the reader passes concrete colors resolved from its own theme
+ * instead (a `var(--…)` reference won't resolve inside a data-URI SVG, so
+ * callers must resolve their CSS custom property to a literal color first).
  */
-export function fieldWeaveBackground(field: FieldSpec): {
+export function fieldWeaveBackground(
+  field: FieldSpec,
+  ink = 'rgba(217,180,74,0.07)',
+  embossLight = 'rgba(255,255,255,0.05)',
+): {
   backgroundImage: string
   backgroundSize: string
 } {
@@ -193,8 +202,8 @@ export function fieldWeaveBackground(field: FieldSpec): {
   const body = field.strokes.map((s) => `<path d='${pathD(s, 1)}'/>`).join('')
   const uses: string[] = []
   for (const [stroke, off] of [
-    ['rgba(255,255,255,0.05)', -0.6 * px],
-    ['rgba(217,180,74,0.07)', 0],
+    [embossLight, -0.6 * px],
+    [ink, 0],
   ] as const) {
     for (let dx = -1; dx <= 1; dx++) {
       for (let dy = -1; dy <= 1; dy++) {
