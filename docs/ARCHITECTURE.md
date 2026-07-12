@@ -24,7 +24,7 @@ app (runtime)                                           ▼
                      └─ PlayerUiState StateFlow (what's playing, where)
    HighlightEngine ── pure: (segments, positionMs) → active word position
    ViewModels ── HomeViewModel, ReaderViewModel, SettingsViewModel, …
-   UI ── three sheets (Home, Reader, Settings) + ink-bleed overlays
+   UI ── four sheets (Bookmarks, Home, Reader, Settings) + ink-bleed overlays
          (notification prompt, Root Word Viewer, Timings Lab)
 ```
 
@@ -44,7 +44,7 @@ app (runtime)                                           ▼
    Android dependencies.
 4. **Small over clever.** No Hilt (a hand-rolled ViewModel factory over
    Application-scoped singletons), no Room (a 100-line raw-SQLite wrapper),
-   no navigation library at all (the three sheets are a hand-rolled paper
+   no navigation library at all (the four sheets are a hand-rolled paper
    stack in `MainActivity`). Every dependency earns its place.
 
 ## The data pipeline (`tools/build_db.py`)
@@ -211,12 +211,15 @@ streaming. Audio flows through a `CacheDataSource` backed by a 1 GB LRU
 
 ## UI structure
 
-Three full-screen "sheets", one visible at a time. Navigation is a
+Four full-screen "sheets", one visible at a time. Navigation is a
 hand-rolled **paper stack** (`PaperStackApp` in `MainActivity`): the sheets
 sit on top of each other like pages of a book, and moving between them is a
 horizontal page turn — draggable, fling-able, with page-turn audio
 (`PageTurnSounds`) tracking the live sheet position:
 
+- `bookmarks/BookmarksScreen` — a left-hand index revealed by swiping right
+  from Chapters or tapping its exposed ruby ribbon; saved verses are searchable
+  and sectioned by surah, and each result jumps directly back into the reader.
 - `home/HomeScreen` — surah list with search (surah names / `surah:ayah`
   references, plus Quran-wide word hits sectioned by surah with truncated
   expand-in-place lists), a continue-listening card, and a floating playback

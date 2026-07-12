@@ -63,6 +63,15 @@ data class SurahContent(
     val ayahs: List<Ayah>,
 )
 
+/** Read-only Quran text joined to one of the reader's persisted bookmarks. */
+data class BookmarkedAyah(
+    val surah: Surah,
+    val ayahNumber: Int,
+    val text: String,
+    val translation: String,
+    val createdAt: Long,
+)
+
 /** Morphology for one reader word, from the Quranic Arabic Corpus. */
 data class WordMorphology(
     val surahId: Int,

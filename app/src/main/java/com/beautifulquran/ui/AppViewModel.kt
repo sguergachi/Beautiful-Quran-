@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.beautifulquran.QuranApp
+import com.beautifulquran.ui.bookmarks.BookmarksViewModel
 import com.beautifulquran.ui.home.HomeViewModel
 import com.beautifulquran.ui.reader.ReaderViewModel
 import com.beautifulquran.ui.rootviewer.RootViewerViewModel
@@ -17,6 +18,8 @@ object AppViewModelFactory : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
         val app = extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as QuranApp
         return when {
+            modelClass.isAssignableFrom(BookmarksViewModel::class.java) ->
+                BookmarksViewModel(app.repository, app.bookmarks) as T
             modelClass.isAssignableFrom(HomeViewModel::class.java) ->
                 HomeViewModel(app.repository, app.settings, app.player) as T
             modelClass.isAssignableFrom(ReaderViewModel::class.java) ->
