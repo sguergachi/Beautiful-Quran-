@@ -89,7 +89,8 @@ internal fun VerseBookmarkRibbon(
 ) {
     val mirrored = side == AyahSelectorSide.RIGHT
     val ruby = LocalQuranAccents.current.bookmarkRibbon
-    val playbackAccent = MaterialTheme.colorScheme.primary
+    // Match the monochrome play/pause icon, not the green interactive accent.
+    val playbackInk = MaterialTheme.colorScheme.onSurfaceVariant
     val view = LocalView.current
     val scope = rememberCoroutineScope()
 
@@ -225,8 +226,8 @@ internal fun VerseBookmarkRibbon(
             val alpha = chrome * when {
                 showingRibbon && progress > 0.5f -> SOLID_ALPHA
                 showingRibbon -> SOLID_ALPHA * (0.55f + 0.45f * progress.coerceIn(0f, 1f))
-                // The inactive outline is the playback-green affordance, at
-                // full opacity. Ruby remains exclusive to saved bookmarks.
+                // The inactive outline uses the opaque monochrome playback ink.
+                // Ruby remains exclusive to saved bookmarks.
                 else -> 1f
             }
 
@@ -283,7 +284,7 @@ internal fun VerseBookmarkRibbon(
                 // is reserved for the reader's saved marks.
                 drawPath(
                     path = path,
-                    color = playbackAccent,
+                    color = playbackInk,
                     alpha = alpha,
                     style = Stroke(
                         width = nubStroke,
