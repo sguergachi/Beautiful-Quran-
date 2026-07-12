@@ -12,6 +12,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -63,10 +64,6 @@ private const val WAVE_AMP_DP = 4.5f    // cloth sway while unfurling
 private const val SETTLE_AMP_DP = 3.2f  // final flutter amplitude
 private const val NUB_STROKE_DP = 1.25f // idle outline: affordance, not a mark
 private const val OVERSHOOT = 0.06f     // tip past the resting length, then spring back
-/** Retracted tip — a quiet hint, not a mark. */
-private const val NUB_ALPHA = 0.22f
-/** Reading-position tip, still soft vs. a saved ribbon. */
-private const val NUB_FOCUSED_ALPHA = 0.38f
 private const val SOLID_ALPHA = 0.92f
 
 /** Gravity spill: slow peel, then accelerates, eases as length runs out. */
@@ -92,6 +89,7 @@ internal fun VerseBookmarkRibbon(
 ) {
     val mirrored = side == AyahSelectorSide.RIGHT
     val ruby = LocalQuranAccents.current.bookmarkRibbon
+    val playbackAccent = MaterialTheme.colorScheme.primary
     val view = LocalView.current
     val scope = rememberCoroutineScope()
 
@@ -227,8 +225,9 @@ internal fun VerseBookmarkRibbon(
             val alpha = chrome * when {
                 showingRibbon && progress > 0.5f -> SOLID_ALPHA
                 showingRibbon -> SOLID_ALPHA * (0.55f + 0.45f * progress.coerceIn(0f, 1f))
-                focused -> NUB_FOCUSED_ALPHA
-                else -> NUB_ALPHA
+                // The inactive outline is the playback-green affordance, at
+                // full opacity. Ruby remains exclusive to saved bookmarks.
+                else -> 1f
             }
 
             // Cloth wave while unfurling; settle flutter once the tip lands.
@@ -284,7 +283,7 @@ internal fun VerseBookmarkRibbon(
                 // is reserved for the reader's saved marks.
                 drawPath(
                     path = path,
-                    color = ruby,
+                    color = playbackAccent,
                     alpha = alpha,
                     style = Stroke(
                         width = nubStroke,
