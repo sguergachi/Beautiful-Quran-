@@ -88,6 +88,13 @@ export function applyMask(el: HTMLElement | SVGElement, mask: string) {
   el.classList.add('word-wash')
 }
 
+/** Snap-clear an opaque paper cover without exposing a transition frame. */
+export function clearPaperCover(cover: HTMLElement) {
+  cover.style.transition = 'none'
+  applyMask(cover, 'none')
+  cover.style.removeProperty('opacity')
+}
+
 export type WashTick = (progress: number, eased: number) => void
 
 /**
