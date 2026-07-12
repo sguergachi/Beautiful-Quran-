@@ -61,7 +61,10 @@ export function coverLayout(width: number, height: number): CoverLayout {
   // Frame — generous gilt margin that grows with the board, clamped so a
   // phone still keeps readable leather outside the rule.
   const outerInset = clamp(short * 0.058, unit * 2.2, short * 0.078)
-  const ruleGap = clamp(unit * 1.05, 10, outerInset * 0.55)
+  // The border zone between the two rules carries the generated frieze — a
+  // real mushaf border band, not a pinstripe — so the gap is generous
+  // (mirrors Android's ruleGap = 26dp).
+  const ruleGap = clamp(unit * 1.95, 18, outerInset * 0.85)
   const innerInset = outerInset + ruleGap
 
   // Concentric radii from an invented design corner (~7.5% of short).
@@ -74,9 +77,10 @@ export function coverLayout(width: number, height: number): CoverLayout {
   const starSize = clamp(outerInset * 1.42, unit * 2.6, outerInset * 1.65)
 
   // The generated border frieze runs between the two rules; the seals sit
-  // on its corners (bandCenter) covering the miter joints.
+  // on its corners (bandCenter) covering the miter joints. Mirrors
+  // Android's 0.72 factor and 10–20dp clamp for a fuller tooled channel.
   const bandCenter = (outerInset + innerInset) / 2
-  const bandHeight = clamp((innerInset - outerInset) * 0.6, 4, 12)
+  const bandHeight = clamp((innerInset - outerInset) * 0.72, 10, 20)
 
   // Medallion: Android's ceremonial scale — 52% of board width, capped by
   // height (~30%) so the vertical stack (medal → titles → dua) keeps air,

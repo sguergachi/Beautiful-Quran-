@@ -80,9 +80,13 @@ class OrnamentGeneratorTest {
                     assertTrue("seal point too far out: $p", p.y in -0.2..1.2)
                 }
             }
+            // The khatam chain's link diamond straddles the period
+            // boundary by design (its far half is completed by the
+            // neighbouring tile when the band repeats), so the x margin
+            // allows for it; y always stays inside the band.
             for (s in o.border.strokes) {
                 for (p in s.points) {
-                    assertTrue("border x outside period: $p", p.x in -0.001..o.border.period + 0.001)
+                    assertTrue("border x outside period: $p", p.x in -0.2..o.border.period + 0.2)
                     assertTrue("border y outside band: $p", p.y in -0.001..1.001)
                 }
             }

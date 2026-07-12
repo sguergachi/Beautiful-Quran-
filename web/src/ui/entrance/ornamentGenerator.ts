@@ -5,7 +5,7 @@
  * two classical construction methods: {n/k} star polygons (gcd(n, k) > 1
  * yields the interlaced polygons — the khatam is exactly {8/2}) and
  * Hankin's "polygons in contact" method (rays from tile-edge midpoints at a
- * contact angle θ), plus the four frieze grammars of tooled binding borders.
+ * contact angle θ), plus the five frieze grammars of tooled binding borders.
  *
  * This file mirrors, line for line, the Android original at
  * `app/src/main/java/com/beautifulquran/ui/theme/ornament/OrnamentGenerator.kt`;
@@ -342,28 +342,42 @@ function generateSeal(rng: Mulberry32, fold: number): RosetteSpec {
   }
 }
 
-/** The border band — one of four binding frieze grammars. */
+/**
+ * The border band — one of five frieze grammars found on tooled mushaf
+ * bindings: a zigzag lattice with pearls in its diamonds, an interlaced
+ * two-strand cable with pearl eyes (guilloche), a Hankin star-and-cross
+ * strip, a nested lozenge chain, or a khatam chain — small eight-fold
+ * stars linked by diamonds. Historical bindings run exactly these between
+ * their gilt fillets ("bordered by geometric braiding"). Every recipe is
+ * bounded by rule-weight edge rails so the band reads as one tooled
+ * channel; renderers taper the channel's mouth onto the corner seals'
+ * petal tips.
+ */
 function generateBorder(rng: Mulberry32): BorderSpec {
   const strokes: OrnamentStroke[] = []
   const dots: OrnamentDot[] = []
   let period: number
-  const recipe = rng.int(4)
+  const recipe = rng.int(5)
   if (recipe === 0) {
-    // Doubled chevron — two parallel zigzags, one period per peak.
-    period = rng.range(1.1, 1.6)
-    const zig = (hi: number, lo: number): OrnamentStroke => ({
+    // Zigzag lattice — two zigzags half a period out of phase make an
+    // X-crossing diamond trellis; a pearl rests in each diamond.
+    period = rng.range(1.2, 1.7)
+    const zig = (a: number, b: number): OrnamentStroke => ({
       points: [
-        { x: 0, y: hi },
-        { x: period / 2, y: lo },
-        { x: period, y: hi },
+        { x: 0, y: a },
+        { x: period / 2, y: b },
+        { x: period, y: a },
       ],
       closed: false,
       weight: 'hairline',
       birth: 0,
       span: 1,
     })
-    strokes.push(zig(0.88, 0.26))
-    strokes.push(zig(0.74, 0.12))
+    strokes.push(zig(0.86, 0.14))
+    strokes.push(zig(0.14, 0.86))
+    const pearl = rng.range(0.05, 0.075)
+    dots.push({ x: period / 4, y: 0.5, radius: pearl, birth: 0 })
+    dots.push({ x: (3 * period) / 4, y: 0.5, radius: pearl, birth: 0 })
   } else if (recipe === 1) {
     // Cable: two phase-opposed strands, a pearl in each eye.
     period = rng.range(1.8, 2.6)
@@ -397,25 +411,74 @@ function generateBorder(rng: Mulberry32): BorderSpec {
         (deg * Math.PI) / 180,
       ),
     )
-  } else {
-    // Lozenge chain — diamonds tip-to-tip, a pearl in each.
+  } else if (recipe === 3) {
+    // Nested lozenge chain — a diamond in a diamond, tip-to-tip, a pearl
+    // at each heart.
     period = rng.range(1.7, 2.3)
-    strokes.push({
+    const diamond = (halfW: number, halfH: number): OrnamentStroke => ({
       points: [
-        { x: 0, y: 0.5 },
-        { x: period / 2, y: 0.12 },
-        { x: period, y: 0.5 },
-        { x: period / 2, y: 0.88 },
+        { x: period / 2 - halfW, y: 0.5 },
+        { x: period / 2, y: 0.5 - halfH },
+        { x: period / 2 + halfW, y: 0.5 },
+        { x: period / 2, y: 0.5 + halfH },
       ],
       closed: true,
       weight: 'hairline',
       birth: 0,
       span: 1,
     })
-    dots.push({ x: period / 2, y: 0.5, radius: rng.range(0.06, 0.09), birth: 0 })
+    strokes.push(diamond(period / 2, 0.38))
+    strokes.push(diamond(period / 4, 0.19))
+    dots.push({ x: period / 2, y: 0.5, radius: rng.range(0.05, 0.08), birth: 0 })
+  } else {
+    // Khatam chain — small eight-fold stars (two overlapped squares)
+    // linked by diamonds at the period boundaries.
+    period = rng.range(1.35, 1.75)
+    const r = rng.range(0.26, 0.31)
+    const a = r * 0.7071
+    strokes.push({
+      points: [
+        { x: period / 2 - a, y: 0.5 - a },
+        { x: period / 2 + a, y: 0.5 - a },
+        { x: period / 2 + a, y: 0.5 + a },
+        { x: period / 2 - a, y: 0.5 + a },
+      ],
+      closed: true,
+      weight: 'hairline',
+      birth: 0,
+      span: 1,
+    })
+    strokes.push({
+      points: [
+        { x: period / 2 - r, y: 0.5 },
+        { x: period / 2, y: 0.5 - r },
+        { x: period / 2 + r, y: 0.5 },
+        { x: period / 2, y: 0.5 + r },
+      ],
+      closed: true,
+      weight: 'hairline',
+      birth: 0,
+      span: 1,
+    })
+    // Link diamond straddling the period boundary; when tiled, the half
+    // past x = 0 is completed by the neighbouring tile.
+    const cw = rng.range(0.1, 0.14)
+    strokes.push({
+      points: [
+        { x: -cw, y: 0.5 },
+        { x: 0, y: 0.5 - cw * 0.85 },
+        { x: cw, y: 0.5 },
+        { x: 0, y: 0.5 + cw * 0.85 },
+      ],
+      closed: true,
+      weight: 'hairline',
+      birth: 0,
+      span: 1,
+    })
+    dots.push({ x: period / 2, y: 0.5, radius: 0.05, birth: 0 })
   }
-  // Edge rails bound every recipe into one channel; renderers taper the
-  // channel's mouth onto the corner seals' petal tips.
+  // Rule-weight edge rails bound every recipe into one tooled channel;
+  // renderers taper the channel's mouth onto the corner seals' petal tips.
   for (const y of [0, 1]) {
     strokes.push({
       points: [
@@ -423,7 +486,7 @@ function generateBorder(rng: Mulberry32): BorderSpec {
         { x: period, y },
       ],
       closed: false,
-      weight: 'hairline',
+      weight: 'rule',
       birth: 0,
       span: 1,
     })

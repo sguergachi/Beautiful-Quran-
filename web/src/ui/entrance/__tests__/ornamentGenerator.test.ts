@@ -87,10 +87,14 @@ describe('ornamentGenerator', () => {
           )
         }
       }
+      // The khatam chain's link diamond straddles the period boundary by
+      // design (its far half is completed by the neighbouring tile when
+      // the band repeats), so the x margin allows for it; y always stays
+      // inside the band.
       for (const s of o.border.strokes) {
         for (const p of s.points) {
           check(
-            p.x >= -0.001 && p.x <= o.border.period + 0.001 && p.y >= -0.001 && p.y <= 1.001,
+            p.x >= -0.2 && p.x <= o.border.period + 0.2 && p.y >= -0.001 && p.y <= 1.001,
             `${at}: border point outside band (${p.x}, ${p.y})`,
           )
         }

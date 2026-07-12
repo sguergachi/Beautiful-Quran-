@@ -107,13 +107,16 @@ async function runWash(
 
 /**
  * Doubled gilt rule + generated corner seals — sizes from the board layout
- * grid; the seals sit on the border band's corners, hiding its joints.
+ * grid. The seals are the hubs the border band's channels taper onto, part
+ * of the tooled binding rather than the ink wash, so they render complete
+ * from the first frame (matches Android's static `GeneratedCornerSeals`).
  */
-function MushafCoverFrame({ seal, built }: { seal: RosetteSpec; built: boolean }) {
+function MushafCoverFrame({ seal }: { seal: RosetteSpec }) {
   const corner = (pos: string) => (
     <GeneratedRosette
       spec={seal}
-      built={built}
+      built
+      animated={false}
       className={`entrance-corner entrance-corner--${pos}`}
       ruleWidth={4.6}
       hairWidth={4.6}
@@ -353,12 +356,11 @@ export function EntranceCover({
         <GeneratedBorder
           border={ornament.border}
           sealTip={ornament.cornerSeal.tipRadius}
-          built={built}
           layout={board.layout}
           width={board.w}
           height={board.h}
         />
-        <MushafCoverFrame seal={ornament.cornerSeal} built={built} />
+        <MushafCoverFrame seal={ornament.cornerSeal} />
         <div className="entrance-content">
           <div className="entrance-air entrance-air--top" />
           <GeneratedRosette
