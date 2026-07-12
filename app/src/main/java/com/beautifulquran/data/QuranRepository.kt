@@ -5,6 +5,7 @@ import com.beautifulquran.data.model.Ayah
 import com.beautifulquran.data.model.BookmarkedAyah
 import com.beautifulquran.data.model.Reciter
 import com.beautifulquran.data.model.RootOccurrence
+import com.beautifulquran.data.model.RootLemmaSummary
 import com.beautifulquran.data.model.RootSummary
 import com.beautifulquran.data.model.Segment
 import com.beautifulquran.data.model.Surah
@@ -286,7 +287,28 @@ class QuranRepository(
                 surahNameTransliteration = c.getString(5),
             )
         }
-        RootSummary(root = root, occurrenceCount = count, occurrences = occurrences)
+        val lemmas = queryList(
+            """
+            SELECT lemma, pos, COUNT(*)
+            FROM word_morphology
+            WHERE root = ? AND lemma <> ''
+            GROUP BY lemma, pos
+            ORDER BY COUNT(*) DESC, lemma, pos
+            """.trimIndent(),
+            arrayOf(root),
+        ) { c ->
+            RootLemmaSummary(
+                lemma = c.getString(0),
+                pos = c.getString(1),
+                occurrenceCount = c.getInt(2),
+            )
+        }
+        RootSummary(
+            root = root,
+            occurrenceCount = count,
+            occurrences = occurrences,
+            lemmas = lemmas,
+        )
     }
 
     /** The bundled DB timings for a reciter+surah, with **no** Lab overrides
