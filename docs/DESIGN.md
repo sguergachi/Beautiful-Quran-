@@ -183,9 +183,28 @@ Traditional, geometric, and nearly invisible — ornament whispers, never
 speaks. All of it is drawn procedurally (`ui/theme/Ornament.kt`), never an
 image, so it is crisp at any density and nearly free to render.
 
-- **Khatam geometry.** The vocabulary is the classical eight-fold star: two
-  overlapped squares, and the {8/3} octagram — the same figures that
-  generate star-and-cross tessellation in traditional tilework.
+- **Khatam geometry.** The vocabulary on the open book is the classical
+  eight-fold star: two overlapped squares, and the {8/3} octagram — the
+  same figures that generate star-and-cross tessellation in traditional
+  tilework.
+- **The generating machine.** The entrance cover's ornament is not fixed:
+  a seeded generator (`ui/theme/ornament/OrnamentGenerator.kt`, mirrored
+  line-for-line in `web/src/ui/entrance/ornamentGenerator.ts` over an
+  identical mulberry32 stream) composes a new medallion, corner seals,
+  border frieze, and leather field on every launch, from the tradition's
+  own construction grammar: {n/k} star polygons (8/10/12/16-fold; gcd > 1
+  yields the interlaced polygons — the khatam is {8/2}) and Hankin's
+  polygons-in-contact method (rays from tile-edge midpoints at a sampled
+  contact angle, over square, octagon-square 4.8.8, and diamond tilings).
+  Border friezes come from the four band grammars of tooled bindings:
+  doubled chevron, two-strand cable with pearl eyes, Hankin strip, and
+  lozenge chain. The ornament **builds in real time** — strokes ink
+  themselves in along their length across ~3.4 s, field first, medallion
+  outside-in, then border and seals — so the cover is drawn before the
+  reader's eyes, not stamped. One absolute rule: no composition may read
+  as a hexagram — star indices that decompose into triangles ({12/4}),
+  6-fold seals, and 6-fold field tilings are all excluded by construction
+  and guarded by tests on both platforms.
 - **Gilding.** Gold is never a flat color. Gilded elements (the surah
   rosette, ayah number marks, the home mark) carry a three-stop leaf
   gradient (deep bronze → bright gilt → deep bronze). On the reader, the
@@ -229,11 +248,16 @@ three moments:
 
 1. **Arrival.** The board fades in from the system splash: deep-green
    leather (fixed across themes — a bound book keeps its own boards, colors
-   in `Theme.kt`'s `Cover*` values), tooled with the star-and-cross weave at
-   whisper ink, framed in a doubled gilt rule with a khatam star pressed
-   into each corner (`MushafCoverFrame`), carrying the gilded khatam
-   medallion (`GildedMedallion`) with the title **القرآن الكريم** beneath it
-   in the Hafs hand, leafed in gold and written in with the letter wash.
+   in `Theme.kt`'s `Cover*` values), tooled with this launch's generated
+   Hankin field at whisper ink, framed in a doubled gilt rule
+   (`MushafCoverFrame`) with the generated border frieze running between
+   the rules — each side fits a whole number of pattern periods and
+   terminates against the corner seals' rings, tied in by short gold stems,
+   so band and seals read as one continuous design — and carrying the
+   generated medallion (`GeneratedMedallion`) with the title
+   **القرآن الكريم** beneath it in the Hafs hand, leafed in gold and
+   written in with the letter wash. The whole ornament inks itself onto
+   the leather in real time during arrival.
    The frame's inset and corner radii are derived from the display's
    rounded corners (`WindowInsets.getRoundedCorner`, via
    `coverFrameGeometry`) so the gilt rule is concentric with the phone's

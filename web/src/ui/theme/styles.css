@@ -2920,10 +2920,12 @@ select {
   opacity: 1;
 }
 
-/* The generated border frieze between the two gilt rules. Each band tiles
-   its period from the side's midpoint (background-position center); the
-   far sides are mirrored so the pattern faces inward; the corner seals
-   cover the joints. Fades up as the medallion's build crescendos. */
+/* The generated border frieze between the two gilt rules. Each side's
+   band runs rim-to-rim between the corner seals' rings (inline left/right
+   or top/bottom from GeneratedBorder, which also fits a whole number of
+   pattern periods into the run); far sides are mirrored so the pattern
+   faces inward; short gold stems tie the rings to the bands' first nodes.
+   Fades up as the medallion's build crescendos. */
 .entrance-borderband {
   position: absolute;
   inset: 0;
@@ -2932,7 +2934,7 @@ select {
 
 .entrance-border {
   position: absolute;
-  background-position: center;
+  background-position: 0 0;
   opacity: 0;
   transition: opacity 1190ms linear 1360ms;
 }
@@ -2943,8 +2945,6 @@ select {
 
 .entrance-border--top,
 .entrance-border--bottom {
-  left: var(--cover-band-c);
-  right: var(--cover-band-c);
   height: var(--cover-band-h);
   background-repeat: repeat-x;
 }
@@ -2960,8 +2960,6 @@ select {
 
 .entrance-border--left,
 .entrance-border--right {
-  top: var(--cover-band-c);
-  bottom: var(--cover-band-c);
   width: var(--cover-band-h);
   background-repeat: repeat-y;
 }
@@ -2973,6 +2971,19 @@ select {
 .entrance-border--right {
   right: calc(var(--cover-band-c) - var(--cover-band-h) / 2);
   transform: scaleX(-1);
+}
+
+/* Stems: hairline connectors on the band's centre axis, from each corner
+   seal's ring to the adjacent band run — positioned inline. */
+.entrance-stem {
+  position: absolute;
+  background: rgba(217, 180, 74, 0.85);
+  opacity: 0;
+  transition: opacity 1190ms linear 1360ms;
+}
+
+.entrance-stem--on {
+  opacity: 1;
 }
 
 .entrance-frame {

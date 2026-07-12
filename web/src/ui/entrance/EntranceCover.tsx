@@ -149,9 +149,8 @@ export function EntranceCover({
   const [opening, setOpening] = useState(false)
   const [captionOn, setCaptionOn] = useState(false)
   const [arrivalDone, setArrivalDone] = useState(false)
-  const [layoutVars, setLayoutVars] = useState<Record<string, string>>(() =>
-    coverLayoutCssVars(coverLayout(390, 844)),
-  )
+  const [board, setBoard] = useState(() => ({ w: 390, h: 844, layout: coverLayout(390, 844) }))
+  const layoutVars = useMemo(() => coverLayoutCssVars(board.layout), [board.layout])
   // A fresh ornament every visit — the generating machine's whole point.
   const ornament: CoverOrnament = useMemo(
     () => generateCoverOrnament((Math.random() * 0x7fffffff) | 0),
@@ -182,7 +181,7 @@ export function EntranceCover({
     if (!el) return
     const apply = (w: number, h: number) => {
       if (w < 2 || h < 2) return
-      setLayoutVars(coverLayoutCssVars(coverLayout(w, h)))
+      setBoard({ w, h, layout: coverLayout(w, h) })
     }
     apply(el.clientWidth, el.clientHeight)
     const ro = new ResizeObserver((entries) => {
@@ -351,7 +350,13 @@ export function EntranceCover({
           style={weave}
           aria-hidden="true"
         />
-        <GeneratedBorder border={ornament.border} built={built} />
+        <GeneratedBorder
+          border={ornament.border}
+          built={built}
+          layout={board.layout}
+          width={board.w}
+          height={board.h}
+        />
         <MushafCoverFrame seal={ornament.cornerSeal} built={built} />
         <div className="entrance-content">
           <div className="entrance-air entrance-air--top" />

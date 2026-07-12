@@ -22,9 +22,11 @@ import com.beautifulquran.ui.entrance.CoverFrameGeometry
 import com.beautifulquran.ui.theme.ornament.BorderSpec
 import com.beautifulquran.ui.theme.ornament.FieldSpec
 import com.beautifulquran.ui.theme.ornament.RosetteSpec
+import com.beautifulquran.ui.theme.ornament.SEAL_RING_RADIUS
 import com.beautifulquran.ui.theme.ornament.StrokeWeight
-import kotlin.math.ceil
+import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /*
  * Renderers for the generated cover ornament (ui/theme/ornament/
@@ -206,10 +208,13 @@ fun GeneratedCornerSeals(
 private fun borderAlpha(build: Float): Float = ((build - 0.40f) / 0.35f).coerceIn(0f, 1f)
 
 /**
- * The generated border frieze: the band pattern tiled along all four sides
- * between the two gilt rules, out from each side's midpoint so the pattern
- * sits symmetric on the cover; the loose ends at the corners disappear
- * under the seals. Washes in as the build passes the medallion's crescendo.
+ * The generated border frieze: the band pattern runs along all four sides
+ * between the two gilt rules, terminating against each corner seal's ring.
+ * Each run fits a whole number of periods (the period stretches a little
+ * to fit), so the pattern arrives at every corner at the same phase, and a
+ * short gold stem on the band's axis ties each ring to the band's first
+ * node — one continuous design, not a band with stamps dropped on top.
+ * Washes in as the build passes the medallion's crescendo.
  */
 @Composable
 fun GeneratedBorderBand(
@@ -232,7 +237,11 @@ fun GeneratedBorderBand(
                 val c = bandCenter(geometry)
                 val w = size.width
                 val h = size.height
+                // The band's run starts where the seal's ring ends.
+                val rim = geometry.starRadiusPx * 2f * SEAL_RING_RADIUS.toFloat()
+                val bandStart = c + rim
                 val periodPx = (spec.period * bandH).toFloat()
+                val stemLen = bandH * 0.7f
 
                 // (u along the side, v across the band) → screen, per side;
                 // v mirrored on the far sides so the pattern faces inward.
@@ -246,22 +255,37 @@ fun GeneratedBorderBand(
                 val band = Path()
                 val dotCenters = ArrayList<Pair<Offset, Float>>()
                 for ((sideLen, place) in sides) {
-                    val tiles = ceil((sideLen / 2f) / periodPx).toInt()
-                    for (k in -tiles until tiles) {
-                        val u0 = sideLen / 2f + k * periodPx
+                    // Whole periods between the two seals; the period
+                    // stretches to fit so both ends land on the same phase.
+                    val run = sideLen - 2f * bandStart
+                    if (run < periodPx / 2f) continue
+                    val tiles = max(1, (run / periodPx).roundToInt())
+                    val stretch = (run / tiles) / spec.period.toFloat()
+                    for (k in 0 until tiles) {
+                        val u0 = bandStart + k * (run / tiles)
                         for (s in spec.strokes) {
                             s.points.forEachIndexed { i, p ->
-                                val pt = place(u0 + (p.x * bandH).toFloat(), p.y.toFloat())
+                                val pt = place(u0 + (p.x * stretch).toFloat(), p.y.toFloat())
                                 if (i == 0) band.moveTo(pt.x, pt.y) else band.lineTo(pt.x, pt.y)
                             }
                             if (s.closed) band.close()
                         }
                         for (d in spec.dots) {
                             dotCenters.add(
-                                place(u0 + (d.x * bandH).toFloat(), d.y.toFloat()) to
+                                place(u0 + (d.x * stretch).toFloat(), d.y.toFloat()) to
                                     (d.radius * bandH).toFloat(),
                             )
                         }
+                    }
+                    // Stems: ring → first node, on the band's centre axis.
+                    for ((from, to) in listOf(
+                        bandStart - 1f to bandStart + stemLen,
+                        sideLen - bandStart - stemLen to sideLen - bandStart + 1f,
+                    )) {
+                        val a = place(from, 0.5f)
+                        val b = place(to, 0.5f)
+                        band.moveTo(a.x, a.y)
+                        band.lineTo(b.x, b.y)
                     }
                 }
                 val stroke = Stroke(width = 1.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
