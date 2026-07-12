@@ -6,7 +6,7 @@ import { ReaderScreen } from './reader/ReaderScreen'
 import { SettingsScreen } from './settings/SettingsScreen'
 import { EntranceCover } from './entrance/EntranceCover'
 
-function resolveTheme(mode: string): string {
+export function resolveTheme(mode: string): string {
   if (mode === 'light') return 'light'
   if (mode === 'dark') return 'dark'
   if (mode === 'royal_green') return 'royal_green'

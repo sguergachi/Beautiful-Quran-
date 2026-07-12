@@ -84,13 +84,13 @@ import com.beautifulquran.ui.theme.IslamicBackToOriginCapsule
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.ShapedWordBloom
 import com.beautifulquran.ui.theme.TranslationFontFamily
+import com.beautifulquran.ui.theme.generatedFieldWeave
 import com.beautifulquran.ui.theme.gilded
 import com.beautifulquran.ui.theme.letterFadeIn
 import com.beautifulquran.ui.theme.ornament.chapterOrnamentSeed
-import com.beautifulquran.ui.theme.ornament.generateChapterRosette
+import com.beautifulquran.ui.theme.ornament.generateChapterOrnament
 import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.shapedWordBloom
-import com.beautifulquran.ui.theme.starAndCrossWeave
 import com.beautifulquran.ui.theme.verticalFadingEdges
 import kotlinx.coroutines.flow.StateFlow
 
@@ -1305,17 +1305,21 @@ fun SurahHeader(
     val accents = LocalQuranAccents.current
     val weaveFade = MaterialTheme.colorScheme.background
     val hasBasmalahBelow = surahOpensWithBasmalahPreface(chapterNumber)
-    // A distinct rosette per chapter: ayah count is the dominant seed term
-    // (length as fingerprint), folded with the chapter number so all 114
-    // chapters render distinctly even though many share an ayah count.
-    val rosette = remember(chapterNumber, ayahCount) {
-        generateChapterRosette(chapterOrnamentSeed(chapterNumber, ayahCount))
+    // A distinct rosette and backing field per chapter, grown from one
+    // seed: ayah count is the dominant term (length as fingerprint), folded
+    // with the chapter number so all 114 chapters render distinctly even
+    // though many share an ayah count. The field replaces the fixed weave
+    // every chapter used to share — the header's whole ornament is now
+    // this chapter's own.
+    val ornament = remember(chapterNumber, ayahCount) {
+        generateChapterOrnament(chapterOrnamentSeed(chapterNumber, ayahCount))
     }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .fillMaxWidth()
-            .starAndCrossWeave(
+            .generatedFieldWeave(
+                field = ornament.field,
                 ink = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.04f),
                 embossLight = accents.embossLight.copy(alpha = 0.05f),
             )
@@ -1329,8 +1333,8 @@ fun SurahHeader(
             ),
     ) {
         GeneratedChapterRosette(
-            spec = rosette,
-            size = 44.dp,
+            spec = ornament.rosette,
+            size = 52.dp,
             brightGold = accents.goldBright,
             deepGold = accents.goldDeep,
             embossDark = accents.embossDark,

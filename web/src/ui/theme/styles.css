@@ -950,15 +950,42 @@ select {
 }
 
 .surah-header {
+  position: relative;
   text-align: center;
   padding: 1.35rem 0 1.75rem;
   max-width: var(--reader-max);
   margin: 0 auto;
 }
 
+/* This chapter's own Hankin field, tooled at whisper ink behind the
+   header — grown from the same seed as the rosette sitting on it, not the
+   fixed pattern every chapter used to share. Fades at the top/bottom edges
+   (mirrors Android `verticalFadingEdges`, 12px top / 36px bottom) so it
+   dissolves into the page instead of cutting off hard. */
+.surah-header-weave {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 12px,
+    black calc(100% - 36px),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 12px,
+    black calc(100% - 36px),
+    transparent 100%
+  );
+}
+
 .surah-header .rosette {
-  width: 3.25rem;
-  height: 3.25rem;
+  position: relative;
+  width: 3.75rem;
+  height: 3.75rem;
   margin: 0 auto 0.9rem;
   opacity: 0.92;
 }

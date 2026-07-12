@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   chapterOrnamentSeed,
-  generateChapterRosette,
+  generateChapterOrnament,
   generateCoverOrnament,
   Mulberry32,
   SEAL_RING_RADIUS,
@@ -190,24 +190,26 @@ describe('ornamentGenerator', () => {
     expect(seeds.size).toBe(114)
   })
 
-  it('reproduces the same rosette for the same chapter and ayah count', () => {
+  it('reproduces the same ornament for the same chapter and ayah count', () => {
     const seed = chapterOrnamentSeed(2, 286)
-    expect(generateChapterRosette(seed)).toEqual(generateChapterRosette(seed))
+    expect(generateChapterOrnament(seed)).toEqual(generateChapterOrnament(seed))
   })
 
-  it('renders different rosettes for chapters that share an ayah count', () => {
+  it('renders different rosettes and fields for chapters that share an ayah count', () => {
     const elevenAyahChapters = [62, 63, 93, 100, 101]
-    const rosettes = elevenAyahChapters.map((c) => generateChapterRosette(chapterOrnamentSeed(c, 11)))
-    const unique = new Set(rosettes.map((r) => JSON.stringify(r)))
-    expect(unique.size).toBe(elevenAyahChapters.length)
+    const ornaments = elevenAyahChapters.map((c) => generateChapterOrnament(chapterOrnamentSeed(c, 11)))
+    const uniqueRosettes = new Set(ornaments.map((o) => JSON.stringify(o.rosette)))
+    const uniqueFields = new Set(ornaments.map((o) => JSON.stringify(o.field)))
+    expect(uniqueRosettes.size).toBe(elevenAyahChapters.length)
+    expect(uniqueFields.size).toBe(elevenAyahChapters.length)
   })
 
-  it('chapter rosette never draws a hexagram', () => {
+  it('chapter ornament never draws a hexagram', () => {
     const violations: string[] = []
     for (let chapter = 1; chapter <= 114; chapter++) {
       for (const ayahCount of [3, 6, 11, 88, 286]) {
-        const rosette = generateChapterRosette(chapterOrnamentSeed(chapter, ayahCount))
-        for (const s of rosette.strokes) {
+        const ornament = generateChapterOrnament(chapterOrnamentSeed(chapter, ayahCount))
+        for (const s of [...ornament.rosette.strokes, ...ornament.field.strokes]) {
           if (s.closed && s.points.length === 3) {
             violations.push(`chapter ${chapter}, ${ayahCount} ayahs: triangle`)
           }

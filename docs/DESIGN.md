@@ -195,26 +195,30 @@ image, so it is crisp at any density and nearly free to render.
   `web/src/ui/theme/ornamentGenerator.ts` over an identical mulberry32
   stream) composes the geometry from that vocabulary. The cover's medallion,
   corner seals, border frieze, and leather field all grow from one random
-  seed per launch. The **surah rosette is seeded per chapter** instead —
-  `chapterOrnamentSeed(chapterNumber, ayahCount)` folds the chapter's verse
-  count (the dominant term, so a chapter's length reads as its ornament's
-  fingerprint — chapters of similar length grow kin-looking rosettes) with
-  its number (so all 114 chapters render distinctly even though only 77 of
-  them have a verse count no other chapter shares); the same chapter always
-  regrows the same rosette. Border friezes (cover only) come from five band
-  grammars of tooled bindings: a zigzag lattice with pearls in its diamonds,
-  a two-strand cable with pearl eyes, a Hankin strip, a nested lozenge
-  chain, and a khatam chain of small eight-fold stars linked by diamonds.
-  On the cover, the **medallion and field build in real time** — strokes
-  ink themselves in along their length across ~3.4 s, field first, then
-  medallion outside-in — so the illumination is drawn before the reader's
-  eyes, not stamped; the **border and corner seals are static**, complete
-  from the very first frame, the binding's tooling rather than illumination.
-  The **surah rosette is likewise static** — fixed page typography, not a
-  ceremony. One absolute rule, enforced everywhere this generator draws: no
-  composition may read as a hexagram — star indices that decompose into
-  triangles ({12/4}), 6-fold seals, and 6-fold field tilings are all
-  excluded by construction and guarded by tests on both platforms.
+  seed per launch. The **surah header is seeded per chapter** instead — one
+  `chapterOrnamentSeed(chapterNumber, ayahCount)` grows both the rosette
+  *and* the field tooled behind it (`ChapterOrnament`/`generateChapterOrnament`),
+  so the header's whole ornament is this chapter's own, not a rosette
+  sitting on a pattern every chapter shares. The seed folds the chapter's
+  verse count (the dominant term, so a chapter's length reads as its
+  ornament's fingerprint — chapters of similar length grow kin-looking
+  rosettes) with its number (so all 114 chapters render distinctly even
+  though only 77 of them have a verse count no other chapter shares); the
+  same chapter always regrows the same ornament. Border friezes (cover
+  only) come from five band grammars of tooled bindings: a zigzag lattice
+  with pearls in its diamonds, a two-strand cable with pearl eyes, a Hankin
+  strip, a nested lozenge chain, and a khatam chain of small eight-fold
+  stars linked by diamonds. On the cover, the **medallion and field build
+  in real time** — strokes ink themselves in along their length across
+  ~3.4 s, field first, then medallion outside-in — so the illumination is
+  drawn before the reader's eyes, not stamped; the **border and corner
+  seals are static**, complete from the very first frame, the binding's
+  tooling rather than illumination. The **surah header's rosette and field
+  are likewise static** — fixed page typography, not a ceremony. One
+  absolute rule, enforced everywhere this generator draws: no composition
+  may read as a hexagram — star indices that decompose into triangles
+  ({12/4}), 6-fold seals, and 6-fold field tilings are all excluded by
+  construction and guarded by tests on both platforms.
 - **Gilding.** Gold is never a flat color. Gilded elements (the surah
   rosette, ayah number marks, the home mark) carry a three-stop leaf
   gradient (deep bronze → bright gilt → deep bronze). On the reader, the
@@ -225,8 +229,10 @@ image, so it is crisp at any density and nearly free to render.
   with a dark copy nudged to the lower-right and a light copy to the
   upper-left beneath its face — relief under a top-left light, subtle enough
   to be felt more than seen.
-- **The weave.** Behind each surah opening, a star-and-cross tessellation at
-  ~4 % ink, embossed, dissolving into the page at its edges.
+- **The weave.** Behind each surah opening, that chapter's own generated
+  Hankin field at ~4 % ink, embossed, dissolving into the page at its
+  edges — grown from the same seed as the rosette sitting on it (see "The
+  generating machine" above), not a fixed pattern every chapter shares.
 - **Basmalah.** Every surah except Al-Fatihah (where it *is* ayah 1) and
   At-Tawbah (which has none) opens with the basmalah as traditional Naskh
   manuscript calligraphy beneath the chapter title — ink on the page, not a

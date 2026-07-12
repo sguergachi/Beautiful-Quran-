@@ -358,16 +358,17 @@ fun GeneratedBorderBand(
 }
 
 /**
- * The generated leather field: this launch's Hankin star pattern tiled
- * across the cover at whisper ink, replacing the fixed star-and-cross
- * weave. Washes in over the first half of the build. Geometry is built
- * once per size; the wash only re-draws.
+ * A generated Hankin field tiled at whisper ink — the cover's leather
+ * tooling when [build] is given (washes in over the first half of the
+ * build, re-drawing only, geometry built once per size), or a chapter's
+ * static surah-header backdrop when [build] is null (fully inked from the
+ * first frame, fixed typography rather than a ceremony).
  */
 fun Modifier.generatedFieldWeave(
     field: FieldSpec,
     ink: Color,
     embossLight: Color,
-    build: State<Float>,
+    build: State<Float>? = null,
 ): Modifier = drawWithCache {
     val pxPerUnit = (field.cellWidthDp.toFloat().dp.toPx()) / field.cellW.toFloat()
     val cellW = (field.cellW * pxPerUnit).toFloat()
@@ -391,7 +392,7 @@ fun Modifier.generatedFieldWeave(
     }
     val stroke = Stroke(width = 1.dp.toPx())
     onDrawBehind {
-        val a = (build.value / 0.55f).coerceIn(0f, 1f)
+        val a = if (build == null) 1f else (build.value / 0.55f).coerceIn(0f, 1f)
         if (a <= 0f) return@onDrawBehind
         translate(-0.6f, -0.6f) {
             drawPath(weave, embossLight.copy(alpha = embossLight.alpha * a), style = stroke)
