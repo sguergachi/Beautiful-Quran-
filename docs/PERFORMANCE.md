@@ -5,6 +5,9 @@ display's native refresh rate (90/120 Hz where available) with nothing on the
 UI thread that doesn't belong there. This file documents every technique in
 use and the reasoning, so future changes don't regress them.
 
+The latest whole-pipeline review and its profiling constraints are recorded in
+[Android rendering performance audit — 2026-07-12](PERFORMANCE_AUDIT_2026-07-12.md).
+
 ## The frame budget mindset
 
 At 120 Hz a frame is **8.3 ms**. The app's rule of thumb: recomposition is
@@ -29,6 +32,11 @@ recomposes and re-lays-out **nothing**: it only updates a render-node
 property, which is close to free. The same pattern applies to the player-bar
 chrome (`chromeAlpha: () -> Float` — a deferred read, not a Float
 parameter).
+
+The paper stack follows the same rule: its live page position is read inside
+each sheet's `graphicsLayer` and shadow draw callback. Only threshold-derived
+booleans return to composition, so dragging or settling a page does not wake the
+root three-sheet composition every frame.
 
 The no-gloss Arabic path (`ResponsiveHafsAyah`) cannot put `letterFadeIn` on
 the whole ayah. It keeps the shaped ayah as static full-ink spans and applies
