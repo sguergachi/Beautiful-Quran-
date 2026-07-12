@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,14 +70,17 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.drop
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.data.model.Surah
 import com.beautifulquran.data.model.SurahWordSearchSection
 import com.beautifulquran.data.model.WordSearchHit
+import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.domain.WORD_SEARCH_PREVIEW_LIMIT
 import com.beautifulquran.domain.englishTranslationHighlightSpans
+import com.beautifulquran.ui.reader.VerseBookmarkRibbon
 import com.beautifulquran.ui.theme.ArabicTitleStyle
 import com.beautifulquran.ui.theme.GildedRosette
 import com.beautifulquran.ui.theme.LocalQuranAccents
@@ -99,6 +103,9 @@ fun HomeScreen(
     /** True while the paper stack is on (or near) the chapter list — drives
      *  the floating transport's enter/exit across page turns. */
     coverSheetVisible: Boolean = true,
+    /** Number of saved verses; zero removes the Home-page ribbon entirely. */
+    bookmarkCount: Int = 0,
+    onOpenBookmarks: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
@@ -122,6 +129,7 @@ fun HomeScreen(
     var searchFocused by remember { mutableStateOf(false) }
     var boxTop by remember { mutableFloatStateOf(0f) }
     var boxHeight by remember { mutableFloatStateOf(0f) }
+    var searchTop by remember { mutableFloatStateOf(0f) }
     var searchBottom by remember { mutableFloatStateOf(0f) }
     var searchBounds by remember { mutableStateOf<Rect?>(null) }
     var searchPaneBounds by remember { mutableStateOf<Rect?>(null) }
@@ -137,6 +145,22 @@ fun HomeScreen(
         val paneTop = searchBottom - boxTop + searchPaneTopGapPx
         val paneBottom = boxHeight - imeBottom - searchPaneBottomGapPx
         (paneBottom - paneTop).coerceAtLeast(0f).toDp()
+    }
+    var previousBookmarkCount by remember { mutableIntStateOf(bookmarkCount) }
+    var ribbonUnfurlPending by remember { mutableStateOf(false) }
+    var ribbonUnfurlEpoch by remember { mutableIntStateOf(0) }
+
+    // A mark is normally added on Reader while Home is covered. Remember that
+    // event, then begin the long unfurl only once the page turn exposes Home.
+    LaunchedEffect(bookmarkCount) {
+        if (bookmarkCount > previousBookmarkCount) ribbonUnfurlPending = true
+        previousBookmarkCount = bookmarkCount
+    }
+    LaunchedEffect(coverSheetVisible, ribbonUnfurlPending) {
+        if (coverSheetVisible && ribbonUnfurlPending) {
+            ribbonUnfurlEpoch++
+            ribbonUnfurlPending = false
+        }
     }
 
     // When the search takes focus, lift it to the top of the list so the title
@@ -295,6 +319,7 @@ fun HomeScreen(
                         .padding(horizontal = 24.dp)
                         .onFocusChanged { searchFocused = it.isFocused }
                         .onGloballyPositioned {
+                            searchTop = it.boundsInWindow().top
                             searchBottom = it.boundsInWindow().bottom
                             searchBounds = it.boundsInRoot()
                         },
@@ -418,6 +443,34 @@ fun HomeScreen(
                     .height(searchPaneHeight)
                     .onGloballyPositioned { searchPaneBounds = it.boundsInRoot() },
             )
+
+            if (bookmarkCount > 0 && searchTop > 0f && boxHeight > 0f) {
+                val ribbonTopPx = (searchTop - boxTop).coerceAtLeast(0f)
+                val ribbonHeight = with(density) {
+                    (boxHeight - ribbonTopPx)
+                        .coerceAtLeast(96.dp.toPx())
+                        .toDp()
+                }
+                VerseBookmarkRibbon(
+                    bookmarked = true,
+                    focused = true,
+                    side = AyahSelectorSide.LEFT,
+                    chromeAlpha = { 1f },
+                    interactive = true,
+                    onToggle = {
+                        onOpenBookmarks()
+                        true
+                    },
+                    unfurlSignal = ribbonUnfurlEpoch,
+                    topInset = 0.dp,
+                    bottomGap = 16.dp,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset { IntOffset(0, ribbonTopPx.roundToInt()) }
+                        .height(ribbonHeight)
+                        .zIndex(2f),
+                )
+            }
 
             // Floating transport — same bottom inset as the reader's floating
             // Back-to / return-to-ayah controls so the paper stack keeps one

@@ -57,7 +57,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.AppViewModelFactory
 import com.beautifulquran.ui.PageTurnSounds
-import com.beautifulquran.ui.bookmarks.BookmarksEdgeRibbon
 import com.beautifulquran.ui.bookmarks.BookmarksScreen
 import com.beautifulquran.ui.bookmarks.BookmarksViewModel
 import com.beautifulquran.ui.entrance.EntranceCover
@@ -453,7 +452,9 @@ private fun PaperStackApp(
             layer = PaperLayer.Bookmarks,
             stackPosition = stackPositionProvider,
             settingsLayer = settingsLayer,
-            modifier = Modifier.zIndex(0.5f),
+            // The left index is a top sheet: it slides over Chapters rather
+            // than exposing another copy of the cover underneath it.
+            modifier = Modifier.zIndex(2.25f),
         ) {
             BookmarksScreen(
                 viewModel = bookmarksViewModel,
@@ -589,15 +590,9 @@ private fun PaperStackApp(
                 // slides in when returning to chapter selection and out when
                 // leaving for the reader — not only when nowPlaying flips.
                 coverSheetVisible = coverSheetVisible,
+                bookmarkCount = bookmarkCount,
+                onOpenBookmarks = { animateTo(BOOKMARKS_LAYER) },
             )
-            if (bookmarkCount > 0) {
-                BookmarksEdgeRibbon(
-                    onClick = { animateTo(BOOKMARKS_LAYER) },
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .zIndex(1f),
-                )
-            }
         }
 
         // Concordance "Back to …" — opaque floating capsule above the paper
@@ -704,26 +699,18 @@ private fun Modifier.paperLayerTransform(
     when (layer) {
         PaperLayer.Bookmarks -> {
             val reveal = (-position).coerceIn(0f, 1f)
-            // Once navigation moves right of Chapters, park this left-hand
-            // index fully off-screen as well as transparent. Its z-order must
-            // sit above Settings while it is revealed, so translation also
-            // keeps its search/results from intercepting Settings touches.
-            translationX = if (position >= 0f) {
-                -(width + STACK_OFFSCREEN_OVERSCAN_DP * density)
-            } else {
-                -width * 0.055f * (1f - reveal)
-            }
-            scaleX = 0.985f + 0.015f * reveal
-            scaleY = 0.985f + 0.015f * reveal
-            alpha = if (position < 0f) 1f else 0f
+            // A genuine top sheet entering from the left. At Chapters it is
+            // parked wholly beyond the edge; pulling right lays it over Home.
+            translationX = -(width + STACK_OFFSCREEN_OVERSCAN_DP * density) *
+                (1f - reveal)
+            rotationY = -4f * (1f - reveal)
+            alpha = if (position <= 0f) 1f else 0f
         }
         PaperLayer.Cover -> {
             val forwardTurn = position.coerceIn(0f, 1f)
-            val bookmarkTurn = (-position).coerceIn(0f, 1f)
-            translationX = (width + STACK_OFFSCREEN_OVERSCAN_DP * density) *
-                (bookmarkTurn - forwardTurn)
-            rotationY = 5f * bookmarkTurn - 5f * forwardTurn
-            shadowElevation = 22f * (1f - maxOf(forwardTurn, bookmarkTurn))
+            translationX = -(width + STACK_OFFSCREEN_OVERSCAN_DP * density) * forwardTurn
+            rotationY = -5f * forwardTurn
+            shadowElevation = 22f * (1f - forwardTurn)
         }
         PaperLayer.Ayah -> {
             val reveal = position.coerceIn(0f, 1f)

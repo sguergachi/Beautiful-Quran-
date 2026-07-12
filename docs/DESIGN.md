@@ -379,9 +379,10 @@ Implementation: `ui/reader/VerseBookmarkRibbon.kt`, drawn per verse inside
 SharedPreferences store (`data/BookmarkRepository.kt`), never in the read-only
 `quran.db`.
 
-Once the first verse is marked, a narrow ruby ribbon remains exposed on the
-left edge of the Chapters sheet. Tapping it—or pulling the Chapters sheet to
-the right—reveals the Bookmarks sheet beneath. This is a real page in the paper
+Once a newly marked verse returns to Chapters, the same physical ribbon used
+inside its verse block unfurls from the search line to just above the page
+bottom, then remains exposed on the left edge. Tapping it—or pulling right from Chapters—
+slides the Bookmarks sheet in from the left above it. This is a real page in the paper
 stack, not an overlay: results are grouped by surah, show Arabic and translation
 snippets with their chapter:ayah reference, and can be searched by reference,
 chapter name, or verse text. The small ruby strip beside each result removes the

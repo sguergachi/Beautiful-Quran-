@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.beautifulquran.data.AyahSelectorSide
@@ -87,6 +88,11 @@ internal fun VerseBookmarkRibbon(
     interactive: Boolean,
     onToggle: () -> Boolean,
     modifier: Modifier = Modifier,
+    /** Non-zero changes replay the same physical unfurl for an already saved
+     * ribbon, used when a new bookmark first arrives back on Chapters. */
+    unfurlSignal: Int = 0,
+    topInset: Dp = TOP_INSET_DP.dp,
+    bottomGap: Dp = BOTTOM_GAP_DP.dp,
 ) {
     val mirrored = side == AyahSelectorSide.RIGHT
     val ruby = LocalQuranAccents.current.bookmarkRibbon
@@ -101,6 +107,7 @@ internal fun VerseBookmarkRibbon(
     val sway = remember { Animatable(0f) }
     var animating by remember { mutableStateOf(false) }
     var job by remember { mutableStateOf<Job?>(null) }
+    var stripSize by remember { mutableStateOf(IntSize.Zero) }
 
     // External bookmark changes snap without animation — only the tap path
     // below runs the unfurl.
@@ -154,10 +161,17 @@ internal fun VerseBookmarkRibbon(
         }
     }
 
+    LaunchedEffect(unfurlSignal) {
+        if (unfurlSignal <= 0 || !bookmarked) return@LaunchedEffect
+        // Let the returning Home sheet finish its first measure so duration
+        // and cloth travel use the ribbon's real full-page height.
+        delay(16)
+        playUnfurl(stripSize.height.toFloat().coerceAtLeast(1f))
+    }
+
     val latestOnToggle by rememberUpdatedState(onToggle)
     val latestChrome by rememberUpdatedState(chromeAlpha)
     val interaction = remember { MutableInteractionSource() }
-    var stripSize by remember { mutableStateOf(IntSize.Zero) }
 
     // Tap target is the whole strip: clickable is more reliable than a nested
     // empty pointerInput Box, and the strip already sits in the ayah block's
@@ -197,17 +211,17 @@ internal fun VerseBookmarkRibbon(
             if (h <= 0f) return@Canvas
             val edgeInset = EDGE_INSET_DP.dp.toPx()
             val ribbonW = RIBBON_WIDTH_DP.dp.toPx()
-            val topInset = TOP_INSET_DP.dp.toPx()
+            val topInsetPx = topInset.toPx()
             val nubLen = NUB_LENGTH_DP.dp.toPx()
-            val bottomGap = BOTTOM_GAP_DP.dp.toPx()
+            val bottomGapPx = bottomGap.toPx()
             val notch = NOTCH_DP.dp.toPx()
             val waveAmp = WAVE_AMP_DP.dp.toPx()
             val settleAmp = SETTLE_AMP_DP.dp.toPx()
             val nubStroke = NUB_STROKE_DP.dp.toPx()
             // Resting full length stops short of the block bottom so consecutive
             // saved ribbons (and the next verse's idle tip) never kiss.
-            val retractedTipY = topInset + nubLen
-            val fullLen = (h - bottomGap).coerceAtLeast(retractedTipY)
+            val retractedTipY = topInsetPx + nubLen
+            val fullLen = (h - bottomGapPx).coerceAtLeast(retractedTipY)
 
             fun ax(logicalX: Float): Float =
                 if (mirrored) size.width - logicalX else logicalX
@@ -253,8 +267,8 @@ internal fun VerseBookmarkRibbon(
             // Always a swallowtail tip — idle "nub" is just that tip, short and
             // faded; a saved mark is the same shape grown to the block bottom.
             val path = Path().apply {
-                val top = topInset
-                val bot = tipY.coerceAtLeast(topInset + nubLen * 0.6f)
+                val top = topInsetPx
+                val bot = tipY.coerceAtLeast(topInsetPx + nubLen * 0.6f)
                 val span = (bot - top).coerceAtLeast(1f)
                 val notchDepth = minOf(notch, span * 0.45f)
                 val steps = (span / 3f).toInt().coerceIn(6, 64)
@@ -276,7 +290,7 @@ internal fun VerseBookmarkRibbon(
                     0f to ruby,
                     0.55f to ruby,
                     1f to ruby.copy(alpha = 0.82f),
-                    startY = topInset,
+                    startY = topInsetPx,
                     endY = tipY.coerceAtLeast(1f),
                 )
                 drawPath(path, fill, alpha = alpha)
