@@ -1,7 +1,7 @@
 /**
  * Verse bookmark ribbon — port of Android `VerseBookmarkRibbon.kt`.
  *
- * Idle: tip hidden until the verse is hovered (or the ribbon is
+ * Idle: outlined tip hidden until the verse is hovered (or the ribbon is
  * keyboard-focused). Saved: the same ruby strip grown nearly the full
  * verse height. Click unfurls with a cloth wave + overshoot; unmark
  * gathers back into the tip.
@@ -189,19 +189,28 @@ export function VerseBookmarkRibbon({
       ctx.closePath()
     }
 
-    // Flat ruby fill — no edge strokes or lateral shading (avoids outline/shadow).
+    // Ruby fill belongs only to a saved mark. The idle affordance remains an
+    // empty swallowtail outline, so it cannot read as an active bookmark.
     buildBodyPath()
     const x0 = Math.min(ax(outer), ax(inner))
     const x1 = Math.max(ax(outer), ax(inner))
-    const tipWash = ctx.createLinearGradient(0, top - TOP_FOLD, 0, bot)
-    tipWash.addColorStop(0, `rgba(${r},${g},${b},${alpha})`)
-    tipWash.addColorStop(0.55, `rgba(${r},${g},${b},${alpha})`)
-    tipWash.addColorStop(1, `rgba(${r},${g},${b},${alpha * 0.82})`)
-    ctx.fillStyle = tipWash
-    ctx.fill()
+    if (showingRibbon) {
+      const tipWash = ctx.createLinearGradient(0, top - TOP_FOLD, 0, bot)
+      tipWash.addColorStop(0, `rgba(${r},${g},${b},${alpha})`)
+      tipWash.addColorStop(0.55, `rgba(${r},${g},${b},${alpha})`)
+      tipWash.addColorStop(1, `rgba(${r},${g},${b},${alpha * 0.82})`)
+      ctx.fillStyle = tipWash
+      ctx.fill()
+    } else {
+      ctx.strokeStyle = `rgba(${r},${g},${b},${alpha})`
+      ctx.lineWidth = 1.25
+      ctx.lineJoin = 'round'
+      ctx.lineCap = 'round'
+      ctx.stroke()
+    }
 
     // Soft weave
-    if (span > NUB_LENGTH && alpha > 0.3) {
+    if (showingRibbon && span > NUB_LENGTH && alpha > 0.3) {
       ctx.save()
       buildBodyPath()
       ctx.clip()

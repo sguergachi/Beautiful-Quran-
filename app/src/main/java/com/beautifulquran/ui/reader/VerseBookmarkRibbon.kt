@@ -23,6 +23,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
@@ -58,6 +61,7 @@ private const val BOTTOM_GAP_DP = 48f   // leave air above the next verse's tip
 private const val NOTCH_DP = 5.5f
 private const val WAVE_AMP_DP = 4.5f    // cloth sway while unfurling
 private const val SETTLE_AMP_DP = 3.2f  // final flutter amplitude
+private const val NUB_STROKE_DP = 1.25f // idle outline: affordance, not a mark
 private const val OVERSHOOT = 0.06f     // tip past the resting length, then spring back
 /** Retracted tip — a quiet hint, not a mark. */
 private const val NUB_ALPHA = 0.22f
@@ -199,6 +203,7 @@ internal fun VerseBookmarkRibbon(
             val notch = NOTCH_DP.dp.toPx()
             val waveAmp = WAVE_AMP_DP.dp.toPx()
             val settleAmp = SETTLE_AMP_DP.dp.toPx()
+            val nubStroke = NUB_STROKE_DP.dp.toPx()
             // Resting full length stops short of the block bottom so consecutive
             // saved ribbons (and the next verse's idle tip) never kiss.
             val retractedTipY = topInset + nubLen
@@ -265,14 +270,29 @@ internal fun VerseBookmarkRibbon(
                 close()
             }
 
-            val fill = Brush.verticalGradient(
-                0f to ruby,
-                0.55f to ruby,
-                1f to ruby.copy(alpha = 0.82f),
-                startY = topInset,
-                endY = tipY.coerceAtLeast(1f),
-            )
-            drawPath(path, fill, alpha = alpha)
+            if (showingRibbon) {
+                val fill = Brush.verticalGradient(
+                    0f to ruby,
+                    0.55f to ruby,
+                    1f to ruby.copy(alpha = 0.82f),
+                    startY = topInset,
+                    endY = tipY.coerceAtLeast(1f),
+                )
+                drawPath(path, fill, alpha = alpha)
+            } else {
+                // An unmarked verse gets an empty ribbon silhouette. Ruby fill
+                // is reserved for the reader's saved marks.
+                drawPath(
+                    path = path,
+                    color = ruby,
+                    alpha = alpha,
+                    style = Stroke(
+                        width = nubStroke,
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round,
+                    ),
+                )
+            }
         }
     }
 }
