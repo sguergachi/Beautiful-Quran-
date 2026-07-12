@@ -1157,7 +1157,14 @@ fun AyahBlock(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 28.dp, vertical = 14.dp),
+                .padding(
+                    // Extra room on the bookmark ribbon's side so its tip
+                    // doesn't crowd the verse text.
+                    start = if (bookmarkSide == AyahSelectorSide.LEFT) 38.dp else 28.dp,
+                    end = if (bookmarkSide == AyahSelectorSide.RIGHT) 38.dp else 28.dp,
+                    top = 14.dp,
+                    bottom = 14.dp,
+                ),
         ) {
             if (readingMode == ReadingMode.ENGLISH_ONLY) {
                 ResponsiveEnglishAyah(
