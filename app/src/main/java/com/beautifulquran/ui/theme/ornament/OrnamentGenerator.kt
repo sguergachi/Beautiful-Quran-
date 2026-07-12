@@ -130,7 +130,28 @@ private const val TAU = 2.0 * PI
 /** All rosette layers grow from a vertex pointing up. */
 private const val ROT0 = -PI / 2.0
 
+/**
+ * Corner-seal ring radius in the unit box. Renderers terminate the border
+ * band's runs against this ring (rim = radius × seal diameter), so it is
+ * part of the seal ↔ border contract on both platforms.
+ */
+const val SEAL_RING_RADIUS = 0.46
+
 private fun gcd(a: Int, b: Int): Int = if (b == 0) a else gcd(b, a % b)
+
+/**
+ * Star indices whose {n/k} never decomposes into triangles. A triangle
+ * decomposition (n / gcd(n, k) == 3, e.g. {12/4}) reads as overlapped
+ * triangles — the hexagram — which this app must never draw. The seal
+ * fold mapping below avoids 6-fold stars for the same reason.
+ */
+private fun allowedStarKs(n: Int): List<Int> {
+    val ks = ArrayList<Int>()
+    for (k in 2..n / 2 - 1) {
+        if (n / gcd(n, k) != 3) ks.add(k)
+    }
+    return ks
+}
 
 private fun polar(angle: Double, radius: Double): OrnamentPoint =
     OrnamentPoint(0.5 + radius * cos(angle), 0.5 + radius * sin(angle))
@@ -251,8 +272,7 @@ private fun generateMedallion(rng: Mulberry32): RosetteSpec {
     strokes.add(circleStroke(r1, seg, StrokeWeight.Hairline))
     strokes.add(circleStroke(r2, seg, StrokeWeight.Hairline))
 
-    val ks = ArrayList<Int>()
-    for (k in 2..fold / 2 - 1) ks.add(k)
+    val ks = allowedStarKs(fold)
     val k = ks[rng.int(ks.size)]
     val rs = rng.range(0.30, 0.345)
     strokes.addAll(starPolygons(fold, k, rs, ROT0, StrokeWeight.Rule))
@@ -317,19 +337,20 @@ private fun generateMedallion(rng: Mulberry32): RosetteSpec {
 
 /**
  * The corner seal: a smaller star of the medallion's family (halved above
- * 12 so seals stay legible at seal size), an optional hairline ring, and a
- * pearl at the heart. Seals ink in late — after the medallion has formed.
+ * 12 so seals stay legible at seal size — never to 6, which would force
+ * the hexagram), inside a mandatory hairline ring, with a pearl at the
+ * heart. The ring is the hub the border band's runs terminate against, so
+ * it is never optional. Seals ink in late — after the medallion has formed.
  */
 private fun generateSeal(rng: Mulberry32, fold: Int): RosetteSpec {
-    val m = if (fold >= 12) fold / 2 else fold
-    val ks = ArrayList<Int>()
-    for (k in 2..m / 2 - 1) ks.add(k)
+    var m = if (fold >= 12) fold / 2 else fold
+    if (m == 6) m = 8
+    val ks = allowedStarKs(m)
     val k = ks[rng.int(ks.size)]
-    val ring = rng.chance(0.5)
     val starR = rng.range(0.32, 0.37)
 
     val strokes = ArrayList<OrnamentStroke>()
-    if (ring) strokes.add(circleStroke(0.46, m * 12, StrokeWeight.Hairline))
+    strokes.add(circleStroke(SEAL_RING_RADIUS, m * 12, StrokeWeight.Hairline))
     strokes.addAll(starPolygons(m, k, starR, ROT0, StrokeWeight.Hairline))
     val n = strokes.size
     val stamped = strokes.mapIndexed { i, s ->
@@ -544,15 +565,17 @@ private fun regularPolygon(cx: Double, cy: Double, r: Double, n: Int, startAngle
 /**
  * A field pattern from one of three classical tilings — the square grid,
  * the octagon-and-square (4.8.8, home of the star-and-cross), and the
- * hexagonal (6.6.6) — at a sampled contact angle. Angle bands skirt the
- * degenerate θ where paired rays go collinear.
+ * diamond grid (the square grid at 45°, a distinct diagonal read) — at a
+ * sampled contact angle. Angle bands skirt the degenerate θ where paired
+ * rays go collinear. All three tilings live in the 4/8-fold khatam family;
+ * 6-fold tilings are deliberately absent (no hexagram-adjacent stars).
  */
 private fun generateField(rng: Mulberry32): FieldSpec {
     val tiling = rng.int(3)
     val deg = when (tiling) {
         0 -> if (rng.chance(0.5)) rng.range(28.0, 42.0) else rng.range(50.0, 68.0)
         1 -> if (rng.chance(0.5)) rng.range(30.0, 42.0) else rng.range(50.0, 64.0)
-        else -> rng.range(36.0, 58.0)
+        else -> if (rng.chance(0.5)) rng.range(28.0, 42.0) else rng.range(50.0, 68.0)
     }
     val theta = deg * PI / 180.0
 
@@ -594,13 +617,19 @@ private fun generateField(rng: Mulberry32): FieldSpec {
             )
         }
         else -> {
-            // 6.6.6 — two flat-top hexagons per rectangular cell.
-            cellW = 3.0
-            cellH = kotlin.math.sqrt(3.0)
-            cellWidthDp = rng.range(132.0, 180.0)
-            val hex = regularPolygon(0.0, 0.0, 1.0, 6, 0.0)
-            polygons.add(hex)
-            polygons.add(translated(hex, 1.5, kotlin.math.sqrt(3.0) / 2.0))
+            // Diamond grid — two unit diamonds per 2 × 2 cell, the square
+            // grid rotated 45° for a diagonal star-and-cross read.
+            cellW = 2.0
+            cellH = 2.0
+            cellWidthDp = rng.range(96.0, 132.0)
+            val diamond = listOf(
+                OrnamentPoint(1.0, 0.0),
+                OrnamentPoint(0.0, 1.0),
+                OrnamentPoint(-1.0, 0.0),
+                OrnamentPoint(0.0, -1.0),
+            )
+            polygons.add(diamond)
+            polygons.add(translated(diamond, 1.0, 1.0))
         }
     }
 

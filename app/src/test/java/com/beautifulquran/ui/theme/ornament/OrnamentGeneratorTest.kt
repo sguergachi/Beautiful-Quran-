@@ -128,6 +128,22 @@ class OrnamentGeneratorTest {
     }
 
     @Test
+    fun `never draws a hexagram - no triangles, no 6-fold stars, anywhere`() {
+        for (seed in 0 until 400) {
+            val o = generateCoverOrnament(seed * 104729 + 13)
+            assertTrue("seal fold 6 (seed $seed)", o.cornerSeal.fold != 6)
+            val everyStroke = o.medallion.strokes + o.cornerSeal.strokes +
+                o.border.strokes + o.field.strokes
+            for (s in everyStroke) {
+                assertTrue(
+                    "closed triangle found (seed $seed)",
+                    !(s.closed && s.points.size == 3),
+                )
+            }
+        }
+    }
+
+    @Test
     fun `variety - a seed sample uses every fold, motif, tiling and border`() {
         val folds = HashSet<Int>()
         val tilingCells = HashSet<Long>()

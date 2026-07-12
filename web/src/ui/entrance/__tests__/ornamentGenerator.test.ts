@@ -114,6 +114,24 @@ describe('ornamentGenerator', () => {
     }
   })
 
+  it('never draws a hexagram — no triangles, no 6-fold stars, anywhere', () => {
+    const violations: string[] = []
+    for (let seed = 0; seed < 400; seed++) {
+      const o = generateCoverOrnament(seed * 104729 + 13)
+      if (o.cornerSeal.fold === 6) violations.push(`seed ${seed}: 6-fold seal`)
+      const everyStroke = [
+        ...o.medallion.strokes,
+        ...o.cornerSeal.strokes,
+        ...o.border.strokes,
+        ...o.field.strokes,
+      ]
+      for (const s of everyStroke) {
+        if (s.closed && s.points.length === 3) violations.push(`seed ${seed}: triangle`)
+      }
+    }
+    expect(violations).toEqual([])
+  })
+
   it('a seed sample uses every fold, motif family, tiling, and border', () => {
     const folds = new Set<number>()
     const tilings = new Set<string>()

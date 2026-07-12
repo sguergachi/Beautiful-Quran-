@@ -103,8 +103,29 @@ const TAU = 2 * Math.PI
 /** All rosette layers grow from a vertex pointing up. */
 const ROT0 = -Math.PI / 2
 
+/**
+ * Corner-seal ring radius in the unit box. Renderers terminate the border
+ * band's runs against this ring (rim = radius × seal diameter), so it is
+ * part of the seal ↔ border contract on both platforms.
+ */
+export const SEAL_RING_RADIUS = 0.46
+
 function gcd(a: number, b: number): number {
   return b === 0 ? a : gcd(b, a % b)
+}
+
+/**
+ * Star indices whose {n/k} never decomposes into triangles. A triangle
+ * decomposition (n / gcd(n, k) === 3, e.g. {12/4}) reads as overlapped
+ * triangles — the hexagram — which this app must never draw. The seal
+ * fold mapping below avoids 6-fold stars for the same reason.
+ */
+function allowedStarKs(n: number): number[] {
+  const ks: number[] = []
+  for (let k = 2; k <= n / 2 - 1; k++) {
+    if (n / gcd(n, k) !== 3) ks.push(k)
+  }
+  return ks
 }
 
 function polar(angle: number, radius: number): OrnamentPoint {
@@ -213,8 +234,7 @@ function generateMedallion(rng: Mulberry32): RosetteSpec {
   strokes.push(circleStroke(r1, seg, 'hairline'))
   strokes.push(circleStroke(r2, seg, 'hairline'))
 
-  const ks: number[] = []
-  for (let k = 2; k <= fold / 2 - 1; k++) ks.push(k)
+  const ks = allowedStarKs(fold)
   const k = ks[rng.int(ks.length)]!
   const rs = rng.range(0.3, 0.345)
   strokes.push(...starPolygons(fold, k, rs, ROT0, 'rule'))
@@ -272,17 +292,20 @@ function generateMedallion(rng: Mulberry32): RosetteSpec {
   return { fold, strokes: assignBirths(strokes), dots }
 }
 
-/** The corner seal — a late-inking small star of the medallion's family. */
+/**
+ * The corner seal — a late-inking small star of the medallion's family
+ * (never 6-fold: that would force the hexagram) inside a mandatory ring,
+ * the hub the border band's runs terminate against.
+ */
 function generateSeal(rng: Mulberry32, fold: number): RosetteSpec {
-  const m = fold >= 12 ? fold / 2 : fold
-  const ks: number[] = []
-  for (let k = 2; k <= m / 2 - 1; k++) ks.push(k)
+  let m = fold >= 12 ? fold / 2 : fold
+  if (m === 6) m = 8
+  const ks = allowedStarKs(m)
   const k = ks[rng.int(ks.length)]!
-  const ring = rng.chance(0.5)
   const starR = rng.range(0.32, 0.37)
 
   const strokes: OrnamentStroke[] = []
-  if (ring) strokes.push(circleStroke(0.46, m * 12, 'hairline'))
+  strokes.push(circleStroke(SEAL_RING_RADIUS, m * 12, 'hairline'))
   strokes.push(...starPolygons(m, k, starR, ROT0, 'hairline'))
   const n = strokes.length
   const stamped = strokes.map((s, i) => {
@@ -488,13 +511,17 @@ function regularPolygon(
   return points
 }
 
-/** A field from the square, octagon-square (4.8.8), or hexagonal tiling. */
+/**
+ * A field from the square, octagon-square (4.8.8), or diamond tiling —
+ * all in the 4/8-fold khatam family; 6-fold tilings are deliberately
+ * absent (no hexagram-adjacent stars).
+ */
 function generateField(rng: Mulberry32): FieldSpec {
   const tiling = rng.int(3)
   let deg: number
   if (tiling === 0) deg = rng.chance(0.5) ? rng.range(28, 42) : rng.range(50, 68)
   else if (tiling === 1) deg = rng.chance(0.5) ? rng.range(30, 42) : rng.range(50, 64)
-  else deg = rng.range(36, 58)
+  else deg = rng.chance(0.5) ? rng.range(28, 42) : rng.range(50, 68)
   const theta = (deg * Math.PI) / 180
 
   const polygons: OrnamentPoint[][] = []
@@ -527,13 +554,19 @@ function generateField(rng: Mulberry32): FieldSpec {
       { x: 0, y: -h },
     ])
   } else {
-    // 6.6.6 — two flat-top hexagons per rectangular cell.
-    cellW = 3
-    cellH = Math.sqrt(3)
-    cellWidthDp = rng.range(132, 180)
-    const hex = regularPolygon(0, 0, 1, 6, 0)
-    polygons.push(hex)
-    polygons.push(translated(hex, 1.5, Math.sqrt(3) / 2))
+    // Diamond grid — two unit diamonds per 2 × 2 cell, the square grid
+    // rotated 45° for a diagonal star-and-cross read.
+    cellW = 2
+    cellH = 2
+    cellWidthDp = rng.range(96, 132)
+    const diamond: OrnamentPoint[] = [
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+      { x: -1, y: 0 },
+      { x: 0, y: -1 },
+    ]
+    polygons.push(diamond)
+    polygons.push(translated(diamond, 1, 1))
   }
 
   const strokes: OrnamentStroke[] = []

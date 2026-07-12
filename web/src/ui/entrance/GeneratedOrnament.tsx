@@ -7,12 +7,14 @@
  * the reader's eyes rather than appearing stamped.
  */
 import { useEffect, useId, useMemo, useState } from 'react'
-import type {
-  BorderSpec,
-  FieldSpec,
-  OrnamentStroke,
-  RosetteSpec,
+import {
+  SEAL_RING_RADIUS,
+  type BorderSpec,
+  type FieldSpec,
+  type OrnamentStroke,
+  type RosetteSpec,
 } from './ornamentGenerator'
+import type { CoverLayout } from './coverLayout'
 
 /** One build clock for the whole cover; Android uses the same schedule. */
 export const ORNAMENT_BUILD_MS = 3_400
@@ -191,12 +193,11 @@ export function fieldWeaveBackground(field: FieldSpec): {
 
 /**
  * One period of the border frieze as a tiling background — horizontal for
- * the top/bottom bands, coordinate-swapped for the left/right ones. Sized
- * by the layout's band height via CSS vars; mirrored sides use transforms.
+ * the top/bottom bands, coordinate-swapped for the left/right ones. The
+ * caller sizes it (integer-period fit); mirrored sides use transforms.
  */
 export function borderBandBackground(border: BorderSpec, vertical: boolean): {
   backgroundImage: string
-  backgroundSize: string
 } {
   const p = border.period
   // Hairline ≈ 1px at a ~11px band, in band units.
@@ -233,31 +234,98 @@ export function borderBandBackground(border: BorderSpec, vertical: boolean): {
     `<defs><g id='b' fill='none' stroke-width='${lw}' stroke-linejoin='round' stroke-linecap='round'>${paths}${dots}</g></defs>` +
     uses.join('') +
     `</svg>`
-  return {
-    backgroundImage: svgDataUri(svg),
-    backgroundSize: vertical
-      ? `var(--cover-band-h) calc(var(--cover-band-h) * ${p.toFixed(4)})`
-      : `calc(var(--cover-band-h) * ${p.toFixed(4)}) var(--cover-band-h)`,
-  }
+  return { backgroundImage: svgDataUri(svg) }
 }
 
 /**
- * The border frieze between the frame's two gilt rules: four bands tiled
- * from each side's midpoint (background-position center), the far sides
- * mirrored so the pattern faces inward, corner joints hidden under the
- * seals. Washes in as the build passes the medallion's crescendo.
+ * The border frieze between the frame's two gilt rules: each side's band
+ * runs rim-to-rim between the corner seals' rings, fitting a whole number
+ * of periods (the period stretches a little), so the pattern arrives at
+ * every corner at the same phase; a short gold stem on the band's axis
+ * ties each ring to the band's first node — one continuous design, not a
+ * band with stamps dropped on top. Far sides are mirrored so the pattern
+ * faces inward. Washes in as the build passes the medallion's crescendo.
  */
-export function GeneratedBorder({ border, built }: { border: BorderSpec; built: boolean }) {
+export function GeneratedBorder({
+  border,
+  built,
+  layout,
+  width,
+  height,
+}: {
+  border: BorderSpec
+  built: boolean
+  layout: CoverLayout
+  width: number
+  height: number
+}) {
   const horizontal = useMemo(() => borderBandBackground(border, false), [border])
   const verticalBg = useMemo(() => borderBandBackground(border, true), [border])
+
+  const bandH = layout.bandHeight
+  const bandStart = layout.bandCenter + layout.starSize * SEAL_RING_RADIUS
+  const periodPx = border.period * bandH
+  const fitted = (side: number): number | null => {
+    const run = side - 2 * bandStart
+    if (run < periodPx / 2) return null
+    return run / Math.max(1, Math.round(run / periodPx))
+  }
+  const hPeriod = fitted(width)
+  const vPeriod = fitted(height)
+  const on = built ? ' entrance-border--on' : ''
+  const start = `${bandStart.toFixed(2)}px`
+
+  const stemLen = bandH * 0.7 + 1
+  const axis = `${(layout.bandCenter - 0.5).toFixed(2)}px`
+  const near = `${(bandStart - 1).toFixed(2)}px`
+  const stems: React.CSSProperties[] = []
+  for (const ax of ['top', 'bottom'] as const) {
+    for (const end of ['left', 'right'] as const) {
+      stems.push({ [ax]: axis, [end]: near, width: stemLen, height: 1 })
+    }
+  }
+  for (const ax of ['left', 'right'] as const) {
+    for (const end of ['top', 'bottom'] as const) {
+      stems.push({ [ax]: axis, [end]: near, width: 1, height: stemLen })
+    }
+  }
+
   return (
     <div className="entrance-borderband" aria-hidden="true">
-      {(['top', 'bottom', 'left', 'right'] as const).map((side) => (
-        <div
-          key={side}
-          className={`entrance-border entrance-border--${side}${built ? ' entrance-border--on' : ''}`}
-          style={side === 'top' || side === 'bottom' ? horizontal : verticalBg}
-        />
+      {hPeriod != null && (
+        <>
+          {(['top', 'bottom'] as const).map((side) => (
+            <div
+              key={side}
+              className={`entrance-border entrance-border--${side}${on}`}
+              style={{
+                ...horizontal,
+                left: start,
+                right: start,
+                backgroundSize: `${hPeriod.toFixed(2)}px ${bandH}px`,
+              }}
+            />
+          ))}
+        </>
+      )}
+      {vPeriod != null && (
+        <>
+          {(['left', 'right'] as const).map((side) => (
+            <div
+              key={side}
+              className={`entrance-border entrance-border--${side}${on}`}
+              style={{
+                ...verticalBg,
+                top: start,
+                bottom: start,
+                backgroundSize: `${bandH}px ${vPeriod.toFixed(2)}px`,
+              }}
+            />
+          ))}
+        </>
+      )}
+      {stems.map((style, i) => (
+        <div key={i} className={`entrance-stem${built ? ' entrance-stem--on' : ''}`} style={style} />
       ))}
     </div>
   )
