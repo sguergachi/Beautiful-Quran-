@@ -55,7 +55,9 @@ On the pressed word at `(surahId, ayah, wordPosition)`:
    sense heading for that root in Quranic usage.
 3. **This form** — part of speech and a plain-English morphology line
    drawn from the annotation (noun / verb, person, gender, number, case,
-   verb form where present). Grammar tags stay secondary to readable
+   verb form and mood where present), plus the exact QAC lemma and its
+   occurrence count beneath this root. A frequency-ordered lemma list shows
+   the other corpus analyses annotated with the same root. Grammar tags stay secondary to readable
    English; the point is understanding, not a tag dump.
 4. **Concordance** — how often this root appears in the Quran, and where.
    This is a first-class part of the surface, not a footnote:
@@ -65,6 +67,9 @@ On the pressed word at `(surahId, ayah, wordPosition)`:
    - A scrollable list of occurrences grouped by **surah** (chapter), each
      row showing surah name / number, ayah number, the Arabic word form at
      that location, and its gloss.
+   - Each chapter initially shows at most **five** references. A quiet
+     show-more / show-fewer line expands or truncates that chapter without
+     changing the other chapter sections.
    - Each occurrence is tappable: choosing one **closes the bleed and
      jumps the reader to that ayah** (same surah navigate-in-place, or
      open the other chapter if the hit is elsewhere), so the concordance

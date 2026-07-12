@@ -88,4 +88,13 @@ data class RootSummary(
     val root: String,
     val occurrenceCount: Int,
     val occurrences: List<RootOccurrence>,
+    /** Corpus lemmas annotated with this root, ordered by frequency. */
+    val lemmas: List<RootLemmaSummary>,
+)
+
+/** One exact QAC lemma/POS analysis found under a root. */
+data class RootLemmaSummary(
+    val lemma: String,
+    val pos: String,
+    val occurrenceCount: Int,
 )
