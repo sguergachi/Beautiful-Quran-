@@ -7,6 +7,18 @@ import { ReaderScreen } from './reader/ReaderScreen'
 import { SettingsScreen } from './settings/SettingsScreen'
 import { EntranceCover } from './entrance/EntranceCover'
 import { BOOKMARKS_LAYER, COVER_LAYER } from './paper/stack'
+import { OrnamentsLab } from './lab/OrnamentsLab'
+
+/** True while the URL hash routes to the Ornaments Lab (`#lab`). */
+function useLabRoute(): boolean {
+  const [isLab, setIsLab] = useState(() => location.hash.startsWith('#lab'))
+  useEffect(() => {
+    const onHash = () => setIsLab(location.hash.startsWith('#lab'))
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+  return isLab
+}
 
 export function resolveTheme(mode: string): string {
   if (mode === 'light') return 'light'
@@ -38,6 +50,7 @@ export function App() {
   const state = useAppState()
   // Once per page load — mirrors Android rememberSaveable entranceDone.
   const [entranceDone, setEntranceDone] = useState(false)
+  const isLab = useLabRoute()
   const swipeStart = useRef<{ x: number; y: number; pointerId: number } | null>(null)
 
   useEffect(() => {
@@ -70,6 +83,10 @@ export function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [entranceDone])
+
+  // The Ornaments Lab is a standalone dev tool — it needs no database, so
+  // it renders over everything the moment the hash routes to it.
+  if (isLab) return <OrnamentsLab />
 
   const stack = state.stackLayer
   // Keep explicit reader ownership as a guard for transient state restores.

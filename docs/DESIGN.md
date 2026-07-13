@@ -60,6 +60,7 @@ surfaces use it today / by design:
 | Notification permission | Play control | The allow / not-now question (word-by-word lyric fade) |
 | [Root Word Viewer](ROOT_VIEWER.md) | Long-pressed word | Root, form, and concordance for that word |
 | [Timings Lab](TIMINGS_LAB.md) | Long-pressed word (developer mode only) | The timing workbench |
+| Ornaments Lab | Settings → Developer (developer mode only) | The procedural ornament generator workbench — explore/design/save seeds |
 
 For the notification prompt specifically:
 

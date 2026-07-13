@@ -3920,3 +3920,255 @@ html[data-entrance='true'] body {
     transform: none;
   }
 }
+
+/* —— Ornaments Lab (developer tool, #lab) —— */
+.lab {
+  position: fixed;
+  inset: 0;
+  overflow: auto;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  padding-bottom: 3rem;
+}
+
+.lab-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--paper-surface);
+  border-bottom: 1px solid var(--gold-deep);
+}
+
+.lab-bar strong {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  color: var(--gold-deep);
+}
+
+.lab-seed,
+.lab-themes {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.lab-seed input {
+  width: 11ch;
+  padding: 0.3rem 0.4rem;
+  font-family: var(--font-body);
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--gold-deep);
+  border-radius: 4px;
+}
+
+.lab button {
+  padding: 0.3rem 0.6rem;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--gold-deep);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.lab button:hover {
+  background: var(--accent-container);
+}
+
+.lab-themes button.is-active {
+  background: var(--gold-deep);
+  color: var(--paper);
+}
+
+.lab-close {
+  margin-left: auto;
+}
+
+.lab-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+  align-items: start;
+}
+
+.lab-panel {
+  border: 1px solid color-mix(in srgb, var(--gold-deep) 45%, transparent);
+  border-radius: 6px;
+  padding: 0.75rem;
+  overflow: hidden;
+}
+
+.lab-panel h3 {
+  margin: 0 0 0.6rem;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: var(--ink-muted);
+}
+
+.lab-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.lab-medallion {
+  width: 200px;
+  height: 200px;
+}
+
+.lab-seal {
+  width: 120px;
+  height: 120px;
+}
+
+.lab-header-preview {
+  position: relative;
+}
+
+.lab-header-rosette {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lab-rosette {
+  width: 3.75rem;
+  height: 3.75rem;
+}
+
+.lab-traits dl {
+  margin: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.lab-traits dl > div {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dotted color-mix(in srgb, var(--ink) 20%, transparent);
+  padding-bottom: 0.2rem;
+}
+
+.lab-traits dt {
+  color: var(--ink-muted);
+}
+
+.lab-traits dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.lab-design label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+  color: var(--ink-muted);
+}
+
+.lab-design select {
+  padding: 0.25rem;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--gold-deep);
+  border-radius: 4px;
+}
+
+.lab-hint,
+.lab-note {
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+  margin: 0 0 0.6rem;
+}
+
+.lab-note {
+  margin: 0.5rem 0 0;
+  font-style: italic;
+}
+
+.lab-save-row {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.lab-save-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.4rem;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--gold-deep);
+  border-radius: 4px;
+}
+
+.lab-saved ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.lab-saved li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lab-empty {
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
+.lab-swatch {
+  padding: 0;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.lab-saved-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.lab-saved code {
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+}
+
+.lab-del {
+  padding: 0.15rem 0.4rem;
+}
+
+.settings-dev-button {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.9rem;
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: var(--paper-surface);
+  border: 1px solid var(--gold-deep);
+  border-radius: 6px;
+  cursor: pointer;
+}

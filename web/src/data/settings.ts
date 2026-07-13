@@ -20,6 +20,8 @@ export interface Settings {
   lastSurah: number
   lastAyah: number
   playbackSpeed: number
+  /** Reveals developer tools (e.g. the Ornaments Lab). Off by default. */
+  developerMode: boolean
 }
 
 const DEFAULTS: Settings = {
@@ -34,6 +36,7 @@ const DEFAULTS: Settings = {
   lastSurah: 0,
   lastAyah: 1,
   playbackSpeed: 1,
+  developerMode: false,
 }
 
 const KEY = 'beautiful-quran-settings'

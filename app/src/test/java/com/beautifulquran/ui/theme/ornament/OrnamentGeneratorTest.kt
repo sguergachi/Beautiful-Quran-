@@ -54,7 +54,7 @@ class OrnamentGeneratorTest {
             assertTrue(o.cornerSeal.strokes.isNotEmpty())
             assertTrue(o.border.strokes.isNotEmpty())
             assertTrue(o.border.period > 0.5)
-            assertTrue(o.field.strokes.size >= 8)
+            assertTrue(o.field.strokes.size >= 2)
             assertTrue(o.field.cellW > 0 && o.field.cellH > 0)
             assertTrue(o.field.cellWidthDp in 40.0..200.0)
 
@@ -119,28 +119,22 @@ class OrnamentGeneratorTest {
     }
 
     @Test
-    fun `field pattern is continuous across cell edges`() {
-        // Every Hankin stroke starts at an edge midpoint shared with the
-        // neighbouring polygon (possibly in the next cell), so each start
-        // point must be matched by another stroke start at the same spot,
-        // modulo the cell period.
+    fun `star-and-cross field kisses at every cell-edge midpoint`() {
+        // The star's four cardinal points must land exactly on the cell-edge
+        // midpoints, so when the cell tiles each star meets its orthogonal
+        // neighbour tip-to-tip — the seam-free continuity of the weave.
         for (seed in intArrayOf(5, 8, 21, 100, 4242)) {
             val f = generateCoverOrnament(seed).field
-            val starts = f.strokes.map { it.points.first() }
-            for (s in starts) {
-                var mates = 0
-                for (t in starts) {
-                    for (dx in -1..1) {
-                        for (dy in -1..1) {
-                            val tx = t.x + dx * f.cellW
-                            val ty = t.y + dy * f.cellH
-                            if (abs(tx - s.x) < 1e-6 && abs(ty - s.y) < 1e-6) mates++
-                        }
-                    }
-                }
-                // The ray itself plus at least its sibling ray; midpoints on
-                // shared edges collect all four rays of the two polygons.
-                assertTrue("seed $seed: lonely ray at (${s.x}, ${s.y})", mates >= 2)
+            val verts = f.strokes.flatMap { it.points }
+            val midpoints = listOf(
+                OrnamentPoint(f.cellW / 2, 0.0),
+                OrnamentPoint(f.cellW / 2, f.cellH),
+                OrnamentPoint(0.0, f.cellH / 2),
+                OrnamentPoint(f.cellW, f.cellH / 2),
+            )
+            for (m in midpoints) {
+                val hit = verts.any { abs(it.x - m.x) < 1e-9 && abs(it.y - m.y) < 1e-9 }
+                assertTrue("seed $seed: no star point at edge midpoint $m", hit)
             }
         }
     }
@@ -162,18 +156,20 @@ class OrnamentGeneratorTest {
     }
 
     @Test
-    fun `variety - a seed sample uses every fold, motif, tiling and border`() {
+    fun `variety - a seed sample uses every fold, field style and border`() {
         val folds = HashSet<Int>()
-        val tilingCells = HashSet<Long>()
+        val fieldStyles = HashSet<Int>()
         val borderShapes = HashSet<Int>()
         for (seed in 0 until 200) {
             val o = generateCoverOrnament(seed)
             folds.add(o.medallion.fold)
-            tilingCells.add((o.field.cellW * 1000).toLong() * 100_000 + (o.field.cellH * 1000).toLong())
+            // Star style (khatam = 2 strokes vs octagram = 1) and centre-mark
+            // presence both shift the field's stroke count.
+            fieldStyles.add(o.field.strokes.size)
             borderShapes.add(o.border.strokes.size * 31 + o.border.dots.size)
         }
         assertEquals(setOf(8, 10, 12, 16), folds)
-        assertEquals(3, tilingCells.size)
+        assertTrue("expected several field styles, got $fieldStyles", fieldStyles.size >= 3)
         assertTrue("expected several border grammars, got $borderShapes", borderShapes.size >= 3)
     }
 
