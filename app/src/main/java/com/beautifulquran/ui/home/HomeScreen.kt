@@ -94,8 +94,9 @@ private val HomeRibbonWidth = 13.dp
 private val HomeRibbonGutter = (HomeRibbonLane - HomeRibbonWidth) / 2f
 private val HomeStartInset = HomeRibbonLane
 private val HomeEndInset = 28.dp
-private val HomeNumberColumn = 34.dp
-private val HomeColumnGap = 10.dp
+private val HomeNumberColumn = 26.dp
+private val HomeColumnGap = 4.dp
+private val HomeArabicOpticalInset = 4.dp
 
 @Composable
 fun HomeScreen(
@@ -583,6 +584,7 @@ private fun ContinueRow(target: ContinueTarget, onClick: () -> Unit) {
             style = ArabicTitleStyle,
             fontSize = 24.sp,
             color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(end = HomeArabicOpticalInset),
         )
     }
 }
@@ -626,6 +628,7 @@ private fun SurahRow(surah: Surah, onClick: () -> Unit) {
             text = surah.nameArabic,
             style = ArabicTitleStyle,
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+            modifier = Modifier.padding(end = HomeArabicOpticalInset),
         )
     }
 }
