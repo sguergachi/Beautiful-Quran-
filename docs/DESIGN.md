@@ -486,8 +486,11 @@ On Android, that lane is fixed to the viewport: scrolling the chapter list
 must never move the ribbon. It begins beside, and slightly below the top of,
 the single Cormorant “Beautiful Quran” masthead and keeps a small, optically
 balanced paper gutter on both sides of the ruby cloth. The Chapters masthead
-does not repeat the Arabic app name; Arabic remains where it identifies
-Quranic content.
+and settings rosette remain fixed above the scrolling chapter document,
+matching the web composition. The masthead does not repeat the Arabic app
+name; Arabic remains where it identifies Quranic content. The ribbon folds
+softly over the top page edge with two restrained rounded corners, matching
+the web renderer without turning its cap into a pill.
 
 There is one content rule beside that lane. On a bookmarked Chapters page,
 the title, search field, and gold chapter-number column all begin on it. The
