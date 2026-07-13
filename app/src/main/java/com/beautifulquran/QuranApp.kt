@@ -5,6 +5,7 @@ import com.beautifulquran.data.BookmarkRepository
 import com.beautifulquran.data.QuranDatabase
 import com.beautifulquran.data.QuranRepository
 import com.beautifulquran.data.SettingsRepository
+import com.beautifulquran.ornamentslab.OrnamentSeedStore
 import com.beautifulquran.playback.PlayerController
 import com.beautifulquran.timingslab.TimingOverrides
 
@@ -20,6 +21,8 @@ class QuranApp : Application() {
         private set
     lateinit var timingOverrides: TimingOverrides
         private set
+    lateinit var ornamentSeeds: OrnamentSeedStore
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -30,5 +33,6 @@ class QuranApp : Application() {
         bookmarks = BookmarkRepository(this)
         player = PlayerController(this)
         timingOverrides = overrides
+        ornamentSeeds = OrnamentSeedStore(this)
     }
 }
