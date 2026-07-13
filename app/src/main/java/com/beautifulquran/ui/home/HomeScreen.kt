@@ -252,8 +252,6 @@ fun HomeScreen(
                         bottomInset = listBottomInset,
                     ),
                     contentPadding = PaddingValues(
-                        start = HomeStartInset,
-                        end = HomeEndInset,
                         bottom = listBottomPadding,
                     ),
                 ) {
@@ -265,6 +263,7 @@ fun HomeScreen(
                             onValueChange = viewModel::onQueryChange,
                             onFocusChanged = { searchFocused = it },
                             modifier = Modifier
+                                .padding(start = HomeStartInset, end = HomeEndInset)
                                 .fillMaxWidth()
                                 .onGloballyPositioned {
                                     searchBottom = it.boundsInWindow().bottom
@@ -334,7 +333,12 @@ fun HomeScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 24.dp),
+                                    .padding(
+                                        start = HomeStartInset,
+                                        end = HomeEndInset,
+                                        top = 24.dp,
+                                        bottom = 24.dp,
+                                    ),
                             )
                         }
                     }
@@ -507,19 +511,17 @@ private fun HomeSearchField(
         decorationBox = { field ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
             ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.width(HomeNumberColumn + HomeColumnGap),
-                ) {
-                    Icon(
-                        Icons.Rounded.Search,
-                        contentDescription = null,
-                        tint = mutedInk.copy(alpha = 0.5f),
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
+                Icon(
+                    Icons.Rounded.Search,
+                    contentDescription = null,
+                    tint = mutedInk.copy(alpha = 0.5f),
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(Modifier.width(12.dp))
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     if (value.isEmpty()) {
                         Text(
@@ -544,8 +546,6 @@ private fun HomeSearchField(
                             tint = mutedInk.copy(alpha = 0.6f),
                         )
                     }
-                } else {
-                    Spacer(Modifier.width(16.dp))
                 }
             }
         },
@@ -563,7 +563,7 @@ private fun ContinueRow(target: ContinueTarget, onClick: () -> Unit) {
             .quietClickable(onClick = onClick)
             .padding(vertical = 18.dp),
     ) {
-        Spacer(Modifier.width(HomeNumberColumn))
+        Spacer(Modifier.width(HomeStartInset + HomeNumberColumn))
         Spacer(Modifier.width(HomeColumnGap))
         Column(Modifier.weight(1f)) {
             Text(
@@ -584,7 +584,7 @@ private fun ContinueRow(target: ContinueTarget, onClick: () -> Unit) {
             style = ArabicTitleStyle,
             fontSize = 24.sp,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(end = HomeArabicOpticalInset),
+            modifier = Modifier.padding(end = HomeEndInset + HomeArabicOpticalInset),
         )
     }
 }
@@ -597,7 +597,12 @@ private fun SurahRow(surah: Surah, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .quietClickable(onClick = onClick)
-            .padding(vertical = 15.dp),
+            .padding(
+                start = HomeStartInset,
+                end = HomeEndInset,
+                top = 15.dp,
+                bottom = 15.dp,
+            ),
     ) {
         Box(Modifier.width(HomeNumberColumn)) {
             Text(
@@ -641,7 +646,12 @@ private fun SearchSectionLabel(text: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 4.dp),
+            .padding(
+                start = HomeStartInset,
+                end = HomeEndInset,
+                top = 8.dp,
+                bottom = 4.dp,
+            ),
     )
 }
 
@@ -653,7 +663,12 @@ private fun WordSearchSurahHeader(section: SurahWordSearchSection) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 18.dp, bottom = 8.dp)
+            .padding(
+                start = HomeStartInset,
+                end = HomeEndInset,
+                top = 18.dp,
+                bottom = 8.dp,
+            )
             .drawBehind {
                 val y = size.height - 0.5.dp.toPx()
                 drawLine(
@@ -722,7 +737,12 @@ private fun WordSearchHitRow(
         modifier = Modifier
             .fillMaxWidth()
             .quietClickable(onClick = onClick)
-            .padding(vertical = 10.dp),
+            .padding(
+                start = HomeStartInset,
+                end = HomeEndInset,
+                top = 10.dp,
+                bottom = 10.dp,
+            ),
     ) {
         Text(
             text = "${hit.surahId}:${hit.ayahNumber}",
@@ -754,7 +774,12 @@ private fun WordSearchExpandRow(
         modifier = Modifier
             .fillMaxWidth()
             .quietClickable(role = Role.Button, onClick = onClick)
-            .padding(vertical = 12.dp),
+            .padding(
+                start = HomeStartInset,
+                end = HomeEndInset,
+                top = 12.dp,
+                bottom = 12.dp,
+            ),
     )
 }
 
@@ -767,6 +792,11 @@ private fun WordSearchCollapseRow(onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .quietClickable(role = Role.Button, onClick = onClick)
-            .padding(vertical = 12.dp),
+            .padding(
+                start = HomeStartInset,
+                end = HomeEndInset,
+                top = 12.dp,
+                bottom = 12.dp,
+            ),
     )
 }

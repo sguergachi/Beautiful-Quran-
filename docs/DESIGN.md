@@ -501,6 +501,12 @@ may use their own layout primitives, yet must preserve the same visible
 anchors. Keep the gold chapter number close to its transliterated name; the
 number lane must not read as an empty decorative gutter.
 
+The Android search pill owns an even 16 dp internal inset on both ends; its
+icon and text spacing is independent of the chapter-number grid. Continue
+listening is the one full-bleed row in the scrolling chapter document: its
+quiet green wash and tap target reach both sheet edges, while its bilingual
+text remains on the same inner English and Arabic rails as the chapter rows.
+
 The ribbon's drawing and navigation are deliberately separate. Reuse
 `VerseBookmarkRibbon` for the cloth; put its Home/Chapters navigation on an
 adjacent quiet target (28 dp on Android Home, 44 px on web). That keeps the
