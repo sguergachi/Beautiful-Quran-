@@ -180,7 +180,10 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
 
         <div className="edge-fade">
           <div className={`scroll${showFloat ? ' scroll-with-float' : ''}`}>
-            <div className="home-scroll-page">
+            <div
+              className="home-scroll-page"
+              data-has-bookmarks={state.bookmarks.length > 0 || undefined}
+            >
               <div className="search-row" ref={searchRowRef}>
                 <PaperInput
                   id="chapter-search"

@@ -3237,6 +3237,27 @@ select {
     --sheet-pad: clamp(0.95rem, 4.5vw, 1.35rem);
   }
 
+  /* The home bookmark is part of the chapter document, but it must never
+     * sit on top of the search text or the chapter-number lane. Reserve its
+     * full target width plus breathing room only while it is present. */
+  .home-scroll-page[data-has-bookmarks='true'] {
+    --home-bookmark-edge-gap: 8px;
+    --home-bookmark-reserve: 60px;
+  }
+
+  .home-scroll-page[data-has-bookmarks='true'] .home-bookmark-ribbon {
+    left: var(--home-bookmark-edge-gap);
+  }
+
+  .home-scroll-page[data-has-bookmarks='true'] > .search-row,
+  .home-scroll-page[data-has-bookmarks='true'] > .continue-row,
+  .home-scroll-page[data-has-bookmarks='true'] > .surah-list,
+  .home-scroll-page[data-has-bookmarks='true'] > .word-search-results {
+    width: calc(100% - var(--home-bookmark-reserve));
+    margin-right: 0;
+    margin-left: var(--home-bookmark-reserve);
+  }
+
   body {
     font-size: 16px;
   }
