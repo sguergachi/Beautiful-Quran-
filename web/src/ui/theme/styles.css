@@ -1849,13 +1849,6 @@ select {
   line-height: 3rem;
 }
 
-.bookmarks-header p {
-  margin: 0;
-  color: color-mix(in srgb, var(--ink-muted) 90%, transparent);
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-}
-
 .bookmarks-header button {
   min-height: 44px;
   padding: 0.7rem 0;
@@ -3249,6 +3242,7 @@ select {
 @media (max-width: 640px) {
   :root {
     --sheet-pad: clamp(0.95rem, 4.5vw, 1.35rem);
+    --home-bookmark-reserve: 52px;
   }
 
   /* The home bookmark is part of the chapter document, but it must never
@@ -3256,7 +3250,6 @@ select {
      * full target width plus breathing room only while it is present. */
   .home-scroll-page[data-has-bookmarks='true'] {
     --home-bookmark-edge-gap: 8px;
-    --home-bookmark-reserve: 52px;
   }
 
   .home-scroll-page[data-has-bookmarks='true'] .home-bookmark-ribbon {
@@ -3271,6 +3264,15 @@ select {
   .home-scroll-page[data-has-bookmarks='true'] > .surah-list,
   .home-scroll-page[data-has-bookmarks='true'] > .word-search-results {
     padding-left: var(--home-bookmark-reserve);
+  }
+
+  /* The home title is part of the chapter list hierarchy: when the bookmark
+   * lane is present, it starts above the chapter numbers—not at the page edge
+   * and not above the ribbon. */
+  .home-header[data-has-bookmarks='true'] {
+    padding-left: calc(
+      var(--home-bookmark-reserve) + var(--sheet-pad) + var(--sheet-pad)
+    );
   }
 
   body {

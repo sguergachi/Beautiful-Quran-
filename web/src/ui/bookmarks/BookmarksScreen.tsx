@@ -54,10 +54,6 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
         <header className="bookmarks-header">
           <div>
             <h1>Bookmarks</h1>
-            <p>
-              {state.bookmarks.length}{' '}
-              {state.bookmarks.length === 1 ? 'marked verse' : 'marked verses'}
-            </p>
           </div>
           <button type="button" onClick={() => appStore.revealLayer(COVER_LAYER)}>
             Chapters&nbsp; →

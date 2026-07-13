@@ -167,7 +167,10 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
       ) : null}
 
       <div className="sheet-frame">
-        <header className="home-header">
+        <header
+          className="home-header"
+          data-has-bookmarks={state.bookmarks.length > 0 || undefined}
+        >
           <h1>Beautiful Quran</h1>
           <button
             type="button"
