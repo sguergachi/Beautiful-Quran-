@@ -241,7 +241,9 @@ private fun BookmarkSectionHeader(surah: Surah, first: Boolean) {
                 fontFeatureSettings = "'kern' 1, 'liga' 1, 'lnum' 1, 'tnum' 1",
             ),
             color = gold,
-            modifier = Modifier.width(36.dp),
+            modifier = Modifier
+                .width(36.dp)
+                .padding(start = 2.dp),
         )
         Spacer(Modifier.width(16.dp))
         Text(
@@ -319,7 +321,7 @@ private fun BookmarkAyahRow(
                     true
                 },
                 animateOnTap = false,
-                edgeInset = 0.dp,
+                edgeInset = 2.dp,
                 topInset = 0.dp,
                 bottomGap = 12.dp,
                 modifier = Modifier

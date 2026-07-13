@@ -206,7 +206,7 @@ function BookmarkVerse({
         focused
         side="left"
         animateOnTap={false}
-        edgeInset={0}
+        edgeInset={2}
         topInset={8}
         bottomGap={12}
         ariaLabel={`Remove bookmark ${surah.id}:${ayah.number}`}

@@ -514,9 +514,10 @@ not rules or containers, separates sections.
 The Bookmarks header contains only its title and the Chapters return action;
 the total marked-verse count is deliberately omitted.
 
-Within a bookmark result, the visible ruby edge aligns with the outer rule
-shared by the title, search icon, and chapter number. Its 44 dp/px touch lane
-may extend inward, but it must not add a visual inset to the ribbon itself.
+Within the fixed outer lane, the visible ruby edge and gold chapter number
+share a 2 dp/px optical inset from the title/search rule. That nudge is taken
+from the lane's right-hand air: it never widens the 44 dp/px ribbon target,
+moves the inner content spine, or changes the page measure.
 
 Results remain in Quranic order and can be searched by reference, chapter
 name, or verse text. A chapter initially shows five marked verses; its green
