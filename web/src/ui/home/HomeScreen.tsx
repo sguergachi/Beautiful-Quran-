@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   IconBuffering,
   IconClose,
@@ -41,6 +41,8 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const previousBookmarkCount = useRef(state.bookmarks.length)
   const pendingRibbonUnfurl = useRef(false)
   const [ribbonUnfurlSignal, setRibbonUnfurlSignal] = useState(0)
+  const searchRowRef = useRef<HTMLDivElement>(null)
+  const [ribbonHeight, setRibbonHeight] = useState(0)
 
   useEffect(() => {
     setExpandedSurahIds(new Set())
@@ -76,6 +78,22 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
     pendingRibbonUnfurl.current = false
     setRibbonUnfurlSignal((value) => value + 1)
   }, [stackLayer])
+
+  useLayoutEffect(() => {
+    const searchRow = searchRowRef.current
+    if (!searchRow) return
+    const measure = () => {
+      setRibbonHeight(Math.max(96, window.innerHeight - searchRow.getBoundingClientRect().top - 92))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(searchRow)
+    window.addEventListener('resize', measure)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [])
 
   const wordSections = useMemo(
     () => sectionWordSearchHits(wordHits, expandedSurahIds),
@@ -163,7 +181,7 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
         <div className="edge-fade">
           <div className={`scroll${showFloat ? ' scroll-with-float' : ''}`}>
             <div className="home-scroll-page">
-              <div className="search-row">
+              <div className="search-row" ref={searchRowRef}>
                 <PaperInput
                   id="chapter-search"
                   name="chapter-search"
@@ -176,13 +194,13 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
               </div>
 
               {state.bookmarks.length > 0 ? (
-                <div className="home-bookmark-ribbon">
+                <div className="home-bookmark-ribbon" style={{ height: ribbonHeight }}>
                   <VerseBookmarkRibbon
                     bookmarked
                     focused
                     side="left"
                     topInset={0}
-                    bottomGap={16}
+                    bottomGap={0}
                     unfurlSignal={ribbonUnfurlSignal}
                     ariaLabel="Open bookmarks"
                     onToggle={() => {

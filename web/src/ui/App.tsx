@@ -82,7 +82,6 @@ export function App() {
     if (stack !== COVER_LAYER && stack !== BOOKMARKS_LAYER) return
     if (event.pointerType === 'mouse' && event.button !== 0) return
     swipeStart.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId }
-    event.currentTarget.setPointerCapture(event.pointerId)
   }
 
   const finishBookmarkSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
