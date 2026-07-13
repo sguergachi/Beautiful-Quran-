@@ -499,9 +499,10 @@ The bookmark index is a compact bilingual concordance, shared by Android and
 web. It uses one centered column (560 dp / 36 rem maximum) and a fixed 52 dp/px
 content spine: a 44 dp/px ribbon lane followed by an 8 dp/px gap. Chapter rows
 align their gold number, English name, and isolated RTL Arabic name to that
-same spine. Verse entries then stack Arabic at 24/36, translation at 17/25,
-and metadata at 14/20; the title is the only display-sized element. Spacing,
-not rules or containers, separates sections.
+same spine. Verse copy balances that spine with an equal trailing gutter so
+its reading measure remains centered. Entries then stack Arabic at 24/36,
+translation at 17/25, and metadata at 14/20; the title is the only
+display-sized element. Spacing, not rules or containers, separates sections.
 
 The Bookmarks header contains only its title and the Chapters return action;
 the total marked-verse count is deliberately omitted.

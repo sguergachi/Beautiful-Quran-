@@ -704,6 +704,7 @@ private fun Modifier.paperLayerTransform(
             translationX = -(width + STACK_OFFSCREEN_OVERSCAN_DP * density) *
                 (1f - reveal)
             rotationY = -4f * (1f - reveal)
+            shadowElevation = 22f * reveal
             alpha = if (position <= 0f) 1f else 0f
         }
         PaperLayer.Cover -> {
@@ -744,7 +745,7 @@ private fun Modifier.paperDropShadow(
     drawContent()
     val position = stackPosition()
     val turning = when (layer) {
-        PaperLayer.Bookmarks -> 0f
+        PaperLayer.Bookmarks -> (-position).coerceIn(0f, 1f)
         PaperLayer.Cover -> position.coerceIn(0f, 1f)
         PaperLayer.Ayah -> (position - 1f).coerceIn(0f, 1f)
         PaperLayer.Settings -> 0f

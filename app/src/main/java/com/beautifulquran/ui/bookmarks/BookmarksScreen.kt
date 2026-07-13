@@ -279,7 +279,9 @@ private fun BookmarkAyahRow(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 52.dp)
+                // Balance the ribbon spine so the verse copy stays centered
+                // between equal reading gutters.
+                .padding(horizontal = 52.dp)
                 .quietClickable(onClick = onOpen),
         ) {
             Text(
