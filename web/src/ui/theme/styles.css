@@ -158,7 +158,12 @@ select {
 .app-shell {
   position: relative;
   height: 100%;
-  overflow: hidden;
+  /* `hidden` creates a horizontal scroll container. When the parked
+   * bookmark sheet receives focus, browsers can scroll that container toward
+   * the off-canvas sheet and leave Home visibly cropped. Clip the paper deck
+   * instead: sheets may still paint off-canvas for the transition, but the
+   * shell cannot acquire a horizontal scroll position. */
+  overflow: clip;
   background: var(--paper);
   /* Peek gutters are desktop-only; phones are full-bleed (back buttons). */
   --peek-step: 0px;
@@ -3248,20 +3253,21 @@ select {
      * full target width plus breathing room only while it is present. */
   .home-scroll-page[data-has-bookmarks='true'] {
     --home-bookmark-edge-gap: 8px;
-    --home-bookmark-reserve: 60px;
+    --home-bookmark-reserve: 52px;
   }
 
   .home-scroll-page[data-has-bookmarks='true'] .home-bookmark-ribbon {
     left: var(--home-bookmark-edge-gap);
   }
 
+  /* Keep every block in the document flow. Moving the blocks with margins
+   * offset the entire mobile sheet (including its title) in narrow previews.
+   * Inner padding creates the ribbon lane without disturbing the page edge. */
   .home-scroll-page[data-has-bookmarks='true'] > .search-row,
   .home-scroll-page[data-has-bookmarks='true'] > .continue-row,
   .home-scroll-page[data-has-bookmarks='true'] > .surah-list,
   .home-scroll-page[data-has-bookmarks='true'] > .word-search-results {
-    width: calc(100% - var(--home-bookmark-reserve));
-    margin-right: 0;
-    margin-left: var(--home-bookmark-reserve);
+    padding-left: var(--home-bookmark-reserve);
   }
 
   body {
