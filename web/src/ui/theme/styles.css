@@ -1811,6 +1811,8 @@ select {
   --bookmark-lane: 44px;
   --bookmark-gap: 8px;
   --bookmark-spine: calc(var(--bookmark-lane) + var(--bookmark-gap));
+  /* Matches VerseBookmarkRibbon's painted edge inside its 44px target. */
+  --bookmark-ribbon-ink-inset: 9px;
   width: 100%;
   max-width: 36rem;
   align-self: center;
@@ -1887,7 +1889,9 @@ select {
   display: flex;
   flex: 0 0 var(--bookmark-lane);
   align-items: center;
-  justify-content: center;
+  box-sizing: border-box;
+  padding-left: var(--bookmark-ribbon-ink-inset);
+  justify-content: flex-start;
 }
 
 .bookmarks-search-icon {
@@ -1940,9 +1944,9 @@ select {
 
 .bookmark-section-header {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
+  grid-template-columns: var(--bookmark-lane) minmax(0, 1fr);
   align-items: center;
-  column-gap: 1rem;
+  column-gap: var(--bookmark-gap);
   padding: 1.75rem 0 0.75rem;
 }
 
@@ -1951,6 +1955,8 @@ select {
 }
 
 .bookmark-section-number {
+  box-sizing: border-box;
+  padding-left: var(--bookmark-ribbon-ink-inset);
   color: var(--gold);
   font-size: 0.875rem;
   font-variant-numeric: lining-nums tabular-nums;
