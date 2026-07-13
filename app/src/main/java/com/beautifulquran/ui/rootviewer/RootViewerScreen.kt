@@ -23,8 +23,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -484,14 +486,15 @@ private fun ChapterHeading(section: RootOccurrenceSection, open: Boolean, onClic
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
             )
             Spacer(Modifier.width(8.dp))
-            Text(
-                text = if (open) "⌄" else "›",
-                fontFamily = DisplayFontFamily,
-                fontSize = 18.sp,
-                lineHeight = 18.sp,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.width(12.dp),
-                textAlign = TextAlign.Center,
+            Icon(
+                imageVector = if (open) {
+                    Icons.Rounded.KeyboardArrowDown
+                } else {
+                    Icons.AutoMirrored.Rounded.KeyboardArrowRight
+                },
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
             )
         }
     }
