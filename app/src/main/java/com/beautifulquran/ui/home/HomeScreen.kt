@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -28,12 +29,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -50,7 +48,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
@@ -90,6 +88,13 @@ private const val SEARCH_ITEM_INDEX = 1
 
 /** How far (px) the list must scroll past the lifted search before a scroll counts as "dismiss". */
 private const val DISMISS_SCROLL_THRESHOLD_PX = 24
+
+private val HomeRibbonLane = 42.dp
+private val HomeRibbonGap = 4.dp
+private val HomeStartInset = HomeRibbonLane + HomeRibbonGap
+private val HomeEndInset = 28.dp
+private val HomeNumberColumn = 34.dp
+private val HomeColumnGap = 10.dp
 
 @Composable
 fun HomeScreen(
@@ -246,16 +251,18 @@ fun HomeScreen(
                         // edge dissolves just above the player, not through it.
                         bottomInset = listBottomInset,
                     ),
-                contentPadding = PaddingValues(bottom = listBottomPadding),
+                contentPadding = PaddingValues(
+                    start = HomeStartInset,
+                    end = HomeEndInset,
+                    bottom = listBottomPadding,
+                ),
             ) {
             item(key = "title") {
                 val accents = LocalQuranAccents.current
                 val titleSheen = remember { mutableStateOf(0.35f) }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 28.dp),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(Modifier.weight(1f)) {
                         Spacer(Modifier.height(30.dp))
@@ -299,46 +306,12 @@ fun HomeScreen(
             item(key = "chapter-page") {
                 Box(Modifier.fillMaxWidth()) {
                     Column(Modifier.fillMaxWidth()) {
-                        TextField(
+                        HomeSearchField(
                             value = uiState.query,
                             onValueChange = viewModel::onQueryChange,
-                            placeholder = {
-                                Text(
-                                    "Search surah, word, or 2:255",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Rounded.Search,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                )
-                            },
-                            trailingIcon = {
-                                if (uiState.query.isNotEmpty()) {
-                                    IconButton(onClick = { viewModel.onQueryChange("") }) {
-                                        Icon(
-                                            Icons.Rounded.Close,
-                                            contentDescription = "Clear search",
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                        )
-                                    }
-                                }
-                            },
-                            singleLine = true,
-                            shape = RoundedCornerShape(20.dp),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                disabledIndicatorColor = Color.Transparent,
-                            ),
+                            onFocusChanged = { searchFocused = it },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 28.dp)
-                                .onFocusChanged { searchFocused = it.isFocused }
                                 .onGloballyPositioned {
                                     searchBottom = it.boundsInWindow().bottom
                                     searchBounds = it.boundsInRoot()
@@ -346,7 +319,7 @@ fun HomeScreen(
                         )
 
                         uiState.continueTarget?.let { target ->
-                            ContinueCard(
+                            ContinueRow(
                                 target = target,
                                 onClick = { onOpenSurah(target.surah.id, target.ayah, null) },
                             )
@@ -407,7 +380,7 @@ fun HomeScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 28.dp, vertical = 24.dp),
+                                    .padding(vertical = 24.dp),
                             )
                         }
                     }
@@ -435,13 +408,14 @@ fun HomeScreen(
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .offset { IntOffset(0, homeRibbonTop) }
+                            .width(HomeRibbonLane)
                             .height(homeRibbonHeight),
                     )
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .offset { IntOffset(0, homeRibbonTop) }
-                            .width(44.dp)
+                            .width(HomeRibbonLane)
                             .height(homeRibbonHeight)
                             .quietClickable(role = Role.Button, onClick = onOpenBookmarks)
                             .semantics { contentDescription = "Open bookmarks" },
@@ -463,7 +437,7 @@ fun HomeScreen(
                     .offset {
                         IntOffset(0, (searchBottom - boxTop + searchPaneTopGapPx).roundToInt())
                     }
-                    .padding(horizontal = 24.dp)
+                    .padding(start = HomeStartInset, end = HomeEndInset)
                     .height(searchPaneHeight)
                     .onGloballyPositioned { searchPaneBounds = it.boundsInRoot() },
             )
@@ -504,18 +478,93 @@ fun HomeScreen(
 }
 
 @Composable
-private fun ContinueCard(target: ContinueTarget, onClick: () -> Unit) {
+private fun HomeSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onFocusChanged: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val ink = MaterialTheme.colorScheme.onBackground
+    val mutedInk = MaterialTheme.colorScheme.onSurfaceVariant
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = ink),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        modifier = modifier
+            .height(56.dp)
+            .onFocusChanged {
+                focused = it.isFocused
+                onFocusChanged(it.isFocused)
+            }
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                MaterialTheme.colorScheme.surfaceVariant.copy(
+                    alpha = if (focused) 0.45f else 0.35f,
+                ),
+            ),
+        decorationBox = { field ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.width(HomeNumberColumn),
+                ) {
+                    Icon(
+                        Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = mutedInk.copy(alpha = 0.5f),
+                    )
+                }
+                Spacer(Modifier.width(HomeColumnGap))
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                    if (value.isEmpty()) {
+                        Text(
+                            "Search surah, word, or 2:255",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = mutedInk.copy(alpha = 0.5f),
+                        )
+                    }
+                    field()
+                }
+                if (value.isNotEmpty()) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .quietClickable(role = Role.Button) { onValueChange("") }
+                            .semantics { contentDescription = "Clear search" },
+                    ) {
+                        Icon(
+                            Icons.Rounded.Close,
+                            contentDescription = null,
+                            tint = mutedInk.copy(alpha = 0.6f),
+                        )
+                    }
+                } else {
+                    Spacer(Modifier.width(16.dp))
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun ContinueRow(target: ContinueTarget, onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp)
             .padding(top = 18.dp)
-            .clip(RoundedCornerShape(22.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
             .quietClickable(onClick = onClick)
-            .padding(horizontal = 22.dp, vertical = 18.dp),
+            .padding(vertical = 18.dp),
     ) {
+        Spacer(Modifier.width(HomeNumberColumn))
+        Spacer(Modifier.width(HomeColumnGap))
         Column(Modifier.weight(1f)) {
             Text(
                 text = "Continue listening",
@@ -547,16 +596,16 @@ private fun SurahRow(surah: Surah, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .quietClickable(onClick = onClick)
-            .padding(horizontal = 28.dp, vertical = 15.dp),
+            .padding(vertical = 15.dp),
     ) {
-        Box(Modifier.width(34.dp)) {
+        Box(Modifier.width(HomeNumberColumn)) {
             Text(
                 text = surah.id.toString(),
                 style = MaterialTheme.typography.labelMedium,
                 color = accents.gold.copy(alpha = 0.75f),
             )
         }
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(HomeColumnGap))
         Column(Modifier.weight(1f)) {
             Text(
                 text = surah.nameTransliteration,
@@ -590,7 +639,6 @@ private fun SearchSectionLabel(text: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 28.dp)
             .padding(top = 8.dp, bottom = 4.dp),
     )
 }
@@ -603,7 +651,6 @@ private fun WordSearchSurahHeader(section: SurahWordSearchSection) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 28.dp)
             .padding(top = 18.dp, bottom = 8.dp)
             .drawBehind {
                 val y = size.height - 0.5.dp.toPx()
@@ -673,7 +720,7 @@ private fun WordSearchHitRow(
         modifier = Modifier
             .fillMaxWidth()
             .quietClickable(onClick = onClick)
-            .padding(horizontal = 28.dp, vertical = 10.dp),
+            .padding(vertical = 10.dp),
     ) {
         Text(
             text = "${hit.surahId}:${hit.ayahNumber}",
@@ -705,7 +752,7 @@ private fun WordSearchExpandRow(
         modifier = Modifier
             .fillMaxWidth()
             .quietClickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 28.dp, vertical = 12.dp),
+            .padding(vertical = 12.dp),
     )
 }
 
@@ -718,6 +765,6 @@ private fun WordSearchCollapseRow(onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .quietClickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 28.dp, vertical = 12.dp),
+            .padding(vertical = 12.dp),
     )
 }
