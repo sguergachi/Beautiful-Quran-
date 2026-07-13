@@ -189,7 +189,7 @@ private fun BookmarkSearchField(value: String, onValueChange: (String) -> Unit) 
         cursorBrush = SolidColor(accent),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 24.dp)
+            .padding(start = 24.dp, top = 24.dp, end = 24.dp)
             .height(52.dp)
             .onFocusChanged { focused = it.isFocused }
             .semantics { contentDescription = "Search bookmarked verses" },
@@ -231,7 +231,7 @@ private fun BookmarkSectionHeader(surah: Surah, first: Boolean) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp)
-            .padding(top = if (first) 8.dp else 32.dp, bottom = 16.dp),
+            .padding(top = if (first) 18.dp else 32.dp, bottom = 12.dp),
     ) {
         Text(
             text = surah.id.toString(),
@@ -276,7 +276,8 @@ private fun BookmarkAyahRow(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 12.dp),
+            .padding(horizontal = 24.dp)
+            .padding(top = 8.dp, bottom = 12.dp),
     ) {
         Column(
             modifier = Modifier
@@ -301,7 +302,6 @@ private fun BookmarkAyahRow(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(8.dp))
             BookmarkReferenceOrConfirmation(
                 bookmark = bookmark,
                 confirming = confirming,
@@ -387,10 +387,11 @@ private fun BookmarkReferenceOrConfirmation(
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Ayah ",
+                        text = "Ayah",
                         style = bookmarkMetadataStyle(),
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f),
                     )
+                    Spacer(Modifier.width(4.dp))
                     Text(
                         text = bookmark.ayahNumber.toString(),
                         style = bookmarkMetadataStyle(FontWeight.Medium, numeric = true),

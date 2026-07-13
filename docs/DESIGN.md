@@ -522,6 +522,12 @@ text, chapter names, verse copy, metadata, and disclosures all begin on the
 same 40 dp/px inner spine; the Arabic chapter name reaches the far-right rule
 shared by the Arabic verse copy.
 
+The index follows one vertical rhythm on both platforms: 24 dp/px from title
+to search and from search to the first chapter label, 32 dp/px before later
+chapter groups, 12 dp/px below a chapter header, and 8 dp/px between Arabic
+verse copy and its translation. The fixed-height ayah line supplies its own
+breathing room, so no extra spacer sits between translation and metadata.
+
 Results remain in Quranic order and can be searched by reference, chapter
 name, or verse text. A chapter initially shows five marked verses; its green
 inline disclosure reveals the remainder, while an active search shows every
