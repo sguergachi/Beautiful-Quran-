@@ -64,6 +64,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -74,6 +75,7 @@ import com.beautifulquran.data.model.Surah
 import com.beautifulquran.data.model.SurahWordSearchSection
 import com.beautifulquran.data.model.WordSearchHit
 import com.beautifulquran.data.AyahSelectorSide
+import com.beautifulquran.data.HomeBookmarkStyle
 import com.beautifulquran.domain.WORD_SEARCH_PREVIEW_LIMIT
 import com.beautifulquran.domain.englishTranslationHighlightSpans
 import com.beautifulquran.ui.reader.VerseBookmarkRibbon
@@ -95,8 +97,13 @@ private val HomeRibbonGutter = (HomeRibbonLane - HomeRibbonWidth) / 2f
 private val HomeStartInset = HomeRibbonLane
 private val HomeEndInset = 28.dp
 private val HomeNumberColumn = 26.dp
+private val HomeRowRibbonGutter = (HomeNumberColumn - HomeRibbonWidth) / 2f
 private val HomeColumnGap = 4.dp
 private val HomeArabicOpticalInset = 4.dp
+private val HomeDocumentTop = 106.dp
+private val CompactRibbonHeight = 80.dp
+private val TopBoundRibbonHeight = 88.dp
+private val BottomRibbonHeight = 64.dp
 
 @Composable
 fun HomeScreen(
@@ -110,6 +117,7 @@ fun HomeScreen(
     coverSheetVisible: Boolean = true,
     /** Number of saved verses; zero removes the Home-page ribbon entirely. */
     bookmarkCount: Int = 0,
+    bookmarkStyle: HomeBookmarkStyle = HomeBookmarkStyle.LONG_RIBBON,
     onOpenBookmarks: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -278,6 +286,16 @@ fun HomeScreen(
                                 onClick = { onOpenSurah(target.surah.id, target.ayah, null) },
                             )
                         }
+                        if (
+                            bookmarkCount > 0 &&
+                            bookmarkStyle == HomeBookmarkStyle.SAVED_PASSAGES &&
+                            !searching
+                        ) {
+                            SavedPassagesRow(
+                                unfurlSignal = ribbonUnfurlEpoch,
+                                onClick = onOpenBookmarks,
+                            )
+                        }
                         Spacer(Modifier.height(16.dp))
 
                         if (showSurahMatches) SearchSectionLabel(text = "Surahs")
@@ -344,40 +362,15 @@ fun HomeScreen(
             }
             }
 
-            if (bookmarkCount > 0) {
-                Box(Modifier.matchParentSize()) {
-                    // Navigation is intentionally separate from the shared
-                    // ribbon drawing: opening Bookmarks must not invoke its
-                    // mark/unmark retract path.
-                    VerseBookmarkRibbon(
-                        bookmarked = true,
-                        focused = true,
-                        side = AyahSelectorSide.LEFT,
-                        chromeAlpha = { 1f },
-                        interactive = false,
-                        onToggle = { true },
-                        animateOnTap = false,
-                        unfurlSignal = ribbonUnfurlEpoch,
-                        edgeInset = HomeRibbonGutter,
-                        ribbonWidth = HomeRibbonWidth,
-                        topInset = 0.dp,
-                        bottomGap = 0.dp,
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .offset(y = homeRibbonTop)
-                            .width(HomeRibbonLane)
-                            .height(homeRibbonHeight),
-                    )
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .offset(y = homeRibbonTop)
-                            .width(HomeRibbonLane)
-                            .height(homeRibbonHeight)
-                            .quietClickable(role = Role.Button, onClick = onOpenBookmarks)
-                            .semantics { contentDescription = "Open bookmarks" },
-                    )
-                }
+            if (bookmarkCount > 0 && bookmarkStyle != HomeBookmarkStyle.SAVED_PASSAGES) {
+                HomeBookmarkOverlay(
+                    style = bookmarkStyle,
+                    longRibbonTop = homeRibbonTop,
+                    longRibbonHeight = homeRibbonHeight,
+                    unfurlSignal = ribbonUnfurlEpoch,
+                    onClick = onOpenBookmarks,
+                    modifier = Modifier.matchParentSize(),
+                )
             }
 
             SearchDialsPane(
@@ -471,6 +464,112 @@ private fun HomeHeader(onOpenSettings: () -> Unit) {
                 embossDark = accents.embossDark,
                 embossLight = accents.embossLight,
                 sheen = titleSheen,
+            )
+        }
+    }
+}
+
+/** One cloth language in four placements; navigation remains a separate target
+ * so opening Bookmarks never borrows the ribbon's retract interaction. */
+@Composable
+private fun HomeBookmarkOverlay(
+    style: HomeBookmarkStyle,
+    longRibbonTop: Dp,
+    longRibbonHeight: Dp,
+    unfurlSignal: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier) {
+        val placement = when (style) {
+            HomeBookmarkStyle.LONG_RIBBON -> Modifier
+                .align(Alignment.TopStart)
+                .offset(y = longRibbonTop)
+                .width(HomeRibbonLane)
+                .height(longRibbonHeight)
+            HomeBookmarkStyle.COMPACT_EDGE -> Modifier
+                .align(Alignment.TopStart)
+                .offset(y = HomeDocumentTop)
+                .width(HomeRibbonLane)
+                .height(CompactRibbonHeight)
+            HomeBookmarkStyle.TOP_BOUND -> Modifier
+                .align(Alignment.TopStart)
+                .width(HomeRibbonLane)
+                .height(TopBoundRibbonHeight)
+            HomeBookmarkStyle.BOTTOM_TAIL -> Modifier
+                .align(Alignment.BottomStart)
+                .width(HomeRibbonLane)
+                .height(BottomRibbonHeight)
+            // Rendered inside the scrolling document, never by this host.
+            HomeBookmarkStyle.SAVED_PASSAGES -> Modifier
+        }
+
+        VerseBookmarkRibbon(
+            bookmarked = true,
+            focused = true,
+            side = AyahSelectorSide.LEFT,
+            chromeAlpha = { 1f },
+            interactive = false,
+            onToggle = { true },
+            animateOnTap = false,
+            unfurlSignal = unfurlSignal,
+            edgeInset = HomeRibbonGutter,
+            ribbonWidth = HomeRibbonWidth,
+            topInset = 0.dp,
+            bottomGap = 0.dp,
+            modifier = placement,
+        )
+        Box(
+            modifier = placement
+                .quietClickable(role = Role.Button, onClick = onClick)
+                .semantics { contentDescription = "Open bookmarks" },
+        )
+    }
+}
+
+/** A bookmark index entry written into the chapter document. */
+@Composable
+private fun SavedPassagesRow(unfurlSignal: Int, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .quietClickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = "Open bookmarks" }
+            .padding(vertical = 12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .width(HomeNumberColumn)
+                .height(44.dp),
+        ) {
+            VerseBookmarkRibbon(
+                bookmarked = true,
+                focused = true,
+                side = AyahSelectorSide.LEFT,
+                chromeAlpha = { 1f },
+                interactive = false,
+                onToggle = { true },
+                animateOnTap = false,
+                unfurlSignal = unfurlSignal,
+                edgeInset = HomeRowRibbonGutter,
+                ribbonWidth = HomeRibbonWidth,
+                topInset = 0.dp,
+                bottomGap = 0.dp,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        Spacer(Modifier.width(HomeColumnGap))
+        Column {
+            Text(
+                text = "Saved passages",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "Return to your marked ayahs",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
             )
         }
     }

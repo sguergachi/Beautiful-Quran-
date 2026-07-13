@@ -509,6 +509,25 @@ animation from being borrowed as navigation feedback, and leaves the shared
 component authoritative for its own visual language. Do not create another
 bookmark icon, a second ribbon shape, or a bespoke animated substitute.
 
+### Chapters bookmark design experiment
+
+Android developer settings can compare the long ribbon against four quieter
+placements without changing the bookmark language: a compact 80 dp fore-edge
+mark at the chapter-document boundary, an 88 dp ribbon bound to the top edge,
+a 64 dp tail at the bottom edge, and a typographic *Saved passages* line whose
+number-column mark is the same ruby cloth. The long ribbon remains the shipped
+default and comparison control. All five appear only when a bookmark exists,
+open the same Bookmarks sheet, and reuse `VerseBookmarkRibbon`; verse-level
+ribbons in the Reader never change.
+
+The selector is visible only in developer mode, but its persisted choice stays
+active if developer mode is hidden again. The inline treatment is omitted
+during active search so results remain answer-first. It carries no count:
+“Saved passages” and “Return to your marked ayahs” are sufficient information
+scent. The other variants retain the fixed 28 dp Home lane and separate quiet
+navigation target, so switching treatments never moves the chapter document
+or turns cloth animation into navigation feedback.
+
 The bookmark index is a compact bilingual concordance, shared by Android and
 web. It uses one centered column (560 dp / 36 rem maximum) and a fixed 40 dp/px
 inner content spine from the outer title rule. The gold number belongs to the
