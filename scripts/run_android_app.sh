@@ -12,6 +12,7 @@ ANDROID_AVD_NAME="${ANDROID_AVD_NAME:-BeautifulQuran_API_${ANDROID_API}}"
 EMULATOR="$ANDROID_HOME/emulator/emulator"
 ADB="$ANDROID_HOME/platform-tools/adb"
 BOOT_TIMEOUT_SECONDS="${BOOT_TIMEOUT_SECONDS:-180}"
+ANDROID_EMULATOR_HEADLESS="${ANDROID_EMULATOR_HEADLESS:-}"
 
 log() {
   printf '\n==> %s\n' "$*" >&2
@@ -43,6 +44,13 @@ start_emulator_if_needed() {
     -netdelay none
     -netspeed full
   )
+
+  # The emulator initializes Qt before booting Android. On a CI or SSH shell
+  # without a display server that fails immediately unless its window is off.
+  if [[ "$ANDROID_EMULATOR_HEADLESS" == "1" || ( "$ANDROID_EMULATOR_HEADLESS" != "0" && -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ) ]]; then
+    log "No graphical display detected; starting headless"
+    emulator_args+=(-no-window)
+  fi
 
   if command -v setsid >/dev/null 2>&1; then
     setsid -f "$EMULATOR" "${emulator_args[@]}" \
