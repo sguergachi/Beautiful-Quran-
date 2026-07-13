@@ -369,8 +369,18 @@ export function VerseBookmarkRibbon({
 
   const onClick = () => {
     if (!interactive || chromeAlpha < 0.1) return
+    if (!animateOnTap) {
+      stopControls()
+      unfurl.current = 1
+      sway.current = 0
+      animating.current = false
+      userDriven.current = false
+      draw()
+      onToggle()
+      return
+    }
     const nowMarked = onToggle()
-    if (animateOnTap) runAnimation(nowMarked)
+    runAnimation(nowMarked)
   }
 
   const style: CSSProperties = {
