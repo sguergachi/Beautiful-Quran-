@@ -479,13 +479,21 @@ cloth itself a wide, blank-looking control. The cloth is centred in the
 narrow edge lane; its hit geometry is an interaction concern, not a visual
 gutter that sets the text measure.
 
+On Android, that lane is fixed to the viewport: scrolling the chapter list
+must never move the ribbon. It begins beside, and slightly below the top of,
+the single Cormorant “Beautiful Quran” masthead and keeps a small, optically
+balanced paper gutter on both sides of the ruby cloth. The Chapters masthead
+does not repeat the Arabic app name; Arabic remains where it identifies
+Quranic content.
+
 There is one content rule beside that lane. On a bookmarked Chapters page,
 the title, search field, and gold chapter-number column all begin on it. The
 surah name may form a second, inner reading column, but no heading may drift
 back to the paper edge simply because it is larger. This alignment is checked
 as a relationship, not as unrelated platform padding values: web and Android
 may use their own layout primitives, yet must preserve the same visible
-anchors.
+anchors. Keep the gold chapter number close to its transliterated name; the
+number lane must not read as an empty decorative gutter.
 
 The ribbon's drawing and navigation are deliberately separate. Reuse
 `VerseBookmarkRibbon` for the cloth; put its Home/Chapters navigation on an
