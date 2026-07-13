@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   IconBuffering,
   IconClose,
@@ -10,6 +10,7 @@ import {
 import { PaperInput } from '../kit/PaperInput'
 import { appStore, useAppState, COVER_LAYER, READER_LAYER } from '../../store/appStore'
 import { QuranRepository } from '../../data/repository'
+import { VerseBookmarkRibbon } from '../../render/VerseBookmarkRibbon'
 import {
   englishTranslationHighlightSpans,
   filterSurahs,
@@ -18,15 +19,18 @@ import {
   WORD_SEARCH_PREVIEW_LIMIT,
   type SurahWordSearchSection,
   type WordSearchHit,
-} from '../../engine/wordSearch'
-import type { StackLayer } from '../paper/stack'
+} from '../../domain/WordSearch'
+import { BOOKMARKS_LAYER, type StackLayer } from '../paper/stack'
 
 export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const state = useAppState()
-  const searching = state.search.trim().length > 0
+  // Local query — typing must not emit through appStore (that re-renders the
+  // whole paper stack, including the mounted reader under the cover).
+  const [search, setSearch] = useState('')
+  const searching = search.trim().length > 0
   const { surahs: filtered, ayahTarget } = useMemo(
-    () => filterSurahs(state.surahs, state.search),
-    [state.surahs, state.search],
+    () => filterSurahs(state.surahs, search),
+    [state.surahs, search],
   )
 
   const [wordHits, setWordHits] = useState<WordSearchHit[]>([])
@@ -34,21 +38,62 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const [expandedSurahIds, setExpandedSurahIds] = useState<Set<number>>(
     () => new Set(),
   )
+  const previousBookmarkCount = useRef(state.bookmarks.length)
+  const pendingRibbonUnfurl = useRef(false)
+  const [ribbonUnfurlSignal, setRibbonUnfurlSignal] = useState(0)
+  const homeTitleRef = useRef<HTMLHeadingElement>(null)
+  const [ribbonHeight, setRibbonHeight] = useState(0)
 
   useEffect(() => {
     setExpandedSurahIds(new Set())
-    if (!shouldRunWordSearch(state.search)) {
+    if (!shouldRunWordSearch(search)) {
       setWordHits([])
       setWordLoading(false)
       return
     }
     setWordLoading(true)
+    let cancelled = false
     const handle = window.setTimeout(() => {
-      setWordHits(QuranRepository.searchWords(state.search))
-      setWordLoading(false)
-    }, 220)
-    return () => window.clearTimeout(handle)
-  }, [state.search])
+      void QuranRepository.searchWordsAsync(search, () => cancelled).then((hits) => {
+        if (cancelled) return
+        setWordHits(hits)
+        setWordLoading(false)
+      })
+    }, 160)
+    return () => {
+      cancelled = true
+      window.clearTimeout(handle)
+    }
+  }, [search])
+
+  useEffect(() => {
+    if (state.bookmarks.length > previousBookmarkCount.current) {
+      pendingRibbonUnfurl.current = true
+    }
+    previousBookmarkCount.current = state.bookmarks.length
+  }, [state.bookmarks.length])
+
+  useEffect(() => {
+    if (stackLayer !== COVER_LAYER || !pendingRibbonUnfurl.current) return
+    pendingRibbonUnfurl.current = false
+    setRibbonUnfurlSignal((value) => value + 1)
+  }, [stackLayer])
+
+  useLayoutEffect(() => {
+    const title = homeTitleRef.current
+    if (!title) return
+    const measure = () => {
+      setRibbonHeight(Math.max(96, window.innerHeight - title.getBoundingClientRect().top - 92))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(title)
+    window.addEventListener('resize', measure)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [])
 
   const wordSections = useMemo(
     () => sectionWordSearchHits(wordHits, expandedSurahIds),
@@ -100,6 +145,10 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
     wordSections.length === 0 &&
     !wordLoading
 
+  const prepareChapter = (surahId: number) => {
+    appStore.prepareSurah(surahId)
+  }
+
   return (
     <div
       className="sheet"
@@ -118,8 +167,32 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
       ) : null}
 
       <div className="sheet-frame">
-        <header className="home-header">
-          <h1>Beautiful Quran</h1>
+        <header
+          className="home-header"
+          data-has-bookmarks={state.bookmarks.length > 0 || undefined}
+        >
+          {state.bookmarks.length > 0 ? (
+            <div className="home-bookmark-ribbon" style={{ height: ribbonHeight }}>
+              <VerseBookmarkRibbon
+                bookmarked
+                focused
+                side="left"
+                interactive={false}
+                animateOnTap={false}
+                topInset={0}
+                bottomGap={0}
+                unfurlSignal={ribbonUnfurlSignal}
+                onToggle={() => true}
+              />
+              <button
+                type="button"
+                className="home-bookmark-open"
+                aria-label="Open bookmarks"
+                onClick={() => appStore.revealLayer(BOOKMARKS_LAYER)}
+              />
+            </div>
+          ) : null}
+          <h1 ref={homeTitleRef}>Beautiful Quran</h1>
           <button
             type="button"
             className="gear"
@@ -129,25 +202,32 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
           </button>
         </header>
 
-        <div className="search-row">
-          <PaperInput
-            id="chapter-search"
-            name="chapter-search"
-            type="search"
-            placeholder="Search surah, word, or 2:255"
-            value={state.search}
-            onValueChange={(v) => appStore.setSearch(v)}
-            aria-label="Search surah, word, or ayah reference"
-          />
-        </div>
-
         <div className="edge-fade">
           <div className={`scroll${showFloat ? ' scroll-with-float' : ''}`}>
+            <div
+              className="home-scroll-page"
+              data-has-bookmarks={state.bookmarks.length > 0 || undefined}
+            >
+              <div className="search-row">
+                <PaperInput
+                  id="chapter-search"
+                  name="chapter-search"
+                  type="search"
+                  placeholder="Search surah, word, or 2:255"
+                  value={search}
+                  onValueChange={setSearch}
+                  aria-label="Search surah, word, or ayah reference"
+                />
+              </div>
+
             {continueSurah ? (
               <div className="continue-row">
                 <button
                   type="button"
                   className="continue"
+                  onPointerEnter={() => prepareChapter(continueSurah.id)}
+                  onPointerDown={() => prepareChapter(continueSurah.id)}
+                  onFocus={() => prepareChapter(continueSurah.id)}
                   onClick={() =>
                     appStore.openSurah(
                       continueSurah.id,
@@ -181,6 +261,9 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
                   <button
                     type="button"
                     className="surah-row"
+                    onPointerEnter={() => prepareChapter(s.id)}
+                    onPointerDown={() => prepareChapter(s.id)}
+                    onFocus={() => prepareChapter(s.id)}
                     onClick={() =>
                       appStore.openSurah(s.id, ayahTarget ?? 1)
                     }
@@ -209,8 +292,9 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
                   <WordSearchSection
                     key={section.surahId}
                     section={section}
-                    query={state.search}
+                    query={search}
                     onToggle={() => toggleSection(section.surahId)}
+                    onPrepareHit={(hit) => prepareChapter(hit.surahId)}
                     onOpenHit={(hit) =>
                       appStore.openSurah(
                         hit.surahId,
@@ -226,6 +310,7 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
             {showEmpty ? (
               <p className="search-empty">No matches</p>
             ) : null}
+            </div>
           </div>
         </div>
       </div>
@@ -266,19 +351,21 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
             <button
               type="button"
               aria-label={
-                state.player.isBuffering
+                state.player.isBuffering && !state.player.isPlaying
                   ? 'Buffering'
                   : state.player.isPlaying
                     ? 'Pause'
                     : 'Play'
               }
-              aria-busy={state.player.isBuffering || undefined}
+              aria-busy={
+                (state.player.isBuffering && !state.player.isPlaying) || undefined
+              }
               onClick={() => {
-                if (state.player.isBuffering) return
+                if (state.player.isBuffering && !state.player.isPlaying) return
                 void appStore.playPause()
               }}
             >
-              {state.player.isBuffering ? (
+              {state.player.isBuffering && !state.player.isPlaying ? (
                 <IconBuffering />
               ) : state.player.isPlaying ? (
                 <IconPause />
@@ -300,11 +387,13 @@ function WordSearchSection({
   section,
   query,
   onToggle,
+  onPrepareHit,
   onOpenHit,
 }: {
   section: SurahWordSearchSection
   query: string
   onToggle: () => void
+  onPrepareHit: (hit: WordSearchHit) => void
   onOpenHit: (hit: WordSearchHit) => void
 }) {
   return (
@@ -324,6 +413,9 @@ function WordSearchSection({
             <button
               type="button"
               className="word-search-hit"
+              onPointerEnter={() => onPrepareHit(hit)}
+              onPointerDown={() => onPrepareHit(hit)}
+              onFocus={() => onPrepareHit(hit)}
               onClick={() => onOpenHit(hit)}
             >
               <span className="word-search-ref">

@@ -11,7 +11,9 @@ export default defineConfig({
     port: 5173,
   },
   optimizeDeps: {
-    exclude: ['sql.js'],
+    // sql.js publishes UMD browser files. Pre-bundling creates the ESM default
+    // export Vite's dev server needs instead of serving that raw UMD file.
+    include: ['sql.js'],
   },
   test: {
     globals: true,

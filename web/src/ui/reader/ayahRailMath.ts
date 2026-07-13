@@ -242,8 +242,11 @@ export function railTickLabelX(
 }
 
 /**
- * Collapsed stack bar rect. Edge mode hides the outer rounded cap behind the
- * screen edge and slips outer bars off first on expand (Android parity).
+ * Collapsed stack bar rect. On expand, bars retract so the wheel can bloom
+ * out of the minimized stack:
+ * - `center` (desktop): dashes shrink toward the midline
+ * - `edge` (mobile): hide the outer rounded cap and slip bars off-screen
+ *   (Android parity)
  */
 export function railCollapsedBarRect(
   railWidth: number,
@@ -253,13 +256,15 @@ export function railCollapsedBarRect(
   barH: number,
   exit: number,
 ): { x: number; width: number } {
+  const t = Math.min(1, Math.max(0, exit))
   if (growFrom === 'center') {
     const midX = railWidth * 0.5
-    return { x: midX - barW / 2, width: barW }
+    const w = barW * t
+    return { x: midX - w / 2, width: w }
   }
   // Extra width so the rounded outer cap sits past the edge; slip on exit.
   const fullW = barW + barH
-  const slip = (1 - exit) * 4
+  const slip = (1 - t) * 4
   if (side === 'left') {
     return { x: -barH - slip, width: fullW }
   }

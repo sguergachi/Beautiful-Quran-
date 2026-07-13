@@ -69,7 +69,7 @@ import kotlin.math.min
  */
 
 /** Gilded gold ramp; [t] 0..1 tilts the lighting axis. */
-private fun DrawScope.goldBrush(bright: Color, deep: Color, t: Float): Brush {
+internal fun DrawScope.goldBrush(bright: Color, deep: Color, t: Float): Brush {
     val w = size.width
     val h = size.height
     return Brush.linearGradient(
@@ -161,66 +161,11 @@ fun GildedRosette(
 }
 
 /**
- * The centrepiece of the entrance cover: a [GildedRosette] grown into a full
- * mushaf medallion — the eight-fold star wrapped in two hairline rings with a
- * pearl at each of the sixteen ring stations, embossed into the leather and
- * faced in shifting gold. Same khatam vocabulary, ceremonial scale.
- */
-@Composable
-fun GildedMedallion(
-    size: Dp,
-    brightGold: Color,
-    deepGold: Color,
-    embossDark: Color,
-    embossLight: Color,
-    sheen: State<Float>,
-    modifier: Modifier = Modifier,
-) {
-    Canvas(modifier.then(Modifier.size(size))) {
-        val s = min(this.size.width, this.size.height)
-        val c = s / 2f
-        val center = Offset(c, c)
-        val line = Stroke(width = s * 0.010f)
-        val hairline = Stroke(width = s * 0.005f)
-
-        val outerRing = s * 0.485f
-        val innerRing = s * 0.36f
-        val khatam = Path().apply { addKhatam(c, c, s * 0.335f) }
-        val octagram = Path().apply { addOctagram(c, c, s * 0.24f) }
-
-        // Relief first, face last — the same press-into-paper order as the
-        // rosette, ring by ring from the outside in.
-        embossed(khatam, line, embossDark, embossLight)
-        embossed(octagram, line, embossDark, embossLight)
-
-        val gold = goldBrush(brightGold, deepGold, sheen.value.coerceIn(0f, 1f))
-        drawCircle(gold, radius = outerRing, center = center, style = hairline)
-        drawCircle(gold, radius = innerRing, center = center, style = hairline)
-        drawPath(khatam, gold, style = line)
-        drawPath(octagram, gold, style = line)
-
-        // Sixteen pearls stationed between the rings; a seed at the heart.
-        for (k in 0 until 16) {
-            val ang = Math.toRadians(k * 22.5).toFloat()
-            drawCircle(
-                brush = gold,
-                radius = if (k % 2 == 0) s * 0.016f else s * 0.009f,
-                center = Offset(
-                    c + (outerRing + innerRing) / 2f * kotlin.math.cos(ang),
-                    c + (outerRing + innerRing) / 2f * kotlin.math.sin(ang),
-                ),
-            )
-        }
-        drawCircle(gold, radius = s * 0.028f, center = center)
-        drawCircle(gold, radius = s * 0.07f, center = center, style = hairline)
-    }
-}
-
-/**
- * The tooled border of the entrance cover: a doubled gilt rule following the
- * sheet's edge with a small khatam star pressed into each corner — the frame
- * a hand-bound mushaf carries on its leather. Fills whatever it is given;
- * meant to sit full-bleed on the cover.
+ * The tooled frame of the entrance cover: a doubled gilt rule following the
+ * sheet's edge — the fillets a hand-bound mushaf carries on its leather.
+ * The generated border frieze and corner seals (GeneratedOrnament.kt) live
+ * between and over these rules. Fills whatever it is given; meant to sit
+ * full-bleed on the cover.
  *
  * [geometry] is the concentric inset/radius set derived from the display's
  * corner radii ([com.beautifulquran.ui.entrance.coverFrameGeometry]) so the
@@ -276,27 +221,11 @@ fun MushafCoverFrame(
                 ),
             )
         }
-        // Corner stars sit on the inner rule's corners, sized with the
-        // frame margin so they read as pressed seals rather than pinpricks.
-        val starR = geometry.starRadiusPx
-        val corners = listOf(
-            Offset(innerInset, innerInset),
-            Offset(size.width - innerInset, innerInset),
-            Offset(innerInset, size.height - innerInset),
-            Offset(size.width - innerInset, size.height - innerInset),
-        )
-        val stars = Path().apply {
-            corners.forEach { addKhatam(it.x, it.y, starR) }
-        }
-
         embossed(outer, rule, embossDark, embossLight)
-        embossed(stars, hairline, embossDark, embossLight)
 
         val gold = goldBrush(brightGold, deepGold, sheen.value.coerceIn(0f, 1f))
         drawPath(outer, gold, style = rule)
         drawPath(inner, gold, style = hairline)
-        drawPath(stars, gold, style = hairline)
-        corners.forEach { drawCircle(gold, radius = starR * 0.16f, center = it) }
     }
 }
 
@@ -349,38 +278,6 @@ fun GildedFlourish(
                 strokeWidth = line.width,
             )
         }
-    }
-}
-
-/**
- * A whisper-faint star-and-cross weave: khatam stars on a grid with small
- * diamonds between them, embossed at ~4% ink. Geometry is built once per
- * size (drawWithCache) — scrolling never rebuilds it.
- */
-fun Modifier.starAndCrossWeave(
-    ink: Color,
-    embossLight: Color,
-    cell: Dp = 64.dp,
-): Modifier = drawWithCache {
-    val cellPx = cell.toPx()
-    val weave = Path()
-    var y = 0f
-    var row = 0
-    while (y < size.height + cellPx) {
-        val xOffset = if (row % 2 == 0) 0f else cellPx / 2f
-        var x = -cellPx / 2f + xOffset
-        while (x < size.width + cellPx) {
-            weave.addKhatam(x, y, cellPx * 0.27f)
-            weave.addKhatam(x + cellPx / 2f, y + cellPx / 2f, cellPx * 0.10f)
-            x += cellPx
-        }
-        y += cellPx
-        row++
-    }
-    val stroke = Stroke(width = 1.dp.toPx())
-    onDrawBehind {
-        translate(-0.6f, -0.6f) { drawPath(weave, embossLight, style = stroke) }
-        drawPath(weave, ink, style = stroke)
     }
 }
 

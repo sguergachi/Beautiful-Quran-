@@ -1,14 +1,13 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import type { ActiveWord, Ayah } from '../data/models'
+import type { ActiveWord, Ayah, Word } from '../data/models'
 import type { ReadingMode } from '../data/settings'
-import { ayahTranslationAlpha, inkAlpha, InkState } from '../engine/ink'
+import { punctuateEnglishGlosses } from '../domain/EnglishTypography'
+import { InkEngine, InkState } from '../ui/reader/InkEngine'
+import { ayahTranslationAlpha } from '../ui/reader/WordHighlight'
+import { formatReaderDigits } from '../util/digits'
 import { WordUnit } from './WordUnit'
 import { HafsWord } from './HafsWord'
 import { VerseBookmarkRibbon } from './VerseBookmarkRibbon'
-
-function toArabicIndic(n: number): string {
-  return String(n).replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)]!)
-}
 
 interface Props {
   ayah: Ayah
@@ -36,7 +35,7 @@ interface Props {
   /** Tap a word to start recitation at that word's timing. */
   onPlayWord: (ayah: number, wordPosition: number) => void
   onToggleBookmark: (ayah: number) => boolean
-  onHoldWord: (ayah: number, position: number, arabic: string, translation: string) => void
+  onHoldWord: (ayah: number, word: Word) => void
 }
 
 function AyahBlockInner({
@@ -65,11 +64,21 @@ function AyahBlockInner({
 }: Props) {
   const englishOnly = readingMode === 'english_only'
   const arabicOnly = readingMode === 'arabic_only'
-  // Ayah mark: full ink when not recessed (Android `focused = !dimmed`).
-  // At rest every verse is undimmed → full opacity; during playback only the
-  // active verse's mark blooms to full.
-  const markOpacity = dimmed ? 0.22 : 1
+  // English-only: Western digits (Android AyahNumberMark useArabicIndicDigits=false).
+  const ayahMark = `﴿${formatReaderDigits(ayah.number, !englishOnly)}﴾`
+  // Ayah mark opacity is CSS-driven via `.scroll[data-reciting]` (paint-phase
+  // recess) — no inline style so play/pause does not thrash every verse.
   const words = useMemo(() => ayah.words, [ayah.words])
+  const englishWords = useMemo(
+    () => punctuateEnglishGlosses(words.map((word) => word.translation)),
+    [words],
+  )
+  // Derive ink policy once for the ayah, matching Android AyahBlock. The
+  // renderer branches consume these decisions and never reinterpret playback.
+  const activeSweepMs = InkEngine.sweepMs(activeWord, speed)
+  const inks = words.map((word) =>
+    InkEngine.word(word.position, activeWord, isActiveAyah, dimmed),
+  )
   const activeWordRef = useRef<HTMLElement | null>(null)
   const [hovered, setHovered] = useState(false)
   const query = searchQuery?.toLowerCase() ?? null
@@ -88,7 +97,8 @@ function AyahBlockInner({
     <article
       className="ayah-block"
       data-ayah={ayah.number}
-      data-dimmed={dimmed}
+      data-ayah-active={isActiveAyah || undefined}
+      data-dimmed={dimmed || undefined}
       style={{ ['--font-scale' as string]: String(fontScale) }}
       id={`ayah-${ayah.number}`}
       onMouseEnter={() => setHovered(true)}
@@ -106,67 +116,60 @@ function AyahBlockInner({
 
       {arabicOnly ? (
         <p className="hafs-ayah" dir="rtl">
-          {words.map((w) => (
-            <HafsWord
-              key={w.position}
-              word={w}
-              activeWord={isActiveAyah ? activeWord : null}
-              isActiveAyah={isActiveAyah}
-              dimmed={dimmed}
-              speed={speed}
-              searchFlash={flashWordPosition === w.position}
-              rootRef={
-                isActiveAyah && activeWord?.wordPosition === w.position
-                  ? activeWordRef
-                  : undefined
-              }
-              onPlay={() => onPlayWord(ayah.number, w.position)}
-              onHold={() =>
-                onHoldWord(ayah.number, w.position, w.arabic, w.translation)
-              }
-              onContextMenu={(e) => {
-                e.preventDefault()
-                onHoldWord(ayah.number, w.position, w.arabic, w.translation)
-              }}
-            />
-          ))}
-          <span className="ayah-mark" style={{ opacity: markOpacity }}>
-            ﴿{toArabicIndic(ayah.number)}﴾
-          </span>
+          {words.map((w, index) => {
+            const ink = inks[index]!
+            return (
+              <HafsWord
+                key={w.position}
+                word={w}
+                ink={ink}
+                sweepMs={ink.state === InkState.Active ? activeSweepMs : null}
+                searchFlash={flashWordPosition === w.position}
+                rootRef={ink.state === InkState.Active ? activeWordRef : undefined}
+                onPlay={() => onPlayWord(ayah.number, w.position)}
+                onHold={() =>
+                  onHoldWord(ayah.number, w)
+                }
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  onHoldWord(ayah.number, w)
+                }}
+              />
+            )
+          })}
+          <span className="ayah-mark">{ayahMark}</span>
         </p>
       ) : (
         <div className="words" dir={englishOnly ? 'ltr' : 'rtl'} data-lyric={englishOnly ? 'english' : 'arabic'}>
-          {words.map((w) => (
-            <WordUnit
-              key={w.position}
-              word={w}
-              activeWord={isActiveAyah ? activeWord : null}
-              isActiveAyah={isActiveAyah}
-              dimmed={dimmed}
-              showGloss={!englishOnly && showWordGloss}
-              showTransliteration={showTransliteration}
-              englishMode={englishOnly}
-              searchHit={hits(w.translation)}
-              searchFlash={flashWordPosition === w.position}
-              speed={speed}
-              rootRef={
-                isActiveAyah && activeWord?.wordPosition === w.position
-                  ? activeWordRef
-                  : undefined
-              }
-              onPlay={() => onPlayWord(ayah.number, w.position)}
-              onHold={() =>
-                onHoldWord(ayah.number, w.position, w.arabic, w.translation)
-              }
-              onContextMenu={(e) => {
-                e.preventDefault()
-                onHoldWord(ayah.number, w.position, w.arabic, w.translation)
-              }}
-            />
-          ))}
-          <span className="ayah-mark" style={{ opacity: markOpacity }}>
-            ﴿{toArabicIndic(ayah.number)}﴾
-          </span>
+          {words.map((w, index) => {
+            const ink = inks[index]!
+            return (
+              <span key={w.position} className={englishOnly ? 'english-word-run' : 'word-unit-run'}>
+                <WordUnit
+                  word={w}
+                  englishText={englishOnly ? englishWords[index] : undefined}
+                  ink={ink}
+                  sweepMs={ink.state === InkState.Active ? activeSweepMs : null}
+                  showGloss={!englishOnly && showWordGloss}
+                  showTransliteration={showTransliteration}
+                  englishMode={englishOnly}
+                  searchHit={hits(w.translation)}
+                  searchFlash={flashWordPosition === w.position}
+                  rootRef={ink.state === InkState.Active ? activeWordRef : undefined}
+                  onPlay={() => onPlayWord(ayah.number, w.position)}
+                  onHold={() =>
+                    onHoldWord(ayah.number, w)
+                  }
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    onHoldWord(ayah.number, w)
+                  }}
+                />
+                {englishOnly ? ' ' : null}
+              </span>
+            )
+          })}
+          <span className="ayah-mark">{ayahMark}</span>
         </div>
       )}
 
@@ -174,12 +177,8 @@ function AyahBlockInner({
         <p
           className="ayah-translation"
           data-search-hit={translationHit ? 'true' : undefined}
-          // CSS color is already 66% ink; multiply by Upcoming when recessed
-          // (Android: 0.66 * upcomingAlpha). ayahTranslationAlpha documents the
-          // combined strength for tests.
+          // Combined alpha documented for tests/devtools; visual recess is CSS.
           style={{
-            opacity: dimmed ? inkAlpha(InkState.Upcoming) : 1,
-            // Keep the documented combined alpha available to tests/devtools.
             ['--ayah-translation-alpha' as string]: String(ayahTranslationAlpha(dimmed)),
           }}
         >
@@ -214,4 +213,3 @@ export const AyahBlock = memo(AyahBlockInner, (prev, next) => {
     prev.flashWordPosition === next.flashWordPosition
   )
 })
-

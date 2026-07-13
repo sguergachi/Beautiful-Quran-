@@ -20,7 +20,7 @@ jobs:
           java-version: "21"
 
       - name: Verify bundled Quran database asset
-        run: test -f app/src/main/assets/quran.db
+        run: test -s data/quran.db
 
       - name: Accept Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true

@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { appStore, useAppState } from '../store/appStore'
+import { hasReaderOpen } from './paper/stack'
 import { HomeScreen } from './home/HomeScreen'
+import { BookmarksScreen } from './bookmarks/BookmarksScreen'
 import { ReaderScreen } from './reader/ReaderScreen'
 import { SettingsScreen } from './settings/SettingsScreen'
 import { EntranceCover } from './entrance/EntranceCover'
+import { BOOKMARKS_LAYER, COVER_LAYER } from './paper/stack'
 
-function resolveTheme(mode: string): string {
+export function resolveTheme(mode: string): string {
   if (mode === 'light') return 'light'
   if (mode === 'dark') return 'dark'
   if (mode === 'royal_green') return 'royal_green'
@@ -35,6 +38,7 @@ export function App() {
   const state = useAppState()
   // Once per page load — mirrors Android rememberSaveable entranceDone.
   const [entranceDone, setEntranceDone] = useState(false)
+  const swipeStart = useRef<{ x: number; y: number; pointerId: number } | null>(null)
 
   useEffect(() => {
     void appStore.init()
@@ -68,10 +72,31 @@ export function App() {
   }, [entranceDone])
 
   const stack = state.stackLayer
-  const hasReader = state.content != null
+  // Keep explicit reader ownership as a guard for transient state restores.
+  const hasReader = hasReaderOpen(state.content, state.sheet)
   // The cover *is* the loading screen — show the shell underneath only once
   // the book is ready so the open reveals chapters, not an empty page.
   const showStack = state.ready
+
+  const beginBookmarkSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (stack !== COVER_LAYER && stack !== BOOKMARKS_LAYER) return
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    swipeStart.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId }
+  }
+
+  const finishBookmarkSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const start = swipeStart.current
+    swipeStart.current = null
+    if (!start || start.pointerId !== event.pointerId) return
+    const dx = event.clientX - start.x
+    const dy = event.clientY - start.y
+    if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.35) return
+    if (stack === COVER_LAYER && dx > 0 && state.bookmarks.length > 0) {
+      appStore.revealLayer(BOOKMARKS_LAYER)
+    } else if (stack === BOOKMARKS_LAYER && dx < 0) {
+      appStore.revealLayer(COVER_LAYER)
+    }
+  }
 
   return (
     <div
@@ -79,11 +104,21 @@ export function App() {
       data-stack={stack}
       data-has-reader={hasReader}
       data-booting={showStack ? undefined : 'true'}
+      onPointerDown={beginBookmarkSwipe}
+      onPointerUp={finishBookmarkSwipe}
+      onPointerCancel={() => { swipeStart.current = null }}
     >
       {showStack && (
         <>
+          <BookmarksScreen stackLayer={stack} />
           <HomeScreen stackLayer={stack} />
-          <ReaderScreen stackLayer={stack} />
+          {/* Chapter boundaries get fresh focus/rail geometry. Carrying the
+              previous chapter's dial state into the first peel frame makes
+              the rail visibly jump before the initial focus settles. */}
+          <ReaderScreen
+            key={state.content?.surah.id ?? 'empty-reader'}
+            stackLayer={stack}
+          />
           <SettingsScreen stackLayer={stack} hasReader={hasReader} />
         </>
       )}

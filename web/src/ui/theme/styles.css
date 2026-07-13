@@ -25,9 +25,13 @@
   --home-max: 40rem;
   --ease-sheet: cubic-bezier(0.22, 0.61, 0.36, 1);
   --upcoming-alpha: 0.22;
+  /* Paper-cover strength for recessed (Upcoming) Arabic — 1 − upcoming-alpha. */
+  --upcoming-cover: 0.78;
+  --translit-alpha: 0.55;
   /* Play-start recess — even ease-in-out, matched to Android. */
   --chrome-recede-ms: 520ms;
   --ink-fade-ms: 400ms;
+  --ayah-mark-fade-ms: 400ms;
   --recess-ms: 400ms;
   --recede-ease: cubic-bezier(0.4, 0, 0.2, 1);
   color-scheme: light;
@@ -126,7 +130,10 @@ button:focus-visible,
 a.control:focus-visible,
 .surah-row:focus-visible,
 .word-unit:focus-visible,
-.occurrence:focus-visible {
+.occurrence:focus-visible,
+.root-occurrence:focus-visible,
+.root-chapter-heading:focus-visible,
+.root-text-action:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: 3px;
 }
@@ -151,7 +158,12 @@ select {
 .app-shell {
   position: relative;
   height: 100%;
-  overflow: hidden;
+  /* `hidden` creates a horizontal scroll container. When the parked
+   * bookmark sheet receives focus, browsers can scroll that container toward
+   * the off-canvas sheet and leave Home visibly cropped. Clip the paper deck
+   * instead: sheets may still paint off-canvas for the transition, but the
+   * shell cannot acquire a horizontal scroll position. */
+  overflow: clip;
   background: var(--paper);
   /* Peek gutters are desktop-only; phones are full-bleed (back buttons). */
   --peek-step: 0px;
@@ -169,20 +181,34 @@ select {
   display: flex;
   flex-direction: column;
   background: var(--paper);
+  /* Visible paper peel — long enough to read as a sheet glide, short enough
+     not to feel stuck. Heavy work must not run on this same frame. */
   transition:
-    left 420ms cubic-bezier(0.24, 0.02, 0.12, 1),
-    right 420ms cubic-bezier(0.24, 0.02, 0.12, 1),
-    transform 420ms cubic-bezier(0.24, 0.02, 0.12, 1),
-    opacity 380ms ease,
-    box-shadow 420ms ease;
-  will-change: transform, opacity, left, right;
+    transform 360ms cubic-bezier(0.24, 0.02, 0.12, 1),
+    opacity 300ms ease,
+    left 360ms cubic-bezier(0.24, 0.02, 0.12, 1),
+    right 360ms cubic-bezier(0.24, 0.02, 0.12, 1);
   transform-origin: center center;
   transform: translateX(0) scale(1);
   opacity: 1;
 }
 
+/* Promote to a compositor layer only while the paper deck is moving. */
+.app-shell[data-stack] .sheet {
+  will-change: auto;
+}
+.app-shell[data-stack='1'] .sheet[data-name='home'],
+.app-shell[data-stack='1'] .sheet[data-name='reader'],
+.app-shell[data-stack='2'] .sheet {
+  will-change: transform, opacity;
+}
+
 .sheet[data-name='home'] {
   z-index: 1;
+}
+
+.sheet[data-name='bookmarks'] {
+  z-index: 4;
 }
 
 .sheet[data-name='reader'] {
@@ -195,6 +221,20 @@ select {
 
 .sheet[data-empty='true'] {
   visibility: hidden;
+  pointer-events: none;
+}
+
+/* Bookmarks is the one left-hand top sheet: parked beyond the left edge at
+   Chapters, then laid over Home when layer -1 is selected. */
+.sheet[data-name='bookmarks'][data-active='false'] {
+  transform: translateX(-105%);
+  opacity: 0;
+  pointer-events: none;
+  content-visibility: hidden;
+  contain: strict;
+}
+
+.app-shell[data-stack='-1'] .sheet[data-name='home'] {
   pointer-events: none;
 }
 
@@ -246,6 +286,10 @@ select {
   opacity: 0;
   pointer-events: none;
   box-shadow: none;
+  /* Drop the parked reader out of layout/paint — close must stay smooth
+     even when a long surah is still mounted underneath. */
+  content-visibility: hidden;
+  contain: strict;
 }
 
 /* Left-edge hit target — desktop peek gutter only (phones have no peek). */
@@ -281,6 +325,7 @@ select {
 }
 
 .sheet-frame {
+  position: relative;
   width: min(100%, 52rem);
   margin: 0 auto;
   height: 100%;
@@ -403,10 +448,35 @@ select {
 }
 
 /* —— Home —— */
+.home-scroll-page {
+  position: relative;
+  min-height: 100%;
+}
+
+.home-scroll-page > .search-row {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.home-bookmark-ribbon {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 44px;
+  z-index: 8;
+}
+
+.home-bookmark-ribbon .verse-ribbon {
+  top: 0;
+  bottom: 0;
+}
+
 .home-header {
+  --home-header-top: max(clamp(1rem, 2.5vh, 2rem), env(safe-area-inset-top, 0px));
   padding: clamp(1rem, 2.5vh, 2rem) var(--sheet-pad) 0.5rem;
-  padding-top: max(clamp(1rem, 2.5vh, 2rem), env(safe-area-inset-top));
+  padding-top: var(--home-header-top);
   display: flex;
+  position: relative;
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
@@ -421,6 +491,33 @@ select {
   font-size: clamp(1.75rem, 5vw, 2.15rem);
   margin: 0;
   letter-spacing: 0.01em;
+}
+
+/* The saved ribbon begins beside the page title, then runs down the paper.
+ * It is positioned against the header rather than the search document. */
+.home-header .home-bookmark-ribbon {
+  top: var(--home-header-top);
+}
+
+/* Navigation is deliberately separated from the ribbon drawing. Clicking the
+ * Home affordance opens the bookmark sheet without ever invoking the ribbon's
+ * mark/unmark animation. */
+.home-bookmark-open {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -6.5px;
+  width: 44px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  z-index: 3;
+}
+
+.home-bookmark-open:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .home-header .gear {
@@ -932,15 +1029,42 @@ select {
 }
 
 .surah-header {
+  position: relative;
   text-align: center;
   padding: 1.35rem 0 1.75rem;
   max-width: var(--reader-max);
   margin: 0 auto;
 }
 
+/* This chapter's own Hankin field, tooled at whisper ink behind the
+   header — grown from the same seed as the rosette sitting on it, not the
+   fixed pattern every chapter used to share. Fades at the top/bottom edges
+   (mirrors Android `verticalFadingEdges`, 12px top / 36px bottom) so it
+   dissolves into the page instead of cutting off hard. */
+.surah-header-weave {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 12px,
+    black calc(100% - 36px),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 12px,
+    black calc(100% - 36px),
+    transparent 100%
+  );
+}
+
 .surah-header .rosette {
-  width: 3.25rem;
-  height: 3.25rem;
+  position: relative;
+  width: 3.75rem;
+  height: 3.75rem;
   margin: 0 auto 0.9rem;
   opacity: 0.92;
 }
@@ -1027,6 +1151,69 @@ select {
   /* Shared with .word-arabic / .ayah-mark so the verse sign tracks glyph size. */
   --word-arabic-size: calc(1.8rem * var(--font-scale, 1));
   --word-arabic-line: 1.9;
+  /* Skip paint/layout for off-screen verses after mount (browser virtualization). */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 7.5rem;
+}
+
+/* FocusEngine needs the chosen ayah's real wrapped-text height even while it
+ * is far offscreen; `auto` would otherwise expose only the intrinsic estimate. */
+.ayah-block[data-focus-target='true'] {
+  content-visibility: visible;
+  contain-intrinsic-size: none;
+}
+
+/* Progressive-mount scroll padding — one block above/below the window. */
+.ayah-mount-pad {
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+/* Progressive-mount placeholder — keeps scroll geometry while the window expands. */
+.ayah-block--spacer {
+  padding: 0;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 7rem;
+  pointer-events: none;
+}
+
+/*
+ * Mushaf page break — Android `PageBreak`: whisper-gold hairline with Western
+ * digits left and Arabic-Indic right. English-only uses one Western number.
+ */
+.page-break {
+  max-width: var(--reader-max);
+  margin: 0 auto;
+  padding: 0.625rem 2.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-sizing: border-box;
+}
+
+.page-break__num {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  line-height: 1;
+  /* Alpha on gold (Android gold.copy(alpha)), not color-mix with transparent —
+   * transparent is black, so a 20–68% mix reads as near-black and vanishes on
+   * Nightfall / Royal Green paper. */
+  color: rgb(from var(--gold) r g b / 0.68);
+  flex-shrink: 0;
+}
+
+.page-break__line {
+  flex: 1;
+  height: 0.5px;
+  background: rgb(from var(--gold) r g b / 0.2);
+  min-width: 0;
+}
+
+/* English has no mirrored Arabic folio number. Equal flexing rules on both
+   sides keep the surviving Western number mathematically centred. */
+.page-break--western-only .page-break__line {
+  height: 1px;
+  background: rgb(from var(--gold) r g b / 0.36);
 }
 
 .ayah-mark {
@@ -1034,7 +1221,7 @@ select {
   color: var(--gold);
   font-size: 0.95rem;
   margin-inline-start: 0.35rem;
-  transition: opacity var(--ink-fade-ms) var(--recede-ease);
+  transition: opacity var(--ayah-mark-fade-ms) var(--recede-ease);
   line-height: 1;
 }
 
@@ -1050,13 +1237,24 @@ select {
   height: calc(var(--word-arabic-size) * var(--word-arabic-line));
   /* Match .word-unit padding-top so the box lines up with the glyph row. */
   margin-block-start: 0.2rem;
+  /* Hafs' ornament sits low inside its reported line box. Lift only its paint;
+     the fixed Arabic-line box above continues to own row alignment. */
+  transform: translateY(-0.22em);
 }
 
-/* English lyric: sit mid-row beside the single gloss line. */
+/* English lyric: proportional ornament on the prose baseline. */
 .words[data-lyric='english'] > .ayah-mark {
-  display: inline-flex;
-  align-items: center;
-  align-self: center;
+  display: inline-block;
+  margin-inline-start: 0.2em;
+  /* Relative to the live 22px × user font scale, so it remains accurate at
+     every text-size setting rather than depending on a fixed pixel size. */
+  font-size: 0.78em;
+  line-height: inherit;
+  vertical-align: baseline;
+  /* Calibrated against the rasterized fonts in the production browser: Hafs'
+     ornament ink starts with a 0.619em lift. The final literal half-pixel
+     adjustment is intentionally scale-independent for exact raster alignment. */
+  transform: translateY(calc(-0.619em + 1px));
 }
 
 .words {
@@ -1064,6 +1262,61 @@ select {
   flex-wrap: wrap;
   gap: 0.5rem 0.8rem;
   justify-content: flex-start;
+}
+
+/*
+ * English-only scripture is continuous prose, not a row of word tiles.
+ * Keep per-word nodes for karaoke ink and interaction, while one inline
+ * formatting context owns spacing, baselines, and line breaking.
+ */
+.words[data-lyric='english'] {
+  display: block;
+  max-width: 32em;
+  margin-inline: auto;
+  font-family: var(--font-body);
+  font-size: calc(1.375rem * var(--font-scale, 1));
+  font-weight: 400;
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures;
+  font-variant-numeric: oldstyle-nums;
+  font-feature-settings: 'kern' 1, 'liga' 1, 'onum' 1;
+  line-height: 1.5;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-align: left;
+  text-wrap: pretty;
+  hyphens: none;
+}
+
+.english-word-run {
+  display: inline;
+}
+
+/* Structural keyed wrapper only; preserve the Arabic flex row's direct items. */
+.word-unit-run {
+  display: contents;
+}
+
+.words[data-lyric='english'] .word-unit {
+  display: inline;
+  padding: 0;
+  border-radius: 0;
+  font: inherit;
+  line-height: inherit;
+  vertical-align: baseline;
+}
+
+.words[data-lyric='english'] .word-stack,
+.words[data-lyric='english'] .word-ink-slot {
+  display: inline-block;
+  vertical-align: baseline;
+}
+
+.words[data-lyric='english'] .word-gloss {
+  font: inherit;
+  line-height: inherit;
+  color: inherit;
+  text-align: inherit;
 }
 
 .words[dir='rtl'] {
@@ -1087,8 +1340,8 @@ select {
 }
 
 @media (hover: hover) {
-  .word-unit:hover .word-arabic:not(.word-repeat-overlay):not(.word-search-flash-overlay),
-  .word-unit:hover .word-gloss:not(.word-repeat-overlay):not(.word-search-flash-overlay) {
+  .word-unit:hover .word-arabic:not(.word-repeat-overlay),
+  .word-unit:hover .word-gloss:not(.word-repeat-overlay) {
     color: var(--accent);
   }
 }
@@ -1160,16 +1413,29 @@ select {
   overflow: visible;
 }
 
-/* Orange second fade — same box/typography as the base glyph it covers.
-   left/top (not inset:0 + flex) so the overlay sizes to its own text and
-   sits flush on the base; inset+flex with mismatched font looked like tiny
-   orange text in the corner of the word box. */
+/* Tight box around the base glyph. Orange overlays fill this slot (inset:0)
+   so they share the same border box — `top:0` on the stack sat on the line-
+   box top, half-leading above the inline baseline. */
+.word-ink-slot {
+  position: relative;
+  display: inline-block;
+}
+
+.word-ink-slot > .word-arabic,
+.word-ink-slot > .word-gloss,
+.word-ink-slot > .hafs-glyph {
+  display: block;
+  position: static;
+}
+
+/* Orange second fade — fill the ink slot (same border box as the base glyph).
+   No flex: font size must come from the glyph class alone. */
 .word-repeat-overlay {
   position: absolute;
-  left: 0;
-  top: 0;
+  inset: 0;
   pointer-events: none;
   white-space: nowrap;
+  margin: 0;
 }
 
 /* Beat .word-gloss / .word-arabic (and their hover accent) when both classes
@@ -1177,36 +1443,25 @@ select {
 .word-repeat-overlay.word-arabic,
 .word-repeat-overlay.word-gloss {
   color: var(--repeat);
+  /* Keep absolute from .word-repeat-overlay; beat .word-arabic's relative. */
+  position: absolute;
 }
 
-/* Search-hit flash overlay — same box as the repeat orange layer.
-   Motion is driven by runSearchHitDoubleWash (directional mask + dissolve).
-   Kept here (after .word-arabic) so position:absolute beats the base glyph's
-   position:relative — an earlier rule let the flash join flow and shift text. */
-.word-search-flash-overlay {
-  position: absolute;
-  left: 0;
-  top: 0;
-  pointer-events: none;
-  white-space: nowrap;
-  color: var(--repeat);
-  opacity: 0;
-}
-
-.word-search-flash-overlay.word-arabic,
-.word-search-flash-overlay.word-gloss {
-  position: absolute;
+/* English prose gives `.word-gloss` a mode-specific `color: inherit` above.
+   Match that selector's mode context so it cannot override the orange repeat
+   twin and turn the directional wash into invisible ink-on-identical-ink. */
+.words[data-lyric='english'] .word-repeat-overlay.word-gloss {
   color: var(--repeat);
 }
 
 .word-gloss-flash {
   position: relative;
+  display: inline-block;
 }
 
-.word-gloss-flash .word-search-flash-overlay {
-  position: absolute;
-  inset: 0;
-  white-space: normal;
+.word-gloss-flash > .word-gloss:not(.word-repeat-overlay) {
+  display: block;
+  position: static;
 }
 
 .word-wash {
@@ -1276,15 +1531,16 @@ select {
 
 .hafs-repeat-overlay {
   position: absolute;
-  left: 0;
-  top: 0;
+  inset: 0;
   pointer-events: none;
   white-space: nowrap;
+  margin: 0;
 }
 
 /* Beat .hafs-glyph ink (and hover accent) on the shared overlay node. */
 .hafs-repeat-overlay.hafs-glyph {
   color: var(--repeat);
+  position: absolute;
 }
 
 .ayah-translation {
@@ -1297,6 +1553,47 @@ select {
 
 .ayah-block[data-dimmed='true'] .ayah-translation {
   opacity: var(--upcoming-alpha, 0.22);
+}
+
+/*
+ * Global play/pause recess — paint-phase only (Android draw-phase dimming).
+ *
+ * Toggling [data-reciting] on .scroll dims every inactive ayah via CSS without
+ * React re-rendering WordUnit/HafsWord across the surah. Only the active ayah
+ * ([data-ayah-active]) wakes for karaoke ink. Covers must not carry an inline
+ * opacity:0 from clearCover, or this rule cannot paint.
+ */
+.scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .ink-paper-cover,
+.scroll[data-reciting='true'] .basmalah-block:not([data-ayah-active='true']) .ink-paper-cover {
+  opacity: var(--upcoming-cover, 0.78);
+  transition: opacity var(--recess-ms) var(--recede-ease);
+}
+
+.scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .word-ink {
+  opacity: var(--upcoming-alpha, 0.22);
+}
+
+.scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .word-arabic-ink > .word-gloss-flash > .word-gloss {
+  opacity: var(--upcoming-alpha, 0.22);
+}
+
+.scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .word-arabic-ink > .word-translit {
+  opacity: calc(var(--upcoming-alpha, 0.22) * var(--translit-alpha, 0.55));
+}
+
+.scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .ayah-mark {
+  opacity: var(--upcoming-alpha, 0.22);
+}
+
+.scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .ayah-translation {
+  opacity: var(--upcoming-alpha, 0.22);
+}
+
+/* Bookmark ribbons recede with chrome — CSS only, no per-ayah React update. */
+.scroll[data-reciting='true'] .verse-ribbon {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--chrome-recede-ms) var(--recede-ease);
 }
 
 .ayah-translation[data-search-hit='true'],
@@ -1542,6 +1839,342 @@ select {
   filter: brightness(1.12);
 }
 
+/* —— Bookmark index —— */
+.bookmarks-frame {
+  --bookmark-pad: clamp(1.25rem, 4vw, 1.5rem);
+  --bookmark-lane: 44px;
+  --bookmark-gap: 8px;
+  --bookmark-spine: calc(var(--bookmark-lane) + var(--bookmark-gap));
+  /* Matches VerseBookmarkRibbon's painted edge inside its 44px target. */
+  --bookmark-ribbon-ink-inset: 9px;
+  width: 100%;
+  max-width: 36rem;
+  align-self: center;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.bookmarks-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  /* The page title belongs to the outer rule, alongside the physical ribbon
+   * edge and the chapter numbers. The reading/search spine begins one lane
+   * inward below it. */
+  padding: 1.75rem var(--bookmark-pad) 0
+    calc(var(--bookmark-pad) + var(--bookmark-ribbon-ink-inset));
+}
+
+.bookmarks-header > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.bookmarks-header h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 2.5rem;
+  font-weight: 600;
+  line-height: 3rem;
+}
+
+.bookmarks-header button {
+  min-height: 44px;
+  padding: 0.7rem 0;
+  color: var(--accent);
+  background: transparent;
+  border: none;
+  font: 500 0.875rem/1.25rem var(--font-body);
+  cursor: pointer;
+}
+
+.bookmarks-search {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  margin: 1.25rem var(--bookmark-pad) 0.25rem;
+  color: color-mix(in srgb, var(--ink-muted) 84%, transparent);
+}
+
+.bookmarks-search .paper-input {
+  min-width: 0;
+  width: 100%;
+  height: 52px;
+  padding: 0 0 0 var(--bookmark-gap);
+  color: var(--ink);
+  border: none;
+  font: 400 1.0625rem/1.5625rem var(--font-body);
+}
+
+.bookmarks-search .paper-input::placeholder {
+  color: color-mix(in srgb, var(--ink-muted) 82%, transparent);
+  opacity: 1;
+}
+
+.bookmarks-search:focus-within {
+  color: var(--accent);
+}
+
+.bookmarks-search-lane {
+  display: flex;
+  flex: 0 0 var(--bookmark-lane);
+  align-items: center;
+  box-sizing: border-box;
+  padding-left: var(--bookmark-ribbon-ink-inset);
+  justify-content: flex-start;
+}
+
+.bookmarks-search-icon {
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.8;
+}
+
+.bookmarks-search-clear {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: color-mix(in srgb, var(--ink-muted) 82%, transparent);
+  background: transparent;
+  border: 0;
+  font: 400 1.5rem/1 var(--font-body);
+  cursor: pointer;
+}
+
+.bookmarks-scroll {
+  padding: 0 var(--bookmark-pad) 3rem;
+}
+
+.bookmarks-empty {
+  padding: 3rem 0.75rem;
+  text-align: center;
+}
+
+.bookmarks-empty p {
+  margin: 0;
+  color: color-mix(in srgb, var(--ink) 82%, transparent);
+  font-size: 1.0625rem;
+  line-height: 1.5625rem;
+}
+
+.bookmarks-empty small {
+  display: block;
+  margin-top: 0.5rem;
+  color: color-mix(in srgb, var(--ink-muted) 72%, transparent);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.bookmark-section {
+  margin: 0;
+}
+
+.bookmark-section-header {
+  display: grid;
+  grid-template-columns: var(--bookmark-lane) minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--bookmark-gap);
+  padding: 1.75rem 0 0.75rem;
+}
+
+.bookmark-section-header[data-first='true'] {
+  padding-top: 0.25rem;
+}
+
+.bookmark-section-number {
+  box-sizing: border-box;
+  padding-left: var(--bookmark-ribbon-ink-inset);
+  color: var(--gold);
+  font-size: 0.875rem;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.bookmark-section-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 1.125rem;
+  font-weight: 500;
+  line-height: 1.5rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookmark-section-copy {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 1rem;
+}
+
+.bookmark-section-arabic {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--ink) 88%, transparent);
+  font-family: var(--font-arabic);
+  font-size: 1.25rem;
+  font-weight: 400;
+  line-height: 1.875rem;
+  white-space: nowrap;
+}
+
+.bookmark-verses {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bookmark-verse {
+  position: relative;
+  padding: 0.625rem 0;
+}
+
+.bookmark-verse-copy {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0 0 0 var(--bookmark-spine);
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  font-family: var(--font-body);
+  cursor: pointer;
+}
+
+.bookmark-verse-ar {
+  width: 100%;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--ink) 92%, transparent);
+  font-family: var(--font-arabic);
+  font-size: 1.5rem;
+  line-height: 2.25rem;
+  text-align: right;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.bookmark-verse-translation {
+  overflow: hidden;
+  color: color-mix(in srgb, var(--ink) 88%, transparent);
+  font-size: 1.0625rem;
+  line-height: 1.5625rem;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.bookmark-verse-meta {
+  display: flex;
+  min-height: 44px;
+  margin-left: var(--bookmark-spine);
+  align-items: center;
+}
+
+.bookmark-verse-meta[data-confirming='true'] {
+  animation: bookmark-meta-in 160ms ease-out both;
+}
+
+.bookmark-verse-ref {
+  min-height: 44px;
+  padding: 0;
+  color: color-mix(in srgb, var(--ink-muted) 84%, transparent);
+  background: transparent;
+  border: 0;
+  font: 400 0.875rem/1.25rem var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.bookmark-verse-ref strong {
+  color: var(--gold);
+  font-variant-numeric: lining-nums tabular-nums;
+  font-weight: 500;
+}
+
+.bookmark-remove-confirmation {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  color: color-mix(in srgb, var(--ink-muted) 76%, transparent);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.bookmark-remove-confirmation span {
+  flex: 1;
+}
+
+.bookmark-remove-confirmation button {
+  min-height: 44px;
+  padding: 0 0.35rem;
+  color: var(--accent);
+  background: transparent;
+  border: none;
+  font: 500 0.875rem/1.25rem var(--font-body);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.bookmark-remove-confirmation .confirm-remove {
+  padding-right: 0;
+  color: color-mix(in srgb, var(--ink) 78%, transparent);
+}
+
+.bookmark-disclosure {
+  display: block;
+  min-height: 44px;
+  margin-left: var(--bookmark-spine);
+  padding: 0.25rem 0 1rem;
+  color: var(--accent);
+  background: transparent;
+  border: 0;
+  font: 500 1.0625rem/1.5625rem var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+@keyframes bookmark-meta-in {
+  from {
+    opacity: 0;
+    transform: translateX(0.4rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 420px) {
+  .bookmarks-header h1 {
+    font-size: 2.25rem;
+    line-height: 2.75rem;
+  }
+
+  .bookmark-remove-confirmation span {
+    font-size: 0.8125rem;
+  }
+
+  .bookmark-remove-confirmation button {
+    font-size: 0.8125rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bookmark-verse-meta[data-confirming='true'] {
+    animation: none;
+  }
+}
+
 
 /* —— Settings —— */
 .settings {
@@ -1779,6 +2412,152 @@ select {
   padding-block: 0.35rem 0.55rem;
 }
 
+/* Ink segmented row — short enums, no borders / tracks. */
+.paper-segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.55rem;
+  width: 100%;
+  padding: 0.15rem 0 0.35rem;
+}
+
+.paper-segmented-item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.35;
+  padding: 0.55rem 0.35rem;
+  min-height: 44px;
+  color: color-mix(in srgb, var(--ink) 42%, transparent);
+  cursor: pointer;
+  transition: color 160ms ease;
+}
+
+.paper-segmented-item[data-pressed] {
+  color: var(--accent);
+}
+
+.paper-segmented-item:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) {
+  .paper-segmented-item:hover {
+    color: color-mix(in srgb, var(--ink) 72%, transparent);
+  }
+  .paper-segmented-item[data-pressed]:hover {
+    color: var(--accent);
+  }
+}
+
+/* Vertical choice list — theme / long visible enums. */
+.paper-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.paper-choice-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 48px;
+  padding: 0.45rem 0;
+  cursor: pointer;
+}
+
+.paper-choice-radio {
+  position: relative;
+  flex-shrink: 0;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 28%, transparent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.paper-choice-radio[data-checked] {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.paper-choice-indicator {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.paper-choice-radio[data-checked] .paper-choice-indicator {
+  background: var(--accent);
+}
+
+.paper-choice-radio:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.paper-choice-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.paper-choice-label {
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.paper-choice-row:has(.paper-choice-radio[data-checked]) .paper-choice-label {
+  color: var(--accent);
+}
+
+.paper-choice-desc {
+  color: color-mix(in srgb, var(--ink-muted) 85%, transparent);
+  font-size: 0.82rem;
+  line-height: 1.3;
+}
+
+.paper-choice-trailing {
+  flex-shrink: 0;
+  margin-inline-start: auto;
+}
+
+.theme-swatches {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.theme-swatch {
+  width: 16px;
+  height: 22px;
+  border-radius: 5px;
+  display: block;
+}
+
+.settings-subfield {
+  margin-top: 0.85rem;
+}
+
+.settings-subfield:first-child {
+  margin-top: 0;
+}
+
+.settings-sublabel {
+  margin: 0 0 0.2rem;
+  font-size: 0.9rem;
+  color: color-mix(in srgb, var(--ink) 72%, transparent);
+}
+
 .paper-slider {
   display: flex;
   flex-direction: column;
@@ -1943,10 +2722,18 @@ select {
   background: var(--paper);
   color: var(--ink);
   animation: bleed-in 420ms ease;
+  --root-inline-padding: 2rem;
+  --root-space-1: 0.25rem;
+  --root-space-2: 0.5rem;
+  --root-space-3: 0.75rem;
+  --root-space-4: 1rem;
+  --root-space-5: 1.5rem;
+  --root-space-6: 2rem;
+  --root-space-7: 2.5rem;
+  --root-space-8: 3.5rem;
   overflow: auto;
-  padding: 1.5rem var(--sheet-pad) 3rem;
-  padding-top: max(1.5rem, env(safe-area-inset-top));
-  padding-bottom: calc(3rem + env(safe-area-inset-bottom, 0px));
+  padding: env(safe-area-inset-top, 0px) var(--root-inline-padding)
+    calc(2rem + env(safe-area-inset-bottom, 0px));
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
@@ -1988,14 +2775,19 @@ select {
 }
 
 .ink-bleed-inner {
-  max-width: 34rem;
+  max-width: 40rem;
   margin: 0 auto;
 }
 
 .ink-bleed-chrome {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
+  min-height: 60px;
+  align-items: center;
   justify-content: flex-end;
-  margin-bottom: 0.5rem;
+  background: var(--paper);
 }
 
 @keyframes bleed-in {
@@ -2021,99 +2813,295 @@ select {
   }
 }
 
-/*
- * Root Word Viewer typography. Hierarchy mirrors the Android reference
- * (ui/rootviewer/RootViewerScreen.kt): a centred "this word" moment up top,
- * then start-aligned, labelled reference sections below — spacing, size,
- * and ink strength only (no rules/cards). Quiet uppercase eyebrow labels
- * match the existing `.settings-section h2` convention.
- */
-.ink-bleed-word {
+/* Root lexicon: compact bilingual hierarchy on one reading spine. */
+.root-prose-measure {
+  max-width: 34rem;
+  margin-inline: auto;
+}
+
+.root-opening {
+  padding-top: var(--root-space-2);
   text-align: center;
-  padding: 0.15rem 0 0.4rem;
 }
 
-.ink-bleed .arabic-lg {
-  font-family: var(--font-arabic);
-  font-size: clamp(2.1rem, 7vw, 2.6rem);
-  line-height: 1.5;
-  direction: rtl;
+.root-opening p,
+.root-analysis p,
+.root-section p {
   margin: 0;
 }
 
-.ink-bleed-word-translation {
-  margin: 0.25rem 0 0;
-  color: color-mix(in srgb, var(--ink) 78%, transparent);
-  font-size: 1.05rem;
-}
-
-.ink-bleed-section {
-  margin-top: 2rem;
-}
-
-.ink-bleed-label {
-  margin: 0 0 0.4rem;
-  color: var(--ink-muted);
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-weight: 500;
-}
-
-.ink-bleed-root {
+.root-word-arabic {
+  color: var(--ink);
   font-family: var(--font-arabic);
-  font-weight: 400;
-  font-size: clamp(1.75rem, 5.5vw, 2.15rem);
+  font-size: 3.5rem;
+  line-height: 1.38;
+  unicode-bidi: isolate;
+}
+
+.root-word-gloss {
+  margin-top: var(--root-space-1) !important;
+  color: var(--ink);
+  font-size: 1.25rem;
+  font-style: italic;
   line-height: 1.4;
-  direction: rtl;
+}
+
+.root-word-transliteration {
+  margin-top: 0.125rem !important;
+  color: color-mix(in srgb, var(--ink) 68%, transparent);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.root-analysis {
+  margin-top: var(--root-space-6);
+}
+
+.root-analysis-group + .root-analysis-group {
+  margin-top: var(--root-space-5);
+}
+
+.root-label {
   margin: 0;
-  color: var(--ink);
-}
-
-.ink-bleed-form-pos {
-  margin: 0;
-  font-size: 1.1rem;
-  color: var(--ink);
-}
-
-.ink-bleed-lemma {
-  margin: 0.6rem 0 0;
-  display: flex;
-  align-items: baseline;
-  gap: 0.55rem;
-}
-
-.ink-bleed-lemma-label {
-  flex-shrink: 0;
-  color: var(--ink-muted);
-  font-size: 0.78rem;
-  letter-spacing: 0.06em;
+  color: color-mix(in srgb, var(--ink) 72%, transparent);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  line-height: 1.35;
   text-transform: uppercase;
 }
 
-.ink-bleed-lemma-ar {
+.root-radicals {
+  width: fit-content;
+  margin-top: var(--root-space-2) !important;
+  color: var(--ink);
   font-family: var(--font-arabic);
-  font-size: 1.1rem;
-  direction: rtl;
-  color: color-mix(in srgb, var(--ink) 78%, transparent);
+  font-size: 2rem;
+  line-height: 1.45;
+  unicode-bidi: isolate;
 }
 
-.ink-bleed-count {
+.root-form-lemma {
+  width: fit-content;
+  margin-top: var(--root-space-2) !important;
+  color: var(--ink);
+  font-family: var(--font-arabic);
+  font-size: 1.5rem;
+  line-height: 1.5;
+  unicode-bidi: isolate;
+}
+
+.root-form-grammar {
+  margin-top: var(--root-space-2) !important;
+  color: color-mix(in srgb, var(--ink) 82%, transparent);
+  font-size: 1.0625rem;
+  line-height: 1.47;
+}
+
+.root-form-frequency,
+.root-no-root,
+.root-section-summary {
+  margin-top: var(--root-space-1) !important;
+  color: color-mix(in srgb, var(--ink) 74%, transparent);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.root-no-root {
+  margin-top: var(--root-space-4) !important;
+}
+
+.root-section {
+  margin-top: var(--root-space-7);
+}
+
+.root-section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--root-space-4);
   margin: 0;
-  font-size: 1.1rem;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.root-section-title::after {
+  flex: 1;
+  height: 1px;
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
+  content: '';
+}
+
+.root-chapter-list,
+.root-related-list {
+  margin-top: var(--root-space-5);
+}
+
+.root-occurrences,
+.root-related {
+  max-width: 34rem;
+  margin-inline: auto;
+}
+
+.root-chapter-heading {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--root-space-4);
+  padding: var(--root-space-3) 0;
+  text-align: start;
+}
+
+.root-chapter-name {
+  min-width: 0;
+  color: color-mix(in srgb, var(--ink) 90%, transparent);
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  line-height: 1.3;
+}
+
+.root-chapter-name i {
+  display: inline-block;
+  width: 1.5rem;
+  margin-inline-end: var(--root-space-2);
+  color: var(--gold);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-style: normal;
+  font-variant-numeric: lining-nums tabular-nums;
+  text-align: end;
+}
+
+.root-chapter-meta {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: baseline;
+  gap: var(--root-space-2);
+  color: color-mix(in srgb, var(--ink) 68%, transparent);
+}
+
+.root-chapter-count,
+.root-related-count {
+  flex-shrink: 0;
+  color: inherit;
+  font-size: 0.875rem;
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1.4;
+}
+
+.root-chapter-disclosure {
+  width: 0.75rem;
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  line-height: 1;
+  text-align: center;
+}
+
+.root-chapter-occurrences {
+  margin: var(--root-space-2) 0 var(--root-space-2) 2.5rem;
+}
+
+.root-occurrence {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 0.625rem 0;
+  text-align: start;
+}
+
+.root-occurrence[data-current='true'] .root-occurrence-ref {
   color: var(--ink);
 }
 
-.ink-bleed .muted {
-  margin: 0.2rem 0 0;
+.root-occurrence-ref {
+  display: block;
+  color: var(--gold);
+  font-size: 0.875rem;
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1.4;
+}
+
+.root-occurrence-word {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: var(--root-space-2);
+  margin-top: var(--root-space-1);
+}
+
+.root-occurrence-word [lang='ar'] {
+  color: var(--ink);
+  font-family: var(--font-arabic);
+  font-size: 1.5rem;
+  line-height: 1.5;
+  unicode-bidi: isolate;
+}
+
+.root-occurrence-word span:last-child:not([lang='ar']) {
+  min-width: 0;
   color: var(--ink-muted);
+  font-size: 1.0625rem;
+  line-height: 1.47;
+}
+
+.root-text-action {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  margin-top: var(--root-space-1);
+  padding: var(--root-space-3) 0;
+  color: var(--accent);
+  font-size: 1.0625rem;
+  line-height: 1.4;
+  text-align: start;
+}
+
+.root-chapters-action {
+  margin-top: var(--root-space-2);
+}
+
+.root-related-row {
+  display: flex;
+  min-height: 48px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--root-space-4);
+  padding: var(--root-space-3) 0;
+}
+
+.root-related-form {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: var(--root-space-2);
+}
+
+.root-related-form [lang='ar'] {
+  color: var(--ink);
+  font-family: var(--font-arabic);
+  font-size: 1.5rem;
+  line-height: 1.5;
+  unicode-bidi: isolate;
+}
+
+.root-related-form span:last-child:not([lang='ar']) {
+  color: var(--ink-muted);
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
 .ink-bleed-attribution {
-  margin: 2.5rem 0 0;
-  color: color-mix(in srgb, var(--ink-muted) 85%, transparent);
-  font-size: 0.82rem;
+  margin: var(--root-space-8) 0 0;
+  color: var(--ink-muted);
+  font-size: 0.875rem;
   line-height: 1.5;
+  text-align: center;
 }
 
 .ink-bleed-attribution a {
@@ -2123,72 +3111,46 @@ select {
 }
 
 .ink-bleed .close {
-  color: color-mix(in srgb, var(--ink-muted) 55%, transparent);
-  padding: 0.55rem;
+  display: inline-flex;
   min-width: 44px;
   min-height: 44px;
-  display: inline-flex;
   align-items: center;
   justify-content: center;
+  padding: 0.55rem;
+  color: color-mix(in srgb, var(--ink) 68%, transparent);
 }
 
 @media (hover: hover) {
-  .ink-bleed .close:hover {
-    color: var(--ink-muted);
+  .ink-bleed .close:hover,
+  .root-chapter-heading:hover,
+  .root-occurrence:hover,
+  .root-text-action:hover {
+    opacity: 0.76;
   }
 }
 
-.occurrence-list {
-  margin-top: 0.9rem;
-}
-
-.occurrence {
-  display: block;
-  width: 100%;
-  text-align: start;
-  padding: 0.75rem 0;
-  min-height: 48px;
-  border-bottom: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
-}
-
-@media (hover: hover) {
-  .occurrence:hover {
-    opacity: 0.78;
+@media (max-width: 899px) {
+  .ink-bleed {
+    --root-inline-padding: 1.75rem;
   }
 }
 
-.occurrence .ref {
-  color: var(--gold);
-  font-size: 0.85rem;
-}
+@media (max-width: 599px) {
+  .ink-bleed {
+    --root-inline-padding: 1.25rem;
+  }
 
-.occurrence-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-top: 0.2rem;
-}
+  .root-word-arabic {
+    font-size: 3rem;
+    line-height: 1.45;
+  }
 
-.occurrence-ar {
-  font-family: var(--font-arabic);
-  font-size: 1.25rem;
-  direction: rtl;
-  color: var(--ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.occurrence-tr {
-  flex-shrink: 0;
-  max-width: 45%;
-  color: var(--ink-muted);
-  font-size: 0.92rem;
-  text-align: end;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  .root-occurrence-word,
+  .root-related-form {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--root-space-1);
+  }
 }
 
 .scroll-with-float {
@@ -2197,19 +3159,35 @@ select {
 
 .floating-play {
   position: absolute;
-  left: 50%;
+  left: 0;
+  right: 0;
   bottom: calc(0.55rem + env(safe-area-inset-bottom, 0px));
-  transform: translateX(-50%);
   z-index: 8;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.1rem;
-  width: min(22rem, calc(100% - 1.25rem));
-  padding: 0.45rem 0.55rem 0.35rem;
+  /* Match the chapter content column above. The desktop paper frame is wider
+     than the list, so sizing this to the frame leaves the dismiss control
+     hanging past the list's edge. Auto inline margins center the absolute box
+     without consuming its transform, which remains available for entrance. */
+  width: min(100%, var(--home-max));
+  margin-inline: auto;
+  padding: 0.45rem var(--sheet-pad) 0.35rem;
   background: var(--paper);
-  animation: float-in 280ms ease;
+  animation: floating-play-in 280ms ease;
   color: var(--accent);
+}
+
+@keyframes floating-play-in {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .floating-play .float-close {
@@ -2293,6 +3271,41 @@ select {
 @media (max-width: 640px) {
   :root {
     --sheet-pad: clamp(0.95rem, 4.5vw, 1.35rem);
+    --home-bookmark-reserve: 27px;
+  }
+
+  /* The reusable ribbon paints a 13px cloth 9px inside its target. On Home,
+   * use a 31px visual canvas so that cloth is centred in the left lane, while
+   * an invisible 44px hit area preserves the required touch target. */
+  .home-header[data-has-bookmarks='true'] .home-bookmark-ribbon {
+    /* The header is now the positioning context: 6.5px centres the 31px
+     * visual canvas inside the 44px edge target without touching the title. */
+    left: 6.5px;
+  }
+
+  .home-header[data-has-bookmarks='true'] .home-bookmark-ribbon .verse-ribbon {
+    width: 31px;
+  }
+
+  /* Keep every block in the document flow. Moving the blocks with margins
+   * offset the entire mobile sheet (including its title) in narrow previews.
+   * Inner padding creates the ribbon lane without disturbing the page edge. */
+  .home-scroll-page[data-has-bookmarks='true'] > .search-row,
+  .home-scroll-page[data-has-bookmarks='true'] > .continue-row,
+  .home-scroll-page[data-has-bookmarks='true'] > .surah-list,
+  .home-scroll-page[data-has-bookmarks='true'] > .word-search-results {
+    padding-left: var(--home-bookmark-reserve);
+  }
+
+  .home-scroll-page[data-has-bookmarks='true'] .surah-row {
+    padding-left: 0;
+  }
+
+  /* The home title is part of the chapter list hierarchy: when the bookmark
+   * lane is present, it starts above the chapter numbers—not at the page edge
+   * and not above the ribbon. */
+  .home-header[data-has-bookmarks='true'] {
+    padding-left: calc(var(--home-bookmark-reserve) + var(--sheet-pad));
   }
 
   body {
@@ -2311,6 +3324,10 @@ select {
   .ayah-block {
     padding-inline: 2.85rem;
     --word-arabic-size: calc(1.65rem * var(--font-scale, 1));
+  }
+
+  .page-break {
+    padding-inline: 2.85rem;
   }
 
   .hafs-ayah {
@@ -2387,7 +3404,8 @@ select {
   .app-shell {
     /* Flat under-paper on wide screens — no gradient wash, no elevation. */
     background: var(--paper);
-    --peek-step: clamp(28px, 3.5vw, 44px);
+    /* Thin edge only — enough to read the under-sheet, not the ayah rail. */
+    --peek-step: clamp(18px, 2.2vw, 28px);
   }
 
   .sheet-edge-back {
@@ -2406,43 +3424,20 @@ select {
     box-shadow: none;
   }
 
-  .app-shell[data-stack='1'] .sheet[data-depth='0'][data-active='true'] {
-    left: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
-    right: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
-    box-shadow: none;
-  }
-
+  .app-shell[data-stack='1'] .sheet[data-depth='0'][data-active='true'],
   .app-shell[data-stack='2'] .sheet[data-depth='0'][data-active='true'] {
-    left: max(
-      calc(var(--peek-step) * 2),
-      calc(50% - var(--sheet-half) + var(--peek-step) * 2)
-    );
-    right: max(
-      calc(var(--peek-step) * 2),
-      calc(50% - var(--sheet-half) + var(--peek-step) * 2)
-    );
+    /* Top sheet covers most of the column; one peek step of under-paper
+       shows on each side — not enough for the ayah rail to hang in the gutter. */
+    left: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
+    right: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
     box-shadow: none;
   }
 
-  .app-shell[data-stack='1'] .sheet[data-depth='1'] {
-    left: max(0px, calc(50% - var(--sheet-half)));
-    right: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
-  }
-
-  .app-shell[data-stack='2'] .sheet[data-depth='1'] {
-    left: max(var(--peek-step), calc(50% - var(--sheet-half) + var(--peek-step)));
-    right: max(
-      calc(var(--peek-step) * 2),
-      calc(50% - var(--sheet-half) + var(--peek-step) * 2)
-    );
-  }
-
+  .app-shell[data-stack='1'] .sheet[data-depth='1'],
+  .app-shell[data-stack='2'] .sheet[data-depth='1'],
   .app-shell[data-stack='2'] .sheet[data-depth='2'] {
     left: max(0px, calc(50% - var(--sheet-half)));
-    right: max(
-      calc(var(--peek-step) * 2),
-      calc(50% - var(--sheet-half) + var(--peek-step) * 2)
-    );
+    right: max(0px, calc(50% - var(--sheet-half)));
   }
 
   .sheet[data-name='reader'][data-active='false']:not([data-depth='1']):not([data-depth='2']),
@@ -2570,15 +3565,76 @@ select {
     );
 }
 
-/* Star-and-cross tessellation tooled into the leather — the same khatam
-   grid as Android `starAndCrossWeave` (72dp cell, stars on staggered rows,
-   small diamonds between), embossed with a light copy nudged upper-left. */
+/* The generated Hankin field tooled into the leather — background image
+   and tile size arrive inline from `fieldWeaveBackground` (a new pattern
+   every visit); it washes in over the first half of the ornament build. */
 .entrance-weave {
   position: absolute;
   inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='144' viewBox='0 0 72 144'%3E%3Cdefs%3E%3Cpath id='k' d='M22.25 -13.75L49.75 -13.75L49.75 13.75L22.25 13.75ZM36 -19.44L55.44 0L36 19.44L16.56 0ZM-13.75 58.25L13.75 58.25L13.75 85.75L-13.75 85.75ZM0 52.56L19.44 72L0 91.44L-19.44 72ZM58.25 58.25L85.75 58.25L85.75 85.75L58.25 85.75ZM72 52.56L91.44 72L72 91.44L52.56 72ZM22.25 130.25L49.75 130.25L49.75 157.75L22.25 157.75ZM36 124.56L55.44 144L36 163.44L16.56 144ZM-5.09 30.91L5.09 30.91L5.09 41.09L-5.09 41.09ZM0 28.8L7.2 36L0 43.2L-7.2 36ZM66.91 30.91L77.09 30.91L77.09 41.09L66.91 41.09ZM72 28.8L79.2 36L72 43.2L64.8 36ZM30.91 102.91L41.09 102.91L41.09 113.09L30.91 113.09ZM36 100.8L43.2 108L36 115.2L28.8 108Z' fill='none' stroke-width='1' stroke-linejoin='round'/%3E%3C/defs%3E%3Cuse href='%23k' x='-0.6' y='-0.6' stroke='rgba(255,255,255,0.05)'/%3E%3Cuse href='%23k' stroke='rgba(217,180,74,0.07)'/%3E%3C/svg%3E");
-  background-size: 72px 144px;
+  opacity: 0;
+  transition: opacity 1870ms linear;
   pointer-events: none;
+}
+
+.entrance-weave--on {
+  opacity: 1;
+}
+
+/* The generated border frieze between the two gilt rules — the binding's
+   tooling, not illumination, so it is complete from the first frame, never
+   animated (matches Android's static GeneratedBorderBand). Each side's band
+   is a railed channel (inline left/right or top/bottom from GeneratedBorder,
+   which fits a whole number of pattern periods into the run) whose mouth
+   tapers onto the corner seal's petal tip; far sides are mirrored so the
+   pattern faces inward. */
+.entrance-borderband {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.entrance-border {
+  position: absolute;
+  background-position: 0 0;
+}
+
+.entrance-border--top,
+.entrance-border--bottom {
+  height: var(--cover-band-h);
+  background-repeat: repeat-x;
+}
+
+.entrance-border--top {
+  top: calc(var(--cover-band-c) - var(--cover-band-h) / 2);
+}
+
+.entrance-border--bottom {
+  bottom: calc(var(--cover-band-c) - var(--cover-band-h) / 2);
+  transform: scaleY(-1);
+}
+
+.entrance-border--left,
+.entrance-border--right {
+  width: var(--cover-band-h);
+  background-repeat: repeat-y;
+}
+
+.entrance-border--left {
+  left: calc(var(--cover-band-c) - var(--cover-band-h) / 2);
+}
+
+.entrance-border--right {
+  right: calc(var(--cover-band-c) - var(--cover-band-h) / 2);
+  transform: scaleX(-1);
+}
+
+/* Channel mouths: the band's two rails converging onto each corner seal's
+   petal tip (SVG backgrounds and positions arrive inline). Static, like
+   the rest of the border. */
+.entrance-chamfer {
+  position: absolute;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
 }
 
 .entrance-frame {
@@ -2617,7 +3673,7 @@ select {
   aspect-ratio: 1 / 1;
   flex-shrink: 0;
   overflow: visible;
-  /* Centered on the inner rule's corners — square seal, never stretched. */
+  /* Centered on the border band's corners — square seal, never stretched. */
 }
 
 .entrance-corner svg {
@@ -2628,23 +3684,23 @@ select {
 }
 
 .entrance-corner--tl {
-  top: calc(var(--cover-inner-inset) - var(--cover-star) / 2);
-  left: calc(var(--cover-inner-inset) - var(--cover-star) / 2);
+  top: calc(var(--cover-band-c) - var(--cover-star) / 2);
+  left: calc(var(--cover-band-c) - var(--cover-star) / 2);
 }
 
 .entrance-corner--tr {
-  top: calc(var(--cover-inner-inset) - var(--cover-star) / 2);
-  right: calc(var(--cover-inner-inset) - var(--cover-star) / 2);
+  top: calc(var(--cover-band-c) - var(--cover-star) / 2);
+  right: calc(var(--cover-band-c) - var(--cover-star) / 2);
 }
 
 .entrance-corner--bl {
-  bottom: calc(var(--cover-inner-inset) - var(--cover-star) / 2);
-  left: calc(var(--cover-inner-inset) - var(--cover-star) / 2);
+  bottom: calc(var(--cover-band-c) - var(--cover-star) / 2);
+  left: calc(var(--cover-band-c) - var(--cover-star) / 2);
 }
 
 .entrance-corner--br {
-  bottom: calc(var(--cover-inner-inset) - var(--cover-star) / 2);
-  right: calc(var(--cover-inner-inset) - var(--cover-star) / 2);
+  bottom: calc(var(--cover-band-c) - var(--cover-star) / 2);
+  right: calc(var(--cover-band-c) - var(--cover-star) / 2);
 }
 
 /*

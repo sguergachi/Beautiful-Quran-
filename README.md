@@ -1,6 +1,6 @@
 # Beautiful Quran
 
-A beautiful, simple Quran app for Android. Its signature feature is a lyric-style
+A beautiful, simple Quran reader for Android and the web. Its signature feature is a lyric-style
 **follow-along view**: as the reciter recites, each Arabic word lights up in time
 with the audio — with its English meaning right beneath it — like a karaoke or
 Apple Music lyrics view.
@@ -24,9 +24,23 @@ Grab **BeautifulQuran.apk** from the
 ## Building
 
 ```bash
-python3 tools/build_db.py     # builds app/src/main/assets/quran.db
-./gradlew assembleDebug
+./gradlew assembleDebug       # Android; copies data/quran.db into generated assets
+npm --prefix web ci
+npm --prefix web run build    # Web; copies the same database into dist
 ```
+
+`data/quran.db` is committed, so normal builds stay offline. Run
+`python3 tools/build_db.py` only when deliberately changing Quran data.
+
+To create the Play Store app bundle, place the uncommitted signing key at
+`release.keystore`, then run:
+
+```bash
+scripts/build_release_bundle.sh
+```
+
+The script builds `app-release.aab` and verifies that it is signed with the
+upload certificate expected by Google Play.
 
 `tools/build_db.py` downloads the Quran text, word-by-word data, and word-level
 audio timings, validates them against each other, and packs them into a single
@@ -45,7 +59,7 @@ scripts/run_android_app.sh
 The setup script installs/verifies JDK 21, using
 `~/.local/share/android-dev/jdk-21` if no system Java is available, downloads
 Android command-line tools to `~/Android/Sdk`, installs API 35 emulator
-packages, writes `local.properties`, builds `app/src/main/assets/quran.db` if
+packages, writes `local.properties`, builds `data/quran.db` if
 needed, and creates an AVD named `BeautifulQuran_API_35`.
 
 For future runs, use:
@@ -53,6 +67,10 @@ For future runs, use:
 ```bash
 scripts/run_android_app.sh
 ```
+
+The script starts headlessly when neither `DISPLAY` nor `WAYLAND_DISPLAY` is
+available. Set `ANDROID_EMULATOR_HEADLESS=0` to force an emulator window, or
+`ANDROID_EMULATOR_HEADLESS=1` to hide it on a desktop session.
 
 If the emulator window does not appear or booting times out, check
 `.android-emulator.log`. To make the SDK tools available in your current shell:
@@ -65,6 +83,7 @@ source scripts/android_env.sh
 
 - [PLAN.md](PLAN.md) — the original product/engineering plan and research
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how the app is put together: pipeline, sync engine, modules, conventions
+- [docs/COMPLEXITY.md](docs/COMPLEXITY.md) — subsystem-by-subsystem complexity map and safe simplification roadmap
 - [docs/DESIGN.md](docs/DESIGN.md) — the design language: the sheet, ink, color, type, motion
 - [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — every smoothness technique in use and why
 - [docs/REPEAT_HIGHLIGHTING.md](docs/REPEAT_HIGHLIGHTING.md) — the orange second fade for words a reciter repeats, and where the repeat-aware timing data comes from

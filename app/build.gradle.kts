@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.androidx.baselineprofile)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
 }
@@ -18,8 +19,8 @@ android {
 
     defaultConfig {
         applicationId = "com.beautifulquran"
-        minSdk = 26
-        targetSdk = 35
+        minSdk = 30
+        targetSdk = 37
         versionCode = 3
         versionName = "0.2"
     }
@@ -77,6 +78,13 @@ android {
         noCompress += "ttf"
         noCompress += "xz"
     }
+    sourceSets.named("main") {
+        // preBuild owns generation; a concrete path keeps Android Studio's
+        // source-set model deterministic while the task dependency stays explicit.
+        assets.directories.add(
+            layout.buildDirectory.dir("generated/quranAssets").get().asFile.absolutePath,
+        )
+    }
     lint {
         // Media3's @UnstableApi opt-in trips lintVital on release builds; the
         // full lint task still reports it. CI ships release APKs, so keep
@@ -85,18 +93,29 @@ android {
     }
 }
 
+baselineProfile {
+    // Profiles are regenerated explicitly on representative hardware, then
+    // committed. Release builds must remain deterministic and device-free.
+    mergeIntoMain = true
+    saveInSrc = true
+    automaticGenerationDuringBuild = false
+}
+
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
     }
 }
 
-val checkQuranDbAsset by tasks.registering {
-    val dbAsset = layout.projectDirectory.file("src/main/assets/quran.db")
+val syncQuranDbAsset by tasks.registering(Sync::class) {
+    val dbAsset = rootProject.layout.projectDirectory.file("data/quran.db")
+    from(dbAsset)
+    into(layout.buildDirectory.dir("generated/quranAssets"))
+
     doLast {
         if (!dbAsset.asFile.isFile) {
             throw GradleException(
-                "Missing bundled Quran database: ${dbAsset.asFile}. " +
+                "Missing canonical Quran database: ${dbAsset.asFile}. " +
                     "Run `python3 tools/build_db.py` from the repo root before building locally.",
             )
         }
@@ -104,7 +123,7 @@ val checkQuranDbAsset by tasks.registering {
 }
 
 tasks.named("preBuild") {
-    dependsOn(checkQuranDbAsset)
+    dependsOn(syncQuranDbAsset)
 }
 
 dependencies {
@@ -125,6 +144,9 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.guava)
     implementation(libs.xz)
+    implementation(libs.androidx.profileinstaller)
+
+    baselineProfile(project(":baselineprofile"))
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

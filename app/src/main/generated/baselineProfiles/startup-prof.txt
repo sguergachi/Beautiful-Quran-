@@ -1,0 +1,11 @@
+# Startup-only DEX layout seed. Keep this narrower than baseline-prof.txt.
+Lcom/beautifulquran/QuranApp;
+Lcom/beautifulquran/MainActivity;
+Lcom/beautifulquran/MainActivityKt;
+Lcom/beautifulquran/data/SettingsRepository;
+Lcom/beautifulquran/ui/home/HomeViewModel;
+Lcom/beautifulquran/ui/home/HomeScreenKt;
+Lcom/beautifulquran/ui/entrance/EntranceCoverKt;
+Lcom/beautifulquran/ui/theme/ThemeKt;
+Lcom/beautifulquran/ui/theme/TypeKt;
+Lcom/beautifulquran/ui/theme/GeneratedOrnamentKt;

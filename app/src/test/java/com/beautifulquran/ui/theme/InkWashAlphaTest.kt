@@ -1,10 +1,23 @@
 package com.beautifulquran.ui.theme
 
+import androidx.compose.ui.geometry.Rect
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class InkWashAlphaTest {
+
+    @Test
+    fun paperCoverBleed_staysInsideItsTextLine() {
+        val line = Rect(left = 20f, top = 40f, right = 120f, bottom = 80f)
+
+        val cover = linePaperCoverBounds(line, horizontalPad = 4f)
+
+        assertEquals(16f, cover.left, 0f)
+        assertEquals(124f, cover.right, 0f)
+        assertEquals(line.top, cover.top, 0f)
+        assertEquals(line.bottom, cover.bottom, 0f)
+    }
 
     @Test
     fun aheadOfWash_restsAtUpcomingFloor() {

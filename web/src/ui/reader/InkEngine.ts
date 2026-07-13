@@ -1,0 +1,179 @@
+/**
+ * Visual word-ink policy — port of Android `ui/reader/InkEngine.kt`.
+ * Pure decision functions; no DOM.
+ */
+import type { ActiveWord } from '../../data/models'
+
+export enum InkState {
+  Plain = 'Plain',
+  Upcoming = 'Upcoming',
+  Active = 'Active',
+  Recited = 'Recited',
+}
+
+export interface InkWord {
+  state: InkState
+  repeat: boolean
+}
+
+export interface InkTuning {
+  upcomingAlpha: number
+  inkFadeMs: number
+  ayahMarkFadeMs: number
+  recessMs: number
+  minSweepMs: number
+  maxSweepMs: number
+  repeatSweepMs: number
+  repeatFadeOutMs: number
+  washFeather: number
+  sweepEaseX1: number
+  sweepEaseY1: number
+  sweepEaseX2: number
+  sweepEaseY2: number
+}
+
+export const DEFAULT_TUNING: InkTuning = {
+  upcomingAlpha: 0.22,
+  inkFadeMs: 400,
+  ayahMarkFadeMs: 400,
+  recessMs: 400,
+  minSweepMs: 140,
+  maxSweepMs: 8_000,
+  repeatSweepMs: 450,
+  repeatFadeOutMs: 900,
+  washFeather: 1.6,
+  sweepEaseX1: 0.3,
+  sweepEaseY1: 0.24,
+  sweepEaseX2: 0.7,
+  sweepEaseY2: 0.78,
+}
+
+let tuning: InkTuning = { ...DEFAULT_TUNING }
+
+export function getTuning(): InkTuning {
+  return tuning
+}
+
+export function setTuning(next: Partial<InkTuning> | InkTuning): void {
+  tuning = { ...tuning, ...next }
+}
+
+export function resetTuning(): void {
+  tuning = { ...DEFAULT_TUNING }
+}
+
+export function inkAlpha(state: InkState): number {
+  return state === InkState.Upcoming ? tuning.upcomingAlpha : 1
+}
+
+export function wordState(
+  position: number,
+  activeWord: ActiveWord | null | undefined,
+  isActiveAyah: boolean,
+  dimmed: boolean,
+): InkState {
+  if (!isActiveAyah) return dimmed ? InkState.Upcoming : InkState.Plain
+  if (!activeWord) return InkState.Upcoming
+  if (position === activeWord.wordPosition) return InkState.Active
+  if (position < activeWord.wordPosition) return InkState.Recited
+  if (position <= activeWord.highWater) return InkState.Recited
+  return InkState.Upcoming
+}
+
+export function inRepeatChain(
+  position: number,
+  activeWord: ActiveWord | null | undefined,
+): boolean {
+  if (!activeWord) return false
+  return activeWord.isRepeat &&
+    position >= activeWord.repeatStart &&
+    position <= activeWord.wordPosition
+}
+
+export function word(
+  position: number,
+  activeWord: ActiveWord | null | undefined,
+  isActiveAyah: boolean,
+  dimmed: boolean,
+): InkWord {
+  return {
+    state: wordState(position, activeWord, isActiveAyah, dimmed),
+    repeat: isActiveAyah && inRepeatChain(position, activeWord),
+  }
+}
+
+export function sweepMs(
+  activeWord: ActiveWord | null | undefined,
+  playbackSpeed: number,
+): number | null {
+  if (!activeWord) return null
+  // Kotlin `toInt()` truncates; use the same boundary semantics on web.
+  const raw = Math.max(0, Math.trunc(activeWord.durationMs / playbackSpeed))
+  if (raw <= 0) return 1
+  // Never clamp the floor above the lit lifetime — that left the wash running
+  // past handoff and flickered Arabic-only's paper cover on the completed word.
+  const floor = Math.min(tuning.minSweepMs, raw)
+  return Math.min(tuning.maxSweepMs, Math.max(floor, raw))
+}
+
+export function startRevealed(previous: InkState, current: InkState): boolean {
+  return current === InkState.Active && previous === InkState.Recited
+}
+
+export function prefaceState(isActive: boolean, dimmed: boolean): InkState {
+  if (isActive) return InkState.Active
+  if (dimmed) return InkState.Upcoming
+  return InkState.Plain
+}
+
+/**
+ * How far the basmalah calligraphy wash has traveled (0..1) across the SVG.
+ * Driven by the lead-in clip's playback clock — settles at
+ * [PREFACE_WASH_SETTLE_FRACTION] so the feathered edge finishes before audio ends.
+ * Port of Android `InkEngine.prefaceWashProgress`.
+ */
+export function prefaceWashProgress(positionMs: number, durationMs: number): number {
+  if (durationMs <= 0) return 0
+  if (positionMs <= 0) return 0
+  const settleAt = Math.max(1, Math.trunc(durationMs * PREFACE_WASH_SETTLE_FRACTION))
+  if (positionMs >= settleAt) return 1
+  return Math.min(1, Math.max(0, positionMs / settleAt))
+}
+
+/**
+ * Advance the calligraphy wash without allowing a playlist clock reset to
+ * uncover ink that has already settled.
+ */
+export function advancePrefaceWashProgress(
+  previousProgress: number,
+  positionMs: number,
+  durationMs: number,
+): number {
+  return Math.max(previousProgress, prefaceWashProgress(positionMs, durationMs))
+}
+
+/** Fraction of the lead-in clip at which the SVG wash must be fully settled. */
+export const PREFACE_WASH_SETTLE_FRACTION = 0.88
+
+export const InkEngine = {
+  State: InkState,
+  get tuning() {
+    return getTuning()
+  },
+  set tuning(v: InkTuning) {
+    setTuning(v)
+  },
+  wordState,
+  inRepeatChain,
+  word,
+  sweepMs,
+  startRevealed,
+  prefaceState,
+  prefaceWashProgress,
+  advancePrefaceWashProgress,
+  PREFACE_WASH_SETTLE_FRACTION,
+  inkAlpha,
+  resetTuning,
+  setTuning,
+  getTuning,
+}

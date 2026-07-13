@@ -10,11 +10,9 @@ https://sguergachi.github.io/Beautiful-Quran-/app/
 
 Linked from the project homepage as **Open web reader**.
 
-GitHub Pages serves `master:/docs`. The reader is the built tree under
-`docs/app`. On every `master` push that touches `web/`, `.github/workflows/web.yml`
-runs `npm run build:pages` and commits that output so the live site stays in
-sync — you do not need to republish by hand. Use `build:pages` locally only
-when you want to preview the Pages artifact before merging.
+GitHub Actions stages the marketing content from `docs/` and builds the reader
+under `/app/`, then deploys the combined tree as a GitHub Pages artifact. Build
+output is never committed back to `master`.
 
 ## Quick start
 
@@ -24,20 +22,21 @@ npm install
 npm run dev      # http://localhost:5173
 npm test         # engine unit tests (Vitest)
 npm run build    # static site → dist/
-npm run build:pages  # → ../docs/app (CI does this on master)
+npm run build:pages  # → ../_site/app (CI does this on master)
 ```
 
-Requires Node 20+. The committed `public/quran.db` (~27 MB) and fonts are
-copied from the Android app assets — no separate data pipeline.
+Requires Node 20+. `npm run dev` and `npm run build` copy the canonical
+`../data/quran.db` into the generated web assets. The database is committed
+once and shared with Android; there is no second data pipeline.
 
 ## Architecture
 
 ```
-src/engine/     pure TS ports of HighlightEngine, FocusEngine, InkEngine, fade math
+src/domain/     HighlightEngine, HighlightClock, basmalah and search policy
 src/data/       WASM SQLite (sql.js) over quran.db + settings/bookmarks
-src/playback/   Dual HTMLAudioElement + Cache API prefetch + Media Session + 33 ms tick
+src/playback/   Dual HTMLAudioElement + Cache API prefetch + Media Session + rAF clock
 src/render/     WordUnit / HafsWord / AyahBlock (directional ink + paper-cover bloom)
-src/ui/         paper stack: Home | Reader | Settings + entrance cover + root viewer
+src/ui/         paper stack plus Android-mirrored reader/focus/Ink/Fade policy
                 ReaderFocusController keeps the playing ayah on its anchor
 src/store/      hand-rolled app store (boundary-only React updates)
 ```
@@ -60,10 +59,14 @@ Engines are DOM-free and unit-tested against the Android JVM suites. See
   Bump `CACHE` in `public/sw.js` when changing that contract.
 - `sql.js`’s browser build requests `sql-wasm-browser.wasm` (copied into
   `public/` on `npm install`). Shipping only `sql-wasm.wasm` 404s on Pages.
-- Audio streams from everyayah.com; upcoming ayahs are prefetched (parallel
-  Cache API + blob URLs, ~8 ahead) and a standby `<audio>` is loaded from a
-  local blob so verse joins stay gapless — especially on mobile Safari. The
-  play button shows a spinner while buffering.
+- Audio streams from everyayah.com; upcoming ayahs are prefetched in parallel
+  (~8 ahead). Desktop browsers promote a blob-backed standby `<audio>` at verse
+  joins. iOS uses one persistent element with cache-warmed HTTPS sources to
+  avoid WebKit's multi-element/blob playback stalls. Warm current/next clips
+  are decoded for their audible bounds; a short equal-power fade-out/fade-in
+  joins the padded edges without a pause or a hard cut. Unsupported analysis
+  falls back to the normal media-element ending. The play button shows a
+  spinner while buffering.
 - Click a word to play from there; right-click / long-press opens the Root Word Viewer.
 - Themes: Paper / Nightfall / Royal green (Settings).
 - Form controls use [Base UI](https://base-ui.com) primitives (`Select`,

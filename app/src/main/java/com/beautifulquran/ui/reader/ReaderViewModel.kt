@@ -59,6 +59,16 @@ data class ReaderUiState(
     val isLoading: Boolean = true,
 )
 
+/** Reading-session state temporarily displaced by an in-page surface such as
+ * the Root Word Viewer and its isolated word-audition playlist. */
+data class ReaderPlaybackSnapshot(
+    val ayah: Int,
+    val positionMs: Long,
+    val repeatMode: Int,
+    val repeatRange: IntRange?,
+    val speed: Float,
+)
+
 class ReaderViewModel(
     private val repository: QuranRepository,
     val settings: SettingsRepository,
@@ -424,6 +434,42 @@ class ReaderViewModel(
 
     private fun rememberPosition(ayah: Int) {
         settings.update { it.copy(lastSurah = surahId, lastAyah = ayah) }
+    }
+
+    /** Pauses a live reading session and returns enough state to restore it. */
+    fun pauseForRootViewer(): ReaderPlaybackSnapshot? {
+        val state = playerState.value
+        if (!state.isPlaying) return null
+        val nowPlaying = player.liveNowPlaying ?: state.nowPlaying ?: return null
+        if (nowPlaying.surahId != surahId) return null
+        val snapshot = ReaderPlaybackSnapshot(
+            ayah = nowPlaying.ayah,
+            positionMs = player.positionMs,
+            repeatMode = state.repeatMode,
+            repeatRange = state.repeatRange,
+            speed = state.speed,
+        )
+        player.pause()
+        return snapshot
+    }
+
+    /** Restores the chapter playlist displaced by the root viewer's audition. */
+    fun resumeAfterRootViewer(snapshot: ReaderPlaybackSnapshot) {
+        val playlistAyah = snapshot.ayah.coerceAtLeast(1)
+        if (!startSurah(
+                startAyah = playlistAyah,
+                startPositionMs = snapshot.positionMs,
+                preserveRepeatRange = false,
+                startWithBasmalah = snapshot.ayah == BASMALAH_PLAYLIST_AYAH,
+            )
+        ) return
+        player.setSpeed(snapshot.speed)
+        val range = snapshot.repeatRange
+        if (range != null) {
+            player.setRepeatRange(range.first, range.last, repeatEndPositionFor(range.last))
+        } else {
+            player.setRepeatMode(snapshot.repeatMode)
+        }
     }
 
     /** One of Player.REPEAT_MODE_*; always leaves range-repeat behind. */

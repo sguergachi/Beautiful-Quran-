@@ -143,6 +143,9 @@ fun ReaderScreen(
      *  is riding over this reader, so the status bar stays visible under its
      *  header. */
     keepStatusBarVisible: Boolean = false,
+    /** Reports reader-owned ink surfaces to the paper stack so a horizontal
+     * page turn cannot begin while the surface is entering, open, or closing. */
+    onInkOverlayVisibilityChange: (Boolean) -> Unit = {},
 ) {
     LaunchedEffect(surahId) { viewModel.load(surahId) }
     DisposableEffect(onAyahSelectorExpandedChange) {
@@ -322,6 +325,13 @@ fun ReaderScreen(
     )
 
     val notifPermission = rememberPlaybackPermissionState()
+    val onInkOverlayVisibilityChangeLatest = rememberUpdatedState(onInkOverlayVisibilityChange)
+    LaunchedEffect(notifPermission.sheetVisible) {
+        onInkOverlayVisibilityChangeLatest.value(notifPermission.sheetVisible)
+    }
+    DisposableEffect(Unit) {
+        onDispose { onInkOverlayVisibilityChangeLatest.value(false) }
+    }
 
     // The permission prompt is not a dialog — it is an ink bleed that turns
     // this very sheet into the question. See PlaybackNotificationSheet and the
@@ -972,8 +982,7 @@ fun ReaderScreen(
                 playerState.error == null &&
                     !rootReturnVisible &&
                     !followEnabled &&
-                    recitingActive &&
-                    activeAyahPlacement.value.isAway
+                    recitingActive
             Box(
                 contentAlignment = Alignment.BottomCenter,
                 modifier = Modifier

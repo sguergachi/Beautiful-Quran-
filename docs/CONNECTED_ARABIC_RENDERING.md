@@ -297,7 +297,7 @@ Pipeline validation:
 Status: implemented for QCF V2.
 
 - Added `qcf_v2`, `qcf_page`, `qcf_line`, and `qcf_span_end`.
-- Rebuilt `app/src/main/assets/quran.db`.
+- Rebuilt `data/quran.db`.
 - Validated all 6,236 ayahs against QCF V2 layout data.
 - Handled known many-to-many segmentation cases such as `لَّوۡمَا`,
   `بَعْدَ مَا`, and `إِلْ يَاسِينَ`.

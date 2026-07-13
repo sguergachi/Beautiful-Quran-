@@ -5,12 +5,13 @@ import {
   type MouseEventHandler,
 } from 'react'
 import {
+  advancePrefaceWashProgress,
   getTuning,
   prefaceState,
   prefaceWashProgress,
   InkState,
-} from '../engine/ink'
-import { BASMALAH_UTHMANI } from '../engine/basmalah'
+} from '../ui/reader/InkEngine'
+import { BASMALAH_UTHMANI } from '../domain/Basmalah'
 import { player } from '../playback/player'
 import { applyMask, cachedPaperCoverMask } from './inkWash'
 
@@ -62,10 +63,10 @@ export function BasmalahCalligraphy({
     }
 
     if (!active) {
-      // Plain / Recited: no cover.
+      // Plain: clear inline opacity so CSS `[data-reciting]` recess can paint.
       cover.style.transition = 'none'
       applyMask(cover, 'none')
-      cover.style.opacity = '0'
+      cover.style.removeProperty('opacity')
       return
     }
 
@@ -76,13 +77,22 @@ export function BasmalahCalligraphy({
     cover.style.opacity = '1'
     let raf = 0
     let cancelled = false
+    const ps = player.getState()
+    let progress = prefaceWashProgress(ps.positionMs, ps.durationMs)
     const tick = () => {
       if (cancelled) return
-      const ps = player.getState()
-      const progress = prefaceWashProgress(ps.positionMs, ps.durationMs)
+      const current = player.getState()
+      progress = advancePrefaceWashProgress(
+        progress,
+        current.positionMs,
+        current.durationMs,
+      )
       if (progress >= 1) {
         applyMask(cover, 'none')
-        cover.style.opacity = '0'
+        cover.style.removeProperty('opacity')
+        // Completion is terminal for this lead-in. The shared player clock
+        // resets as ayah 1 takes over, before React necessarily clears active.
+        return
       } else {
         applyMask(
           cover,
@@ -92,23 +102,21 @@ export function BasmalahCalligraphy({
       }
       raf = requestAnimationFrame(tick)
     }
-    const ps = player.getState()
-    const initial = prefaceWashProgress(ps.positionMs, ps.durationMs)
-    if (initial >= 1) {
+    if (progress >= 1) {
       applyMask(cover, 'none')
-      cover.style.opacity = '0'
+      cover.style.removeProperty('opacity')
     } else {
       applyMask(
         cover,
-        cachedPaperCoverMask(initial, resting, true, t.washFeather),
+        cachedPaperCoverMask(progress, resting, true, t.washFeather),
       )
+      raf = requestAnimationFrame(tick)
     }
-    raf = requestAnimationFrame(tick)
     return () => {
       cancelled = true
       cancelAnimationFrame(raf)
       applyMask(cover, 'none')
-      cover.style.opacity = '0'
+      cover.style.removeProperty('opacity')
     }
   }, [active, inkState])
 

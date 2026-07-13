@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { AyahBlock } from '../../render/AyahBlock'
 import { BasmalahCalligraphy } from '../../render/BasmalahCalligraphy'
-import { prefaceState } from '../../engine/ink'
-import { isAway, playbackFocusTarget, pointUp } from '../../engine/focus'
+import { getTuning, prefaceState } from './InkEngine'
+import { TRANSLITERATION_COLOR_ALPHA } from './WordHighlight'
+import { isAway, playbackFocusTarget, pointUp } from './focus/FocusEngine'
 import { ReturnToAyahButton } from './ReturnToAyahButton'
-import { surahOpensWithBasmalahPreface } from '../../engine/basmalah'
+import { surahOpensWithBasmalahPreface } from '../../domain/Basmalah'
 import {
   appStore,
   useAppState,
@@ -29,11 +30,23 @@ import {
 } from '../icons/PlaybackIcons'
 import { AyahSelectorRail } from './AyahSelectorRail'
 import { OrnateSurahTitle } from './OrnateSurahTitle'
-import { ReaderFocusController } from './ReaderFocusController'
+import { PageBreak } from './PageBreak'
+import { buildReaderItems, sliceReaderItems } from './readerItems'
+import { ReaderFocusController } from './focus/ReaderFocusController'
 import { selectedPlaybackAyah } from './selectedPlaybackAyah'
 import { shouldPauseFollowOnDrag } from './followGesture'
+import { isRecitingSession } from './recitingActive'
+import { readerInkAyah } from './ReaderHighlightState'
+import {
+  AYAH_SPACER_EST_PX,
+  useProgressiveAyahWindow,
+} from './useProgressiveAyahWindow'
 import { RootViewer } from '../root/RootViewer'
-import { SearchHitFlash, searchHitFlashTotalMs } from '../../engine/wordSearch'
+import { SearchHitFlash, searchHitFlashTotalMs } from './SearchHitFlash'
+import { fieldWeaveBackground, GeneratedRosette } from '../theme/GeneratedOrnament'
+import { chapterOrnamentSeed, generateChapterOrnament } from '../theme/ornamentGenerator'
+import { resolveTheme } from '../App'
+import type { Word } from '../../data/models'
 
 /** Usable in-surah query — mirrors Android `SurahSearchState.activeQuery`. */
 function activeSearchQuery(active: boolean, query: string): string | null {
@@ -41,30 +54,65 @@ function activeSearchQuery(active: boolean, query: string): string | null {
   return active && trimmed.length >= 2 ? trimmed : null
 }
 
-/** Android `recitingActive` debounce — hold recess across brief pause blips. */
-const RECITING_RELEASE_MS = 350
+/**
+ * A data-URI SVG background can't resolve `var(--ink)` (it isn't part of
+ * the live cascade), so the whisper-faint field weave needs a literal
+ * color resolved from the reader's own theme instead — same `--ink` values
+ * as styles.css, at the same ~4% alpha Android's `onBackground.copy(alpha
+ * = 0.04f)` uses. `--emboss-light` is white at low alpha in every theme.
+ */
+function chapterWeaveInk(themeMode: string): string {
+  return resolveTheme(themeMode) === 'light' ? 'rgba(28, 27, 24, 0.04)' : 'rgba(232, 226, 213, 0.04)'
+}
 
-function Rosette() {
+/**
+ * The surah header's own ornament: a distinct rosette and backing field per
+ * chapter, grown from one seed — ayah count is the dominant term (length as
+ * fingerprint), folded with the chapter number so all 114 chapters render
+ * distinctly even though many share an ayah count. Both are static — part
+ * of the page's fixed typography, not a ceremony — and themed off the
+ * reader's own gold/emboss/ink custom properties rather than the entrance
+ * cover's fixed leather gold, since this sits on the page background.
+ */
+function SurahHeaderOrnament({
+  chapterNumber,
+  ayahCount,
+  themeMode,
+}: {
+  chapterNumber: number
+  ayahCount: number
+  themeMode: string
+}) {
+  const ornament = useMemo(
+    () => generateChapterOrnament(chapterOrnamentSeed(chapterNumber, ayahCount)),
+    [chapterNumber, ayahCount],
+  )
+  const weave = useMemo(
+    () => fieldWeaveBackground(ornament.field, chapterWeaveInk(themeMode), 'rgba(255, 255, 255, 0.05)'),
+    [ornament.field, themeMode],
+  )
   return (
-    <svg className="rosette" viewBox="0 0 100 100" fill="none" aria-hidden="true">
-      <defs>
-        <linearGradient id="goldg" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="var(--gold-deep)" />
-          <stop offset="0.5" stopColor="var(--gold-bright)" />
-          <stop offset="1" stopColor="var(--gold-deep)" />
-        </linearGradient>
-      </defs>
-      <g stroke="url(#goldg)" strokeWidth="1.6" fill="none">
-        <path d="M17.47 17.47 L82.53 17.47 L82.53 82.53 L17.47 82.53 Z M50 4 L96 50 L50 96 L4 50 Z" />
-        <path d="M80.49 62.63 L19.51 62.63 L62.63 19.51 L62.63 80.49 L37.37 19.51 L80.49 37.37 L37.37 80.49 L19.51 37.37 Z" />
-      </g>
-      <circle cx="50" cy="50" r="3.5" fill="url(#goldg)" />
-    </svg>
+    <>
+      <div className="surah-header-weave" style={weave} aria-hidden="true" />
+      <GeneratedRosette
+        spec={ornament.rosette}
+        className="rosette"
+        built
+        animated={false}
+        ruleWidth={4.6}
+        hairWidth={4.6}
+        brightGold="var(--gold-bright)"
+        deepGold="var(--gold-deep)"
+        embossDark="var(--emboss-dark)"
+        embossLight="var(--emboss-light)"
+      />
+    </>
   )
 }
 
 export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const state = useAppState()
+  const inkTuning = getTuning()
   const content = state.content
   const scrollRef = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLElement>(null)
@@ -74,9 +122,10 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   }
   // Lazily created once — definite after the null check above.
   const focus = focusRef.current
-  const [focusedAyah, setFocusedAyah] = useState(1)
+  const initialAyah = Math.max(1, state.settings.lastAyah || 1)
+  const [focusedAyah, setFocusedAyah] = useState(initialAyah)
   /** Continuous readout for the rail marker (Android `focusedPosition`). */
-  const [focusedPosition, setFocusedPosition] = useState(1)
+  const [focusedPosition, setFocusedPosition] = useState(initialAyah)
   const [showReturn, setShowReturn] = useState(false)
   const [returnPointUp, setReturnPointUp] = useState(false)
   const [activeExceedsViewport, setActiveExceedsViewport] = useState(false)
@@ -88,6 +137,29 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const followWasEnabled = useRef(true)
   /** While a rail/search jump is in flight, pin focus UI to the commit target. */
   const pendingJumpAyah = useRef<number | null>(null)
+  const [mountRequest, setMountRequest] = useState<{
+    surahId: number
+    ayah: number
+  } | null>(null)
+  const requestedMountAyah =
+    mountRequest != null && mountRequest.surahId === content?.surah.id
+      ? mountRequest.ayah
+      : null
+
+  /** Ensure progressive rendering has a real block before focus measures it. */
+  const focusAyah = useCallback(
+    (
+      ayah: number,
+      options: { animate?: boolean; preRoll?: boolean } = {},
+    ) => {
+      const surahId = content?.surah.id
+      if (surahId != null && ayah > 0) {
+        setMountRequest({ surahId, ayah })
+      }
+      return focus.focus(ayah, options)
+    },
+    [content?.surah.id, focus],
+  )
 
   // Stable callbacks so memo(AyahBlock) can skip inactive verses on word ticks.
   const onKeepWordInView = useCallback((wordEl: HTMLElement) => {
@@ -100,8 +172,8 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const surahIdRef = useRef(content?.surah.id ?? 0)
   surahIdRef.current = content?.surah.id ?? 0
   const onHoldWord = useCallback(
-    (a: number, pos: number, arabic: string, translation: string) => {
-      appStore.openRootViewer(surahIdRef.current, a, pos, arabic, translation)
+    (a: number, word: Word) => {
+      appStore.openRootViewer(surahIdRef.current, a, word)
     },
     [],
   )
@@ -117,48 +189,58 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   }, [state.bookmarks, content?.surah.id])
 
   const side = state.settings.ayahSelectorSide
-  const depth = content ? Math.max(0, stackLayer - READER_LAYER) : 0
-  const isTop = content != null && stackLayer === READER_LAYER
-  const peeking = content != null && stackLayer > READER_LAYER
+  // Keep depth/active correct for the parked empty reader at app start.
+  const depth = Math.max(0, stackLayer - READER_LAYER)
+  const isTop = stackLayer === READER_LAYER
+  const peeking = stackLayer > READER_LAYER
   const active = isTop || peeking
-  const playingNow =
-    state.player.isPlaying &&
-    state.player.nowPlaying?.surahId === content?.surah.id
-  // Debounced like Android — hold recess across the brief isPlaying gap when
-  // the player swaps ayahs. Top bar + rail fully hide (topBarAlpha → 0);
-  // player peripherals stay at a whisper (chromeAlpha → 0.08).
-  const [recitingActive, setRecitingActive] = useState(playingNow)
+  // Instant recess — hold across ayah-join buffering, release on user pause
+  // in the same tick (no 350 ms debounce lag on the transport).
+  const recitingActive = isRecitingSession({
+    sameSurah: state.player.nowPlaying?.surahId === content?.surah.id,
+    isPlaying: state.player.isPlaying,
+    isBuffering: state.player.isBuffering,
+  })
   const receded = recitingActive && !searchActive
 
+  const mountAnchor = state.settings.lastAyah || 1
+  const mountRange = useProgressiveAyahWindow(
+    content?.surah.ayahCount ?? 0,
+    mountAnchor,
+    content?.surah.id,
+    requestedMountAyah,
+  )
+
   const activeQuery = activeSearchQuery(searchActive, searchQuery)
+  // Keep the input snappy — match/highlight work trails by a frame or two.
+  const deferredQuery = useDeferredValue(activeQuery)
+  const searchableAyahs = useMemo(() => {
+    if (!content) return [] as { number: number; translationLower: string; glossLowers: string[] }[]
+    return content.ayahs.map((a) => ({
+      number: a.number,
+      translationLower: a.translation.toLowerCase(),
+      glossLowers: a.words.map((w) => w.translation.toLowerCase()),
+    }))
+  }, [content])
   const searchMatches = useMemo(() => {
-    if (!activeQuery || !content) return [] as number[]
-    const q = activeQuery.toLowerCase()
+    if (!deferredQuery) return [] as number[]
+    const q = deferredQuery.toLowerCase()
     const matches: number[] = []
-    for (const a of content.ayahs) {
+    for (const a of searchableAyahs) {
       if (
-        a.translation.toLowerCase().includes(q) ||
-        a.words.some((w) => w.translation.toLowerCase().includes(q))
+        a.translationLower.includes(q) ||
+        a.glossLowers.some((g) => g.includes(q))
       ) {
         matches.push(a.number)
       }
     }
     return matches
-  }, [content, activeQuery])
+  }, [searchableAyahs, deferredQuery])
+  const matchAyahSet = useMemo(() => new Set(searchMatches), [searchMatches])
   const matchIndex = Math.min(
     Math.max(0, searchIndex),
     Math.max(0, searchMatches.length - 1),
   )
-
-  // Hold recess across brief pause blips (ayah joins / repeat restarts).
-  useEffect(() => {
-    if (playingNow) {
-      setRecitingActive(true)
-      return
-    }
-    const t = window.setTimeout(() => setRecitingActive(false), RECITING_RELEASE_MS)
-    return () => clearTimeout(t)
-  }, [playingNow])
 
   // Reset search / collapsed title when the surah changes.
   useEffect(() => {
@@ -192,20 +274,29 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   }, [activeQuery])
 
   // Jump the reading line to the current search hit.
+  // Debounce while the query is changing so each keystroke does not start a
+  // Motion glide; prev/next (matchIndex only) jumps immediately.
+  const prevSearchQueryRef = useRef(deferredQuery)
   useEffect(() => {
-    if (!isTop || !content || activeQuery == null) return
+    if (!isTop || !content || deferredQuery == null) return
     const target = searchMatches[matchIndex]
     if (target == null) return
-    pendingJumpAyah.current = target
-    setFocusedAyah(target)
-    setFocusedPosition(target)
-    void focus.focus(target, { animate: true, preRoll: true }).finally(() => {
+    const queryChanged = prevSearchQueryRef.current !== deferredQuery
+    prevSearchQueryRef.current = deferredQuery
+    const delay = queryChanged ? 140 : 0
+    const handle = window.setTimeout(() => {
+      pendingJumpAyah.current = target
       setFocusedAyah(target)
       setFocusedPosition(target)
-      pendingJumpAyah.current = null
-    })
+      void focusAyah(target, { animate: true, preRoll: true }).finally(() => {
+        setFocusedAyah(target)
+        setFocusedPosition(target)
+        pendingJumpAyah.current = null
+      })
+    }, delay)
+    return () => window.clearTimeout(handle)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeQuery, matchIndex, searchMatches, isTop, content?.surah.id])
+  }, [deferredQuery, matchIndex, searchMatches, isTop, content?.surah.id])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -213,16 +304,32 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     focus.bind(el, count, 0)
   }, [content?.surah.id, content?.surah.ayahCount, isTop])
 
-  // Initial settle on the saved ayah (no animation).
+  // Initial settle when a surah's content arrives — one frame after mount so
+  // the peel keeps its first paint. Same-surah reopen (isTop only) keeps scroll.
   useEffect(() => {
     if (!content || !isTop) return
     const ayah = state.settings.lastAyah || 1
-    void focus.focus(ayah, { animate: false, preRoll: false }).then(() => {
-      setFocusedAyah(focus.focusedAyah())
+    let cancelled = false
+    const raf = requestAnimationFrame(() => {
+      if (cancelled) return
+      void focusAyah(ayah, { animate: false, preRoll: false }).then(() => {
+        if (cancelled) return
+        setFocusedAyah(focus.focusedAyah())
+      })
     })
-    // Only on surah open / becoming top sheet.
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(raf)
+    }
+    // Only when content identity changes — not every peel of the same surah.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content?.surah.id, isTop])
+  }, [content?.surah.id])
+
+  // Progressive mount expands — refresh focus geometry without re-homing.
+  useEffect(() => {
+    if (!content || !isTop || mountRange.complete) return
+    focus.invalidateLayout()
+  }, [mountRange.lo, mountRange.hi, content?.surah.id, isTop])
 
   // Home word-search hit: orange repeat wash (wash in → dissolve × 2) on the
   // matched word once the verse is on screen (Android SearchHitFlash).
@@ -378,6 +485,8 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   // (verse, or chapter-top basmalah header while the lead-in plays).
   // Also re-homes when the media item advances — fade-lead may have already
   // bumped activeAyah, so nowPlaying.ayah is the boundary that must not miss.
+  // Defer the glide one frame so play/pause paint (icon + CSS recess) lands
+  // first and the Motion scroll does not contend for the same frame budget.
   useEffect(() => {
     if (!isTop || !content) return
     const target = playbackFocusTarget(state.activeAyah, state.activeBasmalah)
@@ -387,11 +496,20 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     }
     const justEnabled = !followWasEnabled.current
     followWasEnabled.current = true
-    void focus.focus(target, { animate: true, preRoll: justEnabled }).then(() => {
-      setShowReturn(false)
-      setFocusedAyah(focus.focusedAyah())
-      setActiveExceedsViewport(focus.exceedsViewport(state.activeAyah))
+    let cancelled = false
+    const raf = requestAnimationFrame(() => {
+      if (cancelled) return
+      void focusAyah(target, { animate: true, preRoll: justEnabled }).then(() => {
+        if (cancelled) return
+        setShowReturn(false)
+        setFocusedAyah(focus.focusedAyah())
+        setActiveExceedsViewport(focus.exceedsViewport(state.activeAyah))
+      })
     })
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(raf)
+    }
   }, [
     state.activeAyah,
     state.activeBasmalah,
@@ -415,7 +533,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       state.followEnabled && focusTarget != null
         ? focusTarget
         : focusedAyah
-    void focus.focus(pin, { animate: true, preRoll: false })
+    void focusAyah(pin, { animate: true, preRoll: false })
     // Intentionally keyed on layout-affecting settings only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -457,7 +575,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       ? appStore.seekToAyah(targetAyah)
       : Promise.resolve()
     void Promise.all([
-      focus.focus(targetAyah, { animate: true, preRoll: true }),
+      focusAyah(targetAyah, { animate: true, preRoll: true }),
       seekPromise,
     ]).finally(() => {
       // Keep the committed jump target — readout can briefly report the
@@ -484,32 +602,52 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     )
   }
 
+  const readerItems = useMemo(
+    () => (content ? buildReaderItems(content.ayahs) : []),
+    [content],
+  )
+  const visibleItems = useMemo(() => {
+    if (!content || mountRange.complete) return readerItems
+    return sliceReaderItems(readerItems, mountRange.lo, mountRange.hi)
+  }, [content, readerItems, mountRange.lo, mountRange.hi, mountRange.complete])
+  const topPad =
+    !mountRange.complete && mountRange.lo > 1
+      ? (mountRange.lo - 1) * AYAH_SPACER_EST_PX
+      : 0
+  const bottomPad =
+    content && !mountRange.complete && mountRange.hi < content.surah.ayahCount
+      ? (content.surah.ayahCount - mountRange.hi) * AYAH_SPACER_EST_PX
+      : 0
+
   if (!content) {
     return (
       <div
         className="sheet"
         data-name="reader"
         data-layer={READER_LAYER}
-        data-depth={0}
-        data-active="false"
-        data-empty="true"
+        data-depth={depth}
+        data-active={active}
+        data-empty={!isTop && !peeking ? 'true' : undefined}
       />
     )
   }
 
-  // Recess non-active ayahs only while audio is actually playing. At rest
-  // (paused / stopped / loaded-but-idle) every ayah is Plain — full opacity.
-  const dimmedGlobal = recitingActive
-  const preface = prefaceState(state.activeBasmalah, dimmedGlobal && !state.activeBasmalah)
+  // Recess is paint-phase CSS on `.scroll[data-reciting]` — inactive ayahs keep
+  // dimmed=false so memo(AyahBlock) skips them on play/pause (Android: one ayah
+  // wakes). Karaoke ink still flows through isActiveAyah + activeWord.
+  const preface = prefaceState(state.activeBasmalah, false)
   const showBasmalah = surahOpensWithBasmalahPreface(content.surah.id)
   const ayahCount = content.surah.ayahCount
+  const useArabicIndicDigits = state.settings.readingMode !== 'english_only'
   // Rail tracks the recitation only while playing; otherwise the reading line.
   const railAyah =
     recitingActive && state.activeAyah != null ? state.activeAyah : focusedAyah
   const railPosition =
     recitingActive && state.activeAyah != null ? state.activeAyah : focusedPosition
 
-  const rail = (
+  // Keep the rail off under-sheets — when Settings (or any sheet above) is
+  // open, a peek of the reader must not show the dial hanging beside it.
+  const rail = isTop ? (
     <AyahSelectorRail
       ayahCount={ayahCount}
       currentAyah={railAyah}
@@ -518,11 +656,16 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       receded={receded}
       onJump={jumpToAyah}
     />
-  )
+  ) : null
 
   const repeatMode = state.player.repeatMode
   const keepWordInView =
     state.followEnabled && recitingActive && activeExceedsViewport
+  // Focus leads by 500 ms to begin the glide before an ayah ends. Karaoke ink
+  // stays with the actual word/media owner until the audio item hands off.
+  const inkAyah = recitingActive
+    ? readerInkAyah(state.activeWord, state.player.nowPlaying?.ayah)
+    : null
   const reciterName =
     state.reciters.find((r) => r.id === state.settings.reciterId)?.name ?? 'Reciter'
   const matchLabel =
@@ -660,9 +803,24 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       <div className="reader-body">
         <div className="reader-main">
           <div className="edge-fade">
-            <div className="scroll" ref={scrollRef}>
+            <div
+              className="scroll"
+              ref={scrollRef}
+              data-reciting={recitingActive || undefined}
+              style={{
+                ['--upcoming-alpha' as string]: String(inkTuning.upcomingAlpha),
+                ['--ink-fade-ms' as string]: `${inkTuning.inkFadeMs}ms`,
+                ['--ayah-mark-fade-ms' as string]: `${inkTuning.ayahMarkFadeMs}ms`,
+                ['--recess-ms' as string]: `${inkTuning.recessMs}ms`,
+                ['--translit-alpha' as string]: String(TRANSLITERATION_COLOR_ALPHA),
+              }}
+            >
               <header className="surah-header" ref={headerRef}>
-                <Rosette />
+                <SurahHeaderOrnament
+                  chapterNumber={content.surah.id}
+                  ayahCount={content.surah.ayahCount}
+                  themeMode={state.settings.themeMode}
+                />
                 <h2>{content.surah.nameTransliteration}</h2>
                 <p className="ar-title">{content.surah.nameArabic}</p>
                 <p className="sub">
@@ -675,23 +833,42 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                   id="ayah-0"
                   className="basmalah-block"
                   data-ayah="0"
+                  data-ayah-active={state.activeBasmalah || undefined}
                 >
                   <BasmalahCalligraphy
                     className="basmalah"
                     data-state={preface}
                     active={state.activeBasmalah}
-                    dimmed={dimmedGlobal && !state.activeBasmalah}
+                    dimmed={false}
                     onClick={() => void appStore.playAyah(1)}
                   />
                 </div>
               ) : null}
 
-              {content.ayahs.map((ayah) => {
-                const isActive = state.activeAyah === ayah.number
-                const dimmed = dimmedGlobal && !isActive
-                // Karaoke ink only while audio is moving. At rest every ayah is
-                // Plain (full opacity) — including the verse that was playing.
-                const inkActive = recitingActive && isActive
+              {topPad > 0 ? (
+                <div
+                  className="ayah-mount-pad"
+                  style={{ height: topPad }}
+                  aria-hidden
+                />
+              ) : null}
+
+              {visibleItems.map((item) => {
+                if (item.kind === 'pageBreak') {
+                  return (
+                    <PageBreak
+                      key={`page-${item.page}`}
+                      page={item.page}
+                      useArabicIndicDigits={useArabicIndicDigits}
+                    />
+                  )
+                }
+                const ayah = item.ayah
+                const isFocusTarget = state.activeAyah === ayah.number
+                // Karaoke ink only while audio is moving. Global recess is CSS
+                // on `.scroll[data-reciting]` — keep dimmed false so inactive
+                // ayahs do not reconcile on play/pause.
+                const inkActive = inkAyah === ayah.number
                 const aw =
                   inkActive && state.activeWord?.ayah === ayah.number
                     ? state.activeWord
@@ -702,9 +879,9 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     ayah={ayah}
                     activeWord={aw}
                     isActiveAyah={inkActive}
-                    dimmed={dimmed}
+                    dimmed={false}
                     focused={focusedAyah === ayah.number}
-                    keepActiveWordInView={keepWordInView && isActive}
+                    keepActiveWordInView={keepWordInView && isFocusTarget}
                     onKeepWordInView={onKeepWordInView}
                     readingMode={state.settings.readingMode}
                     showWordGloss={state.settings.showWordGloss}
@@ -712,14 +889,18 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     showTranslation={state.settings.showTranslation}
                     bookmarked={bookmarkedAyahs.has(ayah.number)}
                     bookmarkSide={side === 'left' ? 'right' : 'left'}
-                    bookmarkChromeAlpha={receded ? 0 : 1}
-                    bookmarkInteractive={!receded}
+                    bookmarkChromeAlpha={1}
+                    bookmarkInteractive={true}
                     speed={state.settings.playbackSpeed}
                     fontScale={state.settings.fontScale}
                     onPlayWord={onPlayWord}
                     onToggleBookmark={onToggleBookmark}
                     onHoldWord={onHoldWord}
-                    searchQuery={activeQuery}
+                    searchQuery={
+                      deferredQuery != null && matchAyahSet.has(ayah.number)
+                        ? deferredQuery
+                        : null
+                    }
                     flashWordPosition={
                       flashTarget?.ayah === ayah.number
                         ? flashTarget.wordPosition
@@ -728,6 +909,14 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                   />
                 )
               })}
+
+              {bottomPad > 0 ? (
+                <div
+                  className="ayah-mount-pad"
+                  style={{ height: bottomPad }}
+                  aria-hidden
+                />
+              ) : null}
             </div>
           </div>
 
@@ -778,15 +967,20 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                 type="button"
                 className="play"
                 aria-label={
-                  state.player.isBuffering
+                  state.player.isBuffering && !state.player.isPlaying
                     ? 'Buffering'
                     : state.player.isPlaying
                       ? 'Pause'
                       : 'Play'
                 }
-                aria-busy={state.player.isBuffering || undefined}
+                aria-busy={
+                  (state.player.isBuffering && !state.player.isPlaying) || undefined
+                }
                 onClick={() => {
-                  if (state.player.isBuffering) return
+                  // Pause must always land immediately — even mid-buffer.
+                  // Only block a cold Play while a fetch is already in flight
+                  // without play intent (should be rare with optimistic isPlaying).
+                  if (state.player.isBuffering && !state.player.isPlaying) return
                   const thisSurahLoaded =
                     state.player.nowPlaying?.surahId === content.surah.id
                   const selected = selectedPlaybackAyah({
@@ -800,12 +994,15 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                   const pendingJump = pendingJumpAyah.current != null
                   if (!state.player.isPlaying) {
                     followWasEnabled.current = false
-                    appStore.setFollowEnabled(true)
                   }
-                  void appStore.playPause({ selectedAyah: selected, pendingJump })
+                  void appStore.playPause({
+                    selectedAyah: selected,
+                    pendingJump,
+                    enableFollow: !state.player.isPlaying,
+                  })
                 }}
               >
-                {state.player.isBuffering ? (
+                {state.player.isBuffering && !state.player.isPlaying ? (
                   <IconBuffering />
                 ) : state.player.isPlaying ? (
                   <IconPause />

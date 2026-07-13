@@ -18,16 +18,21 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.shape.AbsoluteRoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +48,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -59,13 +65,17 @@ import com.beautifulquran.ui.theme.CoverAccents
 import com.beautifulquran.ui.theme.CoverLeatherCenter
 import com.beautifulquran.ui.theme.CoverLeatherEdge
 import com.beautifulquran.ui.theme.CoverParchment
-import com.beautifulquran.ui.theme.GildedMedallion
+import com.beautifulquran.ui.theme.GeneratedBorderBand
+import com.beautifulquran.ui.theme.GeneratedCornerSeals
+import com.beautifulquran.ui.theme.GeneratedMedallion
 import com.beautifulquran.ui.theme.HafsFontFamily
 import com.beautifulquran.ui.theme.MushafCoverFrame
+import com.beautifulquran.ui.theme.generatedFieldWeave
 import com.beautifulquran.ui.theme.gilded
 import com.beautifulquran.ui.theme.letterFadeIn
+import com.beautifulquran.ui.theme.ornament.generateCoverOrnament
 import com.beautifulquran.ui.theme.quietClickable
-import com.beautifulquran.ui.theme.starAndCrossWeave
+import kotlin.random.Random
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -112,6 +122,13 @@ private const val OPEN_CAMERA_DISTANCE = 8f
 private val CoverOpenEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
 
 /**
+ * The ornament build: the generated geometry inks itself onto the leather
+ * over this long — field wash first, medallion strokes in sequence, border
+ * frieze, then seals and pearls. Web uses the same schedule.
+ */
+private const val ORNAMENT_BUILD_MS = 3_400
+
+/**
  * The entrance ceremony: the closed mushaf. A deep-green leather board,
  * tooled with the star-and-cross weave, framed and cornered in gilt,
  * concentric with the phone's screen radius so the cover feels cut for this
@@ -140,6 +157,9 @@ fun EntranceCover(
     val titleWash = remember { Animatable(0f) }
     val duaWash = remember { Animatable(0f) }
     val turn = remember { Animatable(0f) }
+    // A fresh ornament every launch — the generating machine's whole point.
+    val ornament = remember { generateCoverOrnament(Random.nextInt()) }
+    val build = remember { Animatable(0f) }
     // Skip requests cancel the in-flight moment without re-running arrival —
     // re-keying a phase effect used to replay the title wash.
     var skipRequested by remember { mutableStateOf(false) }
@@ -163,6 +183,27 @@ fun EntranceCover(
             bottomRight = r(screenRadii.bottomRight),
             bottomLeft = r(screenRadii.bottomLeft),
         )
+    }
+
+    // The leather board bleeds to the physical edge, but its gilt frame and
+    // ornaments must clear the camera cutout and the system-bar zones — a
+    // tooled cover never runs its rule under the lens. Pull the frame in by a
+    // single margin equal on every side (the largest safe inset plus a little
+    // breathing room, never below a base margin) so the border reads as an
+    // evenly-spaced book frame rather than a full-bleed rectangle clipped by
+    // the notch.
+    val layoutDirection = LocalLayoutDirection.current
+    val safeInsets = WindowInsets.displayCutout.union(WindowInsets.systemBars)
+    val frameMargin = with(localDensity) {
+        val breathing = 8.dp.toPx()
+        val base = 22.dp.toPx()
+        maxOf(
+            base,
+            safeInsets.getTop(this) + breathing,
+            safeInsets.getBottom(this) + breathing,
+            safeInsets.getLeft(this, layoutDirection) + breathing,
+            safeInsets.getRight(this, layoutDirection) + breathing,
+        ).toDp()
     }
 
     // Full-bleed leather: hide the status bar for the ceremony, restore after.
@@ -192,6 +233,8 @@ fun EntranceCover(
     // in-flight moment without re-keying this effect — re-keying on phase
     // used to replay the title wash.
     LaunchedEffect(Unit) {
+        // The ornament inks in alongside the ceremony, not gated by it.
+        launch { build.animateTo(1f, tween(ORNAMENT_BUILD_MS, easing = LinearEasing)) }
         val moment = launch {
             sheetAlpha.animateTo(1f, tween(SHEET_FADE_MS, easing = LinearEasing))
             titleWash.animateTo(1f, tween(TITLE_WASH_MS, easing = LinearEasing))
@@ -213,6 +256,7 @@ fun EntranceCover(
         sheetAlpha.snapTo(1f)
         titleWash.snapTo(1f)
         duaWash.snapTo(1f)
+        build.snapTo(1f)
         captionVisible = true
         phase = EntrancePhase.Opening
         onOpenBegan()
@@ -227,6 +271,8 @@ fun EntranceCover(
         animationSpec = infiniteRepeatable(tween(6_500), RepeatMode.Reverse),
         label = "coverSheenTilt",
     )
+    // State view of the build so renderers re-draw (never recompose) as it runs.
+    val buildState = remember { derivedStateOf { build.value } }
     val captionAlpha by animateFloatAsState(
         targetValue = if (captionVisible) 1f else 0f,
         animationSpec = tween(900),
@@ -264,10 +310,11 @@ fun EntranceCover(
                         ),
                     )
                 }
-                .starAndCrossWeave(
+                .generatedFieldWeave(
+                    field = ornament.field,
                     ink = accents.gold.copy(alpha = 0.05f),
                     embossLight = accents.embossLight.copy(alpha = 0.04f),
-                    cell = 72.dp,
+                    build = buildState,
                 )
                 .quietClickable(
                     enabled = phase != EntrancePhase.Opening,
@@ -279,15 +326,44 @@ fun EntranceCover(
                     role = Role.Button
                 },
         ) {
-            MushafCoverFrame(
-                brightGold = accents.goldBright,
-                deepGold = accents.goldDeep,
-                embossDark = accents.embossDark,
-                embossLight = accents.embossLight,
-                sheen = sheen,
-                geometry = frameGeometry,
-                modifier = Modifier.fillMaxSize(),
-            )
+            // The gilt frame, border frieze, and corner seals share one inset
+            // box so they stay concentric with each other while clearing the
+            // camera and system bars. The leather beneath them still bleeds
+            // full to the screen edge.
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(frameMargin),
+            ) {
+                MushafCoverFrame(
+                    brightGold = accents.goldBright,
+                    deepGold = accents.goldDeep,
+                    embossDark = accents.embossDark,
+                    embossLight = accents.embossLight,
+                    sheen = sheen,
+                    geometry = frameGeometry,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                GeneratedBorderBand(
+                    spec = ornament.border,
+                    seal = ornament.cornerSeal,
+                    geometry = frameGeometry,
+                    brightGold = accents.goldBright,
+                    deepGold = accents.goldDeep,
+                    embossDark = accents.embossDark,
+                    embossLight = accents.embossLight,
+                    sheen = sheen,
+                )
+                GeneratedCornerSeals(
+                    spec = ornament.cornerSeal,
+                    geometry = frameGeometry,
+                    brightGold = accents.goldBright,
+                    deepGold = accents.goldDeep,
+                    embossDark = accents.embossDark,
+                    embossLight = accents.embossLight,
+                    sheen = sheen,
+                )
+            }
 
             val medallionSize =
                 (LocalConfiguration.current.screenWidthDp * 0.52f).coerceAtMost(240f).dp
@@ -299,13 +375,15 @@ fun EntranceCover(
                     .padding(horizontal = 40.dp),
             ) {
                 Spacer(Modifier.weight(0.9f))
-                GildedMedallion(
+                GeneratedMedallion(
+                    spec = ornament.medallion,
                     size = medallionSize,
                     brightGold = accents.goldBright,
                     deepGold = accents.goldDeep,
                     embossDark = accents.embossDark,
                     embossLight = accents.embossLight,
                     sheen = sheen,
+                    build = buildState,
                 )
                 Spacer(Modifier.height(30.dp))
                 Text(

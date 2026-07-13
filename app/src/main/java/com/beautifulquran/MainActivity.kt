@@ -24,6 +24,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -56,12 +57,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.AppViewModelFactory
 import com.beautifulquran.ui.PageTurnSounds
+import com.beautifulquran.ui.bookmarks.BookmarksScreen
+import com.beautifulquran.ui.bookmarks.BookmarksViewModel
 import com.beautifulquran.ui.entrance.EntranceCover
 import com.beautifulquran.ui.home.FloatingPlaybackCoverVisibleMaxPage
 import com.beautifulquran.ui.home.FloatingPlaybackListClearance
 import com.beautifulquran.ui.home.HomeScreen
 import com.beautifulquran.ui.home.HomeViewModel
 import com.beautifulquran.ui.reader.BackToOriginPill
+import com.beautifulquran.ui.reader.ReaderPlaybackSnapshot
 import com.beautifulquran.ui.reader.ReaderScreen
 import com.beautifulquran.ui.reader.ReaderViewModel
 import com.beautifulquran.ui.reader.RootReturnTarget
@@ -135,7 +139,13 @@ class MainActivity : ComponentActivity() {
                     themeMode = settings.themeMode,
                     developerModeEnabled = settings.developerModeEnabled,
                     entranceVisible = !entranceDone,
-                    onEntranceFinished = { entranceDone = true },
+                    onRecordSystemTrace = {
+                        DevProfiling.recordSystemTrace(this@MainActivity)
+                    },
+                    onEntranceFinished = {
+                        entranceDone = true
+                        DevProfiling.reportFullyDrawn(this@MainActivity)
+                    },
                 )
             }
         }
@@ -146,6 +156,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private const val BOOKMARKS_LAYER = -1
 private const val COVER_LAYER = 0
 private const val AYAH_LAYER = 1
 private const val SETTINGS_LAYER = 2
@@ -153,7 +164,7 @@ private const val STACK_PAGE_DURATION_MS = 460
 private const val STACK_PAGE_TURN_THRESHOLD = 0.18f
 private const val STACK_PAGE_FLING_THRESHOLD = 0.35f
 private const val STACK_PAGE_PULL_RESISTANCE_DP = 34
-private const val STACK_OFFSCREEN_OVERSCAN_DP = 24f
+private const val STACK_OFFSCREEN_OVERSCAN_DP = 36f
 private val StackMotionEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
 
 @Composable
@@ -161,13 +172,16 @@ private fun PaperStackApp(
     themeMode: ThemeMode,
     developerModeEnabled: Boolean,
     entranceVisible: Boolean,
+    onRecordSystemTrace: () -> Unit,
     onEntranceFinished: () -> Unit,
 ) {
     val homeViewModel: HomeViewModel = viewModel(factory = AppViewModelFactory)
+    val bookmarksViewModel: BookmarksViewModel = viewModel(factory = AppViewModelFactory)
     val readerViewModel: ReaderViewModel = viewModel(factory = AppViewModelFactory)
     val settingsViewModel: SettingsViewModel = viewModel(factory = AppViewModelFactory)
     val timingsLabViewModel: TimingsLabViewModel = viewModel(factory = AppViewModelFactory)
     val rootViewerViewModel: RootViewerViewModel = viewModel(factory = AppViewModelFactory)
+    val bookmarkCount by bookmarksViewModel.bookmarkCount.collectAsStateWithLifecycle()
 
     var selectedSurahId by rememberSaveable { mutableIntStateOf(0) }
     var selectedStartAyah by rememberSaveable { mutableIntStateOf(0) }
@@ -184,6 +198,11 @@ private fun PaperStackApp(
     var rootVisible by remember { mutableStateOf(false) }
     /** Developer-mode chooser after a word hold (Root Viewer vs Timings Lab). */
     var chooserVisible by remember { mutableStateOf(false) }
+    var chooserRendered by remember { mutableStateOf(false) }
+    var rootRendered by remember { mutableStateOf(false) }
+    var labRendered by remember { mutableStateOf(false) }
+    var readerInkOverlayVisible by remember { mutableStateOf(false) }
+    var rootPlaybackSnapshot by remember { mutableStateOf<ReaderPlaybackSnapshot?>(null) }
     var pendingWord by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
     /** Bumped on every concordance jump so the reader remounts even when the
      * target surah/ayah pair is unchanged. */
@@ -196,9 +215,23 @@ private fun PaperStackApp(
      *  30s countdown that clears [rootReturnTarget]. */
     var rootReturnDismissArmed by remember { mutableStateOf(false) }
     val stackPosition = remember { Animatable(settledLayer.toFloat()) }
+    val stackPositionProvider = remember(stackPosition) { { stackPosition.value } }
+    val stackPastCover by remember {
+        derivedStateOf { stackPosition.value > COVER_LAYER + 0.01f }
+    }
+    val coverSheetVisible by remember {
+        derivedStateOf { stackPosition.value <= FloatingPlaybackCoverVisibleMaxPage }
+    }
+    val stackAboveReaderPlayer by remember {
+        derivedStateOf { stackPosition.value in 0.5f..1.5f }
+    }
     val scope = rememberCoroutineScope()
     val settingsLayer = if (selectedSurahId == 0) AYAH_LAYER else SETTINGS_LAYER
-    val overlayBlocking = labVisible || rootVisible || chooserVisible
+    val overlayBlocking = labVisible || rootVisible || chooserVisible ||
+        labRendered || rootRendered || chooserRendered || readerInkOverlayVisible
+    val stackGesturesBlocked = rememberUpdatedState(
+        ayahSelectorExpanded || overlayBlocking || entranceVisible,
+    )
     val rootReturnVisible = rootReturnTarget != null && !overlayBlocking
     val onRootReturnUserMovedLatest = rememberUpdatedState {
         if (rootReturnTarget != null) rootReturnDismissArmed = true
@@ -216,7 +249,8 @@ private fun PaperStackApp(
     }
 
     suspend fun settleTo(layer: Int) {
-        val boundedLayer = layer.coerceIn(COVER_LAYER, settingsLayer)
+        val minimumLayer = if (bookmarkCount > 0) BOOKMARKS_LAYER else COVER_LAYER
+        val boundedLayer = layer.coerceIn(minimumLayer, settingsLayer)
         val distance = abs(boundedLayer - stackPosition.value)
         settledLayer = boundedLayer
         stackPosition.animateTo(
@@ -231,6 +265,12 @@ private fun PaperStackApp(
 
     fun animateTo(layer: Int) {
         scope.launch { settleTo(layer) }
+    }
+
+    LaunchedEffect(bookmarkCount) {
+        if (bookmarkCount == 0 && stackPosition.value < COVER_LAYER) {
+            settleTo(COVER_LAYER)
+        }
     }
 
     fun openTimingsLab(surahId: Int? = null, ayah: Int? = null, wordPosition: Int? = null) {
@@ -254,14 +294,20 @@ private fun PaperStackApp(
     fun openRootViewer(surahId: Int, ayah: Int, wordPosition: Int) {
         chooserVisible = false
         labVisible = false
+        rootPlaybackSnapshot = readerViewModel.pauseForRootViewer()
         rootViewerViewModel.open(surahId, ayah, wordPosition)
         rootVisible = true
     }
 
-    fun closeRootViewer() {
+    fun closeRootViewer(resumeReading: Boolean = true) {
         if (!rootVisible) return
         rootVisible = false
         rootViewerViewModel.clear()
+        val snapshot = rootPlaybackSnapshot
+        rootPlaybackSnapshot = null
+        if (resumeReading && snapshot != null) {
+            readerViewModel.resumeAfterRootViewer(snapshot)
+        }
     }
 
     fun onWordLongPress(surahId: Int, ayah: Int, wordPosition: Int) {
@@ -285,7 +331,7 @@ private fun PaperStackApp(
                 surahNameTransliteration = origin.surahNameTransliteration,
             )
         }
-        closeRootViewer()
+        closeRootViewer(resumeReading = false)
         if (surahId != selectedSurahId) {
             readerViewModel.load(surahId)
         }
@@ -331,8 +377,11 @@ private fun PaperStackApp(
         rootReturnTarget = null
     }
 
-    BackHandler(enabled = settledLayer > COVER_LAYER || stackPosition.value > COVER_LAYER + 0.01f) {
+    BackHandler(enabled = settledLayer > COVER_LAYER || stackPastCover) {
         animateTo((stackPosition.value.roundToInt() - 1).coerceAtLeast(COVER_LAYER))
+    }
+    BackHandler(enabled = settledLayer < COVER_LAYER || stackPosition.value < -0.01f) {
+        animateTo(COVER_LAYER)
     }
     // Composed after the stack handler so overlay backs dismiss the bleed
     // instead of turning the page beneath it.
@@ -357,10 +406,16 @@ private fun PaperStackApp(
             .paperStackDrag(
                 gestureKey = selectedSurahId,
                 position = { stackPosition.value },
+                minLayer = {
+                    if (bookmarkCount > 0) BOOKMARKS_LAYER else COVER_LAYER
+                },
                 maxLayer = {
                     if (selectedSurahId == 0 && stackPosition.value <= COVER_LAYER + 0.01f) COVER_LAYER else settingsLayer
                 },
-                gesturesBlocked = { ayahSelectorExpanded || overlayBlocking || entranceVisible },
+                // The pointerInput coroutine is intentionally keyed only by
+                // navigation identity. Read a stable state holder here so the
+                // long-lived detector sees overlays that open after it starts.
+                gesturesBlocked = { stackGesturesBlocked.value },
                 onDragStart = {
                     dragStartPosition = stackPosition.value
                 },
@@ -373,7 +428,12 @@ private fun PaperStackApp(
                     // A single gesture may advance at most one layer, so a hard swipe
                     // from the cover lands on the reader instead of overshooting to settings.
                     val startLayer = dragStartPosition.roundToInt()
-                    val lower = (startLayer - 1).coerceAtLeast(COVER_LAYER).toFloat()
+                    val minimumLayer = if (bookmarkCount > 0) {
+                        BOOKMARKS_LAYER
+                    } else {
+                        COVER_LAYER
+                    }
+                    val lower = (startLayer - 1).coerceAtLeast(minimumLayer).toFloat()
                     val upper = (startLayer + 1).coerceAtMost(maxLayer).toFloat()
                     dragSnapJob?.cancel()
                     dragSnapJob = scope.launch {
@@ -388,10 +448,31 @@ private fun PaperStackApp(
                 },
             ),
     ) {
-        val page = stackPosition.value
+        PaperPage(
+            layer = PaperLayer.Bookmarks,
+            stackPosition = stackPositionProvider,
+            settingsLayer = settingsLayer,
+            // The left index is a top sheet: it slides over Chapters rather
+            // than exposing another copy of the cover underneath it.
+            modifier = Modifier.zIndex(4f),
+        ) {
+            BookmarksScreen(
+                viewModel = bookmarksViewModel,
+                onClose = { animateTo(COVER_LAYER) },
+                onOpenAyah = { surahId, ayah ->
+                    if (surahId != selectedSurahId) readerViewModel.load(surahId)
+                    selectedSurahId = surahId
+                    selectedStartAyah = ayah
+                    selectedStartWord = 0
+                    jumpEpoch++
+                    animateTo(AYAH_LAYER)
+                },
+            )
+        }
+
         PaperPage(
             layer = PaperLayer.Settings,
-            stackPosition = page,
+            stackPosition = stackPositionProvider,
             settingsLayer = settingsLayer,
             modifier = Modifier.zIndex(0f),
         ) {
@@ -401,6 +482,7 @@ private fun PaperStackApp(
                     animateTo(if (selectedSurahId == 0) COVER_LAYER else AYAH_LAYER)
                 },
                 onOpenTimingsLab = { openTimingsLab() },
+                onRecordSystemTrace = onRecordSystemTrace,
             )
         }
 
@@ -411,7 +493,7 @@ private fun PaperStackApp(
             val readerBleedOpen = rootVisible || chooserVisible
             PaperPage(
                 layer = PaperLayer.Ayah,
-                stackPosition = page,
+                stackPosition = stackPositionProvider,
                 settingsLayer = settingsLayer,
                 modifier = Modifier.zIndex(if (readerBleedOpen) 3f else 1f),
             ) {
@@ -428,6 +510,7 @@ private fun PaperStackApp(
                         onRootReturnUserMoved = { onRootReturnUserMovedLatest.value() },
                         rootReturnVisible = rootReturnVisible,
                         keepStatusBarVisible = overlayBlocking,
+                        onInkOverlayVisibilityChange = { readerInkOverlayVisible = it },
                     )
                 }
 
@@ -439,6 +522,7 @@ private fun PaperStackApp(
                     visible = chooserVisible,
                     backgroundColor = overlayColors.background,
                     modifier = Modifier.zIndex(3f),
+                    onRenderedChange = { chooserRendered = it },
                 ) {
                     MaterialTheme(colorScheme = overlayColors, typography = MaterialTheme.typography) {
                         CompositionLocalProvider(LocalQuranAccents provides TimingsLabAccents) {
@@ -468,6 +552,7 @@ private fun PaperStackApp(
                     visible = rootVisible,
                     backgroundColor = overlayColors.background,
                     modifier = Modifier.zIndex(4f),
+                    onRenderedChange = { rootRendered = it },
                 ) {
                     MaterialTheme(colorScheme = overlayColors, typography = MaterialTheme.typography) {
                         CompositionLocalProvider(LocalQuranAccents provides TimingsLabAccents) {
@@ -487,7 +572,7 @@ private fun PaperStackApp(
 
         PaperPage(
             layer = PaperLayer.Cover,
-            stackPosition = page,
+            stackPosition = stackPositionProvider,
             settingsLayer = settingsLayer,
             modifier = Modifier.zIndex(2f),
         ) {
@@ -504,7 +589,9 @@ private fun PaperStackApp(
                 // Drive the float's enter/exit from the live page turn so it
                 // slides in when returning to chapter selection and out when
                 // leaving for the reader — not only when nowPlaying flips.
-                coverSheetVisible = page <= FloatingPlaybackCoverVisibleMaxPage,
+                coverSheetVisible = coverSheetVisible,
+                bookmarkCount = bookmarkCount,
+                onOpenBookmarks = { animateTo(BOOKMARKS_LAYER) },
             )
         }
 
@@ -514,7 +601,7 @@ private fun PaperStackApp(
         // inset) as the return-to-ayah roundel. On the cover it clears the
         // floating playback transport; on the reader it clears the embedded
         // player bar.
-        val abovePlayer = page in 0.5f..1.5f && selectedSurahId != 0
+        val abovePlayer = stackAboveReaderPlayer && selectedSurahId != 0
         FloatingPaperControl(
             visible = rootReturnVisible,
             modifier = Modifier
@@ -548,6 +635,7 @@ private fun PaperStackApp(
             visible = labVisible,
             backgroundColor = overlayColors.background,
             modifier = Modifier.zIndex(5f),
+            onRenderedChange = { labRendered = it },
         ) {
             MaterialTheme(colorScheme = overlayColors, typography = MaterialTheme.typography) {
                 CompositionLocalProvider(LocalQuranAccents provides TimingsLabAccents) {
@@ -576,6 +664,7 @@ private fun PaperStackApp(
 }
 
 private enum class PaperLayer {
+    Bookmarks,
     Settings,
     Ayah,
     Cover,
@@ -584,21 +673,16 @@ private enum class PaperLayer {
 @Composable
 private fun PaperPage(
     layer: PaperLayer,
-    stackPosition: Float,
+    stackPosition: () -> Float,
     settingsLayer: Int,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    val turning = when (layer) {
-        PaperLayer.Cover -> stackPosition.coerceIn(0f, 1f)
-        PaperLayer.Ayah -> (stackPosition - 1f).coerceIn(0f, 1f)
-        PaperLayer.Settings -> 0f
-    }
     Box(
         modifier = modifier
             .fillMaxSize()
             .paperLayerTransform(layer, stackPosition, settingsLayer)
-            .paperDropShadow(turning),
+            .paperDropShadow(layer, stackPosition),
     ) {
         content()
     }
@@ -606,32 +690,46 @@ private fun PaperPage(
 
 private fun Modifier.paperLayerTransform(
     layer: PaperLayer,
-    stackPosition: Float,
+    stackPosition: () -> Float,
     settingsLayer: Int,
 ): Modifier = graphicsLayer {
+    val position = stackPosition()
     val width = size.width
     cameraDistance = 18f * density
     when (layer) {
+        PaperLayer.Bookmarks -> {
+            val reveal = (-position).coerceIn(0f, 1f)
+            // A genuine top sheet entering from the left. At Chapters it is
+            // parked wholly beyond the edge; pulling right lays it over Home.
+            translationX = -(width + STACK_OFFSCREEN_OVERSCAN_DP * density) *
+                (1f - reveal)
+            rotationY = -4f * (1f - reveal)
+            alpha = if (position <= 0f) 1f else 0f
+        }
         PaperLayer.Cover -> {
-            val turn = stackPosition.coerceIn(0f, 1f)
-            translationX = -(width + STACK_OFFSCREEN_OVERSCAN_DP * density) * turn
-            rotationY = -5f * turn
-            shadowElevation = 22f * (1f - turn)
+            val forwardTurn = position.coerceIn(0f, 1f)
+            translationX = -(width + STACK_OFFSCREEN_OVERSCAN_DP * density) * forwardTurn
+            rotationY = -5f * forwardTurn
+            shadowElevation = 22f * (1f - forwardTurn)
         }
         PaperLayer.Ayah -> {
-            val reveal = stackPosition.coerceIn(0f, 1f)
-            val turn = (stackPosition - 1f).coerceIn(0f, 1f)
-            translationX = width * 0.055f * (1f - reveal) - width * turn
+            val reveal = position.coerceIn(0f, 1f)
+            val turn = (position - 1f).coerceIn(0f, 1f)
+            // Overscan past full width so rotationY foreshortening cannot leave
+            // the ayah rail peeking over Settings once this sheet has turned.
+            translationX = width * 0.055f * (1f - reveal) -
+                (width + STACK_OFFSCREEN_OVERSCAN_DP * density) * turn
             scaleX = 0.985f + 0.015f * reveal
             scaleY = 0.985f + 0.015f * reveal
             rotationY = -4f * turn
             shadowElevation = 18f * (1f - turn)
         }
         PaperLayer.Settings -> {
-            val reveal = (stackPosition / settingsLayer.toFloat()).coerceIn(0f, 1f)
-            translationX = width * 0.035f * (1f - reveal)
-            scaleX = 0.97f + 0.03f * reveal
-            scaleY = 0.97f + 0.03f * reveal
+            // Stay fully under the sheets above — no lateral shift that would
+            // let the reader rail read as a gutter beside Settings.
+            val reveal = (position / settingsLayer.toFloat()).coerceIn(0f, 1f)
+            scaleX = 0.985f + 0.015f * reveal
+            scaleY = 0.985f + 0.015f * reveal
         }
     }
 }
@@ -639,8 +737,18 @@ private fun Modifier.paperLayerTransform(
 // A lifted sheet casts a soft shadow onto the page beneath it, spilling just
 // past its leading edge rather than darkening the sheet's own edge. The cast
 // is strongest mid-swipe and fades to nothing once either sheet settles.
-private fun Modifier.paperDropShadow(turning: Float): Modifier = drawWithContent {
+private fun Modifier.paperDropShadow(
+    layer: PaperLayer,
+    stackPosition: () -> Float,
+): Modifier = drawWithContent {
     drawContent()
+    val position = stackPosition()
+    val turning = when (layer) {
+        PaperLayer.Bookmarks -> 0f
+        PaperLayer.Cover -> position.coerceIn(0f, 1f)
+        PaperLayer.Ayah -> (position - 1f).coerceIn(0f, 1f)
+        PaperLayer.Settings -> 0f
+    }
     val depth = (4f * turning * (1f - turning)).coerceIn(0f, 1f)
     if (depth > 0.01f) {
         val shadowWidth = 24.dp.toPx()
@@ -663,6 +771,7 @@ private fun Modifier.paperDropShadow(turning: Float): Modifier = drawWithContent
 private fun Modifier.paperStackDrag(
     gestureKey: Any,
     position: () -> Float,
+    minLayer: () -> Int,
     maxLayer: () -> Int,
     gesturesBlocked: () -> Boolean,
     onDragStart: () -> Unit,
@@ -738,7 +847,7 @@ private fun Modifier.paperStackDrag(
             }
             // Clamp the fling to one layer per gesture so a hard swipe settles on the
             // adjacent page rather than overshooting past it.
-            val lower = (startLayer - 1).coerceAtLeast(COVER_LAYER)
+            val lower = (startLayer - 1).coerceAtLeast(minLayer())
             val upper = (startLayer + 1).coerceAtMost(maxLayer())
             val target = if (turnDirection == 0) {
                 draggedPosition.roundToInt()

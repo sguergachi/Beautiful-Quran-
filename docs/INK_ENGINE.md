@@ -382,7 +382,7 @@ InkEngine owns that too, as data rather than as animation code:
   the Ink Lab can retune a live session.
 - **Renderers consume `InkEngine.Word`.** `AyahBlock` derives each ayah's ink
   list once and passes it into all three branches (`WordUnit`,
-  `EnglishWordUnit`, `ResponsiveHafsAyah`); none of them re-derive highlight
+  `ResponsiveEnglishAyah`, `ResponsiveHafsAyah`); none of them re-derive highlight
   semantics. The Compose animation helpers stayed in ReaderComponents.kt but
   read every duration/alpha/easing from `InkEngine.tuning` — no literal
   tuning values remain in the renderers.

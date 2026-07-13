@@ -1,5 +1,6 @@
 package com.beautifulquran.ui.settings
 
+import android.os.Build
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -94,6 +95,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel,
     onBack: () -> Unit,
     onOpenTimingsLab: () -> Unit = {},
+    onRecordSystemTrace: () -> Unit = {},
 ) {
     val settings by viewModel.settings.settings.collectAsStateWithLifecycle()
     val reciters by viewModel.reciters.collectAsStateWithLifecycle()
@@ -213,6 +215,7 @@ fun SettingsScreen(
                     viewModel = viewModel,
                     settings = settings,
                     onOpenTimingsLab = onOpenTimingsLab,
+                    onRecordSystemTrace = onRecordSystemTrace,
                 )
             }
 
@@ -252,6 +255,7 @@ private fun DeveloperSection(
     viewModel: SettingsViewModel,
     settings: Settings,
     onOpenTimingsLab: () -> Unit,
+    onRecordSystemTrace: () -> Unit,
 ) {
     val context = LocalContext.current
     // Created on first audition tap: a SoundPool with nine loaded samples is
@@ -264,6 +268,20 @@ private fun DeveloperSection(
     SectionLabel("Developer")
     Spacer(Modifier.height(2.dp))
     Caption("Tools for testing work in progress.")
+
+    if (BuildConfig.DEBUG && Build.VERSION.SDK_INT >= 37) {
+        Spacer(Modifier.height(20.dp))
+        Text(
+            text = "Record 10-second system trace",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier
+                .fillMaxWidth()
+                .quietClickable(onClick = onRecordSystemTrace)
+                .padding(vertical = 6.dp),
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Caption("Android 17 ProfilingManager writes a Perfetto trace locally; the path is logged under BeautifulQuranProfile.")
+    }
 
     Spacer(Modifier.height(20.dp))
     Text(

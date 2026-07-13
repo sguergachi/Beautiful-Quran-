@@ -1,7 +1,7 @@
 /**
  * Verse bookmark ribbon — port of Android `VerseBookmarkRibbon.kt`.
  *
- * Idle: tip hidden until the verse is hovered (or the ribbon is
+ * Idle: opaque playback-ink outlined tip hidden until the verse is hovered (or the ribbon is
  * keyboard-focused). Saved: the same ruby strip grown nearly the full
  * verse height. Click unfurls with a cloth wave + overshoot; unmark
  * gathers back into the tip.
@@ -18,8 +18,8 @@ const NOTCH = 6.5
 const WAVE_AMP = 4.5
 const SETTLE_AMP = 3.2
 const OVERSHOOT = 0.06
-const NUB_FOCUSED_ALPHA = 0.4
 const SOLID_ALPHA = 0.94
+const TOP_INSET = 24
 const TOP_FOLD = 3.5
 
 type Side = 'left' | 'right'
@@ -33,8 +33,16 @@ type Props = {
   /** 0–1; fades with reader chrome while reciting. */
   chromeAlpha?: number
   interactive?: boolean
+  /** False for navigation and confirmation-only ribbons. */
+  animateOnTap?: boolean
   /** Returns true when the verse is now bookmarked. */
   onToggle: () => boolean
+  /** Replays the existing physical unfurl when this value changes above zero. */
+  unfurlSignal?: number
+  /** Geometry overrides for the same ribbon on taller non-verse sheets. */
+  topInset?: number
+  bottomGap?: number
+  ariaLabel?: string
 }
 
 function parseRuby(cssColor: string): { r: number; g: number; b: number } {
@@ -62,7 +70,12 @@ export function VerseBookmarkRibbon({
   side,
   chromeAlpha = 1,
   interactive = true,
+  animateOnTap = true,
   onToggle,
+  unfurlSignal = 0,
+  topInset = TOP_INSET,
+  bottomGap = BOTTOM_GAP,
+  ariaLabel,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLButtonElement>(null)
@@ -71,6 +84,7 @@ export function VerseBookmarkRibbon({
   const animating = useRef(false)
   const controlsRef = useRef<AnimationPlaybackControls[]>([])
   const rubyRef = useRef({ r: 179, g: 18, b: 47 })
+  const playbackInkRef = useRef({ r: 110, g: 104, b: 88 })
   const userDriven = useRef(false)
   const [ribbonFocused, setRibbonFocused] = useState(false)
 
@@ -107,15 +121,16 @@ export function VerseBookmarkRibbon({
     const outer = EDGE_INSET
     const inner = EDGE_INSET + RIBBON_WIDTH
     const center = EDGE_INSET + RIBBON_WIDTH / 2
-    const fullLen = Math.max(NUB_LENGTH, h - BOTTOM_GAP)
+    const retractedTipY = topInset + NUB_LENGTH
+    const fullLen = Math.max(retractedTipY, h - bottomGap)
 
     const progress = Math.max(0, unfurl.current)
     const tipY =
       progress <= 0.001
-        ? NUB_LENGTH
+        ? retractedTipY
         : Math.min(
             fullLen * 1.08,
-            NUB_LENGTH + Math.max(1, fullLen - NUB_LENGTH) * progress,
+            retractedTipY + Math.max(1, fullLen - retractedTipY) * progress,
           )
 
     const showingRibbon = progress > 0.02 || bookmarked
@@ -125,7 +140,7 @@ export function VerseBookmarkRibbon({
     if (showingRibbon && progress > 0.5) alpha = SOLID_ALPHA
     else if (showingRibbon) alpha = SOLID_ALPHA * (0.55 + 0.45 * Math.min(1, progress))
     else if (!revealTip) alpha = 0
-    else alpha = NUB_FOCUSED_ALPHA
+    else alpha = 1
 
     // Nothing to paint — skip path work so idle verses stay blank.
     if (alpha <= 0.001) return
@@ -147,8 +162,8 @@ export function VerseBookmarkRibbon({
       return cloth + flutter
     }
 
-    const top = TOP_FOLD
-    const bot = Math.max(NUB_LENGTH * 0.6, tipY)
+    const top = topInset + TOP_FOLD
+    const bot = Math.max(topInset + NUB_LENGTH * 0.6, tipY)
     const span = Math.max(1, bot - top)
     const notchDepth = Math.min(NOTCH, span * 0.42)
     const steps = Math.min(72, Math.max(8, Math.floor(span / 2.5)))
@@ -187,36 +202,32 @@ export function VerseBookmarkRibbon({
       ctx.closePath()
     }
 
-    // Primary silk fill — tube shading baked into the ruby itself
+    // Ruby fill belongs only to a saved mark. The idle affordance uses the
+    // same opaque monochrome ink as playback controls.
     buildBodyPath()
     const x0 = Math.min(ax(outer), ax(inner))
     const x1 = Math.max(ax(outer), ax(inner))
-    const silk = ctx.createLinearGradient(x0, 0, x1, 0)
-    const dark = `rgba(${Math.max(0, r - 40)},${Math.max(0, g - 28)},${Math.max(0, b - 22)},${alpha})`
-    const mid = `rgba(${r},${g},${b},${alpha})`
-    const lit = `rgba(${Math.min(255, r + 48)},${Math.min(255, g + 32)},${Math.min(255, b + 28)},${alpha})`
-    silk.addColorStop(0, dark)
-    silk.addColorStop(0.2, mid)
-    silk.addColorStop(0.48, lit)
-    silk.addColorStop(0.78, mid)
-    silk.addColorStop(1, dark)
-    ctx.fillStyle = silk
-    ctx.fill()
-
-    // Vertical depth wash (darker toward the tip)
-    ctx.save()
-    buildBodyPath()
-    ctx.clip()
-    const tipWash = ctx.createLinearGradient(0, top - TOP_FOLD, 0, bot)
-    tipWash.addColorStop(0, `rgba(255,255,255,${0.14 * alpha})`)
-    tipWash.addColorStop(0.15, `rgba(255,255,255,0)`)
-    tipWash.addColorStop(0.7, `rgba(0,0,0,0)`)
-    tipWash.addColorStop(1, `rgba(0,0,0,${0.22 * alpha})`)
-    ctx.fillStyle = tipWash
-    ctx.fillRect(x0 - 4, top - TOP_FOLD - 2, x1 - x0 + 8, bot - top + TOP_FOLD + 8)
+    if (showingRibbon) {
+      const tipWash = ctx.createLinearGradient(0, top - TOP_FOLD, 0, bot)
+      tipWash.addColorStop(0, `rgba(${r},${g},${b},${alpha})`)
+      tipWash.addColorStop(0.55, `rgba(${r},${g},${b},${alpha})`)
+      tipWash.addColorStop(1, `rgba(${r},${g},${b},${alpha * 0.82})`)
+      ctx.fillStyle = tipWash
+      ctx.fill()
+    } else {
+      const ink = playbackInkRef.current
+      ctx.strokeStyle = `rgb(${ink.r},${ink.g},${ink.b})`
+      ctx.lineWidth = 1.25
+      ctx.lineJoin = 'round'
+      ctx.lineCap = 'round'
+      ctx.stroke()
+    }
 
     // Soft weave
-    if (span > NUB_LENGTH && alpha > 0.3) {
+    if (showingRibbon && span > NUB_LENGTH && alpha > 0.3) {
+      ctx.save()
+      buildBodyPath()
+      ctx.clip()
       ctx.strokeStyle = `rgba(255,255,255,${0.08 * alpha})`
       ctx.lineWidth = 0.7
       for (let y = top - TOP_FOLD; y < bot; y += 4.5) {
@@ -225,41 +236,18 @@ export function VerseBookmarkRibbon({
         ctx.lineTo(x1, y + 3)
         ctx.stroke()
       }
+      ctx.restore()
     }
-    ctx.restore()
+  }, [bookmarked, hovered, ribbonFocused, side, topInset, bottomGap])
 
-    // Outer catch-light
-    ctx.beginPath()
-    ctx.moveTo(ax(outer + lateral(top)), top)
-    for (let i = 1; i <= steps; i++) {
-      const y = top + span * (i / steps)
-      if (y > bot - notchDepth) break
-      ctx.lineTo(ax(outer + lateral(y)), y)
-    }
-    ctx.strokeStyle = `rgba(255,248,242,${0.5 * alpha})`
-    ctx.lineWidth = 1.2
-    ctx.stroke()
-
-    // Inner edge depth
-    ctx.beginPath()
-    ctx.moveTo(ax(inner + lateral(top)), top)
-    for (let i = 1; i <= steps; i++) {
-      const y = top + span * (i / steps)
-      if (y > bot - notchDepth) break
-      ctx.lineTo(ax(inner + lateral(y)), y)
-    }
-    ctx.strokeStyle = `rgba(30,4,10,${0.35 * alpha})`
-    ctx.lineWidth = 1.05
-    ctx.stroke()
-  }, [bookmarked, hovered, ribbonFocused, side])
-
-  // Keep ruby color in sync with theme tokens.
+  // Keep bookmark and playback-ink colors in sync with theme tokens.
   useEffect(() => {
     const read = () => {
       const raw = getComputedStyle(document.documentElement)
-        .getPropertyValue('--bookmark')
-        .trim()
-      if (raw) rubyRef.current = parseRuby(raw)
+      const bookmark = raw.getPropertyValue('--bookmark').trim()
+      const inkMuted = raw.getPropertyValue('--ink-muted').trim()
+      if (bookmark) rubyRef.current = parseRuby(bookmark)
+      if (inkMuted) playbackInkRef.current = parseRuby(inkMuted)
       draw()
     }
     read()
@@ -371,10 +359,26 @@ export function VerseBookmarkRibbon({
     [draw, stopControls],
   )
 
+  useEffect(() => {
+    if (unfurlSignal <= 0 || !bookmarked) return
+    const frame = window.requestAnimationFrame(() => runAnimation(true))
+    return () => window.cancelAnimationFrame(frame)
+  }, [bookmarked, runAnimation, unfurlSignal])
+
   useEffect(() => () => stopControls(), [stopControls])
 
   const onClick = () => {
     if (!interactive || chromeAlpha < 0.1) return
+    if (!animateOnTap) {
+      stopControls()
+      unfurl.current = 1
+      sway.current = 0
+      animating.current = false
+      userDriven.current = false
+      draw()
+      onToggle()
+      return
+    }
     const nowMarked = onToggle()
     runAnimation(nowMarked)
   }
@@ -393,7 +397,7 @@ export function VerseBookmarkRibbon({
       data-on={bookmarked || unfurl.current > 0.5 ? 'true' : 'false'}
       data-focused={focused ? 'true' : 'false'}
       data-hovered={hovered || ribbonFocused ? 'true' : 'false'}
-      aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark verse'}
+      aria-label={ariaLabel ?? (bookmarked ? 'Remove bookmark' : 'Bookmark verse')}
       aria-pressed={bookmarked}
       onClick={onClick}
       onFocus={() => setRibbonFocused(true)}

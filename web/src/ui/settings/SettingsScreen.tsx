@@ -3,14 +3,18 @@ import {
   FONT_SCALE_MAX,
   FONT_SCALE_MIN,
   FONT_SCALE_STEP,
+  type AyahSelectorSide,
   type ReadingMode,
   type ThemeMode,
 } from '../../data/settings'
 import type { PlayerState } from '../../playback/player'
 import { settingsLayerFor, type StackLayer } from '../paper/stack'
+import { PaperChoiceList } from '../kit/PaperChoiceList'
+import { PaperSegmented } from '../kit/PaperSegmented'
 import { PaperSelect } from '../kit/PaperSelect'
 import { PaperSlider } from '../kit/PaperSlider'
 import { PaperSwitch } from '../kit/PaperSwitch'
+import { ThemeSwatches } from './themeSwatches'
 
 const ATTRIBUTIONS = `Quran text (Uthmani script) and Saheeh International translation via the quran-json project, from Tanzil and Al Quran Cloud.
 
@@ -25,6 +29,40 @@ Recitation audio streamed from everyayah.com. All rights to the recitations belo
 Arabic typeface: KFGQPC HAFS Uthmanic Script © King Fahd Glorious Quran Printing Complex, Madinah.
 
 This app is free, ad-free, and collects no data.`
+
+const READING_OPTIONS = [
+  { value: 'arabic_english' as const, label: 'Arabic & English' },
+  { value: 'english_only' as const, label: 'English' },
+  { value: 'arabic_only' as const, label: 'Arabic only' },
+]
+
+const SELECTOR_OPTIONS = [
+  { value: 'left' as const, label: 'Left' },
+  { value: 'right' as const, label: 'Right' },
+]
+
+const THEME_OPTIONS: {
+  value: ThemeMode
+  label: string
+}[] = [
+  { value: 'system', label: 'System' },
+  { value: 'light', label: 'Paper' },
+  { value: 'dark', label: 'Nightfall' },
+  { value: 'royal_green', label: 'Royal green' },
+]
+
+const SPEED_OPTIONS = [
+  { value: '0.75', label: '0.75×' },
+  { value: '1', label: '1×' },
+  { value: '1.25', label: '1.25×' },
+  { value: '1.5', label: '1.5×' },
+]
+
+const REPEAT_OPTIONS = [
+  { value: 'off' as const, label: 'Off' },
+  { value: 'ayah' as const, label: 'Ayah' },
+  { value: 'surah' as const, label: 'Surah' },
+]
 
 export function SettingsScreen({
   stackLayer,
@@ -55,9 +93,10 @@ export function SettingsScreen({
         <h1>Settings</h1>
 
         <section className="settings-section">
+          <h2>Reciter</h2>
           <PaperSelect
             id="setting-reciter"
-            label="Reciter"
+            label="Voice"
             wide
             value={String(s.reciterId)}
             options={state.reciters.map((r) => ({
@@ -69,15 +108,11 @@ export function SettingsScreen({
         </section>
 
         <section className="settings-section">
-          <PaperSelect
-            id="setting-mode"
-            label="Reading"
+          <h2>Reading</h2>
+          <PaperSegmented
+            aria-label="Reading mode"
             value={s.readingMode}
-            options={[
-              { value: 'arabic_english', label: 'Arabic & English' },
-              { value: 'english_only', label: 'English' },
-              { value: 'arabic_only', label: 'Arabic only' },
-            ]}
+            options={READING_OPTIONS}
             onChange={(v) =>
               appStore.updateSettings({ readingMode: v as ReadingMode })
             }
@@ -126,33 +161,28 @@ export function SettingsScreen({
         ) : null}
 
         <section className="settings-section">
-          <PaperSelect
-            id="setting-selector"
-            label="Ayah selector"
+          <h2>Ayah selector</h2>
+          <PaperSegmented
+            aria-label="Ayah selector side"
             value={s.ayahSelectorSide}
-            options={[
-              { value: 'left', label: 'Left side' },
-              { value: 'right', label: 'Right side' },
-            ]}
+            options={SELECTOR_OPTIONS}
             onChange={(v) =>
               appStore.updateSettings({
-                ayahSelectorSide: v as 'left' | 'right',
+                ayahSelectorSide: v as AyahSelectorSide,
               })
             }
           />
         </section>
 
         <section className="settings-section">
-          <PaperSelect
-            id="setting-theme"
-            label="Theme"
+          <h2>Theme</h2>
+          <PaperChoiceList
+            aria-label="Theme"
             value={s.themeMode}
-            options={[
-              { value: 'system', label: 'System' },
-              { value: 'light', label: 'Paper' },
-              { value: 'dark', label: 'Nightfall' },
-              { value: 'royal_green', label: 'Royal green' },
-            ]}
+            options={THEME_OPTIONS.map((opt) => ({
+              ...opt,
+              trailing: <ThemeSwatches mode={opt.value} />,
+            }))}
             onChange={(v) =>
               appStore.updateSettings({ themeMode: v as ThemeMode })
             }
@@ -161,31 +191,28 @@ export function SettingsScreen({
 
         <section className="settings-section">
           <h2>Playback</h2>
-          <PaperSelect
-            id="setting-speed"
-            label="Speed"
-            value={String(s.playbackSpeed)}
-            options={[0.75, 1, 1.25, 1.5].map((v) => ({
-              value: String(v),
-              label: `${v}×`,
-            }))}
-            onChange={(v) =>
-              appStore.updateSettings({ playbackSpeed: Number(v) })
-            }
-          />
-          <PaperSelect
-            id="setting-repeat"
-            label="Repeat"
-            value={state.player.repeatMode}
-            options={[
-              { value: 'off', label: 'Off' },
-              { value: 'ayah', label: 'Ayah' },
-              { value: 'surah', label: 'Surah' },
-            ]}
-            onChange={(v) =>
-              appStore.setRepeat(v as PlayerState['repeatMode'])
-            }
-          />
+          <div className="settings-subfield">
+            <p className="settings-sublabel">Speed</p>
+            <PaperSegmented
+              aria-label="Playback speed"
+              value={String(s.playbackSpeed)}
+              options={SPEED_OPTIONS}
+              onChange={(v) =>
+                appStore.updateSettings({ playbackSpeed: Number(v) })
+              }
+            />
+          </div>
+          <div className="settings-subfield">
+            <p className="settings-sublabel">Repeat</p>
+            <PaperSegmented
+              aria-label="Repeat mode"
+              value={state.player.repeatMode}
+              options={REPEAT_OPTIONS}
+              onChange={(v) =>
+                appStore.setRepeat(v as PlayerState['repeatMode'])
+              }
+            />
+          </div>
         </section>
 
         <section className="settings-section">

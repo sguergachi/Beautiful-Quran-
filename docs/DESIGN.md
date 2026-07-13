@@ -13,7 +13,7 @@ no trays — only paper, and ink on paper.
 
 ## The sheet
 
-The whole app is **three flat sheets** — Chapters, Reader, Settings — viewed
+The whole app is **four flat sheets** — Bookmarks, Chapters, Reader, Settings — viewed
 one at a time. Navigation glides the next sheet in from the side (a
 quarter-width slide softened with a fade, 380 ms); nothing stacks, nothing
 floats, nothing casts a shadow.
@@ -47,6 +47,10 @@ origin (the play control, a held word, …) as a soft-edged circle, soaking
 **that sheet** (not a full-screen layer above the paper stack), and when it
 settles the same surface reads as the new content. Closing opens a hole back
 to whatever sat beneath — no push, no stack, no window.
+
+While an ink bleed is entering, open, or receding, paper-stack swipes are
+disabled. The gesture gate follows the overlay's rendered lifetime rather than
+only its requested visibility, so a page cannot turn underneath a closing wash.
 
 The shared composable is `InkRevealOverlay` (`ui/theme/InkReveal.kt`). Three
 surfaces use it today / by design:
@@ -145,7 +149,21 @@ or as a control — a bookmark is the reader's own ink, not the app's.
   figures on in running text (`'kern', 'liga', 'onum'`).
 - **Display face**: Cormorant Garamond semibold for surah titles and
   headlines, where its tall fine-stroked capitals can breathe.
-- **English lyric mode**: EB Garamond semibold, 22 sp — reading-first.
+- **English lyric mode**: EB Garamond regular, 22 sp with 1.5 em leading.
+  It is one flush-left, ragged-right inline paragraph — never a flex/flow row
+  of padded word tiles. Natural font spaces, kerning, common ligatures, and
+  old-style figures remain intact across the 45–75-character target measure;
+  the word spans exist only for karaoke paint and interaction. Web uses
+  `text-wrap: pretty` as a progressive enhancement and never justifies or
+  hyphenates this word-addressable text. Its trailing Hafs verse mark is about
+  0.78 em. Web uses a calibrated paint lift for its browser font metrics;
+  Compose shares the English prose baseline because Android reports different
+  metrics for the same Hafs ornament.
+- **English gloss punctuation**: display-only periods close each ayah and
+  precede genuine capitalized sentence starts. Proper and reverential capitals
+  (Allah, His, Lord, etc.), speech cues, and known source-capitalization
+  artifacts such as mid-phrase “Guidance” are excluded. This policy never
+  mutates the database text or the timing/search identity of a word.
 - **Translations**: EB Garamond, 17 sp, 26 sp leading, at 66 % ink.
 - **UI text**: the same serif at small sizes with letterspacing and reduced
   alpha; labels never compete with scripture. Nothing in the app is sans.
@@ -154,7 +172,93 @@ or as a control — a bookmark is the reader's own ink, not the app's.
 
 Reference points: **Unread** (iOS RSS reader) for chrome-free typographic
 lists and reading view; **Apple Music lyrics** for the word illumination and
-the recede-while-playing behavior.
+the recede-while-playing behavior. Running-text rules follow Bringhurst's
+*Elements of Typographic Style* (45–75 character measure, natural word space,
+ragged-right setting, leading proportional to type size) and WCAG's text
+spacing / visual-presentation guidance.
+
+### Information surfaces: learned rules
+
+Lexicons, search results, bookmarks, and settings are quieter than scripture,
+but they still need a decisive composition. "Calm" must not become faint,
+empty, or ambiguous. Apply these rules before polishing individual elements:
+
+- **Answer first.** The first viewport carries the reason the surface opened.
+  A held-word view must reveal the word, root, form, and occurrence summary
+  before asking the reader to scroll. Ceremony belongs to the cover and surah
+  opening; an information surface earns space through comprehension.
+- **One reading spine.** A centred opening may introduce the subject once;
+  everything after it returns to one primary left edge, with one deliberate
+  inset for owned detail. A layout with separate label, Arabic, list, and
+  metadata axes makes related facts look unrelated. RTL controls Arabic
+  shaping and reading order, never the page alignment: Arabic elements are
+  bidi-isolated and intrinsically sized on the same content spine.
+- **Proximity expresses meaning.** Space is not decoration. Use 4–8 px/dp
+  inside one fact, 12–16 inside a row, 24 between related subgroups, and about
+  40 between major reader questions. Avoid viewport-height gaps: they grow
+  without adding meaning and push useful content below the fold. Parent gaps
+  own rhythm; arbitrary child margins do not.
+- **Use a small, explicit type scale.** The held subject is the only hero.
+  Section titles organise, Arabic forms and chapter names carry the content,
+  and labels/counts remain subordinate. Do not create a new near-equal size
+  for every fact. Arabic needs generous line height for marks and optical
+  checking with heavily vocalised words, not only simple test strings.
+- **Quiet is still legible.** Essential explanation uses confident secondary
+  ink, not several layers of muted colour plus transparency. Reserve the
+  faintest ink for genuinely optional metadata. Colour keeps one meaning:
+  gold is Quranic reference/ornament, green is action, and neither replaces a
+  textual current, selected, or expanded state.
+- **Remove implementation language.** Readers need "This root occurs 36
+  times," not "Root annotated 36 times" or "five corpus analyses." Show a
+  count once, where it changes understanding or predicts what an action will
+  reveal. Do not repeat the current item inside a related-items list.
+- **Design against the largest real record.** A five-row mock-up is not proof.
+  Validate with roots spanning thousands of occurrences, tens of analyses,
+  and most of the 114 chapters. Progressive disclosure limits initial work,
+  keeps only one dense group open, preserves Quranic order, and always keeps
+  the reader's current context in view.
+- **Affordance without chrome.** A whole row may be the tap target, but its
+  state still needs information scent: a compact count, disclosure mark,
+  visible focus, 44 px/dp target, and content motion. No ripple, container,
+  or divider is required. Nested content aligns beneath its owning label, not
+  merely some number of pixels from the sheet edge.
+- **Responsive means stable relationships.** Phones and wide screens share
+  the same hierarchy and semantic indents. Do not invent desktop columns for
+  facts that are read sequentially. Change measure, padding, and wrapping;
+  do not change what belongs together.
+- **Break a rule narrowly and record why.** An exception must solve a named
+  reading problem, remain local, and be impossible to mistake for a reusable
+  decorative habit. The root viewer's major-heading rule below anchors the eye
+  above noisy reference data; it does not license borders between rows or
+  around content.
+
+Review information surfaces with real text at a narrow phone and a wide paper
+sheet. Check the first-viewport content budget, repeated left edges, RTL/LTR
+isolation, touch and keyboard affordances, contrast, long labels, and expanded
+states. If a relationship is unclear, fix order, proximity, or alignment
+before adding decoration.
+
+### Root lexicon typography
+
+The Root Word Viewer is an information page, not a ceremonial chapter
+opening. It uses one centred held word, then one left-hand reading spine. Its
+interactive measure is at most 40 rem / 640 dp and prose is at most 34 rem /
+544 dp. Vertical space follows semantic proximity: 4–8 px/dp within one fact,
+12–16 within a row, 24 between related subgroups, and 40 between major reader
+questions. Viewport-height spacing is forbidden here; it turns tall screens
+into empty stages and pushes the answer below the fold.
+
+Arabic and English occupy separate bidi-isolated elements. The Hafs scale is
+44–52 for the held word, 32 for radicals, and 24 for forms and occurrences;
+English uses 24 Cormorant section headings, 17 EB Garamond body/actions, and
+12–14 labels/metadata. Gold identifies Quran references, green identifies
+actions, and neither substitutes for a textual current/open state.
+
+The lexicon's two major headings — Occurrences and Related forms — may carry
+a 1 px/dp rule at 9% parchment ink from the title to the right edge of the
+content measure. It is part of the heading lockup, not a border or row
+divider: it never reaches the sheet edge, never appears between rows, and
+never uses gold.
 
 ## Ornament
 
@@ -162,9 +266,42 @@ Traditional, geometric, and nearly invisible — ornament whispers, never
 speaks. All of it is drawn procedurally (`ui/theme/Ornament.kt`), never an
 image, so it is crisp at any density and nearly free to render.
 
-- **Khatam geometry.** The vocabulary is the classical eight-fold star: two
-  overlapped squares, and the {8/3} octagram — the same figures that
-  generate star-and-cross tessellation in traditional tilework.
+- **Khatam geometry.** The vocabulary throughout is the classical star:
+  {n/k} star polygons (8/10/12/16-fold; gcd(n, k) > 1 yields the interlaced
+  polygons — the khatam is {8/2}) and Hankin's polygons-in-contact method
+  (rays from tile-edge midpoints at a sampled contact angle) — the same
+  figures that generate star-and-cross tessellation in traditional
+  tilework.
+- **The generating machine.** Ornament on both the entrance cover and the
+  open book is not fixed: a seeded generator
+  (`ui/theme/ornament/OrnamentGenerator.kt`, mirrored line-for-line in
+  `web/src/ui/theme/ornamentGenerator.ts` over an identical mulberry32
+  stream) composes the geometry from that vocabulary. The cover's medallion,
+  corner seals, border frieze, and leather field all grow from one random
+  seed per launch. The **surah header is seeded per chapter** instead — one
+  `chapterOrnamentSeed(chapterNumber, ayahCount)` grows both the rosette
+  *and* the field tooled behind it (`ChapterOrnament`/`generateChapterOrnament`),
+  so the header's whole ornament is this chapter's own, not a rosette
+  sitting on a pattern every chapter shares. The seed folds the chapter's
+  verse count (the dominant term, so a chapter's length reads as its
+  ornament's fingerprint — chapters of similar length grow kin-looking
+  rosettes) with its number (so all 114 chapters render distinctly even
+  though only 77 of them have a verse count no other chapter shares); the
+  same chapter always regrows the same ornament. Border friezes (cover
+  only) come from five band grammars of tooled bindings: a zigzag lattice
+  with pearls in its diamonds, a two-strand cable with pearl eyes, a Hankin
+  strip, a nested lozenge chain, and a khatam chain of small eight-fold
+  stars linked by diamonds. On the cover, the **medallion and field build
+  in real time** — strokes ink themselves in along their length across
+  ~3.4 s, field first, then medallion outside-in — so the illumination is
+  drawn before the reader's eyes, not stamped; the **border and corner
+  seals are static**, complete from the very first frame, the binding's
+  tooling rather than illumination. The **surah header's rosette and field
+  are likewise static** — fixed page typography, not a ceremony. One
+  absolute rule, enforced everywhere this generator draws: no composition
+  may read as a hexagram — star indices that decompose into triangles
+  ({12/4}), 6-fold seals, and 6-fold field tilings are all excluded by
+  construction and guarded by tests on both platforms.
 - **Gilding.** Gold is never a flat color. Gilded elements (the surah
   rosette, ayah number marks, the home mark) carry a three-stop leaf
   gradient (deep bronze → bright gilt → deep bronze). On the reader, the
@@ -175,8 +312,10 @@ image, so it is crisp at any density and nearly free to render.
   with a dark copy nudged to the lower-right and a light copy to the
   upper-left beneath its face — relief under a top-left light, subtle enough
   to be felt more than seen.
-- **The weave.** Behind each surah opening, a star-and-cross tessellation at
-  ~4 % ink, embossed, dissolving into the page at its edges.
+- **The weave.** Behind each surah opening, that chapter's own generated
+  Hankin field at ~4 % ink, embossed, dissolving into the page at its
+  edges — grown from the same seed as the rosette sitting on it (see "The
+  generating machine" above), not a fixed pattern every chapter shares.
 - **Basmalah.** Every surah except Al-Fatihah (where it *is* ayah 1) and
   At-Tawbah (which has none) opens with the basmalah as traditional Naskh
   manuscript calligraphy beneath the chapter title — ink on the page, not a
@@ -195,6 +334,9 @@ image, so it is crisp at any density and nearly free to render.
   title mark. The one place allowed to be lavish is the closed book: the
   [entrance cover](#the-entrance) is bound leather, and binding is where a
   mushaf has always carried its gold. Nothing else on the sheet is decorated.
+  Mushaf **page breaks** are not ornament: a whisper-gold hairline with small
+  page numbers (Western left, Arabic-Indic right) marks Madinah page
+  boundaries in the continuous scroll — functional wayfinding only.
 
 ## The entrance
 
@@ -205,11 +347,19 @@ three moments:
 
 1. **Arrival.** The board fades in from the system splash: deep-green
    leather (fixed across themes — a bound book keeps its own boards, colors
-   in `Theme.kt`'s `Cover*` values), tooled with the star-and-cross weave at
-   whisper ink, framed in a doubled gilt rule with a khatam star pressed
-   into each corner (`MushafCoverFrame`), carrying the gilded khatam
-   medallion (`GildedMedallion`) with the title **القرآن الكريم** beneath it
-   in the Hafs hand, leafed in gold and written in with the letter wash.
+   in `Theme.kt`'s `Cover*` values), framed in a doubled gilt rule
+   (`MushafCoverFrame`) with the generated border frieze running between
+   the rules — each side is a railed channel fitting a whole number of
+   pattern periods, and its mouth tapers onto the corner seal's petal tip
+   (each seal wears a four-petal ogee bezel whose tips aim down the band
+   axes), so border and corner ornaments are one continuous piece of
+   geometry. The frame, border, and seals are the binding's tooling and
+   render complete on the very first frame — no wash, no fade. Tooled
+   *inside* that frame, this launch's generated Hankin field (whisper ink)
+   and the generated medallion (`GeneratedMedallion`) with the title
+   **القرآن الكريم** beneath it in the Hafs hand, leafed in gold, ink
+   themselves onto the leather in real time as the ceremony arrives —
+   the illumination, drawn before the reader's eyes.
    The frame's inset and corner radii are derived from the display's
    rounded corners (`WindowInsets.getRoundedCorner`, via
    `coverFrameGeometry`) so the gilt rule is concentric with the phone's
@@ -288,12 +438,13 @@ with the rest of the chrome and vanishes entirely while reciting.
 
 - **Unified with the verse.** The ribbon is composed inside `AyahBlock`, so its
   height *is* the block's height (Arabic, gloss, and translation together). It
-  cannot drift, lag, or sit mid-block — the tip is always the top corner of
-  *that* verse, left or right.
+  cannot drift, lag, or sit mid-block — the tip begins 24 dp below the block
+  edge, aligned with that verse's first line of ink, left or right.
 - **Every verse carries a tip; a saved verse carries the whole ribbon.** An
-  idle verse shows only the short swallowtail **tip** of the ribbon at the top
-  corner — the same shape as a saved mark, just short and faded so it does not
-  pull the eye. (On web, that tip stays hidden until the verse is hovered,
+  idle verse shows only the short, opaque playback-ink outlined swallowtail
+  **tip** beside the first line — the same monochrome ink as the play button,
+  but empty so
+  ruby fill remains exclusive to saved verses. (On web, that tip stays hidden until the verse is hovered,
   then click to unfurl.) Bookmark it and that tip grows nearly the **full
   vertical length** of the block at full ink, stopping **48 dp** above the next
   verse's tip so consecutive ribbons never touch.
@@ -311,9 +462,65 @@ Implementation: `ui/reader/VerseBookmarkRibbon.kt`, drawn per verse inside
 SharedPreferences store (`data/BookmarkRepository.kt`), never in the read-only
 `quran.db`.
 
+Once a newly marked verse returns to Chapters, the same physical ribbon used
+inside its verse block unfurls beside the title and runs to just above the page
+bottom, then remains exposed on the left edge. Its drawing stays fully unfurled
+while a separate 44 dp/px navigation target opens Bookmarks, so tapping it—or
+pulling right from Chapters—never plays a retract before the Bookmarks sheet
+slides in from the left above it. This is a real page in the paper stack, not an
+overlay.
+
+### Chapters ribbon geometry
+
+The long Chapters ribbon is a structural part of the chapter document, not a
+decoration laid on top of it. Its visible ruby cloth begins beside the title,
+while the full 44 dp/px touch target remains available without making the
+cloth itself a wide, blank-looking control. The cloth is centred in the
+narrow edge lane; its hit geometry is an interaction concern, not a visual
+gutter that sets the text measure.
+
+There is one content rule beside that lane. On a bookmarked Chapters page,
+the title, search field, and gold chapter-number column all begin on it. The
+surah name may form a second, inner reading column, but no heading may drift
+back to the paper edge simply because it is larger. This alignment is checked
+as a relationship, not as unrelated platform padding values: web and Android
+may use their own layout primitives, yet must preserve the same visible
+anchors.
+
+The ribbon's drawing and navigation are deliberately separate. Reuse
+`VerseBookmarkRibbon` for the cloth; put its Home/Chapters navigation on an
+adjacent quiet 44 dp/px target. That keeps the ribbon fully unfurled while the
+Bookmarks sheet opens, prevents a mark/unmark animation from being borrowed
+as navigation feedback, and leaves the shared component authoritative for its
+own visual language. Do not create another bookmark icon, a second ribbon
+shape, or a bespoke animated substitute.
+
+The bookmark index is a compact bilingual concordance, shared by Android and
+web. It uses one centered column (560 dp / 36 rem maximum) and a fixed 52 dp/px
+content spine: a 44 dp/px ribbon lane followed by an 8 dp/px gap. Chapter rows
+align their gold number, English name, and isolated RTL Arabic name to that
+same spine. Verse entries then stack Arabic at 24/36, translation at 17/25,
+and metadata at 14/20; the title is the only display-sized element. Spacing,
+not rules or containers, separates sections.
+
+The Bookmarks header contains only its title and the Chapters return action;
+the total marked-verse count is deliberately omitted.
+
+Results remain in Quranic order and can be searched by reference, chapter
+name, or verse text. A chapter initially shows five marked verses; its green
+inline disclosure reveals the remainder, while an active search shows every
+match. The small ruby strip beside a result opens an inline Keep / Remove
+confirmation in the reference line's fixed-height space before changing the
+mark, so the page does not jump. Keep is green, Remove is quiet ink, references
+are gold, and ruby remains exclusive to the physical ribbon. Tapping the verse
+returns to it in the reader. The long Chapters ribbon is navigation only and
+never retracts when tapped.
+
 ## Reading modes
 
 - **Arabic & English** — Arabic flows right-to-left, the English gloss under
   each word; optional transliteration; the flowing translation below.
 - **English** — the gloss becomes the lyric line itself, flowing
   left-to-right and lighting word-by-word on the same timings.
+  Web page breaks centre one Western folio number between equal visible gold
+  rules; the mirrored Arabic-Indic number is reserved for Arabic modes.

@@ -4,10 +4,17 @@
  * with progress inked onto the leather; arrive → du'a text fade → open once
  * the book is ready.
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { animate, type AnimationPlaybackControls } from 'motion'
-import { washMaskImage } from '../../engine/fade'
+import { washMaskImage } from '../theme/Fade'
 import { coverLayout, coverLayoutCssVars } from './coverLayout'
+import { generateCoverOrnament, type CoverOrnament, type RosetteSpec } from '../theme/ornamentGenerator'
+import {
+  fieldWeaveBackground,
+  GeneratedBorder,
+  GeneratedRosette,
+  useOrnamentBuilt,
+} from '../theme/GeneratedOrnament'
 
 const ISTIADHA_ARABIC = 'أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَٰنِ ٱلرَّجِيمِ'
 const ISTIADHA_ENGLISH = 'I seek refuge in Allah from Shaytan, the accursed'
@@ -99,137 +106,30 @@ async function runWash(
 }
 
 /**
- * Eight-fold khatam + octagram medallion — ceremonial scale, 1:1. Geometry
- * mirrors Android `GildedMedallion` (radii as fractions of the box): outer
- * ring 0.485, inner ring 0.36, khatam 0.335, octagram 0.24, sixteen pearls
- * stationed between the rings, a seed at the heart. Embossed (dark copy to
- * the lower-right, light to the upper-left), faced in the three-stop leaf
- * gradient — gold is never flat.
+ * Doubled gilt rule + generated corner seals — sizes from the board layout
+ * grid. The seals are the hubs the border band's channels taper onto, part
+ * of the tooled binding rather than the ink wash, so they render complete
+ * from the first frame (matches Android's static `GeneratedCornerSeals`).
  */
-function GildedMedallion() {
-  const c = 100
-  const khatamR = 67
-  const a = khatamR * 0.7071
-  const khatam = [
-    `M ${c - a} ${c - a} L ${c + a} ${c - a} L ${c + a} ${c + a} L ${c - a} ${c + a} Z`,
-    `M ${c} ${c - khatamR} L ${c + khatamR} ${c} L ${c} ${c + khatamR} L ${c - khatamR} ${c} Z`,
-  ].join(' ')
-  const oct: string[] = []
-  const angles = Array.from({ length: 8 }, (_, i) => ((22.5 + i * 45) * Math.PI) / 180)
-  let k = 0
-  for (let i = 0; i < 9; i++) {
-    const x = c + 48 * Math.cos(angles[k]!)
-    const y = c + 48 * Math.sin(angles[k]!)
-    oct.push(`${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`)
-    k = (k + 3) % 8
-  }
-  oct.push('Z')
-  const pearls = Array.from({ length: 16 }, (_, i) => {
-    const ang = (i * 22.5 * Math.PI) / 180
-    const r = (97 + 72) / 2
-    return {
-      cx: c + r * Math.cos(ang),
-      cy: c + r * Math.sin(ang),
-      rad: i % 2 === 0 ? 3.2 : 1.8,
-    }
-  })
-  const stars = `${khatam} ${oct.join(' ')}`
-
-  return (
-    <svg
-      className="entrance-medallion"
-      viewBox="0 0 200 200"
-      aria-hidden="true"
-    >
-      <defs>
-        <linearGradient id="entrance-leaf" x1="0%" y1="22%" x2="100%" y2="78%">
-          <stop offset="0%" stopColor="#9a7b2a" />
-          <stop offset="50%" stopColor="#edd188" />
-          <stop offset="100%" stopColor="#9a7b2a" />
-        </linearGradient>
-      </defs>
-      {/* Relief first, face last — pressed into the leather. */}
-      <path
-        d={stars}
-        transform="translate(0.9 0.9)"
-        fill="none"
-        stroke="rgba(0, 0, 0, 0.4)"
-        strokeWidth={2}
-        strokeLinejoin="round"
-      />
-      <path
-        d={stars}
-        transform="translate(-0.9 -0.9)"
-        fill="none"
-        stroke="rgba(255, 255, 255, 0.12)"
-        strokeWidth={2}
-        strokeLinejoin="round"
-      />
-      <g fill="none" stroke="url(#entrance-leaf)" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx={c} cy={c} r={97} strokeWidth={1} />
-        <circle cx={c} cy={c} r={72} strokeWidth={1} />
-        <path d={khatam} strokeWidth={2} />
-        <path d={oct.join(' ')} strokeWidth={2} />
-        <circle cx={c} cy={c} r={14} strokeWidth={1} />
-      </g>
-      <circle cx={c} cy={c} r={5.6} fill="url(#entrance-leaf)" />
-      {pearls.map((p, i) => (
-        <circle key={i} cx={p.cx} cy={p.cy} r={p.rad} fill="url(#entrance-leaf)" />
-      ))}
-    </svg>
+function MushafCoverFrame({ seal }: { seal: RosetteSpec }) {
+  const corner = (pos: string) => (
+    <GeneratedRosette
+      spec={seal}
+      built
+      animated={false}
+      className={`entrance-corner entrance-corner--${pos}`}
+      ruleWidth={4.6}
+      hairWidth={4.6}
+    />
   )
-}
-
-/**
- * Corner seal — viewBox-only; diameter comes from `--cover-star`. Hairline
- * khatam with a gilt pearl at the heart, embossed like the medallion
- * (Android draws these at 1dp with a centre dot of 0.16 × the star radius).
- */
-function CornerKhatam({ className }: { className: string }) {
-  const c = 50
-  const s = 36
-  const a = s * 0.7071
-  const d = `M ${c - a} ${c - a} L ${c + a} ${c - a} L ${c + a} ${c + a} L ${c - a} ${c + a} Z
-      M ${c} ${c - s} L ${c + s} ${c} L ${c} ${c + s} L ${c - s} ${c} Z`
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 100 100"
-      preserveAspectRatio="xMidYMid meet"
-      aria-hidden="true"
-    >
-      <path
-        d={d}
-        transform="translate(1.4 1.4)"
-        fill="none"
-        stroke="rgba(0, 0, 0, 0.4)"
-        strokeWidth="3"
-        strokeLinejoin="round"
-      />
-      <path
-        d={d}
-        transform="translate(-1.4 -1.4)"
-        fill="none"
-        stroke="rgba(255, 255, 255, 0.12)"
-        strokeWidth="3"
-        strokeLinejoin="round"
-      />
-      <path d={d} fill="none" stroke="#d9b44a" strokeWidth="3" strokeLinejoin="round" />
-      <circle cx={c} cy={c} r="5.8" fill="#edd188" />
-    </svg>
-  )
-}
-
-/** Doubled gilt rule + corner seals — sizes from the board layout grid. */
-function MushafCoverFrame() {
   return (
     <div className="entrance-frame" aria-hidden="true">
       <div className="entrance-frame-outer" />
       <div className="entrance-frame-inner" />
-      <CornerKhatam className="entrance-corner entrance-corner--tl" />
-      <CornerKhatam className="entrance-corner entrance-corner--tr" />
-      <CornerKhatam className="entrance-corner entrance-corner--bl" />
-      <CornerKhatam className="entrance-corner entrance-corner--br" />
+      {corner('tl')}
+      {corner('tr')}
+      {corner('bl')}
+      {corner('br')}
     </div>
   )
 }
@@ -252,9 +152,16 @@ export function EntranceCover({
   const [opening, setOpening] = useState(false)
   const [captionOn, setCaptionOn] = useState(false)
   const [arrivalDone, setArrivalDone] = useState(false)
-  const [layoutVars, setLayoutVars] = useState<Record<string, string>>(() =>
-    coverLayoutCssVars(coverLayout(390, 844)),
+  const [board, setBoard] = useState(() => ({ w: 390, h: 844, layout: coverLayout(390, 844) }))
+  const layoutVars = useMemo(() => coverLayoutCssVars(board.layout), [board.layout])
+  // A fresh ornament every visit — the generating machine's whole point.
+  const ornament: CoverOrnament = useMemo(
+    () => generateCoverOrnament((Math.random() * 0x7fffffff) | 0),
+    [],
   )
+  const weave = useMemo(() => fieldWeaveBackground(ornament.field), [ornament])
+  // Flips one frame after mount; starts every stroke's dash-reveal clock.
+  const built = useOrnamentBuilt()
 
   const boardRef = useRef<HTMLDivElement>(null)
   const titleArRef = useRef<HTMLParagraphElement>(null)
@@ -277,7 +184,7 @@ export function EntranceCover({
     if (!el) return
     const apply = (w: number, h: number) => {
       if (w < 2 || h < 2) return
-      setLayoutVars(coverLayoutCssVars(coverLayout(w, h)))
+      setBoard({ w, h, layout: coverLayout(w, h) })
     }
     apply(el.clientWidth, el.clientHeight)
     const ro = new ResizeObserver((entries) => {
@@ -441,11 +348,26 @@ export function EntranceCover({
         }
       >
         <div className="entrance-leather" aria-hidden="true" />
-        <div className="entrance-weave" aria-hidden="true" />
-        <MushafCoverFrame />
+        <div
+          className={`entrance-weave${built ? ' entrance-weave--on' : ''}`}
+          style={weave}
+          aria-hidden="true"
+        />
+        <GeneratedBorder
+          border={ornament.border}
+          sealTip={ornament.cornerSeal.tipRadius}
+          layout={board.layout}
+          width={board.w}
+          height={board.h}
+        />
+        <MushafCoverFrame seal={ornament.cornerSeal} />
         <div className="entrance-content">
           <div className="entrance-air entrance-air--top" />
-          <GildedMedallion />
+          <GeneratedRosette
+            spec={ornament.medallion}
+            built={built}
+            className="entrance-medallion"
+          />
           <div className="entrance-titles">
             <p ref={titleArRef} className="entrance-title-ar" lang="ar" dir="rtl">
               القرآن الكريم

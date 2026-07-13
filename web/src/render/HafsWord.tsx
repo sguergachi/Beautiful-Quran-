@@ -11,26 +11,26 @@ import {
   useRef,
   type MouseEvent,
   type MutableRefObject,
-  type PointerEvent,
 } from 'react'
-import type { ActiveWord, Word } from '../data/models'
-import { InkEngine, InkState, getTuning, startRevealed, sweepMs } from '../engine/ink'
-import { cubicBezierEase } from '../engine/fade'
+import type { Word } from '../data/models'
+import { InkState, getTuning, startRevealed, type InkWord } from '../ui/reader/InkEngine'
+import { cubicBezierEase } from '../ui/theme/Fade'
 import {
   applyMask,
   cachedPaperCoverMask,
-  cachedWashMask,
+  clearPaperCover,
+  runRepeatFadeOut,
+  runRepeatWashIn,
   runSearchHitDoubleWash,
   runWash,
 } from './inkWash'
-import { SearchHitFlash } from '../engine/wordSearch'
+import { SearchHitFlash } from '../ui/reader/SearchHitFlash'
+import { useWordInteraction } from './useWordInteraction'
 
 interface Props {
   word: Word
-  activeWord: ActiveWord | null
-  isActiveAyah: boolean
-  dimmed: boolean
-  speed: number
+  ink: InkWord
+  sweepMs: number | null
   /** When true, pulse the orange search-hit flash on this Arabic word. */
   searchFlash?: boolean
   rootRef?: MutableRefObject<HTMLElement | null>
@@ -39,48 +39,27 @@ interface Props {
   onContextMenu?: (e: MouseEvent) => void
 }
 
-const HOLD_MS = 450
-const MOVE_CANCEL_PX = 10
-
-/** Snap-clear the paper cover — never CSS-transition a solid rect away. */
-function clearCover(cover: HTMLElement) {
-  cover.style.transition = 'none'
-  applyMask(cover, 'none')
-  cover.style.opacity = '0'
-}
-
 export function HafsWord({
   word,
-  activeWord,
-  isActiveAyah,
-  dimmed,
-  speed,
+  ink,
+  sweepMs: activeSweepMs,
   searchFlash = false,
   rootRef: externalRootRef,
   onPlay,
   onHold,
   onContextMenu,
 }: Props) {
-  const ink = InkEngine.word(word.position, activeWord, isActiveAyah, dimmed)
   const localRootRef = useRef<HTMLSpanElement>(null)
   const coverRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
+  const flashRef = useRef<HTMLSpanElement>(null)
   const prevState = useRef(ink.state)
   const revealedOnEntry = useRef(false)
   // false so a word that mounts already in the chain still washes orange in.
   const prevRepeat = useRef(false)
-  const holdTimer = useRef<number | null>(null)
-  const startXY = useRef<{ x: number; y: number } | null>(null)
-  const held = useRef(false)
   const tuning = getTuning()
   const upcomingCover = 1 - tuning.upcomingAlpha
-
-  const clearHold = () => {
-    if (holdTimer.current != null) {
-      clearTimeout(holdTimer.current)
-      holdTimer.current = null
-    }
-  }
+  const interaction = useWordInteraction(onPlay, onHold)
 
   /*
    * Paper-cover bloom on Active entry (Android shapedWordBloom InkReveal).
@@ -124,25 +103,25 @@ export function HafsWord({
     }
 
     if (ink.state !== InkState.Active) {
-      clearCover(cover)
+      clearPaperCover(cover)
       return
     }
 
     // Repeat chain: orange overlay carries the motion (Android skips InkReveal).
     if (ink.repeat) {
-      clearCover(cover)
+      clearPaperCover(cover)
       return
     }
 
     if (revealedOnEntry.current) {
-      clearCover(cover)
+      clearPaperCover(cover)
       return
     }
 
     // Still Active after a layout echo (same word) — do not restart.
     if (!enteredActive) return
 
-    const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
+    const duration = activeSweepMs ?? t.repeatSweepMs
     cover.style.transition = 'none'
     cover.style.opacity = '1'
     applyMask(cover, cachedPaperCoverMask(0, resting, true, t.washFeather))
@@ -153,18 +132,18 @@ export function HafsWord({
       cubicBezierEase,
       (p, eased) => {
         if (p >= 1) {
-          clearCover(cover)
+          clearPaperCover(cover)
           return
         }
         applyMask(cover, cachedPaperCoverMask(eased, resting, true, t.washFeather))
       },
       () => {
-        clearCover(cover)
+        clearPaperCover(cover)
       },
     )
     // Duration/speed captured at Active entry only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.state, ink.repeat, activeWord?.wordPosition])
+  }, [ink.state, ink.repeat])
 
   // Orange repeat overlay: wash in on chain entry, dissolve on release.
   // Key only on `ink.repeat` — advancing within the chain must not cancel
@@ -176,42 +155,13 @@ export function HafsWord({
     const enteredRepeat = ink.repeat && !was
     const leftRepeat = !ink.repeat && was
     prevRepeat.current = ink.repeat
-    const t = getTuning()
-    const ease = {
-      x1: t.sweepEaseX1,
-      y1: t.sweepEaseY1,
-      x2: t.sweepEaseX2,
-      y2: t.sweepEaseY2,
-    }
 
     if (enteredRepeat) {
-      const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
-      overlay.style.opacity = '1'
-      applyMask(overlay, cachedWashMask(0, 0, true, t.washFeather))
-      return runWash(
-        duration,
-        ease,
-        cubicBezierEase,
-        (_p, eased) => {
-          applyMask(overlay, cachedWashMask(eased, 0, true, t.washFeather))
-        },
-        () => applyMask(overlay, 'none'),
-      )
+      const duration = activeSweepMs ?? getTuning().repeatSweepMs
+      return runRepeatWashIn(overlay, true, duration)
     }
     if (leftRepeat) {
-      const duration = t.repeatFadeOutMs
-      applyMask(overlay, 'none')
-      return runWash(
-        duration,
-        ease,
-        cubicBezierEase,
-        (_p, eased) => {
-          overlay.style.opacity = String(1 - eased)
-        },
-        () => {
-          overlay.style.opacity = '0'
-        },
-      )
+      return runRepeatFadeOut(overlay)
     }
     if (ink.repeat) {
       overlay.style.opacity = '1'
@@ -223,35 +173,11 @@ export function HafsWord({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ink.repeat])
 
-  // Search-hit flash: same orange overlay + wash as the repeat chain.
+  // Search-hit pulse: same ink-engine wash helpers on a dedicated twin overlay.
   useLayoutEffect(() => {
-    if (!searchFlash || ink.repeat || !overlayRef.current) return
-    return runSearchHitDoubleWash(overlayRef.current, true, SearchHitFlash.PULSES)
-  }, [searchFlash, ink.repeat])
-
-  const onPointerDown = (e: PointerEvent) => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return
-    held.current = false
-    startXY.current = { x: e.clientX, y: e.clientY }
-    clearHold()
-    holdTimer.current = window.setTimeout(() => {
-      held.current = true
-      holdTimer.current = null
-      onHold()
-    }, HOLD_MS)
-  }
-
-  const onPointerMove = (e: PointerEvent) => {
-    if (!startXY.current || holdTimer.current == null) return
-    const dx = Math.abs(e.clientX - startXY.current.x)
-    const dy = Math.abs(e.clientY - startXY.current.y)
-    if (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX) clearHold()
-  }
-
-  const onPointerEnd = () => {
-    clearHold()
-    startXY.current = null
-  }
+    if (!searchFlash || !flashRef.current) return
+    return runSearchHitDoubleWash(flashRef.current, true, SearchHitFlash.PULSES)
+  }, [searchFlash])
 
   return (
     <span
@@ -262,36 +188,32 @@ export function HafsWord({
       className="hafs-word"
       data-state={ink.state}
       style={{ ['--upcoming-cover' as string]: String(upcomingCover) }}
-      onClick={() => {
-        if (held.current) {
-          held.current = false
-          return
-        }
-        onPlay()
-      }}
+      {...interaction}
       onContextMenu={onContextMenu}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerEnd}
-      onPointerCancel={onPointerEnd}
-      onPointerLeave={onPointerEnd}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') onPlay()
-      }}
     >
       <span className="hafs-shell">
-        <span className="hafs-glyph">{word.arabic}</span>
-        <span ref={coverRef} className="ink-paper-cover" aria-hidden="true" />
-        <span
-          ref={overlayRef}
-          className="hafs-repeat-overlay hafs-glyph"
-          aria-hidden="true"
-          style={{ opacity: 0 }}
-        >
-          {word.arabic}
+        <span className="word-ink-slot">
+          <span className="hafs-glyph">{word.arabic}</span>
+          <span
+            ref={overlayRef}
+            className="hafs-repeat-overlay hafs-glyph"
+            aria-hidden="true"
+            style={{ opacity: 0 }}
+          >
+            {word.arabic}
+          </span>
+          <span
+            ref={flashRef}
+            className="hafs-repeat-overlay hafs-glyph"
+            aria-hidden="true"
+            style={{ opacity: 0 }}
+          >
+            {word.arabic}
+          </span>
         </span>
+        <span ref={coverRef} className="ink-paper-cover" aria-hidden="true" />
       </span>
       {' '}
     </span>

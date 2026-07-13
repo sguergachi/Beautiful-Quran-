@@ -21,6 +21,8 @@ export interface Ayah {
   number: number
   text: string
   translation: string
+  /** Madinah Mushaf page where this ayah's first word appears (0 = unknown). */
+  page: number
   words: Word[]
 }
 
@@ -83,6 +85,14 @@ export interface RootSummary {
   root: string
   occurrenceCount: number
   occurrences: RootOccurrence[]
+  lemmas: RootLemmaSummary[]
+}
+
+/** One exact QAC lemma/POS analysis found under a root. */
+export interface RootLemmaSummary {
+  lemma: string
+  pos: string
+  occurrenceCount: number
 }
 
 /** The word currently being recited — mirrors Android `ActiveWord`. */
@@ -90,18 +100,7 @@ export interface ActiveWord {
   ayah: number
   wordPosition: number
   durationMs: number
-  isRepeat?: boolean
-  highWater?: number
-  repeatStart?: number
-}
-
-export function normalizeActiveWord(w: ActiveWord): Required<ActiveWord> {
-  return {
-    ayah: w.ayah,
-    wordPosition: w.wordPosition,
-    durationMs: w.durationMs,
-    isRepeat: w.isRepeat ?? false,
-    highWater: w.highWater ?? w.wordPosition,
-    repeatStart: w.repeatStart ?? w.wordPosition,
-  }
+  isRepeat: boolean
+  highWater: number
+  repeatStart: number
 }

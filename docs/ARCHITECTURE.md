@@ -12,7 +12,7 @@ feature — words lighting up in time with the reciter — is driven by a
 ```
 tools/build_db.py  (build time, runs in CI)
    quran-json (npm) ─┐
-   WBW gloss (npm)  ─┼─► validate, align, pack ─► app/src/main/assets/quran.db
+   WBW gloss (npm)  ─┼─► validate, align, pack ─► data/quran.db
    quran-align zip  ─┤
    QAC morphology   ─┘   (roots / lemma / POS — see ROOT_VIEWER.md)
                                                         │
@@ -24,7 +24,7 @@ app (runtime)                                           ▼
                      └─ PlayerUiState StateFlow (what's playing, where)
    HighlightEngine ── pure: (segments, positionMs) → active word position
    ViewModels ── HomeViewModel, ReaderViewModel, SettingsViewModel, …
-   UI ── three sheets (Home, Reader, Settings) + ink-bleed overlays
+   UI ── four sheets (Bookmarks, Home, Reader, Settings) + ink-bleed overlays
          (notification prompt, Root Word Viewer, Timings Lab)
 ```
 
@@ -44,7 +44,7 @@ app (runtime)                                           ▼
    Android dependencies.
 4. **Small over clever.** No Hilt (a hand-rolled ViewModel factory over
    Application-scoped singletons), no Room (a 100-line raw-SQLite wrapper),
-   no navigation library at all (the three sheets are a hand-rolled paper
+   no navigation library at all (the four sheets are a hand-rolled paper
    stack in `MainActivity`). Every dependency earns its place.
 
 ## The data pipeline (`tools/build_db.py`)
@@ -211,12 +211,15 @@ streaming. Audio flows through a `CacheDataSource` backed by a 1 GB LRU
 
 ## UI structure
 
-Three full-screen "sheets", one visible at a time. Navigation is a
+Four full-screen "sheets", one visible at a time. Navigation is a
 hand-rolled **paper stack** (`PaperStackApp` in `MainActivity`): the sheets
 sit on top of each other like pages of a book, and moving between them is a
 horizontal page turn — draggable, fling-able, with page-turn audio
 (`PageTurnSounds`) tracking the live sheet position:
 
+- `bookmarks/BookmarksScreen` — a left-hand index revealed by swiping right
+  from Chapters or tapping its exposed ruby ribbon; saved verses are searchable
+  and sectioned by surah, and each result jumps directly back into the reader.
 - `home/HomeScreen` — surah list with search (surah names / `surah:ayah`
   references, plus Quran-wide word hits sectioned by surah with truncated
   expand-in-place lists), a continue-listening card, and a floating playback
@@ -226,8 +229,9 @@ horizontal page turn — draggable, fling-able, with page-turn audio
   embedded `PlayerBar` takes over once that sheet is open.
 - `reader/ReaderScreen` — the follow-along view. Composed of
   `SurahHeader` + one `AyahBlock` per ayah in a `LazyColumn`;
-  `AyahBlock` renders `WordUnit`s (Arabic mode, RTL flow) or
-  `EnglishWordUnit`s (English mode, LTR flow); `PlayerBar` sits flat at the
+  `AyahBlock` renders `WordUnit`s (Arabic mode, RTL flow) or one annotated
+  `ResponsiveEnglishAyah` (English mode, LTR prose with word ranges for ink
+  and taps); `PlayerBar` sits flat at the
   bottom. Floating Back-to / return-to-ayah ornaments share
   `FloatingPaperControl` (enter/exit + bottom inset) with the cover float. All scrolling and verse-position logic routes through the
   focus engine (`reader/focus/`, see below).
@@ -270,7 +274,7 @@ current ayah in the new voice when it changes on the settings sheet.
 ## Build & delivery
 
 CI (`.github/workflows/build.yml`) on every push: verify the committed
-`app/src/main/assets/quran.db` asset → unit tests. On `master` only, it
+`data/quran.db` asset → unit tests. On `master` only, it
 continues with **assembleRelease** (R8-minified, resource-shrunk; see
 docs/PERFORMANCE.md) → upload artifact → publish the APK to the rolling
 `latest` GitHub release. Release builds are signed with the repo's debug

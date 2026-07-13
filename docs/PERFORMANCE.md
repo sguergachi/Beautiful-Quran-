@@ -5,6 +5,9 @@ display's native refresh rate (90/120 Hz where available) with nothing on the
 UI thread that doesn't belong there. This file documents every technique in
 use and the reasoning, so future changes don't regress them.
 
+The latest whole-pipeline review and its profiling constraints are recorded in
+[Android rendering performance audit — 2026-07-12](PERFORMANCE_AUDIT_2026-07-12.md).
+
 ## The frame budget mindset
 
 At 120 Hz a frame is **8.3 ms**. The app's rule of thumb: recomposition is
@@ -30,6 +33,11 @@ property, which is close to free. The same pattern applies to the player-bar
 chrome (`chromeAlpha: () -> Float` — a deferred read, not a Float
 parameter).
 
+The paper stack follows the same rule: its live page position is read inside
+each sheet's `graphicsLayer` and shadow draw callback. Only threshold-derived
+booleans return to composition, so dragging or settling a page does not wake the
+root three-sheet composition every frame.
+
 The no-gloss Arabic path (`ResponsiveHafsAyah`) cannot put `letterFadeIn` on
 the whole ayah. It keeps the shaped ayah as static full-ink spans and applies
 `shapedWordBloom` in the draw phase: upcoming words get a full-strength paper
@@ -40,6 +48,9 @@ for gloss/English; paper cover for Arabic-only). First-pass pulls the cover back
 on the ink-wash curve; repeat SrcIn-tints the same shaped glyphs orange then
 DstIn-washes. Progress is read only at draw time, so the sweep never reshapes
 the ayah or paints onto neighbouring words.
+Paper-cover bleed is horizontal-only and clipped to each text line's measured
+top/bottom; an unread line therefore cannot fade descenders belonging to the
+read line above it.
 
 ### 2. Recomposition confined to one ayah
 
@@ -132,6 +143,19 @@ ExoPlayer does its own threading; the UI only ever reads
 callbacks. Audio is cached through a 1 GB LRU `CacheDataSource`, so repeat
 listening doesn't touch the network at all.
 
+### 9. Baseline + Startup Profiles
+
+Release APKs ship an ART Baseline Profile (`assets/dexopt/baseline.prof`) and a
+narrow Startup Profile that guides R8's DEX layout. The baseline covers startup,
+paper navigation, reader/focus/ink, data load, and playback startup; the startup
+subset is intentionally limited to the application, entrance cover, theme, and
+first chapter sheet so it does not crowd the primary DEX.
+
+The committed rules are a conservative seed because this repository's headless
+emulator renderer terminates during instrumentation. The `:baselineprofile`
+module is the source of truth for regenerating both profiles from real critical
+user journeys on stable hardware. See [Profiling](PROFILING.md).
+
 ## Deliberate trade-offs
 
 - **The 33 ms poll** instead of frame-callback syncing: audio position is
@@ -144,9 +168,9 @@ listening doesn't touch the network at all.
 
 ## Future headroom (not yet done)
 
-- **Baseline Profiles** via macrobenchmark for faster cold start and
-  pre-JIT'd scroll paths (needs a device farm run; add
-  `androidx.profileinstaller` + `baseline-prof.txt` when available).
+- Replace the conservative seed Baseline/Startup rules with output captured on
+  a stable physical Android 17 device, then retain them only if Macrobenchmark
+  confirms an improvement.
 - Per-word `contentType` hints if word counts per screen grow (e.g. a future
   mushaf mode).
 - Gapless surah-file playback (single MediaItem + absolute-offset segments)

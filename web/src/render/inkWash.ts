@@ -9,8 +9,8 @@
  * 17-stop gradient on every display refresh.
  */
 import { animate, type AnimationPlaybackControls } from 'motion'
-import { cubicBezierEase, paperCoverMaskImage, washMaskImage } from '../engine/fade'
-import { getTuning } from '../engine/ink'
+import { cubicBezierEase, paperCoverMaskImage, washMaskImage } from '../ui/theme/Fade'
+import { getTuning } from '../ui/reader/InkEngine'
 import { cubicBezierTuple, type CubicBezierEase } from '../ui/motion/easing'
 
 /** Quantize wash progress to ~48 steps — visually identical, far fewer strings. */
@@ -23,6 +23,16 @@ function quantizeProgress(p: number): number {
   if (p >= 1) return 1
   if (p <= 0) return 0
   return Math.round(p * WASH_STEPS) / WASH_STEPS
+}
+
+function sweepEase() {
+  const t = getTuning()
+  return {
+    x1: t.sweepEaseX1,
+    y1: t.sweepEaseY1,
+    x2: t.sweepEaseX2,
+    y2: t.sweepEaseY2,
+  }
 }
 
 export function cachedWashMask(
@@ -76,6 +86,13 @@ export function applyMask(el: HTMLElement | SVGElement, mask: string) {
   el.style.setProperty('mask-image', mask)
   el.style.setProperty('-webkit-mask-image', mask)
   el.classList.add('word-wash')
+}
+
+/** Snap-clear an opaque paper cover without exposing a transition frame. */
+export function clearPaperCover(cover: HTMLElement) {
+  cover.style.transition = 'none'
+  applyMask(cover, 'none')
+  cover.style.removeProperty('opacity')
 }
 
 export type WashTick = (progress: number, eased: number) => void
@@ -135,9 +152,62 @@ export function runWash(
 }
 
 /**
- * Search-hit flash: the same orange directional wash as the repeat overlay,
- * run [pulses] times (wash in → dissolve out → …). Independent of karaoke
- * `ink.repeat` so a real repeat chain is never cancelled.
+ * Orange repeat wash-in: directional ink-engine mask (restingAlpha 0) over the
+ * orange overlay, then clear the mask so full orange holds. Same path the
+ * karaoke repeat chain and the search-hit pulse both use.
+ */
+export function runRepeatWashIn(
+  el: HTMLElement,
+  rtl: boolean,
+  durationMs: number,
+  onDone?: () => void,
+): () => void {
+  const t = getTuning()
+  el.style.opacity = '1'
+  applyMask(el, cachedWashMask(0, 0, rtl, t.washFeather))
+  return runWash(
+    durationMs,
+    sweepEase(),
+    cubicBezierEase,
+    (_p, eased) => {
+      applyMask(el, cachedWashMask(eased, 0, rtl, t.washFeather))
+    },
+    () => {
+      applyMask(el, 'none')
+      onDone?.()
+    },
+  )
+}
+
+/**
+ * Orange repeat dissolve: clear the wash mask, then fade overlay opacity to 0
+ * over [InkTuning.repeatFadeOutMs] with the ink sweep easing.
+ */
+export function runRepeatFadeOut(
+  el: HTMLElement,
+  onDone?: () => void,
+): () => void {
+  const t = getTuning()
+  applyMask(el, 'none')
+  return runWash(
+    t.repeatFadeOutMs,
+    sweepEase(),
+    cubicBezierEase,
+    (_p, eased) => {
+      el.style.opacity = String(1 - eased)
+    },
+    () => {
+      el.style.opacity = '0'
+      onDone?.()
+    },
+  )
+}
+
+/**
+ * Search-hit flash: [runRepeatWashIn] then [runRepeatFadeOut], [pulses] times.
+ * Callers pass a dedicated always-mounted orange overlay (same classes as the
+ * karaoke repeat layer) so the mask sizes to the glyphs — never a stretched
+ * inset box that misaligns the wash edge.
  */
 export function runSearchHitDoubleWash(
   el: HTMLElement,
@@ -145,12 +215,6 @@ export function runSearchHitDoubleWash(
   pulses: number,
 ): () => void {
   const t = getTuning()
-  const ease = {
-    x1: t.sweepEaseX1,
-    y1: t.sweepEaseY1,
-    x2: t.sweepEaseX2,
-    y2: t.sweepEaseY2,
-  }
   let cancelled = false
   let cancelCurrent: (() => void) | null = null
 
@@ -164,33 +228,13 @@ export function runSearchHitDoubleWash(
       finish()
       return
     }
-    el.style.opacity = '1'
-    applyMask(el, cachedWashMask(0, 0, rtl, t.washFeather))
-    cancelCurrent = runWash(
-      t.repeatSweepMs,
-      ease,
-      cubicBezierEase,
-      (_p, eased) => {
-        applyMask(el, cachedWashMask(eased, 0, rtl, t.washFeather))
-      },
-      () => {
+    cancelCurrent = runRepeatWashIn(el, rtl, t.repeatSweepMs, () => {
+      if (cancelled) return
+      cancelCurrent = runRepeatFadeOut(el, () => {
         if (cancelled) return
-        applyMask(el, 'none')
-        cancelCurrent = runWash(
-          t.repeatFadeOutMs,
-          ease,
-          cubicBezierEase,
-          (_p, eased) => {
-            el.style.opacity = String(1 - eased)
-          },
-          () => {
-            if (cancelled) return
-            el.style.opacity = '0'
-            runPulse(remaining - 1)
-          },
-        )
-      },
-    )
+        runPulse(remaining - 1)
+      })
+    })
   }
 
   runPulse(pulses)

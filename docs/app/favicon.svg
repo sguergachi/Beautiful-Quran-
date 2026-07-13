@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" role="img" aria-label="Beautiful Quran">
-  <!-- Rub el Hizb  matches Android ic_launcher_foreground on green ground. -->
-  <rect width="108" height="108" fill="#0E5C4A"/>
-  <path fill="#C9A227" d="M33 33h42v42H33z"/>
-  <path fill="#C9A227" d="M54 24.3 83.7 54 54 83.7 24.3 54z"/>
-  <circle cx="54" cy="54" r="16" fill="#0E5C4A"/>
-  <circle cx="54" cy="54" r="10" fill="#FAF6EF"/>
-</svg>

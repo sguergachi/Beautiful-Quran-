@@ -3,6 +3,7 @@ import type {
   Ayah,
   Reciter,
   RootOccurrence,
+  RootLemmaSummary,
   RootSummary,
   Segment,
   Surah,
@@ -12,16 +13,22 @@ import type {
 } from './models'
 import {
   matchWordSearch,
+  matchWordSearchAsync,
   normalizeArabicForSearch,
   shouldRunWordSearch,
   WORD_SEARCH_MAX_HITS,
   type WordSearchHit,
   type WordSearchIndexEntry,
-} from '../engine/wordSearch'
+} from '../domain/WordSearch'
 
 let surahsCache: Surah[] | null = null
 let recitersCache: Reciter[] | null = null
 let wordSearchIndex: WordSearchIndexEntry[] | null = null
+let wordSearchIndexPromise: Promise<WordSearchIndexEntry[]> | null = null
+/** Per-surah content — reopening a chapter must not re-scan sql.js. */
+const surahContentCache = new Map<number, SurahContent>()
+/** Per-reciter+surah timing segments (raw); PreparedTimings are built lazily. */
+const timingsCache = new Map<string, Map<number, Segment[]>>()
 
 export async function ensureReady(
   onProgress?: (p: LoadProgress) => void,
@@ -63,6 +70,9 @@ export function reciters(): Reciter[] {
 }
 
 export function surahContent(surahId: number): SurahContent {
+  const cached = surahContentCache.get(surahId)
+  if (cached) return cached
+
   const surah = surahs().find((s) => s.id === surahId)
   if (!surah) throw new Error(`Unknown surah ${surahId}`)
 
@@ -86,7 +96,7 @@ export function surahContent(surahId: number): SurahContent {
   )
 
   const ayahs: Ayah[] = queryAll(
-    'SELECT ayah_number, text_uthmani, translation_en FROM ayahs WHERE surah_id = ? ORDER BY ayah_number',
+    'SELECT ayah_number, text_uthmani, translation_en, page FROM ayahs WHERE surah_id = ? ORDER BY ayah_number',
     [surahId],
     (r) => {
       const n = Number(r.ayah_number)
@@ -95,12 +105,44 @@ export function surahContent(surahId: number): SurahContent {
         number: n,
         text: String(r.text_uthmani),
         translation: String(r.translation_en),
+        page: Number(r.page),
         words: wordsByAyah.get(n) ?? [],
       }
     },
   )
 
-  return { surah, ayahs }
+  const content = { surah, ayahs }
+  surahContentCache.set(surahId, content)
+  return content
+}
+
+/** Materialize every chapter a little at a time during startup idle periods. */
+export async function preloadAllSurahContent(preferredSurahId?: number): Promise<void> {
+  const allSurahs = surahs()
+  if (surahContentCache.size >= allSurahs.length) return
+
+  const ids = allSurahs.map((s) => s.id)
+  if (preferredSurahId != null && ids.includes(preferredSurahId)) {
+    ids.splice(ids.indexOf(preferredSurahId), 1)
+    ids.unshift(preferredSurahId)
+  }
+
+  for (const id of ids) {
+    if (surahContentCache.has(id)) continue
+    await new Promise<void>((resolve) => {
+      const run = () => {
+        surahContent(id)
+        resolve()
+      }
+      const ric = (
+        globalThis as unknown as {
+          requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number
+        }
+      ).requestIdleCallback
+      if (typeof ric === 'function') ric(run, { timeout: 1_500 })
+      else setTimeout(run, 0)
+    })
+  }
 }
 
 export function parseSegments(raw: string): Segment[] {
@@ -123,6 +165,10 @@ export function parseSegments(raw: string): Segment[] {
 }
 
 export function timings(reciterId: number, surahId: number): Map<number, Segment[]> {
+  const key = `${reciterId}:${surahId}`
+  const cached = timingsCache.get(key)
+  if (cached) return cached
+
   const map = new Map<number, Segment[]>()
   queryAll(
     'SELECT ayah_number, segments FROM timings WHERE reciter_id = ? AND surah_id = ?',
@@ -132,6 +178,7 @@ export function timings(reciterId: number, surahId: number): Map<number, Segment
       return null
     },
   )
+  timingsCache.set(key, map)
   return map
 }
 
@@ -184,29 +231,67 @@ export function rootSummary(root: string): RootSummary | null {
     }),
   )
 
-  return { root, occurrenceCount: countRow, occurrences }
+  const lemmas: RootLemmaSummary[] = queryAll(
+    `SELECT lemma, pos, COUNT(*) AS occurrence_count
+     FROM word_morphology
+     WHERE root = ? AND lemma <> ''
+     GROUP BY lemma, pos
+     ORDER BY COUNT(*) DESC, lemma, pos`,
+    [root],
+    (r) => ({
+      lemma: String(r.lemma),
+      pos: String(r.pos),
+      occurrenceCount: Number(r.occurrence_count),
+    }),
+  )
+
+  return { root, occurrenceCount: countRow, occurrences, lemmas }
 }
 
-function wordSearchIndexRows(): WordSearchIndexEntry[] {
-  if (wordSearchIndex) return wordSearchIndex
-  wordSearchIndex = queryAll(
-    `SELECT w.surah_id, w.ayah_number, w.position, w.arabic,
-            w.translation_en AS word_translation, w.transliteration,
-            a.text_uthmani, a.translation_en AS ayah_translation,
-            s.name_transliteration, s.name_arabic
-     FROM words w
-     JOIN ayahs a
-       ON a.surah_id = w.surah_id AND a.ayah_number = w.ayah_number
-     JOIN surahs s ON s.id = w.surah_id
-     ORDER BY w.surah_id, w.ayah_number, w.position`,
+/**
+ * Build the Quran-wide word-search index without a words⋈ayahs JOIN.
+ *
+ * Ayah text/translation and surah names are loaded once and shared by
+ * reference across every word in that ayah — much cheaper than sql.js
+ * duplicating those strings on ~77k joined rows (Android builds on IO;
+ * web must stay responsive on the main thread).
+ */
+function buildWordSearchIndex(): WordSearchIndexEntry[] {
+  const ayahMeta = new Map<string, { text: string; translation: string }>()
+  queryAll(
+    'SELECT surah_id, ayah_number, text_uthmani, translation_en FROM ayahs',
     [],
     (r) => {
+      ayahMeta.set(`${Number(r.surah_id)}:${Number(r.ayah_number)}`, {
+        text: String(r.text_uthmani),
+        translation: String(r.translation_en),
+      })
+      return null
+    },
+  )
+
+  const surahNames = new Map<number, { en: string; ar: string }>()
+  for (const s of surahs()) {
+    surahNames.set(s.id, { en: s.nameTransliteration, ar: s.nameArabic })
+  }
+
+  const index: WordSearchIndexEntry[] = []
+  queryAll(
+    `SELECT surah_id, ayah_number, position, arabic, translation_en, transliteration
+     FROM words
+     ORDER BY surah_id, ayah_number, position`,
+    [],
+    (r) => {
+      const surahId = Number(r.surah_id)
+      const ayahNumber = Number(r.ayah_number)
       const arabic = String(r.arabic)
-      const translation = String(r.word_translation)
+      const translation = String(r.translation_en)
       const transliteration = String(r.transliteration)
-      return {
-        surahId: Number(r.surah_id),
-        ayahNumber: Number(r.ayah_number),
+      const meta = ayahMeta.get(`${surahId}:${ayahNumber}`)
+      const names = surahNames.get(surahId)
+      index.push({
+        surahId,
+        ayahNumber,
         position: Number(r.position),
         arabic,
         arabicNorm: normalizeArabicForSearch(arabic),
@@ -214,14 +299,55 @@ function wordSearchIndexRows(): WordSearchIndexEntry[] {
         translationLower: translation.toLowerCase(),
         transliteration,
         transliterationLower: transliteration.toLowerCase(),
-        ayahText: String(r.text_uthmani),
-        ayahTranslation: String(r.ayah_translation),
-        surahNameTransliteration: String(r.name_transliteration),
-        surahNameArabic: String(r.name_arabic),
-      }
+        // Shared string refs — one ayah text object for every word in it.
+        ayahText: meta?.text ?? '',
+        ayahTranslation: meta?.translation ?? '',
+        surahNameTransliteration: names?.en ?? '',
+        surahNameArabic: names?.ar ?? '',
+      })
+      return null
     },
   )
+  return index
+}
+
+function wordSearchIndexRows(): WordSearchIndexEntry[] {
+  if (wordSearchIndex) return wordSearchIndex
+  wordSearchIndex = buildWordSearchIndex()
   return wordSearchIndex
+}
+
+/**
+ * Build the word-search index on demand after the user starts a word query.
+ * It is intentionally not warmed at boot: chapter taps take priority over a
+ * full-Quran scan. Safe to call repeatedly; concurrent callers share a build
+ * promise.
+ */
+export function warmWordSearchIndex(): Promise<WordSearchIndexEntry[]> {
+  if (wordSearchIndex) return Promise.resolve(wordSearchIndex)
+  if (wordSearchIndexPromise) return wordSearchIndexPromise
+  wordSearchIndexPromise = new Promise((resolve) => {
+    const run = () => {
+      try {
+        resolve(wordSearchIndexRows())
+      } catch {
+        wordSearchIndexPromise = null
+        resolve([])
+      }
+    }
+    // Prefer idle time; fall back to a macrotask so Safari still warms.
+    const ric = (
+      globalThis as unknown as {
+        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number
+      }
+    ).requestIdleCallback
+    if (typeof ric === 'function') {
+      ric(run, { timeout: 2_500 })
+    } else {
+      setTimeout(run, 0)
+    }
+  })
+  return wordSearchIndexPromise
 }
 
 /**
@@ -234,14 +360,31 @@ export function searchWords(query: string): WordSearchHit[] {
   return matchWordSearch(wordSearchIndexRows(), query, WORD_SEARCH_MAX_HITS)
 }
 
+/**
+ * Async cover-sheet search — yields during the scan and honours cancellation
+ * so rapid typing does not stack main-thread work (Android `collectLatest`).
+ */
+export async function searchWordsAsync(
+  query: string,
+  isCancelled: () => boolean = () => false,
+): Promise<WordSearchHit[]> {
+  if (!shouldRunWordSearch(query)) return []
+  const index = await warmWordSearchIndex()
+  if (isCancelled()) return []
+  return matchWordSearchAsync(index, query, WORD_SEARCH_MAX_HITS, isCancelled)
+}
+
 export const QuranRepository = {
   ensureReady,
   surahs,
   reciters,
   surahContent,
+  preloadAllSurahContent,
   timings,
   parseSegments,
   wordMorphology,
   rootSummary,
   searchWords,
+  searchWordsAsync,
+  warmWordSearchIndex,
 }

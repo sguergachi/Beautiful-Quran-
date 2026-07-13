@@ -4,55 +4,46 @@ import {
   type CSSProperties,
   type MouseEvent,
   type MutableRefObject,
-  type PointerEvent,
 } from 'react'
-import type { ActiveWord, Word } from '../data/models'
+import type { Word } from '../data/models'
 import {
-  InkEngine,
   InkState,
   getTuning,
-  secondaryAlpha,
   startRevealed,
-  sweepMs,
-  TRANSLITERATION_COLOR_ALPHA,
-} from '../engine/ink'
-import { cubicBezierEase } from '../engine/fade'
+  type InkWord,
+} from '../ui/reader/InkEngine'
+import { secondaryAlpha, TRANSLITERATION_COLOR_ALPHA } from '../ui/reader/WordHighlight'
+import { cubicBezierEase } from '../ui/theme/Fade'
 import {
   applyMask,
   cachedPaperCoverMask,
   cachedWashMask,
+  clearPaperCover,
+  runRepeatFadeOut,
+  runRepeatWashIn,
   runSearchHitDoubleWash,
   runWash,
 } from './inkWash'
-import { SearchHitFlash } from '../engine/wordSearch'
+import { SearchHitFlash } from '../ui/reader/SearchHitFlash'
+import { useWordInteraction } from './useWordInteraction'
 
 interface Props {
   word: Word
-  activeWord: ActiveWord | null
-  isActiveAyah: boolean
-  dimmed: boolean
+  /** Display-only English token; interaction and data identity stay on [word]. */
+  englishText?: string
+  ink: InkWord
+  sweepMs: number | null
   showGloss: boolean
   showTransliteration: boolean
   englishMode?: boolean
   searchHit?: boolean
   /** When true, pulse the orange search-hit flash on Arabic + gloss. */
   searchFlash?: boolean
-  speed: number
   /** Optional external ref so the ayah can keep the active word in view. */
   rootRef?: MutableRefObject<HTMLElement | null>
   onPlay: () => void
   onHold: () => void
   onContextMenu?: (e: MouseEvent) => void
-}
-
-const HOLD_MS = 450
-const MOVE_CANCEL_PX = 10
-
-/** Snap-clear the paper cover — never CSS-transition a solid rect away. */
-function clearCover(cover: HTMLElement) {
-  cover.style.transition = 'none'
-  applyMask(cover, 'none')
-  cover.style.opacity = '0'
 }
 
 /**
@@ -89,33 +80,38 @@ function paintSecondary(
   }
 
   // Arabic path: parent is full opacity; secondary lines carry Upcoming themselves.
-  const floor = ink.state === InkState.Upcoming ? getTuning().upcomingAlpha : 1
-  if (gloss) gloss.style.opacity = String(floor)
-  if (translit) translit.style.opacity = String(TRANSLITERATION_COLOR_ALPHA * floor)
+  // Plain/Recited clear inline opacity so CSS global recess can dim inactive ayahs.
+  if (ink.state === InkState.Upcoming) {
+    const floor = getTuning().upcomingAlpha
+    if (gloss) gloss.style.opacity = String(floor)
+    if (translit) translit.style.opacity = String(TRANSLITERATION_COLOR_ALPHA * floor)
+    return
+  }
+  if (gloss) gloss.style.removeProperty('opacity')
+  if (translit) translit.style.opacity = String(TRANSLITERATION_COLOR_ALPHA)
 }
 
 export function WordUnit({
   word,
-  activeWord,
-  isActiveAyah,
-  dimmed,
+  englishText,
+  ink,
+  sweepMs: activeSweepMs,
   showGloss,
   showTransliteration,
   englishMode = false,
   searchHit = false,
   searchFlash = false,
-  speed,
   rootRef: externalRootRef,
   onPlay,
   onHold,
   onContextMenu,
 }: Props) {
-  const ink = InkEngine.word(word.position, activeWord, isActiveAyah, dimmed)
   const localRootRef = useRef<HTMLSpanElement>(null)
   /** Base glyph layer — Active wash targets this (English) or the paper cover (Arabic). */
   const baseRef = useRef<HTMLSpanElement>(null)
   const coverRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
+  const flashRef = useRef<HTMLSpanElement>(null)
   const glossFlashRef = useRef<HTMLSpanElement>(null)
   const glossRef = useRef<HTMLSpanElement>(null)
   const translitRef = useRef<HTMLSpanElement>(null)
@@ -125,19 +121,10 @@ export function WordUnit({
   // false so a word that mounts already in the chain still washes orange in
   // (Android Animatable starts at progress 0 when repeat is true on first compose).
   const prevRepeat = useRef(false)
-  const holdTimer = useRef<number | null>(null)
-  const startXY = useRef<{ x: number; y: number } | null>(null)
-  const held = useRef(false)
   const tuning = getTuning()
   const baseClass = englishMode ? 'word-gloss' : 'word-arabic'
   const upcomingCover = 1 - tuning.upcomingAlpha
-
-  const clearHold = () => {
-    if (holdTimer.current != null) {
-      clearTimeout(holdTimer.current)
-      holdTimer.current = null
-    }
-  }
+  const interaction = useWordInteraction(onPlay, onHold)
 
   /*
    * Active-entry wash.
@@ -193,26 +180,26 @@ export function WordUnit({
       }
 
       if (ink.state !== InkState.Active) {
-        clearCover(cover)
+        clearPaperCover(cover)
         paintSecondary(glossRef.current, translitRef.current, ink, null, false)
         return
       }
 
       if (ink.repeat) {
-        clearCover(cover)
+        clearPaperCover(cover)
         paintSecondary(glossRef.current, translitRef.current, ink, null, false)
         return
       }
 
       if (revealedOnEntry.current) {
-        clearCover(cover)
+        clearPaperCover(cover)
         paintSecondary(glossRef.current, translitRef.current, ink, 1, false)
         return
       }
 
       if (!enteredActive) return
 
-      const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
+      const duration = activeSweepMs ?? t.repeatSweepMs
       cover.style.transition = 'none'
       cover.style.opacity = '1'
       applyMask(cover, cachedPaperCoverMask(0, resting, true, t.washFeather))
@@ -225,14 +212,14 @@ export function WordUnit({
         (p, eased) => {
           paintSecondary(glossRef.current, translitRef.current, ink, eased, false)
           if (p >= 1) {
-            clearCover(cover)
+            clearPaperCover(cover)
             paintSecondary(glossRef.current, translitRef.current, ink, 1, false)
             return
           }
           applyMask(cover, cachedPaperCoverMask(eased, resting, true, t.washFeather))
         },
         () => {
-          clearCover(cover)
+          clearPaperCover(cover)
           paintSecondary(glossRef.current, translitRef.current, ink, 1, false)
         },
       )
@@ -262,7 +249,7 @@ export function WordUnit({
 
     if (!enteredActive) return
 
-    const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
+    const duration = activeSweepMs ?? t.repeatSweepMs
     applyMask(el, cachedWashMask(0, resting, rtl, t.washFeather))
     paintSecondary(glossRef.current, translitRef.current, ink, 0, true)
 
@@ -282,7 +269,7 @@ export function WordUnit({
     // speed/duration captured at Active entry only — mid-word setting changes
     // must not cancel and restart the sweep (that is itself a flicker).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.state, ink.repeat, activeWord?.wordPosition, englishMode])
+  }, [ink.state, ink.repeat, englishMode])
 
   // Keep secondary alpha in sync when gloss/translit mount or ink leaves Active
   // without a wash restart (e.g. settings toggle mid-verse).
@@ -311,42 +298,13 @@ export function WordUnit({
     const leftRepeat = !ink.repeat && was
     prevRepeat.current = ink.repeat
     const rtl = !englishMode
-    const t = getTuning()
 
-    const ease = {
-      x1: t.sweepEaseX1,
-      y1: t.sweepEaseY1,
-      x2: t.sweepEaseX2,
-      y2: t.sweepEaseY2,
-    }
     if (enteredRepeat) {
-      const duration = sweepMs(activeWord, speed) ?? t.repeatSweepMs
-      overlay.style.opacity = '1'
-      applyMask(overlay, cachedWashMask(0, 0, rtl, t.washFeather))
-      return runWash(
-        duration,
-        ease,
-        cubicBezierEase,
-        (_p, eased) => {
-          applyMask(overlay, cachedWashMask(eased, 0, rtl, t.washFeather))
-        },
-        () => applyMask(overlay, 'none'),
-      )
+      const duration = activeSweepMs ?? getTuning().repeatSweepMs
+      return runRepeatWashIn(overlay, rtl, duration)
     }
     if (leftRepeat) {
-      const duration = t.repeatFadeOutMs
-      applyMask(overlay, 'none')
-      return runWash(
-        duration,
-        ease,
-        cubicBezierEase,
-        (_p, eased) => {
-          overlay.style.opacity = String(1 - eased)
-        },
-        () => {
-          overlay.style.opacity = '0'
-        },
-      )
+      return runRepeatFadeOut(overlay)
     }
     if (ink.repeat) {
       // Still in chain from a prior entry — hold full orange, do not restart.
@@ -359,16 +317,16 @@ export function WordUnit({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ink.repeat, englishMode])
 
-  // Search-hit flash: drive the *same* orange overlay the repeat wash uses
-  // (wash in → dissolve × 2). No second DOM node — mounting an extra glyph
-  // layer was shifting layout when CSS lost to .word-arabic position:relative.
+  // Search-hit pulse: same ink-engine wash helpers as the karaoke repeat
+  // overlay, on a dedicated always-mounted twin (left/top, glyph-sized) so
+  // the mask edge aligns with the letters and never fights real repeat.
   useLayoutEffect(() => {
-    if (!searchFlash || ink.repeat) return
+    if (!searchFlash) return
     const cancels: Array<() => void> = []
-    if (overlayRef.current) {
+    if (flashRef.current) {
       cancels.push(
         runSearchHitDoubleWash(
-          overlayRef.current,
+          flashRef.current,
           !englishMode,
           SearchHitFlash.PULSES,
         ),
@@ -380,38 +338,14 @@ export function WordUnit({
       )
     }
     return () => cancels.forEach((c) => c())
-  }, [searchFlash, englishMode, ink.repeat])
+  }, [searchFlash, englishMode])
 
   const rtl = !englishMode
   const style: CSSProperties = englishMode
     ? { ['--upcoming-alpha' as string]: String(tuning.upcomingAlpha) }
     : { ['--upcoming-cover' as string]: String(upcomingCover) }
 
-  const label = englishMode ? word.translation || word.arabic : word.arabic
-
-  const onPointerDown = (e: PointerEvent) => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return
-    held.current = false
-    startXY.current = { x: e.clientX, y: e.clientY }
-    clearHold()
-    holdTimer.current = window.setTimeout(() => {
-      held.current = true
-      holdTimer.current = null
-      onHold()
-    }, HOLD_MS)
-  }
-
-  const onPointerMove = (e: PointerEvent) => {
-    if (!startXY.current || holdTimer.current == null) return
-    const dx = Math.abs(e.clientX - startXY.current.x)
-    const dy = Math.abs(e.clientY - startXY.current.y)
-    if (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX) clearHold()
-  }
-
-  const onPointerEnd = () => {
-    clearHold()
-    startXY.current = null
-  }
+  const label = englishMode ? englishText || word.translation || word.arabic : word.arabic
 
   return (
     <span
@@ -422,47 +356,44 @@ export function WordUnit({
       className={englishMode ? 'word-unit word-ink' : 'word-unit word-arabic-ink'}
       data-state={ink.state}
       style={style}
-      onClick={() => {
-        if (held.current) {
-          held.current = false
-          return
-        }
-        onPlay()
-      }}
+      {...interaction}
       onContextMenu={onContextMenu}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerEnd}
-      onPointerCancel={onPointerEnd}
-      onPointerLeave={onPointerEnd}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') onPlay()
-      }}
     >
       <span className="word-stack" dir={rtl ? 'rtl' : 'ltr'}>
-        <span
-          ref={baseRef}
-          className={baseClass}
-          data-search-hit={englishMode && searchHit ? 'true' : undefined}
-        >
-          {label}
+        {/* Base + orange overlays share one tight slot so abspos ink sits on
+            the same border box as the glyphs (top:0 on the stack was half-
+            leading above the inline baseline). */}
+        <span className="word-ink-slot">
+          <span
+            ref={baseRef}
+            className={baseClass}
+            data-search-hit={englishMode && searchHit ? 'true' : undefined}
+          >
+            {label}
+          </span>
+          <span
+            ref={overlayRef}
+            className={`word-repeat-overlay ${baseClass}`}
+            aria-hidden="true"
+            style={{ opacity: 0 }}
+          >
+            {label}
+          </span>
+          <span
+            ref={flashRef}
+            className={`word-repeat-overlay ${baseClass}`}
+            aria-hidden="true"
+            style={{ opacity: 0 }}
+          >
+            {label}
+          </span>
         </span>
         {/* Arabic only: opaque full-ink glyphs + paper cover (never glyph alpha). */}
         {!englishMode ? (
           <span ref={coverRef} className="ink-paper-cover" aria-hidden="true" />
         ) : null}
-        {/* Same typography as the base glyph — without word-arabic/word-gloss
-            the orange layer inherited body size and read as tiny text. */}
-        <span
-          ref={overlayRef}
-          className={`word-repeat-overlay ${baseClass}`}
-          aria-hidden="true"
-          style={{ opacity: 0 }}
-        >
-          {label}
-        </span>
       </span>
       {/* Gloss/translit are siblings of the glyph stack (not nested under the
           wash mask). Arabic path: they own Upcoming dim. English path: parent
@@ -476,10 +407,9 @@ export function WordUnit({
           >
             {word.translation}
           </span>
-          {/* Always mounted (opacity 0) like the repeat overlay — no mount jitter. */}
           <span
             ref={glossFlashRef}
-            className="word-search-flash-overlay word-gloss"
+            className="word-repeat-overlay word-gloss"
             aria-hidden="true"
             style={{ opacity: 0 }}
           >
