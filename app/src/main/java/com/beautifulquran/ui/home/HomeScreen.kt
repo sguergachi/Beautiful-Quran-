@@ -421,6 +421,7 @@ fun HomeScreen(
                                     onOpenBookmarks()
                                     true
                                 },
+                                animateOnTap = false,
                                 unfurlSignal = ribbonUnfurlEpoch,
                                 topInset = 0.dp,
                                 bottomGap = 0.dp,

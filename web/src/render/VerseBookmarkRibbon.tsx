@@ -33,6 +33,8 @@ type Props = {
   /** 0–1; fades with reader chrome while reciting. */
   chromeAlpha?: number
   interactive?: boolean
+  /** False for navigation and confirmation-only ribbons. */
+  animateOnTap?: boolean
   /** Returns true when the verse is now bookmarked. */
   onToggle: () => boolean
   /** Replays the existing physical unfurl when this value changes above zero. */
@@ -68,6 +70,7 @@ export function VerseBookmarkRibbon({
   side,
   chromeAlpha = 1,
   interactive = true,
+  animateOnTap = true,
   onToggle,
   unfurlSignal = 0,
   topInset = TOP_INSET,
@@ -367,7 +370,7 @@ export function VerseBookmarkRibbon({
   const onClick = () => {
     if (!interactive || chromeAlpha < 0.1) return
     const nowMarked = onToggle()
-    runAnimation(nowMarked)
+    if (animateOnTap) runAnimation(nowMarked)
   }
 
   const style: CSSProperties = {

@@ -88,6 +88,8 @@ internal fun VerseBookmarkRibbon(
     interactive: Boolean,
     onToggle: () -> Boolean,
     modifier: Modifier = Modifier,
+    /** False when the ribbon is navigation or asks before changing state. */
+    animateOnTap: Boolean = true,
     /** Non-zero changes replay the same physical unfurl for an already saved
      * ribbon, used when a new bookmark first arrives back on Chapters. */
     unfurlSignal: Int = 0,
@@ -183,6 +185,11 @@ internal fun VerseBookmarkRibbon(
             role = Role.Button,
             onClick = {
                 if (latestChrome() < 0.1f) return@clickable
+                if (!animateOnTap) {
+                    latestOnToggle()
+                    view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                    return@clickable
+                }
                 job?.cancel()
                 animating = true
                 val nowMarked = latestOnToggle()
@@ -273,6 +280,7 @@ internal fun VerseBookmarkRibbon(
                 val notchDepth = minOf(notch, span * 0.45f)
                 val steps = (span / 3f).toInt().coerceIn(6, 64)
                 moveTo(ax(outer + lateral(top)), top)
+                lineTo(ax(inner + lateral(top)), top)
                 for (i in 1..steps) {
                     val y = top + span * (i / steps.toFloat())
                     lineTo(ax(inner + lateral(y)), y)
