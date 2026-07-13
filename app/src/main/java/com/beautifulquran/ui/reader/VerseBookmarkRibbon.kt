@@ -280,6 +280,7 @@ internal fun VerseBookmarkRibbon(
                 val notchDepth = minOf(notch, span * 0.45f)
                 val steps = (span / 3f).toInt().coerceIn(6, 64)
                 moveTo(ax(outer + lateral(top)), top)
+                lineTo(ax(inner + lateral(top)), top)
                 for (i in 1..steps) {
                     val y = top + span * (i / steps.toFloat())
                     lineTo(ax(inner + lateral(y)), y)
