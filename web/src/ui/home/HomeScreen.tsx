@@ -41,7 +41,7 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const previousBookmarkCount = useRef(state.bookmarks.length)
   const pendingRibbonUnfurl = useRef(false)
   const [ribbonUnfurlSignal, setRibbonUnfurlSignal] = useState(0)
-  const searchRowRef = useRef<HTMLDivElement>(null)
+  const homeTitleRef = useRef<HTMLHeadingElement>(null)
   const [ribbonHeight, setRibbonHeight] = useState(0)
 
   useEffect(() => {
@@ -80,14 +80,14 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
   }, [stackLayer])
 
   useLayoutEffect(() => {
-    const searchRow = searchRowRef.current
-    if (!searchRow) return
+    const title = homeTitleRef.current
+    if (!title) return
     const measure = () => {
-      setRibbonHeight(Math.max(96, window.innerHeight - searchRow.getBoundingClientRect().top - 92))
+      setRibbonHeight(Math.max(96, window.innerHeight - title.getBoundingClientRect().top - 92))
     }
     measure()
     const observer = new ResizeObserver(measure)
-    observer.observe(searchRow)
+    observer.observe(title)
     window.addEventListener('resize', measure)
     return () => {
       observer.disconnect()
@@ -171,7 +171,25 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
           className="home-header"
           data-has-bookmarks={state.bookmarks.length > 0 || undefined}
         >
-          <h1>Beautiful Quran</h1>
+          {state.bookmarks.length > 0 ? (
+            <div className="home-bookmark-ribbon" style={{ height: ribbonHeight }}>
+              <VerseBookmarkRibbon
+                bookmarked
+                focused
+                side="left"
+                animateOnTap={false}
+                topInset={0}
+                bottomGap={0}
+                unfurlSignal={ribbonUnfurlSignal}
+                ariaLabel="Open bookmarks"
+                onToggle={() => {
+                  appStore.revealLayer(BOOKMARKS_LAYER)
+                  return true
+                }}
+              />
+            </div>
+          ) : null}
+          <h1 ref={homeTitleRef}>Beautiful Quran</h1>
           <button
             type="button"
             className="gear"
@@ -187,7 +205,7 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
               className="home-scroll-page"
               data-has-bookmarks={state.bookmarks.length > 0 || undefined}
             >
-              <div className="search-row" ref={searchRowRef}>
+              <div className="search-row">
                 <PaperInput
                   id="chapter-search"
                   name="chapter-search"
@@ -198,25 +216,6 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
                   aria-label="Search surah, word, or ayah reference"
                 />
               </div>
-
-              {state.bookmarks.length > 0 ? (
-                <div className="home-bookmark-ribbon" style={{ height: ribbonHeight }}>
-                  <VerseBookmarkRibbon
-                    bookmarked
-                    focused
-                    side="left"
-                    animateOnTap={false}
-                    topInset={0}
-                    bottomGap={0}
-                    unfurlSignal={ribbonUnfurlSignal}
-                    ariaLabel="Open bookmarks"
-                    onToggle={() => {
-                      appStore.revealLayer(BOOKMARKS_LAYER)
-                      return true
-                    }}
-                  />
-                </div>
-              ) : null}
 
             {continueSurah ? (
               <div className="continue-row">

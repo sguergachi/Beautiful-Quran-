@@ -472,9 +472,11 @@ select {
 }
 
 .home-header {
+  --home-header-top: max(clamp(1rem, 2.5vh, 2rem), env(safe-area-inset-top, 0px));
   padding: clamp(1rem, 2.5vh, 2rem) var(--sheet-pad) 0.5rem;
-  padding-top: max(clamp(1rem, 2.5vh, 2rem), env(safe-area-inset-top));
+  padding-top: var(--home-header-top);
   display: flex;
+  position: relative;
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
@@ -489,6 +491,12 @@ select {
   font-size: clamp(1.75rem, 5vw, 2.15rem);
   margin: 0;
   letter-spacing: 0.01em;
+}
+
+/* The saved ribbon begins beside the page title, then runs down the paper.
+ * It is positioned against the header rather than the search document. */
+.home-header .home-bookmark-ribbon {
+  top: var(--home-header-top);
 }
 
 .home-header .gear {
@@ -3248,19 +3256,17 @@ select {
   /* The reusable ribbon paints a 13px cloth 9px inside its target. On Home,
    * use a 31px visual canvas so that cloth is centred in the left lane, while
    * an invisible 44px hit area preserves the required touch target. */
-  .home-scroll-page[data-has-bookmarks='true'] {
-    --home-bookmark-edge-gap: calc(6.5px - var(--sheet-pad));
+  .home-header[data-has-bookmarks='true'] .home-bookmark-ribbon {
+    /* The header is now the positioning context: 6.5px centres the 31px
+     * visual canvas inside the 44px edge target without touching the title. */
+    left: 6.5px;
   }
 
-  .home-scroll-page[data-has-bookmarks='true'] .home-bookmark-ribbon {
-    left: var(--home-bookmark-edge-gap);
-  }
-
-  .home-scroll-page[data-has-bookmarks='true'] .home-bookmark-ribbon .verse-ribbon {
+  .home-header[data-has-bookmarks='true'] .home-bookmark-ribbon .verse-ribbon {
     width: 31px;
   }
 
-  .home-scroll-page[data-has-bookmarks='true'] .home-bookmark-ribbon .verse-ribbon::after {
+  .home-header[data-has-bookmarks='true'] .home-bookmark-ribbon .verse-ribbon::after {
     content: '';
     position: absolute;
     inset: 0 -6.5px;
