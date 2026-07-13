@@ -3242,19 +3242,28 @@ select {
 @media (max-width: 640px) {
   :root {
     --sheet-pad: clamp(0.95rem, 4.5vw, 1.35rem);
-    --home-bookmark-reserve: 26px;
+    --home-bookmark-reserve: 27px;
   }
 
-  /* Keep the 44px bookmark target at the physical paper edge. The painted
-   * cloth begins 9px inside that target, so it is shifted into the scroll
-   * padding until only a 4px paper margin remains. Content begins 4px after
-   * the target's right edge rather than after a broad decorative gutter. */
+  /* The reusable ribbon paints a 13px cloth 9px inside its target. On Home,
+   * use a 31px visual canvas so that cloth is centred in the left lane, while
+   * an invisible 44px hit area preserves the required touch target. */
   .home-scroll-page[data-has-bookmarks='true'] {
-    --home-bookmark-edge-gap: calc(4px - var(--sheet-pad) - 9px);
+    --home-bookmark-edge-gap: calc(6.5px - var(--sheet-pad));
   }
 
   .home-scroll-page[data-has-bookmarks='true'] .home-bookmark-ribbon {
     left: var(--home-bookmark-edge-gap);
+  }
+
+  .home-scroll-page[data-has-bookmarks='true'] .home-bookmark-ribbon .verse-ribbon {
+    width: 31px;
+  }
+
+  .home-scroll-page[data-has-bookmarks='true'] .home-bookmark-ribbon .verse-ribbon::after {
+    content: '';
+    position: absolute;
+    inset: 0 -6.5px;
   }
 
   /* Keep every block in the document flow. Moving the blocks with margins
