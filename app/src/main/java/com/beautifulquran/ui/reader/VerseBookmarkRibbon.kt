@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.ui.theme.LocalQuranAccents
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -186,6 +187,12 @@ internal fun VerseBookmarkRibbon(
             onClick = {
                 if (latestChrome() < 0.1f) return@clickable
                 if (!animateOnTap) {
+                    job?.cancel()
+                    animating = false
+                    scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                        unfurl.snapTo(1f)
+                        sway.snapTo(0f)
+                    }
                     latestOnToggle()
                     view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                     return@clickable
