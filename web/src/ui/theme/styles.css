@@ -1845,8 +1845,7 @@ select {
   --bookmark-lane: 44px;
   --bookmark-gap: 8px;
   --bookmark-spine: calc(var(--bookmark-lane) + var(--bookmark-gap));
-  /* Matches VerseBookmarkRibbon's painted edge inside its 44px target. */
-  --bookmark-ribbon-ink-inset: 9px;
+  --bookmark-rule: var(--bookmark-pad);
   width: 100%;
   max-width: 36rem;
   align-self: center;
@@ -1861,8 +1860,7 @@ select {
   /* The page title belongs to the outer rule, alongside the physical ribbon
    * edge and the chapter numbers. The reading/search spine begins one lane
    * inward below it. */
-  padding: 1.75rem var(--bookmark-pad) 0
-    calc(var(--bookmark-pad) + var(--bookmark-ribbon-ink-inset));
+  padding: 1.75rem var(--bookmark-pad) 0 var(--bookmark-rule);
 }
 
 .bookmarks-header > div {
@@ -1920,7 +1918,7 @@ select {
   flex: 0 0 var(--bookmark-lane);
   align-items: center;
   box-sizing: border-box;
-  padding-left: var(--bookmark-ribbon-ink-inset);
+  padding-left: 0;
   justify-content: flex-start;
 }
 
@@ -1986,7 +1984,7 @@ select {
 
 .bookmark-section-number {
   box-sizing: border-box;
-  padding-left: var(--bookmark-ribbon-ink-inset);
+  padding-left: 0;
   color: var(--gold);
   font-size: 0.875rem;
   font-variant-numeric: lining-nums tabular-nums;
