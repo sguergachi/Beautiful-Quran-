@@ -232,10 +232,10 @@ function BookmarkVerse({
             </button>
           </div>
         ) : (
-          <button type="button" className="bookmark-verse-ref" onClick={onOpen}>
-            <span>{surah.nameTransliteration} · </span>
-            <strong>{surah.id}:{ayah.number}</strong>
-          </button>
+          <span className="bookmark-verse-ayah">
+            Ayah{' '}
+            <strong>{ayah.number}</strong>
+          </span>
         )}
       </div>
     </li>

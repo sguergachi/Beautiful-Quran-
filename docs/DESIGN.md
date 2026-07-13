@@ -521,12 +521,13 @@ may extend inward, but it must not add a visual inset to the ribbon itself.
 Results remain in Quranic order and can be searched by reference, chapter
 name, or verse text. A chapter initially shows five marked verses; its green
 inline disclosure reveals the remainder, while an active search shows every
-match. The small ruby strip beside a result opens an inline Keep / Remove
-confirmation in the reference line's fixed-height space before changing the
-mark, so the page does not jump. Keep is green, Remove is quiet ink, references
-are gold, and ruby remains exclusive to the physical ribbon. Tapping the verse
-returns to it in the reader. The long Chapters ribbon is navigation only and
-never retracts when tapped.
+match. The section header establishes the chapter once; an individual result
+shows only its ayah number. The small ruby strip beside a result opens an
+inline Keep / Remove confirmation in that ayah line's fixed-height space before
+changing the mark, so the page does not jump. Keep is green, Remove is quiet
+ink, ayah numbers are gold, and ruby remains exclusive to the physical ribbon.
+Tapping the verse returns to it in the reader. The long Chapters ribbon is
+navigation only and never retracts when tapped.
 
 ## Reading modes
 

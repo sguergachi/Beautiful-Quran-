@@ -2081,18 +2081,13 @@ select {
   animation: bookmark-meta-in 160ms ease-out both;
 }
 
-.bookmark-verse-ref {
+.bookmark-verse-ayah {
   min-height: 44px;
-  padding: 0;
   color: color-mix(in srgb, var(--ink-muted) 84%, transparent);
-  background: transparent;
-  border: 0;
   font: 400 0.875rem/1.25rem var(--font-body);
-  text-align: left;
-  cursor: pointer;
 }
 
-.bookmark-verse-ref strong {
+.bookmark-verse-ayah strong {
   color: var(--gold);
   font-variant-numeric: lining-nums tabular-nums;
   font-weight: 500;

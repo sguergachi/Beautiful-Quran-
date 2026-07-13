@@ -385,12 +385,12 @@ private fun BookmarkReferenceOrConfirmation(
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "${bookmark.surah.nameTransliteration} · ",
+                        text = "Ayah ",
                         style = bookmarkMetadataStyle(),
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f),
                     )
                     Text(
-                        text = "${bookmark.surah.id}:${bookmark.ayahNumber}",
+                        text = bookmark.ayahNumber.toString(),
                         style = bookmarkMetadataStyle(FontWeight.Medium, numeric = true),
                         color = LocalQuranAccents.current.gold,
                     )
