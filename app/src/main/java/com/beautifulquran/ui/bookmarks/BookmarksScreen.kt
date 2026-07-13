@@ -319,6 +319,7 @@ private fun BookmarkAyahRow(
                     true
                 },
                 animateOnTap = false,
+                edgeInset = 0.dp,
                 topInset = 0.dp,
                 bottomGap = 12.dp,
                 modifier = Modifier

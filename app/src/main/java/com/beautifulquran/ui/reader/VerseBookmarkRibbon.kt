@@ -94,6 +94,7 @@ internal fun VerseBookmarkRibbon(
     /** Non-zero changes replay the same physical unfurl for an already saved
      * ribbon, used when a new bookmark first arrives back on Chapters. */
     unfurlSignal: Int = 0,
+    edgeInset: Dp = EDGE_INSET_DP.dp,
     topInset: Dp = TOP_INSET_DP.dp,
     bottomGap: Dp = BOTTOM_GAP_DP.dp,
 ) {
@@ -223,7 +224,7 @@ internal fun VerseBookmarkRibbon(
 
             val h = size.height
             if (h <= 0f) return@Canvas
-            val edgeInset = EDGE_INSET_DP.dp.toPx()
+            val edgeInsetPx = edgeInset.toPx()
             val ribbonW = RIBBON_WIDTH_DP.dp.toPx()
             val topInsetPx = topInset.toPx()
             val nubLen = NUB_LENGTH_DP.dp.toPx()
@@ -240,9 +241,9 @@ internal fun VerseBookmarkRibbon(
             fun ax(logicalX: Float): Float =
                 if (mirrored) size.width - logicalX else logicalX
 
-            val outer = edgeInset
-            val inner = edgeInset + ribbonW
-            val center = edgeInset + ribbonW / 2f
+            val outer = edgeInsetPx
+            val inner = edgeInsetPx + ribbonW
+            val center = edgeInsetPx + ribbonW / 2f
 
             val progress = unfurl.value.coerceAtLeast(0f)
             val tipY = if (progress <= 0.001f) {
