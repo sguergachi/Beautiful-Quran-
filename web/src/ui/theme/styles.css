@@ -1829,8 +1829,11 @@ select {
   display: flex;
   align-items: center;
   gap: 1rem;
+  /* The page title belongs to the outer rule, alongside the physical ribbon
+   * edge and the chapter numbers. The reading/search spine begins one lane
+   * inward below it. */
   padding: 1.75rem var(--bookmark-pad) 0
-    calc(var(--bookmark-pad) + var(--bookmark-spine));
+    calc(var(--bookmark-pad) + var(--bookmark-ribbon-ink-inset));
 }
 
 .bookmarks-header > div {
