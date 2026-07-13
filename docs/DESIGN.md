@@ -385,8 +385,10 @@ bottom, then remains exposed on the left edge. Tapping it—or pulling right fro
 slides the Bookmarks sheet in from the left above it. This is a real page in the paper
 stack, not an overlay: results are grouped by surah, show Arabic and translation
 snippets with their chapter:ayah reference, and can be searched by reference,
-chapter name, or verse text. The small ruby strip beside each result removes the
-mark; tapping the verse returns to it in the reader.
+chapter name, or verse text. The small ruby strip beside a result opens an
+inline Keep / Remove confirmation before changing the mark; tapping the verse
+returns to it in the reader. The long Chapters ribbon is navigation only and
+never retracts when tapped.
 
 ## Reading modes
 

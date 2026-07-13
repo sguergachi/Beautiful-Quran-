@@ -199,6 +199,7 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     bookmarked
                     focused
                     side="left"
+                    animateOnTap={false}
                     topInset={0}
                     bottomGap={0}
                     unfurlSignal={ribbonUnfurlSignal}

@@ -1946,6 +1946,32 @@ select {
   -webkit-line-clamp: 3;
 }
 
+.bookmark-remove-confirmation {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0 0 0.9rem 2.6rem;
+  color: color-mix(in srgb, var(--ink-muted) 72%, transparent);
+  font-size: 0.84rem;
+}
+
+.bookmark-remove-confirmation span {
+  flex: 1;
+}
+
+.bookmark-remove-confirmation button {
+  padding: 0.65rem 0;
+  color: var(--accent);
+  background: transparent;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.bookmark-remove-confirmation .confirm-remove {
+  color: var(--bookmark);
+}
+
 
 /* —— Settings —— */
 .settings {

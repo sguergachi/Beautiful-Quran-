@@ -26,6 +26,9 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -42,6 +45,7 @@ import com.beautifulquran.data.model.BookmarkedAyah
 import com.beautifulquran.data.model.Surah
 import com.beautifulquran.ui.reader.VerseBookmarkRibbon
 import com.beautifulquran.ui.theme.ArabicTitleStyle
+import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.verticalFadingEdges
 
@@ -52,6 +56,7 @@ fun BookmarksScreen(
     onOpenAyah: (surahId: Int, ayah: Int) -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var pendingRemoval by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         LazyColumn(
             modifier = Modifier
@@ -164,9 +169,15 @@ fun BookmarksScreen(
                     BookmarkAyahRow(
                         bookmark = bookmark,
                         onOpen = { onOpenAyah(bookmark.surah.id, bookmark.ayahNumber) },
-                        onRemove = {
-                            viewModel.removeBookmark(bookmark.surah.id, bookmark.ayahNumber)
+                        confirming = pendingRemoval == (bookmark.surah.id to bookmark.ayahNumber),
+                        onRequestRemove = {
+                            pendingRemoval = bookmark.surah.id to bookmark.ayahNumber
                         },
+                        onConfirmRemove = {
+                            viewModel.removeBookmark(bookmark.surah.id, bookmark.ayahNumber)
+                            pendingRemoval = null
+                        },
+                        onKeep = { pendingRemoval = null },
                     )
                 }
             }
@@ -208,8 +219,12 @@ private fun BookmarkSectionHeader(surah: Surah, count: Int) {
 private fun BookmarkAyahRow(
     bookmark: BookmarkedAyah,
     onOpen: () -> Unit,
-    onRemove: () -> Unit,
+    confirming: Boolean,
+    onRequestRemove: () -> Unit,
+    onConfirmRemove: () -> Unit,
+    onKeep: () -> Unit,
 ) {
+    val ruby = LocalQuranAccents.current.bookmarkRibbon
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -240,6 +255,33 @@ private fun BookmarkAyahRow(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.48f),
             )
+            if (confirming) {
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Remove this bookmark?",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = "Keep",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .quietClickable(role = Role.Button, onClick = onKeep)
+                            .padding(12.dp),
+                    )
+                    Text(
+                        text = "Remove",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = ruby,
+                        modifier = Modifier
+                            .quietClickable(role = Role.Button, onClick = onConfirmRemove)
+                            .padding(12.dp),
+                    )
+                }
+            }
         }
         Box(Modifier.matchParentSize()) {
             VerseBookmarkRibbon(
@@ -249,9 +291,10 @@ private fun BookmarkAyahRow(
                 chromeAlpha = { 1f },
                 interactive = true,
                 onToggle = {
-                    onRemove()
-                    false
+                    onRequestRemove()
+                    true
                 },
+                animateOnTap = false,
                 topInset = 0.dp,
                 bottomGap = 12.dp,
                 modifier = Modifier

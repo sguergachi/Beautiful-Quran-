@@ -9,6 +9,7 @@ import { filterBookmarkSections, type BookmarkedVerse } from './bookmarkSections
 export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const state = useAppState()
   const [query, setQuery] = useState('')
+  const [pendingRemoval, setPendingRemoval] = useState<string | null>(null)
   const active = stackLayer === BOOKMARKS_LAYER
   const verses = useMemo<BookmarkedVerse[]>(() => {
     return [...state.bookmarks]
@@ -84,8 +85,10 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
                 </header>
 
                 <ul className="bookmark-verses">
-                  {section.verses.map(({ surah, ayah }) => (
-                    <li className="bookmark-verse" key={`${surah.id}:${ayah.number}`}>
+                  {section.verses.map(({ surah, ayah }) => {
+                    const key = `${surah.id}:${ayah.number}`
+                    return (
+                      <li className="bookmark-verse" key={key}>
                       <button
                         type="button"
                         className="bookmark-verse-copy"
@@ -103,13 +106,36 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
                         bookmarked
                         focused
                         side="left"
+                        animateOnTap={false}
                         topInset={0}
                         bottomGap={12}
                         ariaLabel={`Remove bookmark ${surah.id}:${ayah.number}`}
-                        onToggle={() => appStore.toggleBookmarkAt(surah.id, ayah.number)}
+                        onToggle={() => {
+                          setPendingRemoval(key)
+                          return true
+                        }}
                       />
-                    </li>
-                  ))}
+                      {pendingRemoval === key ? (
+                        <div className="bookmark-remove-confirmation">
+                          <span>Remove this bookmark?</span>
+                          <button type="button" onClick={() => setPendingRemoval(null)}>
+                            Keep
+                          </button>
+                          <button
+                            type="button"
+                            className="confirm-remove"
+                            onClick={() => {
+                              appStore.toggleBookmarkAt(surah.id, ayah.number)
+                              setPendingRemoval(null)
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : null}
+                      </li>
+                    )
+                  })}
                 </ul>
               </section>
             ))}
