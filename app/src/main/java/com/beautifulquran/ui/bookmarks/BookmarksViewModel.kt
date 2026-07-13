@@ -68,7 +68,11 @@ class BookmarksViewModel(
     /** Kept separate so typing in search never recomposes the whole paper stack. */
     val bookmarkCount = bookmarks.bookmarks
         .map { it.size }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            bookmarks.bookmarks.value.size,
+        )
 
     val uiState = combine(query, resolved) { search, (saved, ayahs) ->
         BookmarksUiState(

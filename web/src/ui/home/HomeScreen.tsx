@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   IconBuffering,
   IconClose,
@@ -10,6 +10,7 @@ import {
 import { PaperInput } from '../kit/PaperInput'
 import { appStore, useAppState, COVER_LAYER, READER_LAYER } from '../../store/appStore'
 import { QuranRepository } from '../../data/repository'
+import { VerseBookmarkRibbon } from '../../render/VerseBookmarkRibbon'
 import {
   englishTranslationHighlightSpans,
   filterSurahs,
@@ -19,7 +20,7 @@ import {
   type SurahWordSearchSection,
   type WordSearchHit,
 } from '../../domain/WordSearch'
-import type { StackLayer } from '../paper/stack'
+import { BOOKMARKS_LAYER, type StackLayer } from '../paper/stack'
 
 export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const state = useAppState()
@@ -37,6 +38,9 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const [expandedSurahIds, setExpandedSurahIds] = useState<Set<number>>(
     () => new Set(),
   )
+  const previousBookmarkCount = useRef(state.bookmarks.length)
+  const pendingRibbonUnfurl = useRef(false)
+  const [ribbonUnfurlSignal, setRibbonUnfurlSignal] = useState(0)
 
   useEffect(() => {
     setExpandedSurahIds(new Set())
@@ -59,6 +63,19 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
       window.clearTimeout(handle)
     }
   }, [search])
+
+  useEffect(() => {
+    if (state.bookmarks.length > previousBookmarkCount.current) {
+      pendingRibbonUnfurl.current = true
+    }
+    previousBookmarkCount.current = state.bookmarks.length
+  }, [state.bookmarks.length])
+
+  useEffect(() => {
+    if (stackLayer !== COVER_LAYER || !pendingRibbonUnfurl.current) return
+    pendingRibbonUnfurl.current = false
+    setRibbonUnfurlSignal((value) => value + 1)
+  }, [stackLayer])
 
   const wordSections = useMemo(
     () => sectionWordSearchHits(wordHits, expandedSurahIds),
@@ -143,20 +160,39 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
           </button>
         </header>
 
-        <div className="search-row">
-          <PaperInput
-            id="chapter-search"
-            name="chapter-search"
-            type="search"
-            placeholder="Search surah, word, or 2:255"
-            value={search}
-            onValueChange={setSearch}
-            aria-label="Search surah, word, or ayah reference"
-          />
-        </div>
-
         <div className="edge-fade">
           <div className={`scroll${showFloat ? ' scroll-with-float' : ''}`}>
+            <div className="home-scroll-page">
+              <div className="search-row">
+                <PaperInput
+                  id="chapter-search"
+                  name="chapter-search"
+                  type="search"
+                  placeholder="Search surah, word, or 2:255"
+                  value={search}
+                  onValueChange={setSearch}
+                  aria-label="Search surah, word, or ayah reference"
+                />
+              </div>
+
+              {state.bookmarks.length > 0 ? (
+                <div className="home-bookmark-ribbon">
+                  <VerseBookmarkRibbon
+                    bookmarked
+                    focused
+                    side="left"
+                    topInset={0}
+                    bottomGap={16}
+                    unfurlSignal={ribbonUnfurlSignal}
+                    ariaLabel="Open bookmarks"
+                    onToggle={() => {
+                      appStore.revealLayer(BOOKMARKS_LAYER)
+                      return true
+                    }}
+                  />
+                </div>
+              ) : null}
+
             {continueSurah ? (
               <div className="continue-row">
                 <button
@@ -247,6 +283,7 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
             {showEmpty ? (
               <p className="search-empty">No matches</p>
             ) : null}
+            </div>
           </div>
         </div>
       </div>
