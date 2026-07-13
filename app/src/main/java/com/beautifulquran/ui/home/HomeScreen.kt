@@ -89,9 +89,10 @@ private const val SEARCH_ITEM_INDEX = 1
 /** How far (px) the list must scroll past the lifted search before a scroll counts as "dismiss". */
 private const val DISMISS_SCROLL_THRESHOLD_PX = 24
 
-private val HomeRibbonLane = 42.dp
-private val HomeRibbonGap = 4.dp
-private val HomeStartInset = HomeRibbonLane + HomeRibbonGap
+private val HomeRibbonLane = 28.dp
+private val HomeRibbonWidth = 13.dp
+private val HomeRibbonGutter = (HomeRibbonLane - HomeRibbonWidth) / 2f
+private val HomeStartInset = HomeRibbonLane
 private val HomeEndInset = 28.dp
 private val HomeNumberColumn = 34.dp
 private val HomeColumnGap = 10.dp
@@ -391,7 +392,8 @@ fun HomeScreen(
                         onToggle = { true },
                         animateOnTap = false,
                         unfurlSignal = ribbonUnfurlEpoch,
-                        edgeInset = 7.dp,
+                        edgeInset = HomeRibbonGutter,
+                        ribbonWidth = HomeRibbonWidth,
                         topInset = 0.dp,
                         bottomGap = 0.dp,
                         modifier = Modifier
