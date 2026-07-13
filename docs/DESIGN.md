@@ -402,10 +402,12 @@ SharedPreferences store (`data/BookmarkRepository.kt`), never in the read-only
 `quran.db`.
 
 Once a newly marked verse returns to Chapters, the same physical ribbon used
-inside its verse block unfurls from the search line to just above the page
-bottom, then remains exposed on the left edge. Tapping it—or pulling right from Chapters—
-slides the Bookmarks sheet in from the left above it. This is a real page in the paper
-stack, not an overlay.
+inside its verse block unfurls beside the title and runs to just above the page
+bottom, then remains exposed on the left edge. Its drawing stays fully unfurled
+while a separate 44 dp/px navigation target opens Bookmarks, so tapping it—or
+pulling right from Chapters—never plays a retract before the Bookmarks sheet
+slides in from the left above it. This is a real page in the paper stack, not an
+overlay.
 
 The bookmark index is a compact bilingual concordance, shared by Android and
 web. It uses one centered column (560 dp / 36 rem maximum) and a fixed 52 dp/px
@@ -414,6 +416,9 @@ align their gold number, English name, and isolated RTL Arabic name to that
 same spine. Verse entries then stack Arabic at 24/36, translation at 17/25,
 and metadata at 14/20; the title is the only display-sized element. Spacing,
 not rules or containers, separates sections.
+
+The Bookmarks header contains only its title and the Chapters return action;
+the total marked-verse count is deliberately omitted.
 
 Results remain in Quranic order and can be searched by reference, chapter
 name, or verse text. A chapter initially shows five marked verses; its green

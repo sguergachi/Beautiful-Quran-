@@ -177,15 +177,18 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
                 bookmarked
                 focused
                 side="left"
+                interactive={false}
                 animateOnTap={false}
                 topInset={0}
                 bottomGap={0}
                 unfurlSignal={ribbonUnfurlSignal}
-                ariaLabel="Open bookmarks"
-                onToggle={() => {
-                  appStore.revealLayer(BOOKMARKS_LAYER)
-                  return true
-                }}
+                onToggle={() => true}
+              />
+              <button
+                type="button"
+                className="home-bookmark-open"
+                aria-label="Open bookmarks"
+                onClick={() => appStore.revealLayer(BOOKMARKS_LAYER)}
               />
             </div>
           ) : null}

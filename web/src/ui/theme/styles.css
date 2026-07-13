@@ -499,6 +499,27 @@ select {
   top: var(--home-header-top);
 }
 
+/* Navigation is deliberately separated from the ribbon drawing. Clicking the
+ * Home affordance opens the bookmark sheet without ever invoking the ribbon's
+ * mark/unmark animation. */
+.home-bookmark-open {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -6.5px;
+  width: 44px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  z-index: 3;
+}
+
+.home-bookmark-open:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .home-header .gear {
   color: var(--ink-muted);
   font-size: 0.92rem;
@@ -3264,12 +3285,6 @@ select {
 
   .home-header[data-has-bookmarks='true'] .home-bookmark-ribbon .verse-ribbon {
     width: 31px;
-  }
-
-  .home-header[data-has-bookmarks='true'] .home-bookmark-ribbon .verse-ribbon::after {
-    content: '';
-    position: absolute;
-    inset: 0 -6.5px;
   }
 
   /* Keep every block in the document flow. Moving the blocks with margins
