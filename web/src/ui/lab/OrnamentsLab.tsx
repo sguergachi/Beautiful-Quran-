@@ -129,11 +129,6 @@ function FieldSurface({
   )
 }
 
-const THEME_INK: Record<ThemeName, string> = {
-  light: 'rgba(28, 27, 24, 0.06)',
-  dark: 'rgba(232, 226, 213, 0.06)',
-  royal_green: 'rgba(232, 226, 213, 0.06)',
-}
 const THEME_PAPER: Record<ThemeName, string> = {
   light: '#faf3e8',
   dark: '#0a0b0c',
@@ -218,7 +213,6 @@ export function OrnamentsLab() {
 
   const gold = { brightGold: 'var(--gold-bright)', deepGold: 'var(--gold-deep)', embossDark: 'var(--emboss-dark)', embossLight: 'var(--emboss-light)' }
   const paper = THEME_PAPER[theme]
-  const ink = THEME_INK[theme]
 
   return (
     <div className="lab" data-theme={theme === 'light' ? undefined : theme}>
@@ -265,16 +259,17 @@ export function OrnamentsLab() {
           />
         </section>
 
-        {/* As it appears behind a chapter header: whisper ink + rosette. */}
-        <section className="lab-panel" style={{ background: paper }}>
-          <h3>Chapter header</h3>
+        {/* Chapter header is judged on paper — stage the whisper field on
+            light parchment even when the lab itself is dark/green. */}
+        <section className="lab-panel" style={{ background: '#faf3e8' }}>
+          <h3 style={{ color: 'rgba(28, 27, 24, 0.55)' }}>Chapter header</h3>
           <div className="lab-header-preview">
             <FieldSurface
               field={chapter.field}
               cols={6}
               rows={3}
               cellPx={52}
-              stroke={ink}
+              stroke="rgba(28, 27, 24, 0.10)"
               strokeWidth={1}
               height={200}
             />

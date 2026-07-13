@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -369,7 +370,10 @@ fun Modifier.generatedFieldWeave(
     ink: Color,
     embossLight: Color,
     build: State<Float>? = null,
-): Modifier = drawWithCache {
+): Modifier = clipToBounds().drawWithCache {
+    // Tile one cell past every edge so the weave reads continuous at the
+    // bounds, then clip so neighbouring sections never paint over each other
+    // (the Lab's stacked previews depend on this).
     val pxPerUnit = (field.cellWidthDp.toFloat().dp.toPx()) / field.cellW.toFloat()
     val cellW = (field.cellW * pxPerUnit).toFloat()
     val cellH = (field.cellH * pxPerUnit).toFloat()
