@@ -14,6 +14,9 @@ enum class ReadingMode { ARABIC_ENGLISH, ENGLISH_ONLY }
 /** Which screen edge the ayah selector rail lives on. */
 enum class AyahSelectorSide { LEFT, RIGHT }
 
+/** Developer-selectable bookmark treatment on the Chapters sheet. */
+enum class HomeBookmarkStyle { LONG_RIBBON, COMPACT_EDGE, TOP_BOUND, SAVED_PASSAGES, BOTTOM_TAIL }
+
 data class Settings(
     val reciterId: Int = 1,
     val fontScale: Float = 1f,
@@ -34,6 +37,8 @@ data class Settings(
      *  [developerModeEnabled] is on; the tuning edits themselves are
      *  session-only and never persisted. */
     val inkLabEnabled: Boolean = false,
+    /** Experimental Chapters bookmark treatment; the long ribbon is the shipped baseline. */
+    val homeBookmarkStyle: HomeBookmarkStyle = HomeBookmarkStyle.LONG_RIBBON,
 )
 
 /** Maps a persisted ordinal back to an enum entry, falling back to [default]
@@ -66,6 +71,7 @@ class SettingsRepository(context: Context) {
         lastAyah = prefs.getInt("lastAyah", 1),
         developerModeEnabled = prefs.getBoolean("developerModeEnabled", false),
         inkLabEnabled = prefs.getBoolean("inkLabEnabled", false),
+        homeBookmarkStyle = prefs.enum("homeBookmarkStyle", HomeBookmarkStyle.LONG_RIBBON),
     )
 
     fun update(transform: (Settings) -> Settings) {
@@ -84,6 +90,7 @@ class SettingsRepository(context: Context) {
             putInt("lastAyah", next.lastAyah)
             putBoolean("developerModeEnabled", next.developerModeEnabled)
             putBoolean("inkLabEnabled", next.inkLabEnabled)
+            putInt("homeBookmarkStyle", next.homeBookmarkStyle.ordinal)
         }
     }
 }

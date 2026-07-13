@@ -54,6 +54,7 @@ import androidx.compose.ui.zIndex
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.beautifulquran.data.HomeBookmarkStyle
 import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.AppViewModelFactory
 import com.beautifulquran.ui.PageTurnSounds
@@ -140,6 +141,7 @@ class MainActivity : ComponentActivity() {
                 PaperStackApp(
                     themeMode = settings.themeMode,
                     developerModeEnabled = settings.developerModeEnabled,
+                    homeBookmarkStyle = settings.homeBookmarkStyle,
                     entranceVisible = !entranceDone,
                     onRecordSystemTrace = {
                         DevProfiling.recordSystemTrace(this@MainActivity)
@@ -173,6 +175,7 @@ private val StackMotionEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
 private fun PaperStackApp(
     themeMode: ThemeMode,
     developerModeEnabled: Boolean,
+    homeBookmarkStyle: HomeBookmarkStyle,
     entranceVisible: Boolean,
     onRecordSystemTrace: () -> Unit,
     onEntranceFinished: () -> Unit,
@@ -609,6 +612,7 @@ private fun PaperStackApp(
                 // leaving for the reader — not only when nowPlaying flips.
                 coverSheetVisible = coverSheetVisible,
                 bookmarkCount = bookmarkCount,
+                bookmarkStyle = homeBookmarkStyle,
                 onOpenBookmarks = { animateTo(BOOKMARKS_LAYER) },
             )
         }

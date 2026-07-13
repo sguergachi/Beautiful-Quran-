@@ -68,6 +68,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.BuildConfig
 import com.beautifulquran.R
 import com.beautifulquran.data.AyahSelectorSide
+import com.beautifulquran.data.HomeBookmarkStyle
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.data.Settings
 import com.beautifulquran.data.ThemeMode
@@ -327,6 +328,26 @@ private fun DeveloperSection(
         onChange = { on -> viewModel.settings.update { it.copy(inkLabEnabled = on) } },
     )
     Caption("Live sliders over the reader's highlight tuning. This session only.")
+
+    Spacer(Modifier.height(20.dp))
+    Text("Home bookmark", style = MaterialTheme.typography.bodyLarge)
+    Caption("Changes the Chapters shortcut; bookmark ribbons inside verses are unchanged.")
+    Spacer(Modifier.height(4.dp))
+    HomeBookmarkStyle.entries.forEach { style ->
+        SelectRow(
+            label = when (style) {
+                HomeBookmarkStyle.LONG_RIBBON -> "Long ribbon · baseline"
+                HomeBookmarkStyle.COMPACT_EDGE -> "Compact edge"
+                HomeBookmarkStyle.TOP_BOUND -> "Top-bound ribbon"
+                HomeBookmarkStyle.SAVED_PASSAGES -> "Saved passages line"
+                HomeBookmarkStyle.BOTTOM_TAIL -> "Bottom ribbon tail"
+            },
+            selected = settings.homeBookmarkStyle == style,
+            onClick = {
+                viewModel.settings.update { it.copy(homeBookmarkStyle = style) }
+            },
+        )
+    }
 
     Spacer(Modifier.height(18.dp))
     Text("Page turn sounds", style = MaterialTheme.typography.bodyLarge)

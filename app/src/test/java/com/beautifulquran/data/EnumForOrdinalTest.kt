@@ -36,4 +36,34 @@ class EnumForOrdinalTest {
             enumForOrdinal(AyahSelectorSide.entries, -1, AyahSelectorSide.LEFT),
         )
     }
+
+    @Test
+    fun `home bookmark styles map by ordinal and stale values use baseline`() {
+        HomeBookmarkStyle.entries.forEach { style ->
+            assertEquals(
+                style,
+                enumForOrdinal(
+                    HomeBookmarkStyle.entries,
+                    style.ordinal,
+                    HomeBookmarkStyle.LONG_RIBBON,
+                ),
+            )
+        }
+        assertEquals(
+            HomeBookmarkStyle.LONG_RIBBON,
+            enumForOrdinal(
+                HomeBookmarkStyle.entries,
+                99,
+                HomeBookmarkStyle.LONG_RIBBON,
+            ),
+        )
+        assertEquals(
+            HomeBookmarkStyle.LONG_RIBBON,
+            enumForOrdinal(
+                HomeBookmarkStyle.entries,
+                -1,
+                HomeBookmarkStyle.LONG_RIBBON,
+            ),
+        )
+    }
 }

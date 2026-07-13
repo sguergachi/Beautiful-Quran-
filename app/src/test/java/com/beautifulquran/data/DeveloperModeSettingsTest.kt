@@ -1,5 +1,6 @@
 package com.beautifulquran.data
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -28,5 +29,19 @@ class DeveloperModeSettingsTest {
         val on = Settings().copy(developerModeEnabled = true)
         assertTrue(on.developerModeEnabled)
         assertFalse(on.copy(developerModeEnabled = false).developerModeEnabled)
+    }
+
+    @Test
+    fun `home bookmark style defaults to baseline and survives developer mode`() {
+        val alternative = Settings().copy(
+            homeBookmarkStyle = HomeBookmarkStyle.COMPACT_EDGE,
+            developerModeEnabled = true,
+        )
+
+        assertEquals(HomeBookmarkStyle.LONG_RIBBON, Settings().homeBookmarkStyle)
+        assertEquals(
+            HomeBookmarkStyle.COMPACT_EDGE,
+            alternative.copy(developerModeEnabled = false).homeBookmarkStyle,
+        )
     }
 }
