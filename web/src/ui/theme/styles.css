@@ -3242,14 +3242,15 @@ select {
 @media (max-width: 640px) {
   :root {
     --sheet-pad: clamp(0.95rem, 4.5vw, 1.35rem);
-    --home-bookmark-reserve: 52px;
+    --home-bookmark-reserve: 26px;
   }
 
-  /* The home bookmark is part of the chapter document, but it must never
-     * sit on top of the search text or the chapter-number lane. Reserve its
-     * full target width plus breathing room only while it is present. */
+  /* Keep the 44px bookmark target at the physical paper edge. The painted
+   * cloth begins 9px inside that target, so it is shifted into the scroll
+   * padding until only a 4px paper margin remains. Content begins 4px after
+   * the target's right edge rather than after a broad decorative gutter. */
   .home-scroll-page[data-has-bookmarks='true'] {
-    --home-bookmark-edge-gap: 8px;
+    --home-bookmark-edge-gap: calc(4px - var(--sheet-pad) - 9px);
   }
 
   .home-scroll-page[data-has-bookmarks='true'] .home-bookmark-ribbon {
@@ -3266,13 +3267,15 @@ select {
     padding-left: var(--home-bookmark-reserve);
   }
 
+  .home-scroll-page[data-has-bookmarks='true'] .surah-row {
+    padding-left: 0;
+  }
+
   /* The home title is part of the chapter list hierarchy: when the bookmark
    * lane is present, it starts above the chapter numbers—not at the page edge
    * and not above the ribbon. */
   .home-header[data-has-bookmarks='true'] {
-    padding-left: calc(
-      var(--home-bookmark-reserve) + var(--sheet-pad) + var(--sheet-pad)
-    );
+    padding-left: calc(var(--home-bookmark-reserve) + var(--sheet-pad));
   }
 
   body {
