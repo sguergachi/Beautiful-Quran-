@@ -83,8 +83,8 @@ import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.verticalFadingEdges
 
-/** Position of the search field in the list (after the title) — the row we lift to the top on focus. */
-private const val SEARCH_ITEM_INDEX = 1
+/** The search field leads the scrolling document beneath the fixed masthead. */
+private const val SEARCH_ITEM_INDEX = 0
 
 /** How far (px) the list must scroll past the lifted search before a scroll counts as "dismiss". */
 private const val DISMISS_SCROLL_THRESHOLD_PX = 24
@@ -180,12 +180,9 @@ fun HomeScreen(
         }
     }
 
-    // When the search takes focus, lift it to the top of the list so the title
-    // slides away and the dials pane has room above the keyboard. Once lifted,
-    // a deliberate scroll of the list dismisses the search — clearing focus
-    // hides the keyboard and fades the dials pane out. We only react while the
-    // list is actively scrolling, so search result changes from typing don't
-    // steal focus or dismiss the keyboard.
+    // Keep the focused search at the top of its scrolling document. A
+    // deliberate list scroll then dismisses it, hiding the keyboard and dials.
+    // Search result changes themselves never steal focus.
     LaunchedEffect(searchFocused) {
         if (!searchFocused) return@LaunchedEffect
         listState.animateScrollToItem(SEARCH_ITEM_INDEX)
@@ -232,12 +229,18 @@ fun HomeScreen(
                     boxHeight = it.size.height.toFloat()
                 },
         ) {
-            LazyColumn(
-                state = listState,
+            Column(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxHeight()
                     .widthIn(max = 640.dp)
+                    .fillMaxWidth(),
+            ) {
+                HomeHeader(onOpenSettings)
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                    .weight(1f)
                     .fillMaxWidth()
                     .verticalFadingEdges(
                         color = MaterialTheme.colorScheme.background,
@@ -247,51 +250,12 @@ fun HomeScreen(
                         // edge dissolves just above the player, not through it.
                         bottomInset = listBottomInset,
                     ),
-                contentPadding = PaddingValues(
-                    start = HomeStartInset,
-                    end = HomeEndInset,
-                    bottom = listBottomPadding,
-                ),
-            ) {
-            item(key = "title") {
-                val accents = LocalQuranAccents.current
-                val titleSheen = remember { mutableStateOf(0.35f) }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(
+                        start = HomeStartInset,
+                        end = HomeEndInset,
+                        bottom = listBottomPadding,
+                    ),
                 ) {
-                    Column(Modifier.weight(1f)) {
-                        Spacer(Modifier.height(38.dp))
-                        Text(
-                            text = "Beautiful Quran",
-                            style = MaterialTheme.typography.headlineMedium.copy(
-                                fontSize = 34.sp,
-                                lineHeight = 40.sp,
-                            ),
-                            color = MaterialTheme.colorScheme.onBackground,
-                        )
-                        Spacer(Modifier.height(28.dp))
-                    }
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .quietClickable(role = Role.Button, onClick = onOpenSettings)
-                            .semantics { contentDescription = "Open settings" },
-                    ) {
-                        GildedRosette(
-                            size = 30.dp,
-                            brightGold = accents.goldBright,
-                            deepGold = accents.goldDeep,
-                            embossDark = accents.embossDark,
-                            embossLight = accents.embossLight,
-                            sheen = titleSheen,
-                        )
-                    }
-                }
-            }
-
             item(key = "chapter-page") {
                 Box(Modifier.fillMaxWidth()) {
                     Column(Modifier.fillMaxWidth()) {
@@ -375,6 +339,7 @@ fun HomeScreen(
                     }
 
                 }
+            }
             }
             }
 
@@ -469,6 +434,48 @@ fun HomeScreen(
 }
 
 @Composable
+private fun HomeHeader(onOpenSettings: () -> Unit) {
+    val accents = LocalQuranAccents.current
+    val titleSheen = remember { mutableStateOf(0.35f) }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = HomeStartInset, end = HomeEndInset),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Spacer(Modifier.height(38.dp))
+            Text(
+                text = "Beautiful Quran",
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontSize = 34.sp,
+                    lineHeight = 40.sp,
+                ),
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Spacer(Modifier.height(28.dp))
+        }
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .quietClickable(role = Role.Button, onClick = onOpenSettings)
+                .semantics { contentDescription = "Open settings" },
+        ) {
+            GildedRosette(
+                size = 30.dp,
+                brightGold = accents.goldBright,
+                deepGold = accents.goldDeep,
+                embossDark = accents.embossDark,
+                embossLight = accents.embossLight,
+                sheen = titleSheen,
+            )
+        }
+    }
+}
+
+@Composable
 private fun HomeSearchField(
     value: String,
     onValueChange: (String) -> Unit,
@@ -551,6 +558,7 @@ private fun ContinueRow(target: ContinueTarget, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 18.dp)
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
             .quietClickable(onClick = onClick)
             .padding(vertical = 18.dp),
     ) {
