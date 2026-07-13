@@ -505,11 +505,12 @@ shape, or a bespoke animated substitute.
 
 The bookmark index is a compact bilingual concordance, shared by Android and
 web. It uses one centered column (560 dp / 36 rem maximum) and a fixed 40 dp/px
-inner content spine from the outer title rule. Chapter rows
-align their gold number, English name, and isolated RTL Arabic name to that
-same spine. Verse entries then stack Arabic at 24/36, translation at 17/25,
-and metadata at 14/20; the title is the only display-sized element. Spacing,
-not rules or containers, separates sections.
+inner content spine from the outer title rule. The gold number belongs to the
+outer index lane, the English chapter name begins on the inner spine, and the
+isolated RTL Arabic name ends on the far-right Arabic rule. Verse entries then
+stack Arabic at 24/36, translation at 17/25, and metadata at 14/20; the title
+is the only display-sized element. Spacing, not rules or containers, separates
+sections.
 
 The Bookmarks header contains only its title and the Chapters return action;
 the total marked-verse count is deliberately omitted.
@@ -527,6 +528,40 @@ to search and from search to the first chapter label, 32 dp/px before later
 chapter groups, 12 dp/px below a chapter header, and 8 dp/px between Arabic
 verse copy and its translation. The fixed-height ayah line supplies its own
 breathing room, so no extra spacer sits between translation and metadata.
+
+### Bookmark index alignment lessons
+
+- **Name anchors before assigning padding.** This surface has four: the outer
+  title rule, the 44 dp/px index target, the 40 dp/px inner reading spine, and
+  the far-right Arabic rule. Each value expresses one relationship. Scattered
+  child padding recreates almost-aligned edges that fail as soon as the
+  viewport or platform changes.
+- **Visible ink and interaction geometry are separate.** The ribbon keeps a
+  44 dp/px target while its narrow cloth sits optically inside it. Moving the
+  cloth or chapter numeral must not move the target, widen the gutter, or push
+  the reading spine. The shared ribbon component remains the authority for the
+  cloth; page layout owns only its placement.
+- **Optical equality is not numeric equality.** A wide ruby strip and a small
+  gold numeral do not look centered at the same inset. Their 2 and 4 dp/px
+  offsets are intentionally different, but both are measured inside the same
+  lane. Tune the marked element, not the whole grid.
+- **Bilingual alignment needs both edges.** English search text, chapter names,
+  translation, and metadata begin on the inner left spine. Arabic chapter
+  names and verse copy end on one far-right rule. RTL direction shapes and
+  orders Arabic; it does not place the element on the page.
+- **Measure rhythm between visible ink, not only boxes.** A 52 dp/px search
+  field and a 44 dp/px metadata target contain internal air. Center text inside
+  those targets, then judge the visible title-to-search, search-to-section,
+  section-to-verse, and translation-to-reference gaps. Adding a spacer beside
+  an already centered target doubles the intended breathing room.
+- **A section should establish context once.** The chapter header owns the
+  chapter number and bilingual name. A bookmark row repeats only its ayah
+  number; repeating the chapter name or full reference weakens hierarchy and
+  makes a one-result section feel busier than it is.
+- **Verify relationships with real narrow data.** Check x-coordinates for the
+  outer rule and inner spine, right edges for Arabic, and ink-to-ink vertical
+  gaps with a wrapped translation and a vocalized Arabic verse. Web and Compose
+  may use different primitives, but these measured relationships must match.
 
 Results remain in Quranic order and can be searched by reference, chapter
 name, or verse text. A chapter initially shows five marked verses; its green
