@@ -177,6 +177,22 @@ the recede-while-playing behavior. Running-text rules follow Bringhurst's
 ragged-right setting, leading proportional to type size) and WCAG's text
 spacing / visual-presentation guidance.
 
+### Root lexicon typography
+
+The Root Word Viewer is an information page, not a ceremonial chapter
+opening. It uses one centred held word, then one left-hand reading spine. Its
+interactive measure is at most 40 rem / 640 dp and prose is at most 34 rem /
+544 dp. Vertical space follows semantic proximity: 4–8 px/dp within one fact,
+12–16 within a row, 24 between related subgroups, and 40 between major reader
+questions. Viewport-height spacing is forbidden here; it turns tall screens
+into empty stages and pushes the answer below the fold.
+
+Arabic and English occupy separate bidi-isolated elements. The Hafs scale is
+44–52 for the held word, 32 for radicals, and 24 for forms and occurrences;
+English uses 24 Cormorant section headings, 17 EB Garamond body/actions, and
+12–14 labels/metadata. Gold identifies Quran references, green identifies
+actions, and neither substitutes for a textual current/open state.
+
 ## Ornament
 
 Traditional, geometric, and nearly invisible — ornament whispers, never

@@ -51,15 +51,15 @@ On the pressed word at `(surahId, ayah, wordPosition)`:
    currently selected reciter: it seeks to the word's timing mark and
    pauses at the word's end. Without a usable timing segment the speaker
    does nothing (it never starts the rest of the ayah).
-2. **Root** — the radical letters (e.g. ك ت ب), shown large, with a short
-   sense heading for that root in Quranic usage.
+2. **Root** — the radical letters (e.g. ك ت ب), shown large. QAC supplies
+   morphology, not licensed prose dictionary definitions, so the viewer does
+   not invent a root sense from the word glosses.
 3. **This form** — part of speech and a plain-English morphology line
    drawn from the annotation (noun / verb, person, gender, number, case,
    verb form and mood where present), plus the exact QAC lemma and its
-   occurrence count beneath this root. A frequency-ordered lemma list shows
-   the other corpus analyses annotated with the same root. Grammar tags stay secondary to readable
+   occurrence count beneath this root. Grammar tags stay secondary to readable
    English; the point is understanding, not a tag dump.
-4. **Concordance** — how often this root appears in the Quran, and where.
+4. **Occurrences** — how often this root appears in the Quran, and where.
    This is a first-class part of the surface, not a footnote:
    - A clear **count** ("appears *N* times in the Quran").
    - Optionally a secondary count for this exact surface form if it helps,
@@ -67,19 +67,29 @@ On the pressed word at `(surahId, ayah, wordPosition)`:
    - A scrollable list of occurrences grouped by **surah** (chapter), each
      row showing surah name / number, ayah number, the Arabic word form at
      that location, and its gloss.
-   - Each chapter initially shows at most **five** references. A quiet
-     show-more / show-fewer line expands or truncates that chapter without
-     changing the other chapter sections.
+   - The held word's chapter plus the first seven other chapters appear
+     initially. Only one chapter is open at a time; opening another closes the
+     previous one. An open chapter shows at most **five** references before a
+     quiet show-more line. This keeps roots with thousands of hits small at
+     first render.
    - Each occurrence is tappable: choosing one **closes the bleed and
      jumps the reader to that ayah** (same surah navigate-in-place, or
      open the other chapter if the hit is elsewhere), so the concordance
      is a way to *read through* the root, not only look up a number.
-5. **Attribution** — a quiet line naming the Quranic Arabic Corpus and
+5. **Related forms** — the other frequency-ordered lemma / POS analyses under
+   this root, excluding the form already explained above. Five appear before
+   a quiet show-more line; the section disappears when there are no others.
+6. **Attribution** — a quiet line naming the Quranic Arabic Corpus and
    linking to `http://corpus.quran.com` (required by the data terms).
 
 Particles and other words with no triliteral root still open the surface:
 show the lemma / POS explanation and omit the root-concordance block
 rather than failing the gesture.
+
+The web and Android surfaces share this order and one-column hierarchy. The
+held word is the only hero-sized element; root/form facts stay within a narrow
+prose measure, while chapter rows may use the full interaction measure. Major
+sections are separated by whitespace, never rules, cards, or containers.
 
 ## Concordance model
 

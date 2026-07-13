@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import type { ActiveWord, Ayah } from '../data/models'
+import type { ActiveWord, Ayah, Word } from '../data/models'
 import type { ReadingMode } from '../data/settings'
 import { punctuateEnglishGlosses } from '../domain/EnglishTypography'
 import { InkEngine, InkState } from '../ui/reader/InkEngine'
@@ -35,7 +35,7 @@ interface Props {
   /** Tap a word to start recitation at that word's timing. */
   onPlayWord: (ayah: number, wordPosition: number) => void
   onToggleBookmark: (ayah: number) => boolean
-  onHoldWord: (ayah: number, position: number, arabic: string, translation: string) => void
+  onHoldWord: (ayah: number, word: Word) => void
 }
 
 function AyahBlockInner({
@@ -128,11 +128,11 @@ function AyahBlockInner({
                 rootRef={ink.state === InkState.Active ? activeWordRef : undefined}
                 onPlay={() => onPlayWord(ayah.number, w.position)}
                 onHold={() =>
-                  onHoldWord(ayah.number, w.position, w.arabic, w.translation)
+                  onHoldWord(ayah.number, w)
                 }
                 onContextMenu={(e) => {
                   e.preventDefault()
-                  onHoldWord(ayah.number, w.position, w.arabic, w.translation)
+                  onHoldWord(ayah.number, w)
                 }}
               />
             )
@@ -158,11 +158,11 @@ function AyahBlockInner({
                   rootRef={ink.state === InkState.Active ? activeWordRef : undefined}
                   onPlay={() => onPlayWord(ayah.number, w.position)}
                   onHold={() =>
-                    onHoldWord(ayah.number, w.position, w.arabic, w.translation)
+                    onHoldWord(ayah.number, w)
                   }
                   onContextMenu={(e) => {
                     e.preventDefault()
-                    onHoldWord(ayah.number, w.position, w.arabic, w.translation)
+                    onHoldWord(ayah.number, w)
                   }}
                 />
                 {englishOnly ? ' ' : null}
