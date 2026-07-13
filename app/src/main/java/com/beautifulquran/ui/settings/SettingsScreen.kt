@@ -1,7 +1,12 @@
 package com.beautifulquran.ui.settings
 
 import android.os.Build
-import androidx.compose.foundation.background
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,24 +19,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -43,14 +43,17 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.BuildConfig
 import com.beautifulquran.R
@@ -62,6 +65,7 @@ import com.beautifulquran.ui.PageTurnSounds
 import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.themePreviewColors
 import com.beautifulquran.ui.theme.verticalFadingEdges
+import kotlin.math.roundToInt
 
 private val ATTRIBUTIONS = """
 Quran text (Uthmani script) and Saheeh International translation via the quran-json project, from Tanzil and Al Quran Cloud.
@@ -79,8 +83,13 @@ Arabic typeface: KFGQPC HAFS Uthmanic Script © King Fahd Glorious Quran Printin
 This app is free, ad-free, and collects no data.
 """.trimIndent()
 
-/** Settings as its own sheet of paper — a full page, nothing floating. */
-@OptIn(ExperimentalMaterial3Api::class)
+// Text size runs the same discrete stops the reader honours: 0.8× … 1.6×.
+private const val FONT_SCALE_MIN = 0.8f
+private const val FONT_SCALE_MAX = 1.6f
+private const val FONT_SCALE_STOPS = 8 // intervals; nine tappable stops
+
+/** Settings as its own sheet of paper — a full page, nothing floating, no
+ * cards, no dividers. Hierarchy is spacing, size, and ink alone (docs/DESIGN.md). */
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
@@ -100,162 +109,142 @@ fun SettingsScreen(
         }
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = { Text("Settings", style = MaterialTheme.typography.titleLarge) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxHeight()
+                .widthIn(max = 640.dp)
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.systemBars)
+                .verticalFadingEdges(color = MaterialTheme.colorScheme.background, top = 20.dp, bottom = 40.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 28.dp),
+        ) {
+            Spacer(Modifier.height(8.dp))
+            BackChevron(onBack)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Settings",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+
+            Spacer(Modifier.height(36.dp))
+
+            SectionLabel("Reciter")
+            Spacer(Modifier.height(4.dp))
+            reciters.forEach { reciter ->
+                SelectRow(
+                    label = reciter.name,
+                    note = if (!reciter.hasTimings) "No word highlighting" else null,
+                    selected = reciter.id == settings.reciterId,
+                    onClick = { viewModel.selectReciter(reciter) },
+                )
+            }
+
+            Section("Reading")
+            InlineChoiceRow(
+                entries = ReadingMode.entries,
+                selected = settings.readingMode,
+                label = { mode ->
+                    when (mode) {
+                        ReadingMode.ARABIC_ENGLISH -> "Arabic & English"
+                        ReadingMode.ENGLISH_ONLY -> "English"
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                ),
+                onSelect = { mode -> viewModel.settings.update { it.copy(readingMode = mode) } },
             )
-        },
-    ) { padding ->
-        Box(
-            Modifier
-                .padding(padding)
-                .fillMaxSize(),
-        ) {
-            Column(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxHeight()
-                    .widthIn(max = 640.dp)
-                    .fillMaxWidth()
-                    .verticalFadingEdges(color = MaterialTheme.colorScheme.background, top = 24.dp, bottom = 40.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 28.dp),
-            ) {
-                AppHeader(
-                    developerModeEnabled = settings.developerModeEnabled,
-                    onLogoClick = {
-                        developerTapCount++
-                        if (developerTapCount >= 3) {
-                            viewModel.settings.update {
-                                it.copy(developerModeEnabled = !it.developerModeEnabled)
-                            }
-                            developerTapCount = 0
-                        }
-                    },
-                    onLogoLongClick = {
-                        if (settings.developerModeEnabled) onOpenTimingsLab()
-                    },
-                )
 
-                Spacer(Modifier.height(32.dp))
+            Section("Text size")
+            TextSizeControl(
+                scale = settings.fontScale,
+                onScale = { v -> viewModel.settings.update { it.copy(fontScale = v) } },
+            )
 
-                SectionLabel("Reciter")
-                Spacer(Modifier.height(4.dp))
-                reciters.forEach { reciter ->
-                    ChoiceRow(
-                        label = reciter.name,
-                        description = if (!reciter.hasTimings) "No word highlighting" else null,
-                        selected = reciter.id == settings.reciterId,
-                        onClick = { viewModel.selectReciter(reciter) },
-                    )
-                }
-
-                Spacer(Modifier.height(32.dp))
-                SectionLabel("Reading")
-                Spacer(Modifier.height(6.dp))
-                EnumSegmentedRow(
-                    entries = ReadingMode.entries,
-                    selected = settings.readingMode,
-                    label = { mode ->
-                        when (mode) {
-                            ReadingMode.ARABIC_ENGLISH -> "Arabic & English"
-                            ReadingMode.ENGLISH_ONLY -> "English"
-                        }
-                    },
-                    onSelect = { mode -> viewModel.settings.update { it.copy(readingMode = mode) } },
-                )
-
-                Spacer(Modifier.height(24.dp))
-                SectionLabel("Text size")
-                Slider(
-                    value = settings.fontScale,
-                    onValueChange = { v -> viewModel.settings.update { it.copy(fontScale = v) } },
-                    valueRange = 0.8f..1.6f,
-                    steps = 7,
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                        activeTickColor = MaterialTheme.colorScheme.onPrimary,
-                        inactiveTrackColor = MaterialTheme.colorScheme.primaryContainer,
-                        inactiveTickColor = MaterialTheme.colorScheme.primary,
-                    ),
-                )
-
+            if (settings.readingMode == ReadingMode.ARABIC_ENGLISH) {
                 Spacer(Modifier.height(20.dp))
-                if (settings.readingMode == ReadingMode.ARABIC_ENGLISH) {
-                    SettingToggle(
-                        label = "Word-by-word translation",
-                        checked = settings.showWordGloss,
-                        onChange = { v -> viewModel.settings.update { it.copy(showWordGloss = v) } },
-                    )
-                    SettingToggle(
-                        label = "Transliteration",
-                        checked = settings.showTransliteration,
-                        onChange = { v -> viewModel.settings.update { it.copy(showTransliteration = v) } },
-                    )
-                    SettingToggle(
-                        label = "Ayah translation",
-                        checked = settings.showTranslation,
-                        onChange = { v -> viewModel.settings.update { it.copy(showTranslation = v) } },
-                    )
-                }
-
-                Spacer(Modifier.height(24.dp))
-                SectionLabel("Ayah selector")
-                Spacer(Modifier.height(6.dp))
-                EnumSegmentedRow(
-                    entries = AyahSelectorSide.entries,
-                    selected = settings.ayahSelectorSide,
-                    label = { side ->
-                        when (side) {
-                            AyahSelectorSide.LEFT -> "Left"
-                            AyahSelectorSide.RIGHT -> "Right"
-                        }
-                    },
-                    onSelect = { side -> viewModel.settings.update { it.copy(ayahSelectorSide = side) } },
+                ToggleRow(
+                    label = "Word-by-word translation",
+                    checked = settings.showWordGloss,
+                    onChange = { v -> viewModel.settings.update { it.copy(showWordGloss = v) } },
                 )
-
-                Spacer(Modifier.height(32.dp))
-                SectionLabel("Theme")
-                Spacer(Modifier.height(4.dp))
-                ThemeMode.entries.forEach { mode ->
-                    ThemeOptionRow(
-                        mode = mode,
-                        selected = settings.themeMode == mode,
-                        onClick = { viewModel.settings.update { it.copy(themeMode = mode) } },
-                    )
-                }
-
-                if (settings.developerModeEnabled) {
-                    Spacer(Modifier.height(48.dp))
-                    DeveloperSection(
-                        viewModel = viewModel,
-                        settings = settings,
-                        onOpenTimingsLab = onOpenTimingsLab,
-                        onRecordSystemTrace = onRecordSystemTrace,
-                    )
-                }
-
-                Spacer(Modifier.height(48.dp))
-                SectionLabel("About & attributions")
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = ATTRIBUTIONS,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                ToggleRow(
+                    label = "Transliteration",
+                    checked = settings.showTransliteration,
+                    onChange = { v -> viewModel.settings.update { it.copy(showTransliteration = v) } },
                 )
-                Spacer(Modifier.height(56.dp))
+                ToggleRow(
+                    label = "Ayah translation",
+                    checked = settings.showTranslation,
+                    onChange = { v -> viewModel.settings.update { it.copy(showTranslation = v) } },
+                )
             }
+
+            Section("Ayah selector")
+            InlineChoiceRow(
+                entries = AyahSelectorSide.entries,
+                selected = settings.ayahSelectorSide,
+                label = { side ->
+                    when (side) {
+                        AyahSelectorSide.LEFT -> "Left side"
+                        AyahSelectorSide.RIGHT -> "Right side"
+                    }
+                },
+                onSelect = { side -> viewModel.settings.update { it.copy(ayahSelectorSide = side) } },
+            )
+
+            Section("Theme")
+            Spacer(Modifier.height(2.dp))
+            ThemeMode.entries.forEach { mode ->
+                SelectRow(
+                    label = mode.label,
+                    selected = settings.themeMode == mode,
+                    onClick = { viewModel.settings.update { it.copy(themeMode = mode) } },
+                    trailing = { ThemeColorPreview(colors = themePreviewColors(mode)) },
+                )
+            }
+
+            if (settings.developerModeEnabled) {
+                Spacer(Modifier.height(44.dp))
+                DeveloperSection(
+                    viewModel = viewModel,
+                    settings = settings,
+                    onOpenTimingsLab = onOpenTimingsLab,
+                    onRecordSystemTrace = onRecordSystemTrace,
+                )
+            }
+
+            Spacer(Modifier.height(56.dp))
+            Colophon(
+                developerModeEnabled = settings.developerModeEnabled,
+                onLogoClick = {
+                    developerTapCount++
+                    if (developerTapCount >= 3) {
+                        viewModel.settings.update {
+                            it.copy(developerModeEnabled = !it.developerModeEnabled)
+                        }
+                        developerTapCount = 0
+                    }
+                },
+                onLogoLongClick = {
+                    if (settings.developerModeEnabled) onOpenTimingsLab()
+                },
+            )
+
+            Spacer(Modifier.height(18.dp))
+            Text(
+                text = ATTRIBUTIONS,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(48.dp))
         }
     }
 }
@@ -277,12 +266,8 @@ private fun DeveloperSection(
     }
 
     SectionLabel("Developer")
-    Spacer(Modifier.height(4.dp))
-    Text(
-        text = "Tools for testing work in progress.",
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-    )
+    Spacer(Modifier.height(2.dp))
+    Caption("Tools for testing work in progress.")
 
     if (BuildConfig.DEBUG && Build.VERSION.SDK_INT >= 37) {
         Spacer(Modifier.height(20.dp))
@@ -292,15 +277,10 @@ private fun DeveloperSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .quietClickable(onClick = onRecordSystemTrace)
-                .padding(vertical = 8.dp),
+                .padding(vertical = 6.dp),
             color = MaterialTheme.colorScheme.primary,
         )
-        Text(
-            text = "Android 17 ProfilingManager writes a Perfetto trace locally. " +
-                "The result path is printed to logcat under BeautifulQuranProfile.",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-        )
+        Caption("Android 17 ProfilingManager writes a Perfetto trace locally; the path is logged under BeautifulQuranProfile.")
     }
 
     Spacer(Modifier.height(20.dp))
@@ -310,38 +290,23 @@ private fun DeveloperSection(
         modifier = Modifier
             .fillMaxWidth()
             .quietClickable(onClick = onOpenTimingsLab)
-            .padding(vertical = 8.dp),
+            .padding(vertical = 6.dp),
         color = MaterialTheme.colorScheme.primary,
     )
-    Text(
-        text = "Edit word-level timing marks for the current reciter. " +
-            "Also opens from a word long-press while developer mode is on.",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-    )
+    Caption("Edit word-level timing marks; also opens from a word long-press.")
 
-    Spacer(Modifier.height(20.dp))
-    SettingToggle(
+    Spacer(Modifier.height(18.dp))
+    ToggleRow(
         label = "Ink Lab overlay",
         checked = settings.inkLabEnabled,
         onChange = { on -> viewModel.settings.update { it.copy(inkLabEnabled = on) } },
     )
-    Text(
-        text = "Live sliders over the reader's highlight tuning — fade timings, " +
-            "upcoming ink, sweep feel. Edits last for this session only.",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-    )
+    Caption("Live sliders over the reader's highlight tuning. This session only.")
 
-    Spacer(Modifier.height(20.dp))
+    Spacer(Modifier.height(18.dp))
     Text("Page turn sounds", style = MaterialTheme.typography.bodyLarge)
-    Text(
-        text = "Tap to hear the whole flip (lift → sweep → drop). In use, the " +
-            "stems track your swipe.",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-    )
-    Spacer(Modifier.height(6.dp))
+    Caption("Tap to hear the whole flip (lift → sweep → drop).")
+    Spacer(Modifier.height(4.dp))
     PageTurnSounds.FLIPS.forEachIndexed { index, flip ->
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -357,106 +322,103 @@ private fun DeveloperSection(
                 imageVector = Icons.Rounded.PlayArrow,
                 contentDescription = "Play ${flip.name}",
                 tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
             )
-            Spacer(Modifier.size(12.dp))
+            Spacer(Modifier.size(14.dp))
             Text(flip.name, style = MaterialTheme.typography.bodyLarge)
         }
     }
 }
 
+// ── Header / footer ────────────────────────────────────────────────────────
+
 @Composable
-private fun AppHeader(
+private fun BackChevron(onBack: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .quietClickable(onClick = onBack),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+            contentDescription = "Back",
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+            modifier = Modifier.size(24.dp),
+        )
+    }
+}
+
+/** The book's colophon: the app's own mark at the foot of the sheet. The
+ * quiet triple-tap on the mark toggles developer mode. */
+@Composable
+private fun Colophon(
     developerModeEnabled: Boolean,
     onLogoClick: () -> Unit,
     onLogoLongClick: () -> Unit,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    Column(
         modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
+        androidx.compose.foundation.Image(
+            painter = painterResource(R.drawable.ic_launcher_foreground),
+            contentDescription = null,
             modifier = Modifier
-                .size(52.dp)
-                .quietClickable(
-                    onClick = onLogoClick,
-                    onLongClick = onLogoLongClick,
-                ),
-        ) {
-            androidx.compose.foundation.Image(
-                painter = painterResource(R.drawable.ic_launcher_foreground),
-                contentDescription = null,
-                modifier = Modifier.size(34.dp),
-            )
-        }
-        Column(modifier = Modifier.padding(start = 12.dp)) {
-            Text(
-                text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.titleLarge,
-            )
-            Text(
-                text = buildString {
-                    append("Version ${BuildConfig.VERSION_NAME}")
-                    if (developerModeEnabled) append(" · developer mode")
-                },
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-            )
-        }
+                .size(48.dp)
+                .quietClickable(onClick = onLogoClick, onLongClick = onLogoLongClick),
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = stringResource(R.string.app_name),
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+        )
+        Text(
+            text = buildString {
+                append("Version ${BuildConfig.VERSION_NAME}")
+                if (developerModeEnabled) append(" · developer mode")
+            },
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+        )
     }
 }
 
-@Composable
-private fun ThemeOptionRow(
-    mode: ThemeMode,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    ChoiceRow(
-        label = mode.label,
-        selected = selected,
-        onClick = onClick,
-        trailing = { ThemeColorPreview(colors = themePreviewColors(mode)) },
-    )
-}
+// ── Selection vocabulary ───────────────────────────────────────────────────
 
-/** Ink choice row — accent when selected, no Material radio chrome. */
+/** A single-choice row: a green ink disc leads the label, ink strength carries
+ * the selection, and an optional trailing ornament (theme swatches) sits at the
+ * edge. No radio, no ripple. */
 @Composable
-private fun ChoiceRow(
+private fun SelectRow(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
-    description: String? = null,
-    trailing: (@Composable () -> Unit)? = null,
+    note: String? = null,
+    trailing: @Composable (() -> Unit)? = null,
 ) {
+    val textAlpha by animateFloatAsState(if (selected) 1f else 0.55f, label = "selectInk")
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .semantics { this.selected = selected }
-            .quietClickable(role = Role.RadioButton, onClick = onClick)
-            .padding(vertical = 10.dp),
+            .quietClickable(onClick = onClick)
+            .padding(vertical = 8.dp),
     ) {
-        InkMark(selected = selected)
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 14.dp),
-        ) {
+        InkDisc(selected = selected)
+        Spacer(Modifier.size(16.dp))
+        Column(Modifier.weight(1f)) {
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (selected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = textAlpha),
             )
-            if (description != null) {
+            if (note != null) {
                 Text(
-                    text = description,
+                    text = note,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
                 )
             }
         }
@@ -467,35 +429,158 @@ private fun ChoiceRow(
     }
 }
 
-/** Soft ink disc — filled when selected, whisper ring when not. */
+/** On/off row: label carries the weight, the green disc trails it in the
+ * switch position. Filled = on, faint ring = off. */
 @Composable
-private fun InkMark(selected: Boolean) {
-    val accent = MaterialTheme.colorScheme.primary
-    val muted = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f)
-    Box(
-        contentAlignment = Alignment.Center,
+private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .size(18.dp)
-            .clip(CircleShape)
-            .background(if (selected) accent.copy(alpha = 0.18f) else Color.Transparent),
+            .fillMaxWidth()
+            .quietClickable { onChange(!checked) }
+            .padding(vertical = 8.dp),
     ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+        InkDisc(selected = checked)
+    }
+}
+
+/** The shared selection mark: a green disc that inks in when chosen and
+ * settles to a faint hollow ring when not — one vocabulary for every choice on
+ * the sheet. */
+@Composable
+private fun InkDisc(selected: Boolean) {
+    val fill by animateFloatAsState(if (selected) 1f else 0f, label = "discFill")
+    val accent = MaterialTheme.colorScheme.primary
+    val outline = MaterialTheme.colorScheme.outline
+    Canvas(Modifier.size(18.dp)) {
+        val c = Offset(size.width / 2f, size.height / 2f)
+        val r = size.minDimension / 2f
+        // Faint resting ring, fading out as the fill arrives.
+        drawCircle(
+            color = outline.copy(alpha = 0.5f * (1f - fill)),
+            radius = r - 1.2.dp.toPx(),
+            center = c,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.4.dp.toPx()),
+        )
+        // Green disc, inked in on selection.
+        drawCircle(
+            color = accent.copy(alpha = fill),
+            radius = (r - 2.dp.toPx()) * fill,
+            center = c,
+        )
+    }
+}
+
+/** Two-or-three text options on one line: the chosen one in green, the rest in
+ * faint ink. Replaces the Material segmented pill (no borders, no fill). */
+@Composable
+private fun <T> InlineChoiceRow(
+    entries: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelect: (T) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(28.dp),
+    ) {
+        entries.forEach { entry ->
+            val isSel = entry == selected
+            val color by animateColorAsState(
+                if (isSel) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                },
+                label = "choiceInk",
+            )
+            Text(
+                text = label(entry),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = if (isSel) FontWeight.Medium else FontWeight.Normal,
+                color = color,
+                modifier = Modifier
+                    .quietClickable { onSelect(entry) }
+                    .padding(vertical = 6.dp),
+            )
+        }
+    }
+}
+
+/** Text size as ink, not a Material slider: an "A" at each size flanks a thin
+ * paper track with a green dot; tap or drag the track to choose. The letters
+ * show the effect the setting has. */
+@Composable
+private fun TextSizeControl(scale: Float, onScale: (Float) -> Unit) {
+    var widthPx by remember { mutableStateOf(1) }
+    val fraction = ((scale - FONT_SCALE_MIN) / (FONT_SCALE_MAX - FONT_SCALE_MIN)).coerceIn(0f, 1f)
+    val animFraction by animateFloatAsState(fraction, label = "sizeDot")
+    val trackInk = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f)
+    val accent = MaterialTheme.colorScheme.primary
+
+    fun setFromX(x: Float) {
+        val f = (x / widthPx.coerceAtLeast(1)).coerceIn(0f, 1f)
+        val stop = (f * FONT_SCALE_STOPS).roundToInt()
+        onScale(FONT_SCALE_MIN + stop.toFloat() / FONT_SCALE_STOPS * (FONT_SCALE_MAX - FONT_SCALE_MIN))
+    }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = "A",
+            fontSize = 15.sp,
+            fontFamily = MaterialTheme.typography.bodyLarge.fontFamily,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+        )
         Box(
             modifier = Modifier
-                .size(if (selected) 8.dp else 7.dp)
-                .clip(CircleShape)
-                .background(if (selected) accent else muted),
+                .weight(1f)
+                .height(44.dp)
+                .padding(horizontal = 14.dp)
+                .onSizeChanged { widthPx = it.width }
+                .pointerInput(Unit) { detectTapGestures { setFromX(it.x) } }
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures { change, _ -> setFromX(change.position.x) }
+                },
+        ) {
+            Canvas(Modifier.fillMaxSize()) {
+                val cy = size.height / 2f
+                drawLine(
+                    color = trackInk,
+                    start = Offset(0f, cy),
+                    end = Offset(size.width, cy),
+                    strokeWidth = 1.5.dp.toPx(),
+                )
+                drawCircle(
+                    color = accent,
+                    radius = 7.dp.toPx(),
+                    center = Offset(size.width * animFraction, cy),
+                )
+            }
+        }
+        Text(
+            text = "A",
+            fontSize = 26.sp,
+            fontFamily = MaterialTheme.typography.bodyLarge.fontFamily,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
         )
     }
 }
 
 @Composable
 private fun ThemeColorPreview(colors: List<Color>) {
-    Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
         colors.forEach { color ->
             Box(
                 modifier = Modifier
-                    .size(width = 16.dp, height = 22.dp)
-                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(5.dp))
+                    .size(width = 15.dp, height = 22.dp)
+                    .clip(RoundedCornerShape(5.dp))
                     .background(color),
             )
         }
@@ -510,70 +595,33 @@ private val ThemeMode.label: String
         ThemeMode.ROYAL_GREEN -> "Royal green"
     }
 
+// ── Quiet typographic helpers ──────────────────────────────────────────────
+
+/** A section opening: generous air above, then the quiet label. */
+@Composable
+private fun Section(text: String) {
+    Spacer(Modifier.height(32.dp))
+    SectionLabel(text)
+    Spacer(Modifier.height(10.dp))
+}
+
+/** Letterspaced, low-ink label — a whisper that never competes with the
+ * reading (docs/DESIGN.md). */
 @Composable
 private fun SectionLabel(text: String) {
     Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+        text = text.uppercase(),
+        style = MaterialTheme.typography.labelSmall,
+        letterSpacing = 2.sp,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
     )
 }
 
 @Composable
-private fun SettingToggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-    ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge)
-        Switch(
-            checked = checked,
-            onCheckedChange = onChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = MaterialTheme.colorScheme.surface,
-                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                uncheckedThumbColor = MaterialTheme.colorScheme.surface,
-                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
-                uncheckedBorderColor = MaterialTheme.colorScheme.outline,
-            ),
-        )
-    }
-}
-
-/**
- * Ink segmented row for short enums — selected option in accent ink, others
- * quiet. No borders, tracks, or Material segmented chrome.
- */
-@Composable
-private fun <T> EnumSegmentedRow(
-    entries: List<T>,
-    selected: T,
-    label: (T) -> String,
-    onSelect: (T) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        entries.forEach { entry ->
-            val isSelected = selected == entry
-            Text(
-                text = label(entry),
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (isSelected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.42f)
-                },
-                modifier = Modifier
-                    .quietClickable(role = Role.RadioButton, onClick = { onSelect(entry) })
-                    .semantics { this.selected = isSelected }
-                    .padding(vertical = 10.dp, horizontal = 4.dp),
-            )
-        }
-    }
+private fun Caption(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+    )
 }
