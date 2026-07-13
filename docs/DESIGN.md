@@ -475,12 +475,12 @@ overlay.
 The long Chapters ribbon is a structural part of the chapter document, not a
 decoration laid on top of it. Its visible ruby cloth begins beside the title,
 while its touch target remains available without making the cloth itself a
-wide, blank-looking control. Android permanently reserves a 42 dp Home lane
-plus 4 dp of breathing room, even before the first bookmark exists, so the
-chapter composition never moves when the ribbon appears. That 42 dp target is
-a narrow Home-only exception to the usual 44 dp minimum; verse ribbons and the
-Bookmarks index keep their full 44 dp targets. The visible cloth stays 11 dp
-wide, centred in its edge lane; its hit geometry does not set the text measure.
+wide, blank-looking control. Android permanently reserves a 28 dp Home lane,
+even before the first bookmark exists, so the chapter composition never moves
+when the ribbon appears. The lane matches the opposite page gutter exactly:
+7.5 dp of outer air, a 13 dp ribbon, then 7.5 dp of inner air. Its 28 dp target
+is a narrow Home-only exception to the usual 44 dp minimum; verse ribbons and
+the Bookmarks index keep their full 44 dp targets and 11 dp cloth.
 
 On Android, that lane is fixed to the viewport: scrolling the chapter list
 must never move the ribbon. It begins beside, and slightly below the top of,
@@ -500,7 +500,7 @@ number lane must not read as an empty decorative gutter.
 
 The ribbon's drawing and navigation are deliberately separate. Reuse
 `VerseBookmarkRibbon` for the cloth; put its Home/Chapters navigation on an
-adjacent quiet target (42 dp on Android Home, 44 px on web). That keeps the
+adjacent quiet target (28 dp on Android Home, 44 px on web). That keeps the
 ribbon fully unfurled while the Bookmarks sheet opens, prevents a mark/unmark
 animation from being borrowed as navigation feedback, and leaves the shared
 component authoritative for its own visual language. Do not create another

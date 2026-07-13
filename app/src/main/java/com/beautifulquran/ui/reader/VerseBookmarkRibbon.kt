@@ -95,6 +95,7 @@ internal fun VerseBookmarkRibbon(
      * ribbon, used when a new bookmark first arrives back on Chapters. */
     unfurlSignal: Int = 0,
     edgeInset: Dp = EDGE_INSET_DP.dp,
+    ribbonWidth: Dp = RIBBON_WIDTH_DP.dp,
     topInset: Dp = TOP_INSET_DP.dp,
     bottomGap: Dp = BOTTOM_GAP_DP.dp,
 ) {
@@ -225,7 +226,7 @@ internal fun VerseBookmarkRibbon(
             val h = size.height
             if (h <= 0f) return@Canvas
             val edgeInsetPx = edgeInset.toPx()
-            val ribbonW = RIBBON_WIDTH_DP.dp.toPx()
+            val ribbonW = ribbonWidth.toPx()
             val topInsetPx = topInset.toPx()
             val nubLen = NUB_LENGTH_DP.dp.toPx()
             val bottomGapPx = bottomGap.toPx()
