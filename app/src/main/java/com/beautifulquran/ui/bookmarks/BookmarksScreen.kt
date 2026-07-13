@@ -189,19 +189,20 @@ private fun BookmarkSearchField(value: String, onValueChange: (String) -> Unit) 
         cursorBrush = SolidColor(accent),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 24.dp)
+            .padding(start = 24.dp, top = 24.dp, end = 24.dp)
             .height(52.dp)
             .onFocusChanged { focused = it.isFocused }
             .semantics { contentDescription = "Search bookmarked verses" },
         decorationBox = { field ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Rounded.Search,
-                    contentDescription = null,
-                    tint = if (focused) accent else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                    modifier = Modifier.size(22.dp),
-                )
-                Spacer(Modifier.width(14.dp))
+                Box(Modifier.width(40.dp), contentAlignment = Alignment.CenterStart) {
+                    Icon(
+                        Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = if (focused) accent else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     if (value.isEmpty()) {
                         Text(
@@ -230,7 +231,7 @@ private fun BookmarkSectionHeader(surah: Surah, first: Boolean) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp)
-            .padding(top = if (first) 8.dp else 32.dp, bottom = 16.dp),
+            .padding(top = if (first) 18.dp else 32.dp, bottom = 12.dp),
     ) {
         Text(
             text = surah.id.toString(),
@@ -241,9 +242,10 @@ private fun BookmarkSectionHeader(surah: Surah, first: Boolean) {
                 fontFeatureSettings = "'kern' 1, 'liga' 1, 'lnum' 1, 'tnum' 1",
             ),
             color = gold,
-            modifier = Modifier.width(36.dp),
+            modifier = Modifier
+                .width(40.dp)
+                .padding(start = 4.dp),
         )
-        Spacer(Modifier.width(16.dp))
         Text(
             text = surah.nameTransliteration,
             style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 24.sp),
@@ -274,12 +276,13 @@ private fun BookmarkAyahRow(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 12.dp),
+            .padding(horizontal = 24.dp)
+            .padding(top = 8.dp, bottom = 12.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 52.dp)
+                .padding(start = 40.dp)
                 .quietClickable(onClick = onOpen),
         ) {
             Text(
@@ -299,7 +302,6 @@ private fun BookmarkAyahRow(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(8.dp))
             BookmarkReferenceOrConfirmation(
                 bookmark = bookmark,
                 confirming = confirming,
@@ -319,6 +321,7 @@ private fun BookmarkAyahRow(
                     true
                 },
                 animateOnTap = false,
+                edgeInset = 2.dp,
                 topInset = 0.dp,
                 bottomGap = 12.dp,
                 modifier = Modifier
@@ -384,12 +387,13 @@ private fun BookmarkReferenceOrConfirmation(
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "${bookmark.surah.nameTransliteration} · ",
+                        text = "Ayah",
                         style = bookmarkMetadataStyle(),
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f),
                     )
+                    Spacer(Modifier.width(4.dp))
                     Text(
-                        text = "${bookmark.surah.id}:${bookmark.ayahNumber}",
+                        text = bookmark.ayahNumber.toString(),
                         style = bookmarkMetadataStyle(FontWeight.Medium, numeric = true),
                         color = LocalQuranAccents.current.gold,
                     )
@@ -412,7 +416,7 @@ private fun BookmarkDisclosure(hiddenCount: Int, expanded: Boolean, onClick: () 
         modifier = Modifier
             .fillMaxWidth()
             .quietClickable(role = Role.Button, onClick = onClick)
-            .padding(start = 76.dp, end = 24.dp, top = 4.dp, bottom = 16.dp),
+            .padding(start = 64.dp, end = 24.dp, top = 4.dp, bottom = 16.dp),
     )
 }
 

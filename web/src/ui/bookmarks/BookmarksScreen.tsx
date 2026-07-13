@@ -206,6 +206,7 @@ function BookmarkVerse({
         focused
         side="left"
         animateOnTap={false}
+        edgeInset={2}
         topInset={8}
         bottomGap={12}
         ariaLabel={`Remove bookmark ${surah.id}:${ayah.number}`}
@@ -231,10 +232,10 @@ function BookmarkVerse({
             </button>
           </div>
         ) : (
-          <button type="button" className="bookmark-verse-ref" onClick={onOpen}>
-            <span>{surah.nameTransliteration} · </span>
-            <strong>{surah.id}:{ayah.number}</strong>
-          </button>
+          <span className="bookmark-verse-ayah">
+            Ayah{' '}
+            <strong>{ayah.number}</strong>
+          </span>
         )}
       </div>
     </li>

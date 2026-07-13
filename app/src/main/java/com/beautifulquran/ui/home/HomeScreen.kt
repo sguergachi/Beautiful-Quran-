@@ -132,7 +132,6 @@ fun HomeScreen(
     var searchFocused by remember { mutableStateOf(false) }
     var boxTop by remember { mutableFloatStateOf(0f) }
     var boxHeight by remember { mutableFloatStateOf(0f) }
-    var titleTop by remember { mutableFloatStateOf(0f) }
     var searchBottom by remember { mutableFloatStateOf(0f) }
     var searchBounds by remember { mutableStateOf<Rect?>(null) }
     var searchPaneBounds by remember { mutableStateOf<Rect?>(null) }
@@ -149,16 +148,12 @@ fun HomeScreen(
         val paneBottom = boxHeight - imeBottom - searchPaneBottomGapPx
         (paneBottom - paneTop).coerceAtLeast(0f).toDp()
     }
+    val homeRibbonTop = 40.dp
     val homeRibbonHeight = with(density) {
-        if (titleTop <= boxTop) {
-            96.dp
-        } else {
-            (boxHeight - (titleTop - boxTop) - 92.dp.toPx())
-                .coerceAtLeast(96.dp.toPx())
-                .toDp()
-        }
+        (boxHeight - homeRibbonTop.toPx() - 92.dp.toPx())
+            .coerceAtLeast(96.dp.toPx())
+            .toDp()
     }
-    val homeRibbonTop = (titleTop - boxTop).coerceAtLeast(0f).roundToInt()
     val searching = uiState.query.isNotBlank()
     val showSurahMatches = searching && uiState.surahs.isNotEmpty()
     val showWordSections = searching &&
@@ -265,23 +260,16 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Spacer(Modifier.height(30.dp))
-                        Text(
-                            text = "القرآن الكريم",
-                            style = ArabicTitleStyle,
-                            fontSize = 36.sp,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            modifier = Modifier.onGloballyPositioned {
-                                titleTop = it.boundsInWindow().top
-                            },
-                        )
-                        Spacer(Modifier.height(2.dp))
+                        Spacer(Modifier.height(38.dp))
                         Text(
                             text = "Beautiful Quran",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontSize = 34.sp,
+                                lineHeight = 40.sp,
+                            ),
+                            color = MaterialTheme.colorScheme.onBackground,
                         )
-                        Spacer(Modifier.height(24.dp))
+                        Spacer(Modifier.height(28.dp))
                     }
                     Box(
                         contentAlignment = Alignment.Center,
@@ -403,18 +391,19 @@ fun HomeScreen(
                         onToggle = { true },
                         animateOnTap = false,
                         unfurlSignal = ribbonUnfurlEpoch,
+                        edgeInset = 7.dp,
                         topInset = 0.dp,
                         bottomGap = 0.dp,
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .offset { IntOffset(0, homeRibbonTop) }
+                            .offset(y = homeRibbonTop)
                             .width(HomeRibbonLane)
                             .height(homeRibbonHeight),
                     )
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .offset { IntOffset(0, homeRibbonTop) }
+                            .offset(y = homeRibbonTop)
                             .width(HomeRibbonLane)
                             .height(homeRibbonHeight)
                             .quietClickable(role = Role.Button, onClick = onOpenBookmarks)

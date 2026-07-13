@@ -482,13 +482,21 @@ a narrow Home-only exception to the usual 44 dp minimum; verse ribbons and the
 Bookmarks index keep their full 44 dp targets. The visible cloth stays 11 dp
 wide, centred in its edge lane; its hit geometry does not set the text measure.
 
+On Android, that lane is fixed to the viewport: scrolling the chapter list
+must never move the ribbon. It begins beside, and slightly below the top of,
+the single Cormorant “Beautiful Quran” masthead and keeps a small, optically
+balanced paper gutter on both sides of the ruby cloth. The Chapters masthead
+does not repeat the Arabic app name; Arabic remains where it identifies
+Quranic content.
+
 There is one content rule beside that lane. On a bookmarked Chapters page,
 the title, search field, and gold chapter-number column all begin on it. The
 surah name may form a second, inner reading column, but no heading may drift
 back to the paper edge simply because it is larger. This alignment is checked
 as a relationship, not as unrelated platform padding values: web and Android
 may use their own layout primitives, yet must preserve the same visible
-anchors.
+anchors. Keep the gold chapter number close to its transliterated name; the
+number lane must not read as an empty decorative gutter.
 
 The ribbon's drawing and navigation are deliberately separate. Reuse
 `VerseBookmarkRibbon` for the cloth; put its Home/Chapters navigation on an
@@ -499,25 +507,75 @@ component authoritative for its own visual language. Do not create another
 bookmark icon, a second ribbon shape, or a bespoke animated substitute.
 
 The bookmark index is a compact bilingual concordance, shared by Android and
-web. It uses one centered column (560 dp / 36 rem maximum) and a fixed 52 dp/px
-content spine: a 44 dp/px ribbon lane followed by an 8 dp/px gap. Chapter rows
-align their gold number, English name, and isolated RTL Arabic name to that
-same spine. Verse entries then stack Arabic at 24/36, translation at 17/25,
-and metadata at 14/20; the title is the only display-sized element. Spacing,
-not rules or containers, separates sections.
+web. It uses one centered column (560 dp / 36 rem maximum) and a fixed 40 dp/px
+inner content spine from the outer title rule. The gold number belongs to the
+outer index lane, the English chapter name begins on the inner spine, and the
+isolated RTL Arabic name ends on the far-right Arabic rule. Verse entries then
+stack Arabic at 24/36, translation at 17/25, and metadata at 14/20; the title
+is the only display-sized element. Spacing, not rules or containers, separates
+sections.
 
 The Bookmarks header contains only its title and the Chapters return action;
 the total marked-verse count is deliberately omitted.
 
+Within the fixed outer lane, the visible ruby edge keeps its 2 dp/px optical
+inset while the narrower gold chapter number begins 4 dp/px from the
+title/search rule. Those offsets are taken from the lane's right-hand air:
+they never widen the 44 dp/px ribbon target or change the page measure. Search
+text, chapter names, verse copy, metadata, and disclosures all begin on the
+same 40 dp/px inner spine; the Arabic chapter name reaches the far-right rule
+shared by the Arabic verse copy.
+
+The index follows one vertical rhythm on both platforms: 24 dp/px from title
+to search and from search to the first chapter label, 32 dp/px before later
+chapter groups, 12 dp/px below a chapter header, and 8 dp/px between Arabic
+verse copy and its translation. The fixed-height ayah line supplies its own
+breathing room, so no extra spacer sits between translation and metadata.
+
+### Bookmark index alignment lessons
+
+- **Name anchors before assigning padding.** This surface has four: the outer
+  title rule, the 44 dp/px index target, the 40 dp/px inner reading spine, and
+  the far-right Arabic rule. Each value expresses one relationship. Scattered
+  child padding recreates almost-aligned edges that fail as soon as the
+  viewport or platform changes.
+- **Visible ink and interaction geometry are separate.** The ribbon keeps a
+  44 dp/px target while its narrow cloth sits optically inside it. Moving the
+  cloth or chapter numeral must not move the target, widen the gutter, or push
+  the reading spine. The shared ribbon component remains the authority for the
+  cloth; page layout owns only its placement.
+- **Optical equality is not numeric equality.** A wide ruby strip and a small
+  gold numeral do not look centered at the same inset. Their 2 and 4 dp/px
+  offsets are intentionally different, but both are measured inside the same
+  lane. Tune the marked element, not the whole grid.
+- **Bilingual alignment needs both edges.** English search text, chapter names,
+  translation, and metadata begin on the inner left spine. Arabic chapter
+  names and verse copy end on one far-right rule. RTL direction shapes and
+  orders Arabic; it does not place the element on the page.
+- **Measure rhythm between visible ink, not only boxes.** A 52 dp/px search
+  field and a 44 dp/px metadata target contain internal air. Center text inside
+  those targets, then judge the visible title-to-search, search-to-section,
+  section-to-verse, and translation-to-reference gaps. Adding a spacer beside
+  an already centered target doubles the intended breathing room.
+- **A section should establish context once.** The chapter header owns the
+  chapter number and bilingual name. A bookmark row repeats only its ayah
+  number; repeating the chapter name or full reference weakens hierarchy and
+  makes a one-result section feel busier than it is.
+- **Verify relationships with real narrow data.** Check x-coordinates for the
+  outer rule and inner spine, right edges for Arabic, and ink-to-ink vertical
+  gaps with a wrapped translation and a vocalized Arabic verse. Web and Compose
+  may use different primitives, but these measured relationships must match.
+
 Results remain in Quranic order and can be searched by reference, chapter
 name, or verse text. A chapter initially shows five marked verses; its green
 inline disclosure reveals the remainder, while an active search shows every
-match. The small ruby strip beside a result opens an inline Keep / Remove
-confirmation in the reference line's fixed-height space before changing the
-mark, so the page does not jump. Keep is green, Remove is quiet ink, references
-are gold, and ruby remains exclusive to the physical ribbon. Tapping the verse
-returns to it in the reader. The long Chapters ribbon is navigation only and
-never retracts when tapped.
+match. The section header establishes the chapter once; an individual result
+shows only its ayah number. The small ruby strip beside a result opens an
+inline Keep / Remove confirmation in that ayah line's fixed-height space before
+changing the mark, so the page does not jump. Keep is green, Remove is quiet
+ink, ayah numbers are gold, and ruby remains exclusive to the physical ribbon.
+Tapping the verse returns to it in the reader. The long Chapters ribbon is
+navigation only and never retracts when tapped.
 
 ## Reading modes
 
