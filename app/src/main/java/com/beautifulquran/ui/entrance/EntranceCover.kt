@@ -187,23 +187,28 @@ fun EntranceCover(
 
     // The leather board bleeds to the physical edge, but its gilt frame and
     // ornaments must clear the camera cutout and the system-bar zones — a
-    // tooled cover never runs its rule under the lens. Pull the frame in by a
-    // single margin equal on every side (the largest safe inset plus a little
-    // breathing room, never below a base margin) so the border reads as an
-    // evenly-spaced book frame rather than a full-bleed rectangle clipped by
-    // the notch.
+    // tooled cover never runs its rule under the lens. Pull the frame in with
+    // a book's proportions: generous head and foot margins, tighter
+    // fore-edges, each side floored at a base margin and grown to clear any
+    // safe inset on that edge. The result reads as a bound cover, not a thin
+    // rectangle hugging the screen.
     val layoutDirection = LocalLayoutDirection.current
     val safeInsets = WindowInsets.displayCutout.union(WindowInsets.systemBars)
-    val frameMargin = with(localDensity) {
+    val (frameMarginH, frameMarginV) = with(localDensity) {
         val breathing = 8.dp.toPx()
-        val base = 22.dp.toPx()
-        maxOf(
-            base,
-            safeInsets.getTop(this) + breathing,
-            safeInsets.getBottom(this) + breathing,
+        val baseH = 26.dp.toPx()
+        val baseV = 56.dp.toPx()
+        val h = maxOf(
+            baseH,
             safeInsets.getLeft(this, layoutDirection) + breathing,
             safeInsets.getRight(this, layoutDirection) + breathing,
         ).toDp()
+        val v = maxOf(
+            baseV,
+            safeInsets.getTop(this) + breathing,
+            safeInsets.getBottom(this) + breathing,
+        ).toDp()
+        h to v
     }
 
     // Full-bleed leather: hide the status bar for the ceremony, restore after.
@@ -333,7 +338,7 @@ fun EntranceCover(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .padding(frameMargin),
+                    .padding(horizontal = frameMarginH, vertical = frameMarginV),
             ) {
                 MushafCoverFrame(
                     brightGold = accents.goldBright,
