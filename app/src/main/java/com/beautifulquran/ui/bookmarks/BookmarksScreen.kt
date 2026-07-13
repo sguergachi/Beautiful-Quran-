@@ -195,13 +195,14 @@ private fun BookmarkSearchField(value: String, onValueChange: (String) -> Unit) 
             .semantics { contentDescription = "Search bookmarked verses" },
         decorationBox = { field ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Rounded.Search,
-                    contentDescription = null,
-                    tint = if (focused) accent else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                    modifier = Modifier.size(22.dp),
-                )
-                Spacer(Modifier.width(14.dp))
+                Box(Modifier.width(40.dp), contentAlignment = Alignment.CenterStart) {
+                    Icon(
+                        Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = if (focused) accent else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     if (value.isEmpty()) {
                         Text(
@@ -242,10 +243,9 @@ private fun BookmarkSectionHeader(surah: Surah, first: Boolean) {
             ),
             color = gold,
             modifier = Modifier
-                .width(36.dp)
-                .padding(start = 2.dp),
+                .width(40.dp)
+                .padding(start = 4.dp),
         )
-        Spacer(Modifier.width(16.dp))
         Text(
             text = surah.nameTransliteration,
             style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 24.sp),
@@ -281,7 +281,7 @@ private fun BookmarkAyahRow(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 52.dp)
+                .padding(start = 40.dp)
                 .quietClickable(onClick = onOpen),
         ) {
             Text(
@@ -415,7 +415,7 @@ private fun BookmarkDisclosure(hiddenCount: Int, expanded: Boolean, onClick: () 
         modifier = Modifier
             .fillMaxWidth()
             .quietClickable(role = Role.Button, onClick = onClick)
-            .padding(start = 76.dp, end = 24.dp, top = 4.dp, bottom = 16.dp),
+            .padding(start = 64.dp, end = 24.dp, top = 4.dp, bottom = 16.dp),
     )
 }
 

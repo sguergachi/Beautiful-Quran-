@@ -504,8 +504,8 @@ own visual language. Do not create another bookmark icon, a second ribbon
 shape, or a bespoke animated substitute.
 
 The bookmark index is a compact bilingual concordance, shared by Android and
-web. It uses one centered column (560 dp / 36 rem maximum) and a fixed 52 dp/px
-content spine: a 44 dp/px ribbon lane followed by an 8 dp/px gap. Chapter rows
+web. It uses one centered column (560 dp / 36 rem maximum) and a fixed 40 dp/px
+inner content spine from the outer title rule. Chapter rows
 align their gold number, English name, and isolated RTL Arabic name to that
 same spine. Verse entries then stack Arabic at 24/36, translation at 17/25,
 and metadata at 14/20; the title is the only display-sized element. Spacing,
@@ -514,10 +514,13 @@ not rules or containers, separates sections.
 The Bookmarks header contains only its title and the Chapters return action;
 the total marked-verse count is deliberately omitted.
 
-Within the fixed outer lane, the visible ruby edge and gold chapter number
-share a 2 dp/px optical inset from the title/search rule. That nudge is taken
-from the lane's right-hand air: it never widens the 44 dp/px ribbon target,
-moves the inner content spine, or changes the page measure.
+Within the fixed outer lane, the visible ruby edge keeps its 2 dp/px optical
+inset while the narrower gold chapter number begins 4 dp/px from the
+title/search rule. Those offsets are taken from the lane's right-hand air:
+they never widen the 44 dp/px ribbon target or change the page measure. Search
+text, chapter names, verse copy, metadata, and disclosures all begin on the
+same 40 dp/px inner spine; the Arabic chapter name reaches the far-right rule
+shared by the Arabic verse copy.
 
 Results remain in Quranic order and can be searched by reference, chapter
 name, or verse text. A chapter initially shows five marked verses; its green
