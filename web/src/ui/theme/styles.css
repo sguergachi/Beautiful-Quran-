@@ -199,6 +199,10 @@ select {
   z-index: 1;
 }
 
+.sheet[data-name='bookmarks'] {
+  z-index: 4;
+}
+
 .sheet[data-name='reader'] {
   z-index: 2;
 }
@@ -209,6 +213,20 @@ select {
 
 .sheet[data-empty='true'] {
   visibility: hidden;
+  pointer-events: none;
+}
+
+/* Bookmarks is the one left-hand top sheet: parked beyond the left edge at
+   Chapters, then laid over Home when layer -1 is selected. */
+.sheet[data-name='bookmarks'][data-active='false'] {
+  transform: translateX(-105%);
+  opacity: 0;
+  pointer-events: none;
+  content-visibility: hidden;
+  contain: strict;
+}
+
+.app-shell[data-stack='-1'] .sheet[data-name='home'] {
   pointer-events: none;
 }
 
@@ -299,6 +317,7 @@ select {
 }
 
 .sheet-frame {
+  position: relative;
   width: min(100%, 52rem);
   margin: 0 auto;
   height: 100%;
@@ -421,6 +440,30 @@ select {
 }
 
 /* —— Home —— */
+.home-scroll-page {
+  position: relative;
+  min-height: 100%;
+}
+
+.home-scroll-page > .search-row {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.home-bookmark-ribbon {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 44px;
+  z-index: 8;
+}
+
+.home-bookmark-ribbon .verse-ribbon {
+  top: 0;
+  bottom: 0;
+}
+
 .home-header {
   padding: clamp(1rem, 2.5vh, 2rem) var(--sheet-pad) 0.5rem;
   padding-top: max(clamp(1rem, 2.5vh, 2rem), env(safe-area-inset-top));
@@ -1758,6 +1801,150 @@ select {
 
 .verse-ribbon:focus-visible .verse-ribbon-canvas {
   filter: brightness(1.12);
+}
+
+/* —— Bookmark index —— */
+.bookmarks-frame {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.bookmarks-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: clamp(1.4rem, 4vh, 2.25rem) var(--sheet-pad) 1.25rem;
+}
+
+.bookmarks-header > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.bookmarks-header h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 7vw, 2.75rem);
+  font-weight: 600;
+}
+
+.bookmarks-header p,
+.bookmarks-empty {
+  margin: 0.2rem 0 0;
+  color: color-mix(in srgb, var(--ink-muted) 62%, transparent);
+}
+
+.bookmarks-header button {
+  padding: 0.8rem 0;
+  color: color-mix(in srgb, var(--accent) 82%, transparent);
+  background: transparent;
+  border: none;
+  font: 600 0.82rem/1 var(--font-body);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.bookmarks-search {
+  padding: 0 var(--sheet-pad) 1rem;
+}
+
+.bookmarks-search .paper-input {
+  width: 100%;
+}
+
+.bookmarks-scroll {
+  padding: 0 var(--sheet-pad) 4rem;
+}
+
+.bookmarks-empty {
+  padding: 3.5rem 1rem;
+  text-align: center;
+  font-size: 1.05rem;
+}
+
+.bookmark-section {
+  padding-top: 1.35rem;
+}
+
+.bookmark-section-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.4rem 0 0.55rem;
+}
+
+.bookmark-section-header > span {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.bookmark-section-header strong {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.bookmark-section-header small,
+.bookmark-verse-ref {
+  color: color-mix(in srgb, var(--ink-muted) 52%, transparent);
+  font-size: 0.78rem;
+  letter-spacing: 0.045em;
+}
+
+.bookmark-section-header b {
+  color: color-mix(in srgb, var(--accent) 84%, transparent);
+  font-family: var(--font-arabic);
+  font-size: 1.35rem;
+  font-weight: 400;
+}
+
+.bookmark-verses {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bookmark-verse {
+  position: relative;
+  min-height: 8rem;
+}
+
+.bookmark-verse-copy {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.7rem 0 0.9rem 2.6rem;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.bookmark-verse-ar {
+  width: 100%;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--ink) 92%, transparent);
+  font-family: var(--font-arabic);
+  font-size: 1.45rem;
+  line-height: 1.75;
+  text-align: right;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.bookmark-verse-translation {
+  overflow: hidden;
+  color: color-mix(in srgb, var(--ink-muted) 76%, transparent);
+  font-size: 0.98rem;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 

@@ -454,7 +454,7 @@ private fun PaperStackApp(
             settingsLayer = settingsLayer,
             // The left index is a top sheet: it slides over Chapters rather
             // than exposing another copy of the cover underneath it.
-            modifier = Modifier.zIndex(2.25f),
+            modifier = Modifier.zIndex(4f),
         ) {
             BookmarksScreen(
                 viewModel = bookmarksViewModel,

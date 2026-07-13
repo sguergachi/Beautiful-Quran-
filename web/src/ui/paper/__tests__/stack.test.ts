@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  BOOKMARKS_LAYER,
   READER_LAYER,
   hasReaderOpen,
   settingsLayerFor,
@@ -7,6 +8,11 @@ import {
 } from '../stack'
 
 describe('hasReaderOpen', () => {
+  it('maps the left-hand layer to the bookmark sheet', () => {
+    expect(sheetAtLayer(BOOKMARKS_LAYER, false)).toBe('bookmarks')
+    expect(sheetAtLayer(BOOKMARKS_LAYER, true)).toBe('bookmarks')
+  })
+
   it('is false on home with no content', () => {
     expect(hasReaderOpen(null, 'home')).toBe(false)
   })

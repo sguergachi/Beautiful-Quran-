@@ -7,7 +7,7 @@ implementation; it does not change Android behavior.
 
 **Status: implemented (v1) + hosted.** The `web/` package ships the three pure
 engines with Vitest parity, WASM SQLite over the committed `quran.db`,
-paper-stack UI (Home / Reader / Settings), cold-start entrance cover (closed
+paper-stack UI (Bookmarks / Home / Reader / Settings), cold-start entrance cover (closed
 mushaf + isti'adha text fade-in), directional ink wash, focus follow, bookmarks, root
 viewer, and a PWA shell. Production build is published to GitHub Pages at
 [`/app/`](https://sguergachi.github.io/Beautiful-Quran-/app/)
@@ -239,6 +239,11 @@ mid-tier phones — measure first.
   web idle swallowtail is hidden until the verse is hovered (or the ribbon is
   keyboard-focused). Click the tip to unfurl and bookmark. Saved verses still
   show the full ribbon at rest.
+- A saved verse also uses that same ribbon component on Chapters. It is part of
+  the scrollable chapter document, running from Search to the final chapter
+  entry; a newly added mark replays its unfurl when Chapters returns. Tapping
+  it, or swiping right on Chapters, slides the searchable Bookmarks sheet in
+  from the left above Home.
 
 ## 7. Performance bar (non-negotiable)
 
