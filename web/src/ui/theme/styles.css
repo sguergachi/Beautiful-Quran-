@@ -453,7 +453,6 @@ select {
 .home-bookmark-ribbon {
   position: absolute;
   top: 0;
-  bottom: 0;
   left: 0;
   width: 44px;
   z-index: 8;
