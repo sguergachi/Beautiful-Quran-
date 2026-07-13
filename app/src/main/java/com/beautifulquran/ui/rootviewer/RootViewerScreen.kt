@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -144,7 +145,7 @@ fun RootViewerScreen(
                         Icon(
                             imageVector = Icons.Rounded.Close,
                             contentDescription = "Close",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
                         )
                     }
                 },
@@ -166,7 +167,7 @@ fun RootViewerScreen(
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
-                        .widthIn(max = 688.dp)
+                        .widthIn(max = 592.dp)
                         .fillMaxSize()
                         .verticalFadingEdges(
                             color = MaterialTheme.colorScheme.background,
@@ -199,7 +200,7 @@ fun RootViewerScreen(
                                     text = "This root occurs ${times(ui.occurrenceCount)} across " +
                                         "${sections.size} ${if (sections.size == 1) "chapter" else "chapters"}.",
                                     style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.74f),
                                     modifier = Modifier.padding(top = 4.dp),
                                 )
                                 Spacer(Modifier.height(20.dp))
@@ -251,7 +252,7 @@ fun RootViewerScreen(
                                             } else {
                                                 "Show fewer occurrences"
                                             },
-                                            startPadding = 16.dp,
+                                            startPadding = 40.dp,
                                         ) { showAllOccurrences = !showAllOccurrences }
                                     }
                                 }
@@ -390,7 +391,7 @@ private fun WordAnalysis(
                 Text(
                     text = "This lemma occurs ${times(lemmaCount)}.",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.74f),
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
@@ -400,7 +401,7 @@ private fun WordAnalysis(
         Text(
             text = "No lexical root is annotated for this word.",
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.74f),
             modifier = Modifier.padding(top = 16.dp),
         )
     }
@@ -414,20 +415,29 @@ private fun RootLabel(text: String) {
         lineHeight = 16.sp,
         fontWeight = FontWeight.SemiBold,
         letterSpacing = 1.56.sp,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
     )
 }
 
 @Composable
 private fun RootSectionTitle(text: String) {
-    Text(
-        text = text,
-        fontFamily = DisplayFontFamily,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 24.sp,
-        lineHeight = 29.sp,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = text,
+            fontFamily = DisplayFontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 24.sp,
+            lineHeight = 29.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.width(16.dp))
+        Box(
+            Modifier
+                .weight(1f)
+                .height(1.dp)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.09f)),
+        )
+    }
 }
 
 @Composable
@@ -450,24 +460,40 @@ private fun ChapterHeading(section: RootOccurrenceSection, open: Boolean, onClic
                 text = section.surahId.toString(),
                 style = MaterialTheme.typography.bodyMedium,
                 color = gold,
+                textAlign = TextAlign.End,
+                modifier = Modifier.width(24.dp),
             )
             Spacer(Modifier.width(8.dp))
             Text(
                 text = section.surahName,
                 fontFamily = DisplayFontFamily,
-                fontSize = 20.sp,
-                lineHeight = 26.sp,
+                fontSize = 18.sp,
+                lineHeight = 24.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Text(
-            text = occurrences(section.occurrences.size),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Row(
             modifier = Modifier.padding(start = 16.dp),
-        )
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = section.occurrences.size.toString(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = if (open) "⌄" else "›",
+                fontFamily = DisplayFontFamily,
+                fontSize = 18.sp,
+                lineHeight = 18.sp,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.width(12.dp),
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
@@ -478,7 +504,7 @@ private fun OccurrenceRow(occurrence: RootOccurrence, isCurrent: Boolean, onClic
         modifier = Modifier
             .fillMaxWidth()
             .quietClickable(onClick = onClick)
-            .padding(start = 16.dp, top = 10.dp, bottom = 10.dp),
+            .padding(start = 40.dp, top = 10.dp, bottom = 10.dp),
     ) {
         Text(
             text = "${occurrence.surahId}:${occurrence.ayahNumber}${if (isCurrent) " · Here" else ""}",
@@ -505,7 +531,7 @@ private fun OccurrenceRow(occurrence: RootOccurrence, isCurrent: Boolean, onClic
                 Text(
                     text = occurrence.translation,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -537,13 +563,13 @@ private fun RelatedFormRow(form: RootLemmaSummary) {
             Text(
                 text = MorphologyLabels.posLabel(form.pos),
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
             )
         }
         Text(
             text = if (form.occurrenceCount == 1) "once" else "${form.occurrenceCount}×",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
             modifier = Modifier.padding(start = 16.dp),
         )
     }
@@ -577,8 +603,8 @@ private fun WordHeader(word: Word, isPlaying: Boolean, onPlay: () -> Unit) {
         Text(
             text = word.arabic,
             fontFamily = HafsFontFamily,
-            fontSize = 44.sp,
-            lineHeight = 64.sp,
+            fontSize = 48.sp,
+            lineHeight = 68.sp,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.width(10.dp))
@@ -602,7 +628,7 @@ private fun WordHeader(word: Word, isPlaying: Boolean, onPlay: () -> Unit) {
             text = word.transliteration,
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 2.dp),
@@ -651,5 +677,3 @@ private fun WordSpeakerButton(isPlaying: Boolean, onPlay: () -> Unit, size: Dp) 
 }
 
 private fun times(count: Int): String = if (count == 1) "once" else "$count times"
-
-private fun occurrences(count: Int): String = "$count ${if (count == 1) "occurrence" else "occurrences"}"

@@ -193,6 +193,12 @@ English uses 24 Cormorant section headings, 17 EB Garamond body/actions, and
 12–14 labels/metadata. Gold identifies Quran references, green identifies
 actions, and neither substitutes for a textual current/open state.
 
+The lexicon's two major headings — Occurrences and Related forms — may carry
+a 1 px/dp rule at 9% parchment ink from the title to the right edge of the
+content measure. It is part of the heading lockup, not a border or row
+divider: it never reaches the sheet edge, never appears between rows, and
+never uses gold.
+
 ## Ornament
 
 Traditional, geometric, and nearly invisible — ornament whispers, never

@@ -136,6 +136,7 @@ function RootViewerBleed({ closing, rv }: { closing: boolean; rv: RootViewerStat
                       <button
                         type="button"
                         className="root-chapter-heading"
+                        aria-label={`${section.surahId} ${section.surahName}, ${occurrences(section.occurrences.length)}, ${open ? 'collapse' : 'expand'}`}
                         aria-expanded={open}
                         aria-controls={regionId}
                         onClick={() => {
@@ -144,7 +145,10 @@ function RootViewerBleed({ closing, rv }: { closing: boolean; rv: RootViewerStat
                         }}
                       >
                         <span className="root-chapter-name"><i>{section.surahId}</i>{section.surahName}</span>
-                        <span className="root-chapter-count">{occurrences(section.occurrences.length)}</span>
+                        <span className="root-chapter-meta" aria-hidden="true">
+                          <span className="root-chapter-count">{section.occurrences.length}</span>
+                          <span className="root-chapter-disclosure">{open ? '⌄' : '›'}</span>
+                        </span>
                       </button>
                       {open ? (
                         <div className="root-chapter-occurrences" id={regionId}>
