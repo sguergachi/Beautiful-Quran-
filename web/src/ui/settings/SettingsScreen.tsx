@@ -55,10 +55,9 @@ export function SettingsScreen({
         <h1>Settings</h1>
 
         <section className="settings-section">
-          <h2>Reciter</h2>
           <PaperSelect
             id="setting-reciter"
-            label="Voice"
+            label="Reciter"
             wide
             value={String(s.reciterId)}
             options={state.reciters.map((r) => ({
@@ -70,10 +69,9 @@ export function SettingsScreen({
         </section>
 
         <section className="settings-section">
-          <h2>Reading</h2>
           <PaperSelect
             id="setting-mode"
-            label="Mode"
+            label="Reading"
             value={s.readingMode}
             options={[
               { value: 'arabic_english', label: 'Arabic & English' },
@@ -128,10 +126,9 @@ export function SettingsScreen({
         ) : null}
 
         <section className="settings-section">
-          <h2>Ayah selector</h2>
           <PaperSelect
             id="setting-selector"
-            label="Side"
+            label="Ayah selector"
             value={s.ayahSelectorSide}
             options={[
               { value: 'left', label: 'Left side' },
@@ -146,7 +143,6 @@ export function SettingsScreen({
         </section>
 
         <section className="settings-section">
-          <h2>Theme</h2>
           <PaperSelect
             id="setting-theme"
             label="Theme"
