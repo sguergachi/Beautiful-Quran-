@@ -127,7 +127,7 @@ fun HomeScreen(
     var searchFocused by remember { mutableStateOf(false) }
     var boxTop by remember { mutableFloatStateOf(0f) }
     var boxHeight by remember { mutableFloatStateOf(0f) }
-    var searchTop by remember { mutableFloatStateOf(0f) }
+    var titleTop by remember { mutableFloatStateOf(0f) }
     var searchBottom by remember { mutableFloatStateOf(0f) }
     var searchBounds by remember { mutableStateOf<Rect?>(null) }
     var searchPaneBounds by remember { mutableStateOf<Rect?>(null) }
@@ -145,14 +145,15 @@ fun HomeScreen(
         (paneBottom - paneTop).coerceAtLeast(0f).toDp()
     }
     val homeRibbonHeight = with(density) {
-        if (searchTop <= boxTop) {
+        if (titleTop <= boxTop) {
             96.dp
         } else {
-            (boxHeight - (searchTop - boxTop) - 92.dp.toPx())
+            (boxHeight - (titleTop - boxTop) - 92.dp.toPx())
                 .coerceAtLeast(96.dp.toPx())
                 .toDp()
         }
     }
+    val homeRibbonTop = (titleTop - boxTop).coerceAtLeast(0f).roundToInt()
     val searching = uiState.query.isNotBlank()
     val showSurahMatches = searching && uiState.surahs.isNotEmpty()
     val showWordSections = searching &&
@@ -263,6 +264,9 @@ fun HomeScreen(
                             style = ArabicTitleStyle,
                             fontSize = 36.sp,
                             color = MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.onGloballyPositioned {
+                                titleTop = it.boundsInWindow().top
+                            },
                         )
                         Spacer(Modifier.height(2.dp))
                         Text(
@@ -333,10 +337,9 @@ fun HomeScreen(
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 24.dp)
+                                .padding(horizontal = 28.dp)
                                 .onFocusChanged { searchFocused = it.isFocused }
                                 .onGloballyPositioned {
-                                    searchTop = it.boundsInWindow().top
                                     searchBottom = it.boundsInWindow().bottom
                                     searchBounds = it.boundsInRoot()
                                 },
@@ -409,30 +412,41 @@ fun HomeScreen(
                         }
                     }
 
-                    if (bookmarkCount > 0) {
-                        Box(Modifier.matchParentSize()) {
-                            VerseBookmarkRibbon(
-                                bookmarked = true,
-                                focused = true,
-                                side = AyahSelectorSide.LEFT,
-                                chromeAlpha = { 1f },
-                                interactive = true,
-                                onToggle = {
-                                    onOpenBookmarks()
-                                    true
-                                },
-                                animateOnTap = false,
-                                unfurlSignal = ribbonUnfurlEpoch,
-                                topInset = 0.dp,
-                                bottomGap = 0.dp,
-                                modifier = Modifier
-                                    .align(Alignment.TopStart)
-                                    .height(homeRibbonHeight),
-                            )
-                        }
-                    }
                 }
             }
+            }
+
+            if (bookmarkCount > 0) {
+                Box(Modifier.matchParentSize()) {
+                    // Navigation is intentionally separate from the shared
+                    // ribbon drawing: opening Bookmarks must not invoke its
+                    // mark/unmark retract path.
+                    VerseBookmarkRibbon(
+                        bookmarked = true,
+                        focused = true,
+                        side = AyahSelectorSide.LEFT,
+                        chromeAlpha = { 1f },
+                        interactive = false,
+                        onToggle = { true },
+                        animateOnTap = false,
+                        unfurlSignal = ribbonUnfurlEpoch,
+                        topInset = 0.dp,
+                        bottomGap = 0.dp,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .offset { IntOffset(0, homeRibbonTop) }
+                            .height(homeRibbonHeight),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .offset { IntOffset(0, homeRibbonTop) }
+                            .width(44.dp)
+                            .height(homeRibbonHeight)
+                            .quietClickable(role = Role.Button, onClick = onOpenBookmarks)
+                            .semantics { contentDescription = "Open bookmarks" },
+                    )
+                }
             }
 
             SearchDialsPane(

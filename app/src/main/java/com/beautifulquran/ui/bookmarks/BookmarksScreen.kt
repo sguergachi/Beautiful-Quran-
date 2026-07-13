@@ -90,7 +90,7 @@ fun BookmarksScreen(
                 contentPadding = PaddingValues(bottom = 48.dp),
             ) {
                 item(key = "title") {
-                    BookmarksHeader(uiState.totalCount, onClose)
+                    BookmarksHeader(onClose)
                 }
                 item(key = "search") {
                     BookmarkSearchField(uiState.query, viewModel::onQueryChange)
@@ -146,7 +146,7 @@ fun BookmarksScreen(
 }
 
 @Composable
-private fun BookmarksHeader(count: Int, onClose: () -> Unit) {
+private fun BookmarksHeader(onClose: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 28.dp),
@@ -159,11 +159,6 @@ private fun BookmarksHeader(count: Int, onClose: () -> Unit) {
                     lineHeight = 44.sp,
                 ),
                 color = MaterialTheme.colorScheme.onBackground,
-            )
-            Text(
-                text = if (count == 1) "1 marked verse" else "$count marked verses",
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
             )
         }
         Text(

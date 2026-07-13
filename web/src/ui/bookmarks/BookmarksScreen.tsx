@@ -54,10 +54,6 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
         <header className="bookmarks-header">
           <div>
             <h1>Bookmarks</h1>
-            <p>
-              {state.bookmarks.length}{' '}
-              {state.bookmarks.length === 1 ? 'marked verse' : 'marked verses'}
-            </p>
           </div>
           <button type="button" onClick={() => appStore.revealLayer(COVER_LAYER)}>
             Chapters&nbsp; →
@@ -65,7 +61,9 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
         </header>
 
         <div className="bookmarks-search">
-          <SearchGlyph />
+          <span className="bookmarks-search-lane" aria-hidden="true">
+            <SearchGlyph />
+          </span>
           <PaperInput
             type="search"
             name="bookmark-search"
@@ -112,15 +110,17 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     <span className="bookmark-section-number">
                       {section.surah.id}
                     </span>
-                    <span className="bookmark-section-name">
-                      {section.surah.nameTransliteration}
-                    </span>
-                    <span
-                      className="bookmark-section-arabic"
-                      lang="ar"
-                      dir="rtl"
-                    >
-                      {section.surah.nameArabic}
+                    <span className="bookmark-section-copy">
+                      <span className="bookmark-section-name">
+                        {section.surah.nameTransliteration}
+                      </span>
+                      <span
+                        className="bookmark-section-arabic"
+                        lang="ar"
+                        dir="rtl"
+                      >
+                        {section.surah.nameArabic}
+                      </span>
                     </span>
                   </header>
 
@@ -206,7 +206,7 @@ function BookmarkVerse({
         focused
         side="left"
         animateOnTap={false}
-        topInset={0}
+        topInset={8}
         bottomGap={12}
         ariaLabel={`Remove bookmark ${surah.id}:${ayah.number}`}
         onToggle={() => {
