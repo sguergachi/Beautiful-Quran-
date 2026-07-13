@@ -511,15 +511,15 @@ private fun HomeSearchField(
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.width(HomeNumberColumn),
+                    modifier = Modifier.width(HomeNumberColumn + HomeColumnGap),
                 ) {
                     Icon(
                         Icons.Rounded.Search,
                         contentDescription = null,
                         tint = mutedInk.copy(alpha = 0.5f),
+                        modifier = Modifier.size(22.dp),
                     )
                 }
-                Spacer(Modifier.width(HomeColumnGap))
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     if (value.isEmpty()) {
                         Text(
