@@ -656,92 +656,119 @@ private fun pointInConvex(vertices: List<OrnamentPoint>, px: Double, py: Double)
     return true
 }
 
-private fun translated(vertices: List<OrnamentPoint>, dx: Double, dy: Double): List<OrnamentPoint> =
-    vertices.map { OrnamentPoint(it.x + dx, it.y + dy) }
+// ── Star-and-cross field ───────────────────────────────────────────────────
+//
+// The all-over background of illuminated pages and tooled bindings: a
+// continuous star-and-cross tessellation, drawn as complete interlocking
+// motifs (not ray fragments, which read as scattered marks at whisper ink).
+// Eight-pointed khatam stars sit at the centre of a unit cell; their four
+// cardinal points reach exactly to the cell-edge midpoints, so each star
+// kisses its orthogonal neighbours tip-to-tip. Their diagonal points are
+// tied together by a small knot at each cell corner — one knot per lattice
+// point when the cell tiles — closing the weave into one unbroken net.
 
-private fun regularPolygon(cx: Double, cy: Double, r: Double, n: Int, startAngle: Double): List<OrnamentPoint> {
-    val pts = ArrayList<OrnamentPoint>(n)
-    for (i in 0 until n) {
-        val a = startAngle + i * TAU / n
-        pts.add(OrnamentPoint(cx + r * cos(a), cy + r * sin(a)))
-    }
-    return pts
+/** Star outer radius: cardinal points land on the cell-edge midpoints. */
+private const val FIELD_STAR_R = 0.5
+
+/** Diagonal half-extent of the star's points (R/√2). */
+private val FIELD_S = FIELD_STAR_R / kotlin.math.sqrt(2.0)
+
+/** Knot half-extent at a corner: reaches the four nearest diagonal tips. */
+private val FIELD_G = FIELD_STAR_R - FIELD_S
+
+private fun fieldStroke(pts: List<OrnamentPoint>) =
+    OrnamentStroke(pts, closed = true, weight = StrokeWeight.Hairline, birth = 0.0, span = 1.0)
+
+/**
+ * Eight-pointed khatam star at (cx, cy): a diamond through the cardinal
+ * points and an axis-aligned square through the diagonal points, both
+ * reaching [FIELD_STAR_R] — two overlapped squares, the classic khatam.
+ */
+private fun khatamStar(cx: Double, cy: Double): List<OrnamentStroke> {
+    val r = FIELD_STAR_R
+    val s = FIELD_S
+    return listOf(
+        fieldStroke(
+            listOf(
+                OrnamentPoint(cx + r, cy), OrnamentPoint(cx, cy + r),
+                OrnamentPoint(cx - r, cy), OrnamentPoint(cx, cy - r),
+            ),
+        ),
+        fieldStroke(
+            listOf(
+                OrnamentPoint(cx + s, cy + s), OrnamentPoint(cx - s, cy + s),
+                OrnamentPoint(cx - s, cy - s), OrnamentPoint(cx + s, cy - s),
+            ),
+        ),
+    )
 }
 
 /**
- * A field pattern from one of three classical tilings — the square grid,
- * the octagon-and-square (4.8.8, home of the star-and-cross), and the
- * diamond grid (the square grid at 45°, a distinct diagonal read) — at a
- * sampled contact angle. Angle bands skirt the degenerate θ where paired
- * rays go collinear. All three tilings live in the 4/8-fold khatam family;
- * 6-fold tilings are deliberately absent (no hexagram-adjacent stars).
+ * The {8/3} octagram at (cx, cy): one interlaced closed polyline through the
+ * same eight points as the khatam, for a more woven star.
+ */
+private fun octagramStar(cx: Double, cy: Double): OrnamentStroke {
+    val r = FIELD_STAR_R
+    val pts = ArrayList<OrnamentPoint>(8)
+    var k = 0
+    repeat(8) {
+        val a = k * PI / 4.0
+        pts.add(OrnamentPoint(cx + r * cos(a), cy + r * sin(a)))
+        k = (k + 3) % 8
+    }
+    return fieldStroke(pts)
+}
+
+/** Square knot at (cx, cy): corners on the four nearest star diagonal tips. */
+private fun squareKnot(cx: Double, cy: Double): OrnamentStroke {
+    val g = FIELD_G
+    return fieldStroke(
+        listOf(
+            OrnamentPoint(cx + g, cy + g), OrnamentPoint(cx - g, cy + g),
+            OrnamentPoint(cx - g, cy - g), OrnamentPoint(cx + g, cy - g),
+        ),
+    )
+}
+
+/** Octagon knot at (cx, cy): a regular octagon through the same diagonal tips. */
+private fun octagonKnot(cx: Double, cy: Double): OrnamentStroke {
+    val rr = FIELD_G * kotlin.math.sqrt(2.0)
+    val pts = ArrayList<OrnamentPoint>(8)
+    for (i in 0 until 8) {
+        val a = i * PI / 4.0
+        pts.add(OrnamentPoint(cx + rr * cos(a), cy + rr * sin(a)))
+    }
+    return fieldStroke(pts)
+}
+
+/** A small diamond centre-mark inside the star. */
+private fun centreMark(cx: Double, cy: Double, h: Double): OrnamentStroke =
+    fieldStroke(
+        listOf(
+            OrnamentPoint(cx + h, cy), OrnamentPoint(cx, cy + h),
+            OrnamentPoint(cx - h, cy), OrnamentPoint(cx, cy - h),
+        ),
+    )
+
+/**
+ * A star-and-cross field: an eight-pointed star (khatam or {8/3} octagram)
+ * at the cell centre, a knot (square or octagon) at the cell corner, and an
+ * optional centre-mark. One unit cell tiles the plane into the continuous
+ * pattern; density comes from the rendered cell width. Everything is in the
+ * 4/8-fold khatam family, so nothing can read as a hexagram.
  */
 private fun generateField(rng: Mulberry32): FieldSpec {
-    val tiling = rng.int(3)
-    val deg = when (tiling) {
-        0 -> if (rng.chance(0.5)) rng.range(28.0, 42.0) else rng.range(50.0, 68.0)
-        1 -> if (rng.chance(0.5)) rng.range(30.0, 42.0) else rng.range(50.0, 64.0)
-        else -> if (rng.chance(0.5)) rng.range(28.0, 42.0) else rng.range(50.0, 68.0)
-    }
-    val theta = deg * PI / 180.0
-
-    val polygons = ArrayList<List<OrnamentPoint>>()
-    val cellW: Double
-    val cellH: Double
-    val cellWidthDp: Double
-    when (tiling) {
-        0 -> {
-            cellW = 1.0
-            cellH = 1.0
-            cellWidthDp = rng.range(56.0, 80.0)
-            polygons.add(
-                listOf(
-                    OrnamentPoint(0.0, 0.0),
-                    OrnamentPoint(1.0, 0.0),
-                    OrnamentPoint(1.0, 1.0),
-                    OrnamentPoint(0.0, 1.0),
-                ),
-            )
-        }
-        1 -> {
-            // 4.8.8 — octagon side 1 centred in the cell, a diamond (unit
-            // square at 45°) on the cell corner filling the gap.
-            val p = 1.0 + kotlin.math.sqrt(2.0)
-            cellW = p
-            cellH = p
-            cellWidthDp = rng.range(88.0, 120.0)
-            val rc = 1.0 / (2.0 * sin(PI / 8.0))
-            polygons.add(regularPolygon(p / 2.0, p / 2.0, rc, 8, PI / 8.0))
-            val h = kotlin.math.sqrt(2.0) / 2.0
-            polygons.add(
-                listOf(
-                    OrnamentPoint(h, 0.0),
-                    OrnamentPoint(0.0, h),
-                    OrnamentPoint(-h, 0.0),
-                    OrnamentPoint(0.0, -h),
-                ),
-            )
-        }
-        else -> {
-            // Diamond grid — two unit diamonds per 2 × 2 cell, the square
-            // grid rotated 45° for a diagonal star-and-cross read.
-            cellW = 2.0
-            cellH = 2.0
-            cellWidthDp = rng.range(96.0, 132.0)
-            val diamond = listOf(
-                OrnamentPoint(1.0, 0.0),
-                OrnamentPoint(0.0, 1.0),
-                OrnamentPoint(-1.0, 0.0),
-                OrnamentPoint(0.0, -1.0),
-            )
-            polygons.add(diamond)
-            polygons.add(translated(diamond, 1.0, 1.0))
-        }
-    }
+    val octagram = rng.chance(0.5)
+    val useOctagonKnot = rng.chance(0.5)
+    val withCentre = rng.chance(0.5)
+    val cellWidthDp = rng.range(48.0, 74.0)
 
     val strokes = ArrayList<OrnamentStroke>()
-    for (poly in polygons) strokes.addAll(hankinStrokes(poly, theta))
-    return FieldSpec(cellW, cellH, cellWidthDp, strokes)
+    if (octagram) strokes.add(octagramStar(0.5, 0.5)) else strokes.addAll(khatamStar(0.5, 0.5))
+    strokes.add(if (useOctagonKnot) octagonKnot(0.0, 0.0) else squareKnot(0.0, 0.0))
+    if (withCentre) strokes.add(centreMark(0.5, 0.5, 0.08))
+
+    return FieldSpec(1.0, 1.0, cellWidthDp, strokes)
 }
 
 /**

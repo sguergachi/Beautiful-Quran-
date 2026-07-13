@@ -60,6 +60,7 @@ surfaces use it today / by design:
 | Notification permission | Play control | The allow / not-now question (word-by-word lyric fade) |
 | [Root Word Viewer](ROOT_VIEWER.md) | Long-pressed word | Root, form, and concordance for that word |
 | [Timings Lab](TIMINGS_LAB.md) | Long-pressed word (developer mode only) | The timing workbench |
+| Ornaments Lab | Settings → Developer (developer mode only) | The procedural ornament generator workbench — explore/design/save seeds |
 
 For the notification prompt specifically:
 
@@ -500,6 +501,12 @@ as a relationship, not as unrelated platform padding values: web and Android
 may use their own layout primitives, yet must preserve the same visible
 anchors. Keep the gold chapter number close to its transliterated name; the
 number lane must not read as an empty decorative gutter.
+
+The Android search pill owns an even 16 dp internal inset on both ends; its
+icon and text spacing is independent of the chapter-number grid. Continue
+listening is the one full-bleed row in the scrolling chapter document: its
+quiet green wash and tap target reach both sheet edges, while its bilingual
+text remains on the same inner English and Arabic rails as the chapter rows.
 
 The ribbon's drawing and navigation are deliberately separate. Reuse
 `VerseBookmarkRibbon` for the cloth; put its Home/Chapters navigation on an

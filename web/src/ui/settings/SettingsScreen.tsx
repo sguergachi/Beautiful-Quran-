@@ -216,6 +216,27 @@ export function SettingsScreen({
         </section>
 
         <section className="settings-section">
+          <h2>Developer</h2>
+          <PaperSwitch
+            id="setting-developer"
+            label="Developer mode"
+            checked={s.developerMode}
+            onChange={(checked) => appStore.updateSettings({ developerMode: checked })}
+          />
+          {s.developerMode ? (
+            <button
+              type="button"
+              className="settings-dev-button"
+              onClick={() => {
+                location.hash = '#lab'
+              }}
+            >
+              Open Ornaments Lab
+            </button>
+          ) : null}
+        </section>
+
+        <section className="settings-section">
           <h2>About & attributions</h2>
           <p className="settings-attributions">{ATTRIBUTIONS}</p>
         </section>

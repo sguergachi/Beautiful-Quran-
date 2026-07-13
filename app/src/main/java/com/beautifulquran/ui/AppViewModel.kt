@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.beautifulquran.QuranApp
+import com.beautifulquran.ornamentslab.OrnamentsLabViewModel
 import com.beautifulquran.ui.bookmarks.BookmarksViewModel
 import com.beautifulquran.ui.home.HomeViewModel
 import com.beautifulquran.ui.reader.ReaderViewModel
@@ -30,6 +31,8 @@ object AppViewModelFactory : ViewModelProvider.Factory {
                 TimingsLabViewModel(app.repository, app.settings, app.player, app.timingOverrides) as T
             modelClass.isAssignableFrom(RootViewerViewModel::class.java) ->
                 RootViewerViewModel(app.repository, app.settings, app.player) as T
+            modelClass.isAssignableFrom(OrnamentsLabViewModel::class.java) ->
+                OrnamentsLabViewModel(app.ornamentSeeds) as T
             else -> throw IllegalArgumentException("Unknown ViewModel: $modelClass")
         }
     }

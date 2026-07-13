@@ -608,86 +608,122 @@ function pointInConvex(vertices: OrnamentPoint[], px: number, py: number): boole
   return true
 }
 
-function translated(vertices: OrnamentPoint[], dx: number, dy: number): OrnamentPoint[] {
-  return vertices.map((v) => ({ x: v.x + dx, y: v.y + dy }))
-}
+// ── Star-and-cross field ───────────────────────────────────────────────────
+//
+// The all-over background of illuminated pages and tooled bindings: a
+// continuous star-and-cross tessellation, drawn as complete interlocking
+// motifs (not ray fragments, which read as scattered marks at whisper ink).
+// Eight-pointed khatam stars sit at the centre of a unit cell; their four
+// cardinal points reach exactly to the cell-edge midpoints, so each star
+// kisses its orthogonal neighbours tip-to-tip. Their diagonal points are
+// tied together by a small knot at each cell corner — one knot per lattice
+// point when the cell tiles — closing the weave into one unbroken net.
 
-function regularPolygon(
-  cx: number,
-  cy: number,
-  r: number,
-  n: number,
-  startAngle: number,
-): OrnamentPoint[] {
-  const points: OrnamentPoint[] = []
-  for (let i = 0; i < n; i++) {
-    const a = startAngle + (i * TAU) / n
-    points.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) })
-  }
-  return points
+/** Star outer radius: cardinal points land on the cell-edge midpoints. */
+const FIELD_STAR_R = 0.5
+
+/** Diagonal half-extent of the star's points (R/√2). */
+const FIELD_S = FIELD_STAR_R / Math.sqrt(2)
+
+/** Knot half-extent at a corner: reaches the four nearest diagonal tips. */
+const FIELD_G = FIELD_STAR_R - FIELD_S
+
+function fieldStroke(points: OrnamentPoint[]): OrnamentStroke {
+  return { points, closed: true, weight: 'hairline', birth: 0, span: 1 }
 }
 
 /**
- * A field from the square, octagon-square (4.8.8), or diamond tiling —
- * all in the 4/8-fold khatam family; 6-fold tilings are deliberately
- * absent (no hexagram-adjacent stars).
+ * Eight-pointed khatam star at (cx, cy): a diamond through the cardinal
+ * points and an axis-aligned square through the diagonal points, both
+ * reaching FIELD_STAR_R — two overlapped squares, the classic khatam.
+ */
+function khatamStar(cx: number, cy: number): OrnamentStroke[] {
+  const r = FIELD_STAR_R
+  const s = FIELD_S
+  return [
+    fieldStroke([
+      { x: cx + r, y: cy },
+      { x: cx, y: cy + r },
+      { x: cx - r, y: cy },
+      { x: cx, y: cy - r },
+    ]),
+    fieldStroke([
+      { x: cx + s, y: cy + s },
+      { x: cx - s, y: cy + s },
+      { x: cx - s, y: cy - s },
+      { x: cx + s, y: cy - s },
+    ]),
+  ]
+}
+
+/**
+ * The {8/3} octagram at (cx, cy): one interlaced closed polyline through the
+ * same eight points as the khatam, for a more woven star.
+ */
+function octagramStar(cx: number, cy: number): OrnamentStroke {
+  const r = FIELD_STAR_R
+  const points: OrnamentPoint[] = []
+  let k = 0
+  for (let i = 0; i < 8; i++) {
+    const a = (k * Math.PI) / 4
+    points.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) })
+    k = (k + 3) % 8
+  }
+  return fieldStroke(points)
+}
+
+/** Square knot at (cx, cy): corners on the four nearest star diagonal tips. */
+function squareKnot(cx: number, cy: number): OrnamentStroke {
+  const g = FIELD_G
+  return fieldStroke([
+    { x: cx + g, y: cy + g },
+    { x: cx - g, y: cy + g },
+    { x: cx - g, y: cy - g },
+    { x: cx + g, y: cy - g },
+  ])
+}
+
+/** Octagon knot at (cx, cy): a regular octagon through the same diagonal tips. */
+function octagonKnot(cx: number, cy: number): OrnamentStroke {
+  const rr = FIELD_G * Math.sqrt(2)
+  const points: OrnamentPoint[] = []
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4
+    points.push({ x: cx + rr * Math.cos(a), y: cy + rr * Math.sin(a) })
+  }
+  return fieldStroke(points)
+}
+
+/** A small diamond centre-mark inside the star. */
+function centreMark(cx: number, cy: number, h: number): OrnamentStroke {
+  return fieldStroke([
+    { x: cx + h, y: cy },
+    { x: cx, y: cy + h },
+    { x: cx - h, y: cy },
+    { x: cx, y: cy - h },
+  ])
+}
+
+/**
+ * A star-and-cross field: an eight-pointed star (khatam or {8/3} octagram)
+ * at the cell centre, a knot (square or octagon) at the cell corner, and an
+ * optional centre-mark. One unit cell tiles the plane into the continuous
+ * pattern; density comes from the rendered cell width. Everything is in the
+ * 4/8-fold khatam family, so nothing can read as a hexagram.
  */
 function generateField(rng: Mulberry32): FieldSpec {
-  const tiling = rng.int(3)
-  let deg: number
-  if (tiling === 0) deg = rng.chance(0.5) ? rng.range(28, 42) : rng.range(50, 68)
-  else if (tiling === 1) deg = rng.chance(0.5) ? rng.range(30, 42) : rng.range(50, 64)
-  else deg = rng.chance(0.5) ? rng.range(28, 42) : rng.range(50, 68)
-  const theta = (deg * Math.PI) / 180
-
-  const polygons: OrnamentPoint[][] = []
-  let cellW: number
-  let cellH: number
-  let cellWidthDp: number
-  if (tiling === 0) {
-    cellW = 1
-    cellH = 1
-    cellWidthDp = rng.range(56, 80)
-    polygons.push([
-      { x: 0, y: 0 },
-      { x: 1, y: 0 },
-      { x: 1, y: 1 },
-      { x: 0, y: 1 },
-    ])
-  } else if (tiling === 1) {
-    // 4.8.8 — octagon side 1 centred in the cell, a diamond on the corner.
-    const p = 1 + Math.sqrt(2)
-    cellW = p
-    cellH = p
-    cellWidthDp = rng.range(88, 120)
-    const rc = 1 / (2 * Math.sin(Math.PI / 8))
-    polygons.push(regularPolygon(p / 2, p / 2, rc, 8, Math.PI / 8))
-    const h = Math.sqrt(2) / 2
-    polygons.push([
-      { x: h, y: 0 },
-      { x: 0, y: h },
-      { x: -h, y: 0 },
-      { x: 0, y: -h },
-    ])
-  } else {
-    // Diamond grid — two unit diamonds per 2 × 2 cell, the square grid
-    // rotated 45° for a diagonal star-and-cross read.
-    cellW = 2
-    cellH = 2
-    cellWidthDp = rng.range(96, 132)
-    const diamond: OrnamentPoint[] = [
-      { x: 1, y: 0 },
-      { x: 0, y: 1 },
-      { x: -1, y: 0 },
-      { x: 0, y: -1 },
-    ]
-    polygons.push(diamond)
-    polygons.push(translated(diamond, 1, 1))
-  }
+  const octagram = rng.chance(0.5)
+  const useOctagonKnot = rng.chance(0.5)
+  const withCentre = rng.chance(0.5)
+  const cellWidthDp = rng.range(48, 74)
 
   const strokes: OrnamentStroke[] = []
-  for (const poly of polygons) strokes.push(...hankinStrokes(poly, theta))
-  return { cellW, cellH, cellWidthDp, strokes }
+  if (octagram) strokes.push(octagramStar(0.5, 0.5))
+  else strokes.push(...khatamStar(0.5, 0.5))
+  strokes.push(useOctagonKnot ? octagonKnot(0, 0) : squareKnot(0, 0))
+  if (withCentre) strokes.push(centreMark(0.5, 0.5, 0.08))
+
+  return { cellW: 1, cellH: 1, cellWidthDp, strokes }
 }
 
 /**
