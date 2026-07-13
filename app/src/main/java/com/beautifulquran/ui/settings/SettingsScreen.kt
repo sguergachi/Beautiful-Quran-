@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
@@ -554,10 +555,11 @@ private fun InkDisc(selected: Boolean) {
     }
 }
 
-/** A choice between a handful of options, all shown side by side. A green ink
- * underline — like a reader's pen stroke under the chosen word — slides beneath
- * the active option, so the pair reads unmistakably as "pick one." No borders,
- * no pill, no fill: just ink and a slide (docs/DESIGN.md). */
+/** A choice between a handful of options, all shown side by side. The chosen
+ * option is *circled* with a quick green pen loop — a reader's own annotation on
+ * the page — which glides to whichever word is picked. A loop, not an underline,
+ * so the pair never reads as tabs. No borders, no pill, no fill: ink and a slide
+ * (docs/DESIGN.md). */
 @Composable
 private fun <T> InlineChoiceRow(
     entries: List<T>,
@@ -566,32 +568,50 @@ private fun <T> InlineChoiceRow(
     onSelect: (T) -> Unit,
 ) {
     // Each option reports its left edge and width (px, in the Row's own space)
-    // so the underline can travel to whichever one is chosen.
+    // so the loop can travel to whichever one is chosen.
     val bounds = remember { mutableStateMapOf<Int, Pair<Float, Float>>() }
     val selectedIndex = entries.indexOfFirst { it == selected }.coerceAtLeast(0)
     val target = bounds[selectedIndex]
     val accent = MaterialTheme.colorScheme.primary
 
-    val left by animateFloatAsState(target?.first ?: 0f, label = "underlineLeft")
-    val width by animateFloatAsState(target?.second ?: 0f, label = "underlineWidth")
+    val left by animateFloatAsState(target?.first ?: 0f, label = "loopLeft")
+    val width by animateFloatAsState(target?.second ?: 0f, label = "loopWidth")
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .drawBehind {
-                if (width > 0f) {
-                    val y = size.height - 1.5.dp.toPx()
-                    drawLine(
-                        color = accent,
-                        start = Offset(left, y),
-                        end = Offset(left + width, y),
-                        strokeWidth = 2.dp.toPx(),
-                        cap = StrokeCap.Round,
+                if (width <= 0f) return@drawBehind
+                val padX = 9.dp.toPx()
+                val insetY = 2.dp.toPx()
+                val oval = Rect(
+                    left = left - padX,
+                    top = insetY,
+                    right = left + width + padX,
+                    bottom = size.height - insetY,
+                )
+                // One quick pen stroke that overshoots where it began, so it
+                // reads as a hand-drawn ring around the word, not a tab rule.
+                val loop = Path().apply {
+                    arcTo(
+                        rect = oval,
+                        startAngleDegrees = 138f,
+                        sweepAngleDegrees = 366f,
+                        forceMoveTo = true,
                     )
                 }
+                drawPath(
+                    path = loop,
+                    color = accent,
+                    style = Stroke(
+                        width = 2.dp.toPx(),
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round,
+                    ),
+                )
             },
-        verticalAlignment = Alignment.Bottom,
-        horizontalArrangement = Arrangement.spacedBy(28.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(30.dp),
     ) {
         entries.forEachIndexed { index, entry ->
             val isSel = entry == selected
@@ -614,7 +634,7 @@ private fun <T> InlineChoiceRow(
                         bounds[index] = rect.left to rect.width
                     }
                     .quietClickable { onSelect(entry) }
-                    .padding(top = 4.dp, bottom = 9.dp),
+                    .padding(vertical = 8.dp),
             )
         }
     }
