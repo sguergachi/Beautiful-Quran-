@@ -74,8 +74,9 @@ class PageTurnSounds(context: Context) {
     private var turnRate = 1f
 
     /**
-     * Feed the paper stack's current fractional position (0 = cover, 1 = reader,
-     * 2 = settings). Safe to call every frame from both drags and animations.
+     * Feed the paper stack's current fractional position (-1 = bookmarks,
+     * 0 = cover, 1 = reader, 2 = settings). Safe to call every frame from both
+     * drags and animations.
      */
     fun onPosition(pos: Float) {
         val now = System.nanoTime()
