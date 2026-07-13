@@ -4,6 +4,38 @@ import { normalizeArabicForSearch } from '../../domain/WordSearch'
 export type BookmarkedVerse = { surah: Surah; ayah: Ayah }
 export type BookmarkSection = { surah: Surah; verses: BookmarkedVerse[] }
 
+export const BOOKMARK_SECTION_PREVIEW_LIMIT = 5
+
+export function visibleBookmarkVerses(
+  verses: BookmarkedVerse[],
+  expanded: boolean,
+  searching: boolean,
+): BookmarkedVerse[] {
+  return expanded || searching
+    ? verses
+    : verses.slice(0, BOOKMARK_SECTION_PREVIEW_LIMIT)
+}
+
+export function hiddenBookmarkCount(
+  verses: BookmarkedVerse[],
+  expanded: boolean,
+  searching: boolean,
+): number {
+  return expanded || searching
+    ? 0
+    : Math.max(0, verses.length - BOOKMARK_SECTION_PREVIEW_LIMIT)
+}
+
+export function bookmarkDisclosureLabel(
+  hiddenCount: number,
+  expanded: boolean,
+): string {
+  if (expanded) return 'Show fewer bookmarks'
+  return hiddenCount === 1
+    ? 'Show 1 more bookmark'
+    : `Show ${hiddenCount} more bookmarks`
+}
+
 export function filterBookmarkSections(
   verses: BookmarkedVerse[],
   query: string,

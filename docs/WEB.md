@@ -244,6 +244,15 @@ mid-tier phones — measure first.
   entry; a newly added mark replays its unfurl when Chapters returns. Tapping
   it, or swiping right on Chapters, slides the searchable Bookmarks sheet in
   from the left above Home.
+- The Bookmarks sheet is a single compact bilingual concordance, capped at
+  36 rem and aligned to the Android 560 dp composition. A 44 px ribbon lane
+  plus 8 px gap defines the 52 px text spine for chapter headings, verse copy,
+  references, confirmations, and disclosure actions. Arabic, English, and
+  Western references remain separate elements so bidi order is explicit.
+- Each chapter previews five bookmarks. A local green action reveals or
+  collapses the rest; search bypasses the preview and displays every match.
+  Unmarking swaps the fixed-height reference line for an inline confirmation,
+  focuses Keep, and reserves ruby for the existing ribbon component.
 
 ## 7. Performance bar (non-negotiable)
 

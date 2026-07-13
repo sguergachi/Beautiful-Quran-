@@ -28,6 +28,27 @@ data class BookmarksUiState(
     val loading: Boolean = true,
 )
 
+internal const val BOOKMARK_SECTION_PREVIEW_LIMIT = 5
+
+internal fun visibleBookmarkAyahs(
+    ayahs: List<BookmarkedAyah>,
+    expanded: Boolean,
+    searching: Boolean,
+): List<BookmarkedAyah> =
+    if (expanded || searching) ayahs else ayahs.take(BOOKMARK_SECTION_PREVIEW_LIMIT)
+
+internal fun hiddenBookmarkCount(
+    ayahs: List<BookmarkedAyah>,
+    expanded: Boolean,
+    searching: Boolean,
+): Int = if (expanded || searching) 0 else (ayahs.size - BOOKMARK_SECTION_PREVIEW_LIMIT).coerceAtLeast(0)
+
+internal fun bookmarkDisclosureLabel(hiddenCount: Int, expanded: Boolean): String = when {
+    expanded -> "Show fewer bookmarks"
+    hiddenCount == 1 -> "Show 1 more bookmark"
+    else -> "Show $hiddenCount more bookmarks"
+}
+
 /** Filters bookmark text and groups matches under their chapter heading. */
 internal fun bookmarkSections(
     ayahs: List<BookmarkedAyah>,
