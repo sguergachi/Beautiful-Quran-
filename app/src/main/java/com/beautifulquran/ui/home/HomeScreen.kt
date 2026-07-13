@@ -127,6 +127,7 @@ fun HomeScreen(
     var searchFocused by remember { mutableStateOf(false) }
     var boxTop by remember { mutableFloatStateOf(0f) }
     var boxHeight by remember { mutableFloatStateOf(0f) }
+    var searchTop by remember { mutableFloatStateOf(0f) }
     var searchBottom by remember { mutableFloatStateOf(0f) }
     var searchBounds by remember { mutableStateOf<Rect?>(null) }
     var searchPaneBounds by remember { mutableStateOf<Rect?>(null) }
@@ -142,6 +143,15 @@ fun HomeScreen(
         val paneTop = searchBottom - boxTop + searchPaneTopGapPx
         val paneBottom = boxHeight - imeBottom - searchPaneBottomGapPx
         (paneBottom - paneTop).coerceAtLeast(0f).toDp()
+    }
+    val homeRibbonHeight = with(density) {
+        if (searchTop <= boxTop) {
+            96.dp
+        } else {
+            (boxHeight - (searchTop - boxTop) - 92.dp.toPx())
+                .coerceAtLeast(96.dp.toPx())
+                .toDp()
+        }
     }
     val searching = uiState.query.isNotBlank()
     val showSurahMatches = searching && uiState.surahs.isNotEmpty()
@@ -326,6 +336,7 @@ fun HomeScreen(
                                 .padding(horizontal = 24.dp)
                                 .onFocusChanged { searchFocused = it.isFocused }
                                 .onGloballyPositioned {
+                                    searchTop = it.boundsInWindow().top
                                     searchBottom = it.boundsInWindow().bottom
                                     searchBounds = it.boundsInRoot()
                                 },
@@ -412,10 +423,10 @@ fun HomeScreen(
                                 },
                                 unfurlSignal = ribbonUnfurlEpoch,
                                 topInset = 0.dp,
-                                bottomGap = 16.dp,
+                                bottomGap = 0.dp,
                                 modifier = Modifier
                                     .align(Alignment.TopStart)
-                                    .fillMaxHeight(),
+                                    .height(homeRibbonHeight),
                             )
                         }
                     }
