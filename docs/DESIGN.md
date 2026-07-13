@@ -465,7 +465,7 @@ SharedPreferences store (`data/BookmarkRepository.kt`), never in the read-only
 Once a newly marked verse returns to Chapters, the same physical ribbon used
 inside its verse block unfurls beside the title and runs to just above the page
 bottom, then remains exposed on the left edge. Its drawing stays fully unfurled
-while a separate 44 dp/px navigation target opens Bookmarks, so tapping it—or
+while a separate navigation target opens Bookmarks, so tapping it—or
 pulling right from Chapters—never plays a retract before the Bookmarks sheet
 slides in from the left above it. This is a real page in the paper stack, not an
 overlay.
@@ -474,10 +474,13 @@ overlay.
 
 The long Chapters ribbon is a structural part of the chapter document, not a
 decoration laid on top of it. Its visible ruby cloth begins beside the title,
-while the full 44 dp/px touch target remains available without making the
-cloth itself a wide, blank-looking control. The cloth is centred in the
-narrow edge lane; its hit geometry is an interaction concern, not a visual
-gutter that sets the text measure.
+while its touch target remains available without making the cloth itself a
+wide, blank-looking control. Android permanently reserves a 42 dp Home lane
+plus 4 dp of breathing room, even before the first bookmark exists, so the
+chapter composition never moves when the ribbon appears. That 42 dp target is
+a narrow Home-only exception to the usual 44 dp minimum; verse ribbons and the
+Bookmarks index keep their full 44 dp targets. The visible cloth stays 11 dp
+wide, centred in its edge lane; its hit geometry does not set the text measure.
 
 On Android, that lane is fixed to the viewport: scrolling the chapter list
 must never move the ribbon. It begins beside, and slightly below the top of,
@@ -497,11 +500,11 @@ number lane must not read as an empty decorative gutter.
 
 The ribbon's drawing and navigation are deliberately separate. Reuse
 `VerseBookmarkRibbon` for the cloth; put its Home/Chapters navigation on an
-adjacent quiet 44 dp/px target. That keeps the ribbon fully unfurled while the
-Bookmarks sheet opens, prevents a mark/unmark animation from being borrowed
-as navigation feedback, and leaves the shared component authoritative for its
-own visual language. Do not create another bookmark icon, a second ribbon
-shape, or a bespoke animated substitute.
+adjacent quiet target (42 dp on Android Home, 44 px on web). That keeps the
+ribbon fully unfurled while the Bookmarks sheet opens, prevents a mark/unmark
+animation from being borrowed as navigation feedback, and leaves the shared
+component authoritative for its own visual language. Do not create another
+bookmark icon, a second ribbon shape, or a bespoke animated substitute.
 
 The bookmark index is a compact bilingual concordance, shared by Android and
 web. It uses one centered column (560 dp / 36 rem maximum) and a fixed 40 dp/px
