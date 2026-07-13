@@ -36,4 +36,23 @@ class BookmarksViewModelTest {
     fun `unknown search returns no sections`() {
         assertTrue(bookmarkSections(bookmarks, "mercy not present").isEmpty())
     }
+
+    @Test
+    fun `large chapter previews five bookmarks until expanded`() {
+        val many = (1..7).map {
+            BookmarkedAyah(baqarah, it, "آية $it", "Verse $it", it.toLong())
+        }
+
+        assertEquals(5, visibleBookmarkAyahs(many, expanded = false, searching = false).size)
+        assertEquals(2, hiddenBookmarkCount(many, expanded = false, searching = false))
+        assertEquals(7, visibleBookmarkAyahs(many, expanded = true, searching = false).size)
+        assertEquals(7, visibleBookmarkAyahs(many, expanded = false, searching = true).size)
+    }
+
+    @Test
+    fun `disclosure label uses singular and plural copy`() {
+        assertEquals("Show 1 more bookmark", bookmarkDisclosureLabel(1, expanded = false))
+        assertEquals("Show 2 more bookmarks", bookmarkDisclosureLabel(2, expanded = false))
+        assertEquals("Show fewer bookmarks", bookmarkDisclosureLabel(0, expanded = true))
+    }
 }
