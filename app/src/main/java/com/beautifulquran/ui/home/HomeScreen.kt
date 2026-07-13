@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -21,7 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,16 +29,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,7 +48,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
@@ -75,19 +73,30 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.data.model.Surah
 import com.beautifulquran.data.model.SurahWordSearchSection
 import com.beautifulquran.data.model.WordSearchHit
+import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.domain.WORD_SEARCH_PREVIEW_LIMIT
 import com.beautifulquran.domain.englishTranslationHighlightSpans
+import com.beautifulquran.ui.reader.VerseBookmarkRibbon
 import com.beautifulquran.ui.theme.ArabicTitleStyle
 import com.beautifulquran.ui.theme.GildedRosette
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.verticalFadingEdges
 
-/** Position of the search field in the list (after the title) — the row we lift to the top on focus. */
-private const val SEARCH_ITEM_INDEX = 1
+/** The search field leads the scrolling document beneath the fixed masthead. */
+private const val SEARCH_ITEM_INDEX = 0
 
 /** How far (px) the list must scroll past the lifted search before a scroll counts as "dismiss". */
 private const val DISMISS_SCROLL_THRESHOLD_PX = 24
+
+private val HomeRibbonLane = 28.dp
+private val HomeRibbonWidth = 13.dp
+private val HomeRibbonGutter = (HomeRibbonLane - HomeRibbonWidth) / 2f
+private val HomeStartInset = HomeRibbonLane
+private val HomeEndInset = 28.dp
+private val HomeNumberColumn = 26.dp
+private val HomeColumnGap = 4.dp
+private val HomeArabicOpticalInset = 4.dp
 
 @Composable
 fun HomeScreen(
@@ -99,6 +108,9 @@ fun HomeScreen(
     /** True while the paper stack is on (or near) the chapter list — drives
      *  the floating transport's enter/exit across page turns. */
     coverSheetVisible: Boolean = true,
+    /** Number of saved verses; zero removes the Home-page ribbon entirely. */
+    bookmarkCount: Int = 0,
+    onOpenBookmarks: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
@@ -138,13 +150,40 @@ fun HomeScreen(
         val paneBottom = boxHeight - imeBottom - searchPaneBottomGapPx
         (paneBottom - paneTop).coerceAtLeast(0f).toDp()
     }
+    val homeRibbonTop = 40.dp
+    val homeRibbonHeight = with(density) {
+        (boxHeight - homeRibbonTop.toPx() - 92.dp.toPx())
+            .coerceAtLeast(96.dp.toPx())
+            .toDp()
+    }
+    val searching = uiState.query.isNotBlank()
+    val showSurahMatches = searching && uiState.surahs.isNotEmpty()
+    val showWordSections = searching &&
+        (uiState.wordSections.isNotEmpty() || uiState.wordSearchLoading)
+    val showEmpty = searching &&
+        uiState.surahs.isEmpty() &&
+        uiState.wordSections.isEmpty() &&
+        !uiState.wordSearchLoading
+    var previousBookmarkCount by remember { mutableIntStateOf(bookmarkCount) }
+    var ribbonUnfurlPending by remember { mutableStateOf(false) }
+    var ribbonUnfurlEpoch by remember { mutableIntStateOf(0) }
 
-    // When the search takes focus, lift it to the top of the list so the title
-    // slides away and the dials pane has room above the keyboard. Once lifted,
-    // a deliberate scroll of the list dismisses the search — clearing focus
-    // hides the keyboard and fades the dials pane out. We only react while the
-    // list is actively scrolling, so search result changes from typing don't
-    // steal focus or dismiss the keyboard.
+    // A mark is normally added on Reader while Home is covered. Remember that
+    // event, then begin the long unfurl only once the page turn exposes Home.
+    LaunchedEffect(bookmarkCount) {
+        if (bookmarkCount > previousBookmarkCount) ribbonUnfurlPending = true
+        previousBookmarkCount = bookmarkCount
+    }
+    LaunchedEffect(coverSheetVisible, ribbonUnfurlPending) {
+        if (coverSheetVisible && ribbonUnfurlPending) {
+            ribbonUnfurlEpoch++
+            ribbonUnfurlPending = false
+        }
+    }
+
+    // Keep the focused search at the top of its scrolling document. A
+    // deliberate list scroll then dismisses it, hiding the keyboard and dials.
+    // Search result changes themselves never steal focus.
     LaunchedEffect(searchFocused) {
         if (!searchFocused) return@LaunchedEffect
         listState.animateScrollToItem(SEARCH_ITEM_INDEX)
@@ -191,12 +230,18 @@ fun HomeScreen(
                     boxHeight = it.size.height.toFloat()
                 },
         ) {
-            LazyColumn(
-                state = listState,
+            Column(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxHeight()
                     .widthIn(max = 640.dp)
+                    .fillMaxWidth(),
+            ) {
+                HomeHeader(onOpenSettings)
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                    .weight(1f)
                     .fillMaxWidth()
                     .verticalFadingEdges(
                         color = MaterialTheme.colorScheme.background,
@@ -206,198 +251,133 @@ fun HomeScreen(
                         // edge dissolves just above the player, not through it.
                         bottomInset = listBottomInset,
                     ),
-                contentPadding = PaddingValues(bottom = listBottomPadding),
-            ) {
-            item(key = "title") {
-                val accents = LocalQuranAccents.current
-                val titleSheen = remember { mutableStateOf(0.35f) }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 28.dp),
+                    contentPadding = PaddingValues(
+                        start = HomeStartInset,
+                        end = HomeEndInset,
+                        bottom = listBottomPadding,
+                    ),
                 ) {
-                    Column(Modifier.weight(1f)) {
-                        Spacer(Modifier.height(30.dp))
-                        Text(
-                            text = "القرآن الكريم",
-                            style = ArabicTitleStyle,
-                            fontSize = 36.sp,
-                            color = MaterialTheme.colorScheme.onBackground,
+            item(key = "chapter-page") {
+                Box(Modifier.fillMaxWidth()) {
+                    Column(Modifier.fillMaxWidth()) {
+                        HomeSearchField(
+                            value = uiState.query,
+                            onValueChange = viewModel::onQueryChange,
+                            onFocusChanged = { searchFocused = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onGloballyPositioned {
+                                    searchBottom = it.boundsInWindow().bottom
+                                    searchBounds = it.boundsInRoot()
+                                },
                         )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = "Beautiful Quran",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        )
-                        Spacer(Modifier.height(24.dp))
-                    }
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .quietClickable(role = Role.Button, onClick = onOpenSettings)
-                            .semantics { contentDescription = "Open settings" },
-                    ) {
-                        GildedRosette(
-                            size = 30.dp,
-                            brightGold = accents.goldBright,
-                            deepGold = accents.goldDeep,
-                            embossDark = accents.embossDark,
-                            embossLight = accents.embossLight,
-                            sheen = titleSheen,
-                        )
-                    }
-                }
-            }
 
-            item(key = "search") {
-                TextField(
-                    value = uiState.query,
-                    onValueChange = viewModel::onQueryChange,
-                    placeholder = {
-                        Text(
-                            "Search surah, word, or 2:255",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        )
-                    },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Rounded.Search,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        )
-                    },
-                    trailingIcon = {
-                        if (uiState.query.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.onQueryChange("") }) {
-                                Icon(
-                                    Icons.Rounded.Close,
-                                    contentDescription = "Clear search",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                )
+                        uiState.continueTarget?.let { target ->
+                            ContinueRow(
+                                target = target,
+                                onClick = { onOpenSurah(target.surah.id, target.ayah, null) },
+                            )
+                        }
+                        Spacer(Modifier.height(16.dp))
+
+                        if (showSurahMatches) SearchSectionLabel(text = "Surahs")
+                        uiState.surahs.forEach { surah ->
+                            SurahRow(
+                                surah = surah,
+                                onClick = {
+                                    focusManager.clearFocus()
+                                    onOpenSurah(surah.id, uiState.ayahTarget, null)
+                                },
+                            )
+                        }
+
+                        if (showWordSections) {
+                            SearchSectionLabel(
+                                text = if (uiState.wordSearchLoading && uiState.wordSections.isEmpty()) {
+                                    "Searching ayahs…"
+                                } else {
+                                    "In the Quran"
+                                },
+                            )
+                            uiState.wordSections.forEach { section ->
+                                WordSearchSurahHeader(section = section)
+                                section.hits.forEach { hit ->
+                                    WordSearchHitRow(
+                                        hit = hit,
+                                        query = uiState.query,
+                                        onClick = {
+                                            focusManager.clearFocus()
+                                            onOpenSurah(hit.surahId, hit.ayahNumber, hit.position)
+                                        },
+                                    )
+                                }
+                                if (section.hiddenCount > 0) {
+                                    WordSearchExpandRow(
+                                        section = section,
+                                        onClick = { viewModel.toggleWordSearchSection(section.surahId) },
+                                    )
+                                } else if (
+                                    section.expanded &&
+                                    section.totalCount > WORD_SEARCH_PREVIEW_LIMIT
+                                ) {
+                                    WordSearchCollapseRow(
+                                        onClick = { viewModel.toggleWordSearchSection(section.surahId) },
+                                    )
+                                }
                             }
                         }
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(20.dp),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        disabledIndicatorColor = Color.Transparent,
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                        .onFocusChanged { searchFocused = it.isFocused }
-                        .onGloballyPositioned {
-                            searchBottom = it.boundsInWindow().bottom
-                            searchBounds = it.boundsInRoot()
-                        },
-                )
-            }
 
-            uiState.continueTarget?.let { target ->
-                item(key = "continue") {
-                    ContinueCard(
-                        target = target,
-                        onClick = { onOpenSurah(target.surah.id, target.ayah, null) },
-                    )
-                }
-            }
-
-            item(key = "spacer-list") { Spacer(Modifier.height(16.dp)) }
-
-            val searching = uiState.query.isNotBlank()
-            val showSurahMatches = searching && uiState.surahs.isNotEmpty()
-            val showWordSections = searching &&
-                (uiState.wordSections.isNotEmpty() || uiState.wordSearchLoading)
-            val showEmpty = searching &&
-                uiState.surahs.isEmpty() &&
-                uiState.wordSections.isEmpty() &&
-                !uiState.wordSearchLoading
-
-            if (showSurahMatches) {
-                item(key = "label-surahs") {
-                    SearchSectionLabel(text = "Surahs")
-                }
-            }
-
-            items(
-                count = uiState.surahs.size,
-                key = { "surah-${uiState.surahs[it].id}" },
-            ) { index ->
-                SurahRow(
-                    surah = uiState.surahs[index],
-                    onClick = {
-                        focusManager.clearFocus()
-                        onOpenSurah(uiState.surahs[index].id, uiState.ayahTarget, null)
-                    },
-                )
-            }
-
-            if (showWordSections) {
-                item(key = "label-ayahs") {
-                    SearchSectionLabel(
-                        text = if (uiState.wordSearchLoading && uiState.wordSections.isEmpty()) {
-                            "Searching ayahs…"
-                        } else {
-                            "In the Quran"
-                        },
-                    )
-                }
-                uiState.wordSections.forEach { section ->
-                    item(key = "word-header-${section.surahId}") {
-                        WordSearchSurahHeader(section = section)
-                    }
-                    items(
-                        items = section.hits,
-                        key = { hit ->
-                            "hit-${hit.surahId}-${hit.ayahNumber}-${hit.position}"
-                        },
-                    ) { hit ->
-                        WordSearchHitRow(
-                            hit = hit,
-                            query = uiState.query,
-                            onClick = {
-                                focusManager.clearFocus()
-                                onOpenSurah(hit.surahId, hit.ayahNumber, hit.position)
-                            },
-                        )
-                    }
-                    if (section.hiddenCount > 0) {
-                        item(key = "word-more-${section.surahId}") {
-                            WordSearchExpandRow(
-                                section = section,
-                                onClick = { viewModel.toggleWordSearchSection(section.surahId) },
-                            )
-                        }
-                    } else if (section.expanded && section.totalCount > WORD_SEARCH_PREVIEW_LIMIT) {
-                        item(key = "word-less-${section.surahId}") {
-                            WordSearchCollapseRow(
-                                onClick = { viewModel.toggleWordSearchSection(section.surahId) },
+                        if (showEmpty) {
+                            Text(
+                                text = "No matches",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 24.dp),
                             )
                         }
                     }
+
                 }
             }
+            }
+            }
 
-            if (showEmpty) {
-                item(key = "empty") {
-                    Text(
-                        text = "No matches",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+            if (bookmarkCount > 0) {
+                Box(Modifier.matchParentSize()) {
+                    // Navigation is intentionally separate from the shared
+                    // ribbon drawing: opening Bookmarks must not invoke its
+                    // mark/unmark retract path.
+                    VerseBookmarkRibbon(
+                        bookmarked = true,
+                        focused = true,
+                        side = AyahSelectorSide.LEFT,
+                        chromeAlpha = { 1f },
+                        interactive = false,
+                        onToggle = { true },
+                        animateOnTap = false,
+                        unfurlSignal = ribbonUnfurlEpoch,
+                        edgeInset = HomeRibbonGutter,
+                        ribbonWidth = HomeRibbonWidth,
+                        topInset = 0.dp,
+                        bottomGap = 0.dp,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 28.dp, vertical = 24.dp),
+                            .align(Alignment.TopStart)
+                            .offset(y = homeRibbonTop)
+                            .width(HomeRibbonLane)
+                            .height(homeRibbonHeight),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .offset(y = homeRibbonTop)
+                            .width(HomeRibbonLane)
+                            .height(homeRibbonHeight)
+                            .quietClickable(role = Role.Button, onClick = onOpenBookmarks)
+                            .semantics { contentDescription = "Open bookmarks" },
                     )
                 }
-            }
             }
 
             SearchDialsPane(
@@ -414,7 +394,7 @@ fun HomeScreen(
                     .offset {
                         IntOffset(0, (searchBottom - boxTop + searchPaneTopGapPx).roundToInt())
                     }
-                    .padding(horizontal = 24.dp)
+                    .padding(start = HomeStartInset, end = HomeEndInset)
                     .height(searchPaneHeight)
                     .onGloballyPositioned { searchPaneBounds = it.boundsInRoot() },
             )
@@ -455,18 +435,136 @@ fun HomeScreen(
 }
 
 @Composable
-private fun ContinueCard(target: ContinueTarget, onClick: () -> Unit) {
+private fun HomeHeader(onOpenSettings: () -> Unit) {
+    val accents = LocalQuranAccents.current
+    val titleSheen = remember { mutableStateOf(0.35f) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .padding(top = 18.dp)
-            .clip(RoundedCornerShape(22.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
-            .quietClickable(onClick = onClick)
-            .padding(horizontal = 22.dp, vertical = 18.dp),
+            .padding(start = HomeStartInset, end = HomeEndInset),
     ) {
+        Column(Modifier.weight(1f)) {
+            Spacer(Modifier.height(38.dp))
+            Text(
+                text = "Beautiful Quran",
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontSize = 34.sp,
+                    lineHeight = 40.sp,
+                ),
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Spacer(Modifier.height(28.dp))
+        }
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .quietClickable(role = Role.Button, onClick = onOpenSettings)
+                .semantics { contentDescription = "Open settings" },
+        ) {
+            GildedRosette(
+                size = 30.dp,
+                brightGold = accents.goldBright,
+                deepGold = accents.goldDeep,
+                embossDark = accents.embossDark,
+                embossLight = accents.embossLight,
+                sheen = titleSheen,
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onFocusChanged: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val ink = MaterialTheme.colorScheme.onBackground
+    val mutedInk = MaterialTheme.colorScheme.onSurfaceVariant
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = ink),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        modifier = modifier
+            .height(56.dp)
+            .onFocusChanged {
+                focused = it.isFocused
+                onFocusChanged(it.isFocused)
+            }
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                MaterialTheme.colorScheme.surfaceVariant.copy(
+                    alpha = if (focused) 0.45f else 0.35f,
+                ),
+            ),
+        decorationBox = { field ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.width(HomeNumberColumn + HomeColumnGap),
+                ) {
+                    Icon(
+                        Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = mutedInk.copy(alpha = 0.5f),
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                    if (value.isEmpty()) {
+                        Text(
+                            "Search surah, word, or 2:255",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = mutedInk.copy(alpha = 0.5f),
+                        )
+                    }
+                    field()
+                }
+                if (value.isNotEmpty()) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .quietClickable(role = Role.Button) { onValueChange("") }
+                            .semantics { contentDescription = "Clear search" },
+                    ) {
+                        Icon(
+                            Icons.Rounded.Close,
+                            contentDescription = null,
+                            tint = mutedInk.copy(alpha = 0.6f),
+                        )
+                    }
+                } else {
+                    Spacer(Modifier.width(16.dp))
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun ContinueRow(target: ContinueTarget, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 18.dp)
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+            .quietClickable(onClick = onClick)
+            .padding(vertical = 18.dp),
+    ) {
+        Spacer(Modifier.width(HomeNumberColumn))
+        Spacer(Modifier.width(HomeColumnGap))
         Column(Modifier.weight(1f)) {
             Text(
                 text = "Continue listening",
@@ -486,6 +584,7 @@ private fun ContinueCard(target: ContinueTarget, onClick: () -> Unit) {
             style = ArabicTitleStyle,
             fontSize = 24.sp,
             color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(end = HomeArabicOpticalInset),
         )
     }
 }
@@ -498,16 +597,16 @@ private fun SurahRow(surah: Surah, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .quietClickable(onClick = onClick)
-            .padding(horizontal = 28.dp, vertical = 15.dp),
+            .padding(vertical = 15.dp),
     ) {
-        Box(Modifier.width(34.dp)) {
+        Box(Modifier.width(HomeNumberColumn)) {
             Text(
                 text = surah.id.toString(),
                 style = MaterialTheme.typography.labelMedium,
                 color = accents.gold.copy(alpha = 0.75f),
             )
         }
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(HomeColumnGap))
         Column(Modifier.weight(1f)) {
             Text(
                 text = surah.nameTransliteration,
@@ -529,6 +628,7 @@ private fun SurahRow(surah: Surah, onClick: () -> Unit) {
             text = surah.nameArabic,
             style = ArabicTitleStyle,
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+            modifier = Modifier.padding(end = HomeArabicOpticalInset),
         )
     }
 }
@@ -541,7 +641,6 @@ private fun SearchSectionLabel(text: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 28.dp)
             .padding(top = 8.dp, bottom = 4.dp),
     )
 }
@@ -554,7 +653,6 @@ private fun WordSearchSurahHeader(section: SurahWordSearchSection) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 28.dp)
             .padding(top = 18.dp, bottom = 8.dp)
             .drawBehind {
                 val y = size.height - 0.5.dp.toPx()
@@ -624,7 +722,7 @@ private fun WordSearchHitRow(
         modifier = Modifier
             .fillMaxWidth()
             .quietClickable(onClick = onClick)
-            .padding(horizontal = 28.dp, vertical = 10.dp),
+            .padding(vertical = 10.dp),
     ) {
         Text(
             text = "${hit.surahId}:${hit.ayahNumber}",
@@ -656,7 +754,7 @@ private fun WordSearchExpandRow(
         modifier = Modifier
             .fillMaxWidth()
             .quietClickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 28.dp, vertical = 12.dp),
+            .padding(vertical = 12.dp),
     )
 }
 
@@ -669,6 +767,6 @@ private fun WordSearchCollapseRow(onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .quietClickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 28.dp, vertical = 12.dp),
+            .padding(vertical = 12.dp),
     )
 }

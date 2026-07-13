@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { appStore, useAppState } from '../store/appStore'
 import { hasReaderOpen } from './paper/stack'
 import { HomeScreen } from './home/HomeScreen'
+import { BookmarksScreen } from './bookmarks/BookmarksScreen'
 import { ReaderScreen } from './reader/ReaderScreen'
 import { SettingsScreen } from './settings/SettingsScreen'
 import { EntranceCover } from './entrance/EntranceCover'
+import { BOOKMARKS_LAYER, COVER_LAYER } from './paper/stack'
 import { OrnamentsLab } from './lab/OrnamentsLab'
 
 /** True while the URL hash routes to the Ornaments Lab (`#lab`). */
@@ -49,6 +51,7 @@ export function App() {
   // Once per page load — mirrors Android rememberSaveable entranceDone.
   const [entranceDone, setEntranceDone] = useState(false)
   const isLab = useLabRoute()
+  const swipeStart = useRef<{ x: number; y: number; pointerId: number } | null>(null)
 
   useEffect(() => {
     void appStore.init()
@@ -92,15 +95,39 @@ export function App() {
   // the book is ready so the open reveals chapters, not an empty page.
   const showStack = state.ready
 
+  const beginBookmarkSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (stack !== COVER_LAYER && stack !== BOOKMARKS_LAYER) return
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    swipeStart.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId }
+  }
+
+  const finishBookmarkSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const start = swipeStart.current
+    swipeStart.current = null
+    if (!start || start.pointerId !== event.pointerId) return
+    const dx = event.clientX - start.x
+    const dy = event.clientY - start.y
+    if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.35) return
+    if (stack === COVER_LAYER && dx > 0 && state.bookmarks.length > 0) {
+      appStore.revealLayer(BOOKMARKS_LAYER)
+    } else if (stack === BOOKMARKS_LAYER && dx < 0) {
+      appStore.revealLayer(COVER_LAYER)
+    }
+  }
+
   return (
     <div
       className="app-shell"
       data-stack={stack}
       data-has-reader={hasReader}
       data-booting={showStack ? undefined : 'true'}
+      onPointerDown={beginBookmarkSwipe}
+      onPointerUp={finishBookmarkSwipe}
+      onPointerCancel={() => { swipeStart.current = null }}
     >
       {showStack && (
         <>
+          <BookmarksScreen stackLayer={stack} />
           <HomeScreen stackLayer={stack} />
           {/* Chapter boundaries get fresh focus/rail geometry. Carrying the
               previous chapter's dial state into the first peel frame makes

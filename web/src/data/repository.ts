@@ -3,6 +3,7 @@ import type {
   Ayah,
   Reciter,
   RootOccurrence,
+  RootLemmaSummary,
   RootSummary,
   Segment,
   Surah,
@@ -230,7 +231,21 @@ export function rootSummary(root: string): RootSummary | null {
     }),
   )
 
-  return { root, occurrenceCount: countRow, occurrences }
+  const lemmas: RootLemmaSummary[] = queryAll(
+    `SELECT lemma, pos, COUNT(*) AS occurrence_count
+     FROM word_morphology
+     WHERE root = ? AND lemma <> ''
+     GROUP BY lemma, pos
+     ORDER BY COUNT(*) DESC, lemma, pos`,
+    [root],
+    (r) => ({
+      lemma: String(r.lemma),
+      pos: String(r.pos),
+      occurrenceCount: Number(r.occurrence_count),
+    }),
+  )
+
+  return { root, occurrenceCount: countRow, occurrences, lemmas }
 }
 
 /**

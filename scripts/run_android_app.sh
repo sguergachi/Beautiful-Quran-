@@ -12,6 +12,7 @@ ANDROID_AVD_NAME="${ANDROID_AVD_NAME:-BeautifulQuran_API_${ANDROID_API}}"
 EMULATOR="$ANDROID_HOME/emulator/emulator"
 ADB="$ANDROID_HOME/platform-tools/adb"
 BOOT_TIMEOUT_SECONDS="${BOOT_TIMEOUT_SECONDS:-180}"
+ANDROID_EMULATOR_HEADLESS="${ANDROID_EMULATOR_HEADLESS:-}"
 
 log() {
   printf '\n==> %s\n' "$*" >&2
@@ -24,6 +25,24 @@ fail() {
 
 require_file() {
   [[ -e "$1" ]] || fail "$2"
+}
+
+restore_local_display() {
+  [[ "$ANDROID_EMULATOR_HEADLESS" == "1" || -n "${DISPLAY:-}" ]] && return
+
+  local socket xauthority
+  for socket in /tmp/.X11-unix/X*; do
+    [[ -S "$socket" ]] || continue
+    export DISPLAY=":${socket##*/X}"
+    for xauthority in "/run/user/$(id -u)"/xauth_* "$HOME/.Xauthority"; do
+      if [[ -r "$xauthority" ]]; then
+        export XAUTHORITY="$xauthority"
+        break
+      fi
+    done
+    log "Using local X11 display: $DISPLAY"
+    return
+  done
 }
 
 emulator_serial() {
@@ -43,6 +62,11 @@ start_emulator_if_needed() {
     -netdelay none
     -netspeed full
   )
+
+  if [[ "$ANDROID_EMULATOR_HEADLESS" == "1" ]]; then
+    log "Starting headless"
+    emulator_args+=(-no-window)
+  fi
 
   if command -v setsid >/dev/null 2>&1; then
     setsid -f "$EMULATOR" "${emulator_args[@]}" \
@@ -93,6 +117,7 @@ main() {
   require_file "$ADB" "adb not found. Run scripts/setup_android_emulator.sh first."
 
   build_quran_db_if_missing
+  restore_local_display
 
   serial="$(start_emulator_if_needed)"
   wait_for_boot "$serial"

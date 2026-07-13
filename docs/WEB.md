@@ -7,7 +7,7 @@ implementation; it does not change Android behavior.
 
 **Status: implemented (v1) + hosted.** The `web/` package ships the three pure
 engines with Vitest parity, WASM SQLite over the committed `quran.db`,
-paper-stack UI (Home / Reader / Settings), cold-start entrance cover (closed
+paper-stack UI (Bookmarks / Home / Reader / Settings), cold-start entrance cover (closed
 mushaf + isti'adha text fade-in), directional ink wash, focus follow, bookmarks, root
 viewer, and a PWA shell. Production build is published to GitHub Pages at
 [`/app/`](https://sguergachi.github.io/Beautiful-Quran-/app/)
@@ -239,6 +239,20 @@ mid-tier phones — measure first.
   web idle swallowtail is hidden until the verse is hovered (or the ribbon is
   keyboard-focused). Click the tip to unfurl and bookmark. Saved verses still
   show the full ribbon at rest.
+- A saved verse also uses that same ribbon component on Chapters. It is part of
+  the scrollable chapter document, running from Search to the final chapter
+  entry; a newly added mark replays its unfurl when Chapters returns. Tapping
+  it, or swiping right on Chapters, slides the searchable Bookmarks sheet in
+  from the left above Home.
+- The Bookmarks sheet is a single compact bilingual concordance, capped at
+  36 rem and aligned to the Android 560 dp composition. A 44 px ribbon lane
+  plus 8 px gap defines the 52 px text spine for chapter headings, verse copy,
+  references, confirmations, and disclosure actions. Arabic, English, and
+  Western references remain separate elements so bidi order is explicit.
+- Each chapter previews five bookmarks. A local green action reveals or
+  collapses the rest; search bypasses the preview and displays every match.
+  Unmarking swaps the fixed-height reference line for an inline confirmation,
+  focuses Keep, and reserves ruby for the existing ribbon component.
 
 ## 7. Performance bar (non-negotiable)
 
@@ -403,7 +417,9 @@ sans.
 - ✅ Arabic paper-cover bloom for gloss `WordUnit` and Arabic-only `HafsWord`
   (`ink-paper-cover` / `paperCoverMaskImage` — glyphs stay full opaque ink;
   never CSS opacity on overlapping Hafs marks).
-- Root Word Viewer (ink bleed) + morphology queries.
+- Root Word Viewer (ink bleed) + corpus-backed morphology, lemma-frequency
+  analyses, and per-chapter concordance lists truncated to five references
+  until expanded.
 - PWA installability; offline shell + DB + audio cache.
 - Optional Ink Lab (developer unlock).
 

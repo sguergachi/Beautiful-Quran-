@@ -159,3 +159,18 @@ build/test commands from the "Build, test, run" section above work as-is.
   Media3 `@UnstableApi` opt-in errors. The real lint gate is `lintVitalRelease`,
   which runs inside `assembleRelease` with `checkReleaseBuilds = false` (see
   `app/build.gradle.kts`). Don't treat a `lintDebug` failure as a regression.
+
+# GPT/Codex specific instructions
+
+Write fewer lines of code. Elegant simple code is praised. Over engineering and
+adding complexity is frowned upon. To make me happy, find the solution that
+requires fewer lines and is elegant and simple to read and understand.
+
+If you find a problem that seems complicated or will take us down a rabbit
+hole, let me know! Don't just try to walk through walls. I may not care about
+what I asked if I realize it's complicated and will hurt the maintainability
+and agility of codebase. I want a fit codebase. Nice and thin.
+
+You can push back if something I ask for is unreasonable or goes against the
+goal of the project. If what I ask makes no sense then confirm it's what I
+really want before starting work.

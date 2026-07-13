@@ -57,6 +57,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.AppViewModelFactory
 import com.beautifulquran.ui.PageTurnSounds
+import com.beautifulquran.ui.bookmarks.BookmarksScreen
+import com.beautifulquran.ui.bookmarks.BookmarksViewModel
 import com.beautifulquran.ui.entrance.EntranceCover
 import com.beautifulquran.ui.home.FloatingPlaybackCoverVisibleMaxPage
 import com.beautifulquran.ui.home.FloatingPlaybackListClearance
@@ -154,6 +156,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private const val BOOKMARKS_LAYER = -1
 private const val COVER_LAYER = 0
 private const val AYAH_LAYER = 1
 private const val SETTINGS_LAYER = 2
@@ -173,10 +176,12 @@ private fun PaperStackApp(
     onEntranceFinished: () -> Unit,
 ) {
     val homeViewModel: HomeViewModel = viewModel(factory = AppViewModelFactory)
+    val bookmarksViewModel: BookmarksViewModel = viewModel(factory = AppViewModelFactory)
     val readerViewModel: ReaderViewModel = viewModel(factory = AppViewModelFactory)
     val settingsViewModel: SettingsViewModel = viewModel(factory = AppViewModelFactory)
     val timingsLabViewModel: TimingsLabViewModel = viewModel(factory = AppViewModelFactory)
     val rootViewerViewModel: RootViewerViewModel = viewModel(factory = AppViewModelFactory)
+    val bookmarkCount by bookmarksViewModel.bookmarkCount.collectAsStateWithLifecycle()
 
     var selectedSurahId by rememberSaveable { mutableIntStateOf(0) }
     var selectedStartAyah by rememberSaveable { mutableIntStateOf(0) }
@@ -244,7 +249,8 @@ private fun PaperStackApp(
     }
 
     suspend fun settleTo(layer: Int) {
-        val boundedLayer = layer.coerceIn(COVER_LAYER, settingsLayer)
+        val minimumLayer = if (bookmarkCount > 0) BOOKMARKS_LAYER else COVER_LAYER
+        val boundedLayer = layer.coerceIn(minimumLayer, settingsLayer)
         val distance = abs(boundedLayer - stackPosition.value)
         settledLayer = boundedLayer
         stackPosition.animateTo(
@@ -259,6 +265,12 @@ private fun PaperStackApp(
 
     fun animateTo(layer: Int) {
         scope.launch { settleTo(layer) }
+    }
+
+    LaunchedEffect(bookmarkCount) {
+        if (bookmarkCount == 0 && stackPosition.value < COVER_LAYER) {
+            settleTo(COVER_LAYER)
+        }
     }
 
     fun openTimingsLab(surahId: Int? = null, ayah: Int? = null, wordPosition: Int? = null) {
@@ -368,6 +380,9 @@ private fun PaperStackApp(
     BackHandler(enabled = settledLayer > COVER_LAYER || stackPastCover) {
         animateTo((stackPosition.value.roundToInt() - 1).coerceAtLeast(COVER_LAYER))
     }
+    BackHandler(enabled = settledLayer < COVER_LAYER || stackPosition.value < -0.01f) {
+        animateTo(COVER_LAYER)
+    }
     // Composed after the stack handler so overlay backs dismiss the bleed
     // instead of turning the page beneath it.
     BackHandler(enabled = chooserVisible) {
@@ -391,6 +406,9 @@ private fun PaperStackApp(
             .paperStackDrag(
                 gestureKey = selectedSurahId,
                 position = { stackPosition.value },
+                minLayer = {
+                    if (bookmarkCount > 0) BOOKMARKS_LAYER else COVER_LAYER
+                },
                 maxLayer = {
                     if (selectedSurahId == 0 && stackPosition.value <= COVER_LAYER + 0.01f) COVER_LAYER else settingsLayer
                 },
@@ -410,7 +428,12 @@ private fun PaperStackApp(
                     // A single gesture may advance at most one layer, so a hard swipe
                     // from the cover lands on the reader instead of overshooting to settings.
                     val startLayer = dragStartPosition.roundToInt()
-                    val lower = (startLayer - 1).coerceAtLeast(COVER_LAYER).toFloat()
+                    val minimumLayer = if (bookmarkCount > 0) {
+                        BOOKMARKS_LAYER
+                    } else {
+                        COVER_LAYER
+                    }
+                    val lower = (startLayer - 1).coerceAtLeast(minimumLayer).toFloat()
                     val upper = (startLayer + 1).coerceAtMost(maxLayer).toFloat()
                     dragSnapJob?.cancel()
                     dragSnapJob = scope.launch {
@@ -425,6 +448,28 @@ private fun PaperStackApp(
                 },
             ),
     ) {
+        PaperPage(
+            layer = PaperLayer.Bookmarks,
+            stackPosition = stackPositionProvider,
+            settingsLayer = settingsLayer,
+            // The left index is a top sheet: it slides over Chapters rather
+            // than exposing another copy of the cover underneath it.
+            modifier = Modifier.zIndex(4f),
+        ) {
+            BookmarksScreen(
+                viewModel = bookmarksViewModel,
+                onClose = { animateTo(COVER_LAYER) },
+                onOpenAyah = { surahId, ayah ->
+                    if (surahId != selectedSurahId) readerViewModel.load(surahId)
+                    selectedSurahId = surahId
+                    selectedStartAyah = ayah
+                    selectedStartWord = 0
+                    jumpEpoch++
+                    animateTo(AYAH_LAYER)
+                },
+            )
+        }
+
         PaperPage(
             layer = PaperLayer.Settings,
             stackPosition = stackPositionProvider,
@@ -545,6 +590,8 @@ private fun PaperStackApp(
                 // slides in when returning to chapter selection and out when
                 // leaving for the reader — not only when nowPlaying flips.
                 coverSheetVisible = coverSheetVisible,
+                bookmarkCount = bookmarkCount,
+                onOpenBookmarks = { animateTo(BOOKMARKS_LAYER) },
             )
         }
 
@@ -617,6 +664,7 @@ private fun PaperStackApp(
 }
 
 private enum class PaperLayer {
+    Bookmarks,
     Settings,
     Ayah,
     Cover,
@@ -649,11 +697,21 @@ private fun Modifier.paperLayerTransform(
     val width = size.width
     cameraDistance = 18f * density
     when (layer) {
+        PaperLayer.Bookmarks -> {
+            val reveal = (-position).coerceIn(0f, 1f)
+            // A genuine top sheet entering from the left. At Chapters it is
+            // parked wholly beyond the edge; pulling right lays it over Home.
+            translationX = -(width + STACK_OFFSCREEN_OVERSCAN_DP * density) *
+                (1f - reveal)
+            rotationY = -4f * (1f - reveal)
+            shadowElevation = 22f * reveal
+            alpha = if (position <= 0f) 1f else 0f
+        }
         PaperLayer.Cover -> {
-            val turn = position.coerceIn(0f, 1f)
-            translationX = -(width + STACK_OFFSCREEN_OVERSCAN_DP * density) * turn
-            rotationY = -5f * turn
-            shadowElevation = 22f * (1f - turn)
+            val forwardTurn = position.coerceIn(0f, 1f)
+            translationX = -(width + STACK_OFFSCREEN_OVERSCAN_DP * density) * forwardTurn
+            rotationY = -5f * forwardTurn
+            shadowElevation = 22f * (1f - forwardTurn)
         }
         PaperLayer.Ayah -> {
             val reveal = position.coerceIn(0f, 1f)
@@ -687,6 +745,7 @@ private fun Modifier.paperDropShadow(
     drawContent()
     val position = stackPosition()
     val turning = when (layer) {
+        PaperLayer.Bookmarks -> (-position).coerceIn(0f, 1f)
         PaperLayer.Cover -> position.coerceIn(0f, 1f)
         PaperLayer.Ayah -> (position - 1f).coerceIn(0f, 1f)
         PaperLayer.Settings -> 0f
@@ -713,6 +772,7 @@ private fun Modifier.paperDropShadow(
 private fun Modifier.paperStackDrag(
     gestureKey: Any,
     position: () -> Float,
+    minLayer: () -> Int,
     maxLayer: () -> Int,
     gesturesBlocked: () -> Boolean,
     onDragStart: () -> Unit,
@@ -788,7 +848,7 @@ private fun Modifier.paperStackDrag(
             }
             // Clamp the fling to one layer per gesture so a hard swipe settles on the
             // adjacent page rather than overshooting past it.
-            val lower = (startLayer - 1).coerceAtLeast(COVER_LAYER)
+            val lower = (startLayer - 1).coerceAtLeast(minLayer())
             val upper = (startLayer + 1).coerceAtMost(maxLayer())
             val target = if (turnDirection == 0) {
                 draggedPosition.roundToInt()

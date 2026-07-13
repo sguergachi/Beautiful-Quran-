@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   IconBuffering,
   IconClose,
@@ -10,6 +10,7 @@ import {
 import { PaperInput } from '../kit/PaperInput'
 import { appStore, useAppState, COVER_LAYER, READER_LAYER } from '../../store/appStore'
 import { QuranRepository } from '../../data/repository'
+import { VerseBookmarkRibbon } from '../../render/VerseBookmarkRibbon'
 import {
   englishTranslationHighlightSpans,
   filterSurahs,
@@ -19,7 +20,7 @@ import {
   type SurahWordSearchSection,
   type WordSearchHit,
 } from '../../domain/WordSearch'
-import type { StackLayer } from '../paper/stack'
+import { BOOKMARKS_LAYER, type StackLayer } from '../paper/stack'
 
 export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const state = useAppState()
@@ -37,6 +38,11 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const [expandedSurahIds, setExpandedSurahIds] = useState<Set<number>>(
     () => new Set(),
   )
+  const previousBookmarkCount = useRef(state.bookmarks.length)
+  const pendingRibbonUnfurl = useRef(false)
+  const [ribbonUnfurlSignal, setRibbonUnfurlSignal] = useState(0)
+  const homeTitleRef = useRef<HTMLHeadingElement>(null)
+  const [ribbonHeight, setRibbonHeight] = useState(0)
 
   useEffect(() => {
     setExpandedSurahIds(new Set())
@@ -59,6 +65,35 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
       window.clearTimeout(handle)
     }
   }, [search])
+
+  useEffect(() => {
+    if (state.bookmarks.length > previousBookmarkCount.current) {
+      pendingRibbonUnfurl.current = true
+    }
+    previousBookmarkCount.current = state.bookmarks.length
+  }, [state.bookmarks.length])
+
+  useEffect(() => {
+    if (stackLayer !== COVER_LAYER || !pendingRibbonUnfurl.current) return
+    pendingRibbonUnfurl.current = false
+    setRibbonUnfurlSignal((value) => value + 1)
+  }, [stackLayer])
+
+  useLayoutEffect(() => {
+    const title = homeTitleRef.current
+    if (!title) return
+    const measure = () => {
+      setRibbonHeight(Math.max(96, window.innerHeight - title.getBoundingClientRect().top - 92))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(title)
+    window.addEventListener('resize', measure)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [])
 
   const wordSections = useMemo(
     () => sectionWordSearchHits(wordHits, expandedSurahIds),
@@ -132,8 +167,32 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
       ) : null}
 
       <div className="sheet-frame">
-        <header className="home-header">
-          <h1>Beautiful Quran</h1>
+        <header
+          className="home-header"
+          data-has-bookmarks={state.bookmarks.length > 0 || undefined}
+        >
+          {state.bookmarks.length > 0 ? (
+            <div className="home-bookmark-ribbon" style={{ height: ribbonHeight }}>
+              <VerseBookmarkRibbon
+                bookmarked
+                focused
+                side="left"
+                interactive={false}
+                animateOnTap={false}
+                topInset={0}
+                bottomGap={0}
+                unfurlSignal={ribbonUnfurlSignal}
+                onToggle={() => true}
+              />
+              <button
+                type="button"
+                className="home-bookmark-open"
+                aria-label="Open bookmarks"
+                onClick={() => appStore.revealLayer(BOOKMARKS_LAYER)}
+              />
+            </div>
+          ) : null}
+          <h1 ref={homeTitleRef}>Beautiful Quran</h1>
           <button
             type="button"
             className="gear"
@@ -143,20 +202,24 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
           </button>
         </header>
 
-        <div className="search-row">
-          <PaperInput
-            id="chapter-search"
-            name="chapter-search"
-            type="search"
-            placeholder="Search surah, word, or 2:255"
-            value={search}
-            onValueChange={setSearch}
-            aria-label="Search surah, word, or ayah reference"
-          />
-        </div>
-
         <div className="edge-fade">
           <div className={`scroll${showFloat ? ' scroll-with-float' : ''}`}>
+            <div
+              className="home-scroll-page"
+              data-has-bookmarks={state.bookmarks.length > 0 || undefined}
+            >
+              <div className="search-row">
+                <PaperInput
+                  id="chapter-search"
+                  name="chapter-search"
+                  type="search"
+                  placeholder="Search surah, word, or 2:255"
+                  value={search}
+                  onValueChange={setSearch}
+                  aria-label="Search surah, word, or ayah reference"
+                />
+              </div>
+
             {continueSurah ? (
               <div className="continue-row">
                 <button
@@ -247,6 +310,7 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
             {showEmpty ? (
               <p className="search-empty">No matches</p>
             ) : null}
+            </div>
           </div>
         </div>
       </div>

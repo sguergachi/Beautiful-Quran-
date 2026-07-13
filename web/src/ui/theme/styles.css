@@ -130,7 +130,10 @@ button:focus-visible,
 a.control:focus-visible,
 .surah-row:focus-visible,
 .word-unit:focus-visible,
-.occurrence:focus-visible {
+.occurrence:focus-visible,
+.root-occurrence:focus-visible,
+.root-chapter-heading:focus-visible,
+.root-text-action:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: 3px;
 }
@@ -155,7 +158,12 @@ select {
 .app-shell {
   position: relative;
   height: 100%;
-  overflow: hidden;
+  /* `hidden` creates a horizontal scroll container. When the parked
+   * bookmark sheet receives focus, browsers can scroll that container toward
+   * the off-canvas sheet and leave Home visibly cropped. Clip the paper deck
+   * instead: sheets may still paint off-canvas for the transition, but the
+   * shell cannot acquire a horizontal scroll position. */
+  overflow: clip;
   background: var(--paper);
   /* Peek gutters are desktop-only; phones are full-bleed (back buttons). */
   --peek-step: 0px;
@@ -199,6 +207,10 @@ select {
   z-index: 1;
 }
 
+.sheet[data-name='bookmarks'] {
+  z-index: 4;
+}
+
 .sheet[data-name='reader'] {
   z-index: 2;
 }
@@ -209,6 +221,20 @@ select {
 
 .sheet[data-empty='true'] {
   visibility: hidden;
+  pointer-events: none;
+}
+
+/* Bookmarks is the one left-hand top sheet: parked beyond the left edge at
+   Chapters, then laid over Home when layer -1 is selected. */
+.sheet[data-name='bookmarks'][data-active='false'] {
+  transform: translateX(-105%);
+  opacity: 0;
+  pointer-events: none;
+  content-visibility: hidden;
+  contain: strict;
+}
+
+.app-shell[data-stack='-1'] .sheet[data-name='home'] {
   pointer-events: none;
 }
 
@@ -299,6 +325,7 @@ select {
 }
 
 .sheet-frame {
+  position: relative;
   width: min(100%, 52rem);
   margin: 0 auto;
   height: 100%;
@@ -421,10 +448,35 @@ select {
 }
 
 /* —— Home —— */
+.home-scroll-page {
+  position: relative;
+  min-height: 100%;
+}
+
+.home-scroll-page > .search-row {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.home-bookmark-ribbon {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 44px;
+  z-index: 8;
+}
+
+.home-bookmark-ribbon .verse-ribbon {
+  top: 0;
+  bottom: 0;
+}
+
 .home-header {
+  --home-header-top: max(clamp(1rem, 2.5vh, 2rem), env(safe-area-inset-top, 0px));
   padding: clamp(1rem, 2.5vh, 2rem) var(--sheet-pad) 0.5rem;
-  padding-top: max(clamp(1rem, 2.5vh, 2rem), env(safe-area-inset-top));
+  padding-top: var(--home-header-top);
   display: flex;
+  position: relative;
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
@@ -439,6 +491,33 @@ select {
   font-size: clamp(1.75rem, 5vw, 2.15rem);
   margin: 0;
   letter-spacing: 0.01em;
+}
+
+/* The saved ribbon begins beside the page title, then runs down the paper.
+ * It is positioned against the header rather than the search document. */
+.home-header .home-bookmark-ribbon {
+  top: var(--home-header-top);
+}
+
+/* Navigation is deliberately separated from the ribbon drawing. Clicking the
+ * Home affordance opens the bookmark sheet without ever invoking the ribbon's
+ * mark/unmark animation. */
+.home-bookmark-open {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -6.5px;
+  width: 44px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  z-index: 3;
+}
+
+.home-bookmark-open:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .home-header .gear {
@@ -1760,6 +1839,336 @@ select {
   filter: brightness(1.12);
 }
 
+/* —— Bookmark index —— */
+.bookmarks-frame {
+  --bookmark-pad: clamp(1.25rem, 4vw, 1.5rem);
+  --bookmark-spine: 40px;
+  --bookmark-rule: var(--bookmark-pad);
+  width: 100%;
+  max-width: 36rem;
+  align-self: center;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.bookmarks-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  /* The page title belongs to the outer rule, alongside the physical ribbon
+   * edge and the chapter numbers. The reading/search spine begins one lane
+   * inward below it. */
+  padding: 1.75rem var(--bookmark-pad) 0 var(--bookmark-rule);
+}
+
+.bookmarks-header > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.bookmarks-header h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 2.5rem;
+  font-weight: 600;
+  line-height: 3rem;
+}
+
+.bookmarks-header button {
+  min-height: 44px;
+  padding: 0.7rem 0;
+  color: var(--accent);
+  background: transparent;
+  border: none;
+  font: 500 0.875rem/1.25rem var(--font-body);
+  cursor: pointer;
+}
+
+.bookmarks-search {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  margin: 1.5rem var(--bookmark-pad) 0;
+  color: color-mix(in srgb, var(--ink-muted) 84%, transparent);
+}
+
+.bookmarks-search .paper-input {
+  min-width: 0;
+  width: 100%;
+  height: 52px;
+  padding: 0;
+  color: var(--ink);
+  border: none;
+  font: 400 1.0625rem/1.5625rem var(--font-body);
+}
+
+.bookmarks-search .paper-input::placeholder {
+  color: color-mix(in srgb, var(--ink-muted) 82%, transparent);
+  opacity: 1;
+}
+
+.bookmarks-search:focus-within {
+  color: var(--accent);
+}
+
+.bookmarks-search-lane {
+  display: flex;
+  flex: 0 0 var(--bookmark-spine);
+  align-items: center;
+  box-sizing: border-box;
+  padding-left: 0;
+  justify-content: flex-start;
+}
+
+.bookmarks-search-icon {
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.8;
+}
+
+.bookmarks-search-clear {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: color-mix(in srgb, var(--ink-muted) 82%, transparent);
+  background: transparent;
+  border: 0;
+  font: 400 1.5rem/1 var(--font-body);
+  cursor: pointer;
+}
+
+.bookmarks-scroll {
+  padding: 0 var(--bookmark-pad) 3rem;
+}
+
+.bookmarks-empty {
+  padding: 3rem 0.75rem;
+  text-align: center;
+}
+
+.bookmarks-empty p {
+  margin: 0;
+  color: color-mix(in srgb, var(--ink) 82%, transparent);
+  font-size: 1.0625rem;
+  line-height: 1.5625rem;
+}
+
+.bookmarks-empty small {
+  display: block;
+  margin-top: 0.5rem;
+  color: color-mix(in srgb, var(--ink-muted) 72%, transparent);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.bookmark-section {
+  margin: 0;
+}
+
+.bookmark-section-header {
+  display: grid;
+  grid-template-columns: var(--bookmark-spine) minmax(0, 1fr);
+  align-items: center;
+  padding: 2rem 0 0.75rem;
+}
+
+.bookmark-section-header[data-first='true'] {
+  padding-top: 1.125rem;
+}
+
+.bookmark-section-number {
+  box-sizing: border-box;
+  padding-left: 4px;
+  color: var(--gold);
+  font-size: 0.875rem;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.bookmark-section-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 1.125rem;
+  font-weight: 500;
+  line-height: 1.5rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookmark-section-copy {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 1rem;
+}
+
+.bookmark-section-arabic {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--ink) 88%, transparent);
+  font-family: var(--font-arabic);
+  font-size: 1.25rem;
+  font-weight: 400;
+  line-height: 1.875rem;
+  white-space: nowrap;
+}
+
+.bookmark-verses {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bookmark-verse {
+  position: relative;
+  padding: 0.5rem 0 0.75rem;
+}
+
+.bookmark-verse-copy {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0 var(--bookmark-spine);
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  font-family: var(--font-body);
+  cursor: pointer;
+}
+
+.bookmark-verse-ar {
+  width: 100%;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--ink) 92%, transparent);
+  font-family: var(--font-arabic);
+  font-size: 1.5rem;
+  line-height: 2.25rem;
+  text-align: right;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.bookmark-verse-translation {
+  overflow: hidden;
+  color: color-mix(in srgb, var(--ink) 88%, transparent);
+  font-size: 1.0625rem;
+  line-height: 1.5625rem;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.bookmark-verse-meta {
+  display: flex;
+  min-height: 44px;
+  margin-left: var(--bookmark-spine);
+  align-items: center;
+}
+
+.bookmark-verse-meta[data-confirming='true'] {
+  animation: bookmark-meta-in 160ms ease-out both;
+}
+
+.bookmark-verse-ayah {
+  display: flex;
+  align-items: center;
+  column-gap: 0.25rem;
+  min-height: 44px;
+  color: color-mix(in srgb, var(--ink-muted) 84%, transparent);
+  font: 400 0.875rem/1.25rem var(--font-body);
+}
+
+.bookmark-verse-ayah strong {
+  color: var(--gold);
+  font-variant-numeric: lining-nums tabular-nums;
+  font-weight: 500;
+}
+
+.bookmark-remove-confirmation {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  color: color-mix(in srgb, var(--ink-muted) 76%, transparent);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.bookmark-remove-confirmation span {
+  flex: 1;
+}
+
+.bookmark-remove-confirmation button {
+  min-height: 44px;
+  padding: 0 0.35rem;
+  color: var(--accent);
+  background: transparent;
+  border: none;
+  font: 500 0.875rem/1.25rem var(--font-body);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.bookmark-remove-confirmation .confirm-remove {
+  padding-right: 0;
+  color: color-mix(in srgb, var(--ink) 78%, transparent);
+}
+
+.bookmark-disclosure {
+  display: block;
+  min-height: 44px;
+  margin-left: var(--bookmark-spine);
+  padding: 0.25rem 0 1rem;
+  color: var(--accent);
+  background: transparent;
+  border: 0;
+  font: 500 1.0625rem/1.5625rem var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+@keyframes bookmark-meta-in {
+  from {
+    opacity: 0;
+    transform: translateX(0.4rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 420px) {
+  .bookmarks-header h1 {
+    font-size: 2.25rem;
+    line-height: 2.75rem;
+  }
+
+  .bookmark-remove-confirmation span {
+    font-size: 0.8125rem;
+  }
+
+  .bookmark-remove-confirmation button {
+    font-size: 0.8125rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bookmark-verse-meta[data-confirming='true'] {
+    animation: none;
+  }
+}
+
 
 /* —— Settings —— */
 .settings {
@@ -2307,10 +2716,18 @@ select {
   background: var(--paper);
   color: var(--ink);
   animation: bleed-in 420ms ease;
+  --root-inline-padding: 2rem;
+  --root-space-1: 0.25rem;
+  --root-space-2: 0.5rem;
+  --root-space-3: 0.75rem;
+  --root-space-4: 1rem;
+  --root-space-5: 1.5rem;
+  --root-space-6: 2rem;
+  --root-space-7: 2.5rem;
+  --root-space-8: 3.5rem;
   overflow: auto;
-  padding: 1.5rem var(--sheet-pad) 3rem;
-  padding-top: max(1.5rem, env(safe-area-inset-top));
-  padding-bottom: calc(3rem + env(safe-area-inset-bottom, 0px));
+  padding: env(safe-area-inset-top, 0px) var(--root-inline-padding)
+    calc(2rem + env(safe-area-inset-bottom, 0px));
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
@@ -2352,14 +2769,19 @@ select {
 }
 
 .ink-bleed-inner {
-  max-width: 34rem;
+  max-width: 40rem;
   margin: 0 auto;
 }
 
 .ink-bleed-chrome {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
+  min-height: 60px;
+  align-items: center;
   justify-content: flex-end;
-  margin-bottom: 0.5rem;
+  background: var(--paper);
 }
 
 @keyframes bleed-in {
@@ -2385,99 +2807,295 @@ select {
   }
 }
 
-/*
- * Root Word Viewer typography. Hierarchy mirrors the Android reference
- * (ui/rootviewer/RootViewerScreen.kt): a centred "this word" moment up top,
- * then start-aligned, labelled reference sections below — spacing, size,
- * and ink strength only (no rules/cards). Quiet uppercase eyebrow labels
- * match the existing `.settings-section h2` convention.
- */
-.ink-bleed-word {
+/* Root lexicon: compact bilingual hierarchy on one reading spine. */
+.root-prose-measure {
+  max-width: 34rem;
+  margin-inline: auto;
+}
+
+.root-opening {
+  padding-top: var(--root-space-2);
   text-align: center;
-  padding: 0.15rem 0 0.4rem;
 }
 
-.ink-bleed .arabic-lg {
-  font-family: var(--font-arabic);
-  font-size: clamp(2.1rem, 7vw, 2.6rem);
-  line-height: 1.5;
-  direction: rtl;
+.root-opening p,
+.root-analysis p,
+.root-section p {
   margin: 0;
 }
 
-.ink-bleed-word-translation {
-  margin: 0.25rem 0 0;
-  color: color-mix(in srgb, var(--ink) 78%, transparent);
-  font-size: 1.05rem;
-}
-
-.ink-bleed-section {
-  margin-top: 2rem;
-}
-
-.ink-bleed-label {
-  margin: 0 0 0.4rem;
-  color: var(--ink-muted);
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-weight: 500;
-}
-
-.ink-bleed-root {
+.root-word-arabic {
+  color: var(--ink);
   font-family: var(--font-arabic);
-  font-weight: 400;
-  font-size: clamp(1.75rem, 5.5vw, 2.15rem);
+  font-size: 3.5rem;
+  line-height: 1.38;
+  unicode-bidi: isolate;
+}
+
+.root-word-gloss {
+  margin-top: var(--root-space-1) !important;
+  color: var(--ink);
+  font-size: 1.25rem;
+  font-style: italic;
   line-height: 1.4;
-  direction: rtl;
+}
+
+.root-word-transliteration {
+  margin-top: 0.125rem !important;
+  color: color-mix(in srgb, var(--ink) 68%, transparent);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.root-analysis {
+  margin-top: var(--root-space-6);
+}
+
+.root-analysis-group + .root-analysis-group {
+  margin-top: var(--root-space-5);
+}
+
+.root-label {
   margin: 0;
-  color: var(--ink);
-}
-
-.ink-bleed-form-pos {
-  margin: 0;
-  font-size: 1.1rem;
-  color: var(--ink);
-}
-
-.ink-bleed-lemma {
-  margin: 0.6rem 0 0;
-  display: flex;
-  align-items: baseline;
-  gap: 0.55rem;
-}
-
-.ink-bleed-lemma-label {
-  flex-shrink: 0;
-  color: var(--ink-muted);
-  font-size: 0.78rem;
-  letter-spacing: 0.06em;
+  color: color-mix(in srgb, var(--ink) 72%, transparent);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  line-height: 1.35;
   text-transform: uppercase;
 }
 
-.ink-bleed-lemma-ar {
+.root-radicals {
+  width: fit-content;
+  margin-top: var(--root-space-2) !important;
+  color: var(--ink);
   font-family: var(--font-arabic);
-  font-size: 1.1rem;
-  direction: rtl;
-  color: color-mix(in srgb, var(--ink) 78%, transparent);
+  font-size: 2rem;
+  line-height: 1.45;
+  unicode-bidi: isolate;
 }
 
-.ink-bleed-count {
+.root-form-lemma {
+  width: fit-content;
+  margin-top: var(--root-space-2) !important;
+  color: var(--ink);
+  font-family: var(--font-arabic);
+  font-size: 1.5rem;
+  line-height: 1.5;
+  unicode-bidi: isolate;
+}
+
+.root-form-grammar {
+  margin-top: var(--root-space-2) !important;
+  color: color-mix(in srgb, var(--ink) 82%, transparent);
+  font-size: 1.0625rem;
+  line-height: 1.47;
+}
+
+.root-form-frequency,
+.root-no-root,
+.root-section-summary {
+  margin-top: var(--root-space-1) !important;
+  color: color-mix(in srgb, var(--ink) 74%, transparent);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.root-no-root {
+  margin-top: var(--root-space-4) !important;
+}
+
+.root-section {
+  margin-top: var(--root-space-7);
+}
+
+.root-section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--root-space-4);
   margin: 0;
-  font-size: 1.1rem;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.root-section-title::after {
+  flex: 1;
+  height: 1px;
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
+  content: '';
+}
+
+.root-chapter-list,
+.root-related-list {
+  margin-top: var(--root-space-5);
+}
+
+.root-occurrences,
+.root-related {
+  max-width: 34rem;
+  margin-inline: auto;
+}
+
+.root-chapter-heading {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--root-space-4);
+  padding: var(--root-space-3) 0;
+  text-align: start;
+}
+
+.root-chapter-name {
+  min-width: 0;
+  color: color-mix(in srgb, var(--ink) 90%, transparent);
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  line-height: 1.3;
+}
+
+.root-chapter-name i {
+  display: inline-block;
+  width: 1.5rem;
+  margin-inline-end: var(--root-space-2);
+  color: var(--gold);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-style: normal;
+  font-variant-numeric: lining-nums tabular-nums;
+  text-align: end;
+}
+
+.root-chapter-meta {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: baseline;
+  gap: var(--root-space-2);
+  color: color-mix(in srgb, var(--ink) 68%, transparent);
+}
+
+.root-chapter-count,
+.root-related-count {
+  flex-shrink: 0;
+  color: inherit;
+  font-size: 0.875rem;
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1.4;
+}
+
+.root-chapter-disclosure {
+  width: 0.75rem;
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  line-height: 1;
+  text-align: center;
+}
+
+.root-chapter-occurrences {
+  margin: var(--root-space-2) 0 var(--root-space-2) 2.5rem;
+}
+
+.root-occurrence {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 0.625rem 0;
+  text-align: start;
+}
+
+.root-occurrence[data-current='true'] .root-occurrence-ref {
   color: var(--ink);
 }
 
-.ink-bleed .muted {
-  margin: 0.2rem 0 0;
+.root-occurrence-ref {
+  display: block;
+  color: var(--gold);
+  font-size: 0.875rem;
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1.4;
+}
+
+.root-occurrence-word {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: var(--root-space-2);
+  margin-top: var(--root-space-1);
+}
+
+.root-occurrence-word [lang='ar'] {
+  color: var(--ink);
+  font-family: var(--font-arabic);
+  font-size: 1.5rem;
+  line-height: 1.5;
+  unicode-bidi: isolate;
+}
+
+.root-occurrence-word span:last-child:not([lang='ar']) {
+  min-width: 0;
   color: var(--ink-muted);
+  font-size: 1.0625rem;
+  line-height: 1.47;
+}
+
+.root-text-action {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  margin-top: var(--root-space-1);
+  padding: var(--root-space-3) 0;
+  color: var(--accent);
+  font-size: 1.0625rem;
+  line-height: 1.4;
+  text-align: start;
+}
+
+.root-chapters-action {
+  margin-top: var(--root-space-2);
+}
+
+.root-related-row {
+  display: flex;
+  min-height: 48px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--root-space-4);
+  padding: var(--root-space-3) 0;
+}
+
+.root-related-form {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: var(--root-space-2);
+}
+
+.root-related-form [lang='ar'] {
+  color: var(--ink);
+  font-family: var(--font-arabic);
+  font-size: 1.5rem;
+  line-height: 1.5;
+  unicode-bidi: isolate;
+}
+
+.root-related-form span:last-child:not([lang='ar']) {
+  color: var(--ink-muted);
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
 .ink-bleed-attribution {
-  margin: 2.5rem 0 0;
-  color: color-mix(in srgb, var(--ink-muted) 85%, transparent);
-  font-size: 0.82rem;
+  margin: var(--root-space-8) 0 0;
+  color: var(--ink-muted);
+  font-size: 0.875rem;
   line-height: 1.5;
+  text-align: center;
 }
 
 .ink-bleed-attribution a {
@@ -2487,72 +3105,46 @@ select {
 }
 
 .ink-bleed .close {
-  color: color-mix(in srgb, var(--ink-muted) 55%, transparent);
-  padding: 0.55rem;
+  display: inline-flex;
   min-width: 44px;
   min-height: 44px;
-  display: inline-flex;
   align-items: center;
   justify-content: center;
+  padding: 0.55rem;
+  color: color-mix(in srgb, var(--ink) 68%, transparent);
 }
 
 @media (hover: hover) {
-  .ink-bleed .close:hover {
-    color: var(--ink-muted);
+  .ink-bleed .close:hover,
+  .root-chapter-heading:hover,
+  .root-occurrence:hover,
+  .root-text-action:hover {
+    opacity: 0.76;
   }
 }
 
-.occurrence-list {
-  margin-top: 0.9rem;
-}
-
-.occurrence {
-  display: block;
-  width: 100%;
-  text-align: start;
-  padding: 0.75rem 0;
-  min-height: 48px;
-  border-bottom: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
-}
-
-@media (hover: hover) {
-  .occurrence:hover {
-    opacity: 0.78;
+@media (max-width: 899px) {
+  .ink-bleed {
+    --root-inline-padding: 1.75rem;
   }
 }
 
-.occurrence .ref {
-  color: var(--gold);
-  font-size: 0.85rem;
-}
+@media (max-width: 599px) {
+  .ink-bleed {
+    --root-inline-padding: 1.25rem;
+  }
 
-.occurrence-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-top: 0.2rem;
-}
+  .root-word-arabic {
+    font-size: 3rem;
+    line-height: 1.45;
+  }
 
-.occurrence-ar {
-  font-family: var(--font-arabic);
-  font-size: 1.25rem;
-  direction: rtl;
-  color: var(--ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.occurrence-tr {
-  flex-shrink: 0;
-  max-width: 45%;
-  color: var(--ink-muted);
-  font-size: 0.92rem;
-  text-align: end;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  .root-occurrence-word,
+  .root-related-form {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--root-space-1);
+  }
 }
 
 .scroll-with-float {
@@ -2673,6 +3265,41 @@ select {
 @media (max-width: 640px) {
   :root {
     --sheet-pad: clamp(0.95rem, 4.5vw, 1.35rem);
+    --home-bookmark-reserve: 27px;
+  }
+
+  /* The reusable ribbon paints a 13px cloth 9px inside its target. On Home,
+   * use a 31px visual canvas so that cloth is centred in the left lane, while
+   * an invisible 44px hit area preserves the required touch target. */
+  .home-header[data-has-bookmarks='true'] .home-bookmark-ribbon {
+    /* The header is now the positioning context: 6.5px centres the 31px
+     * visual canvas inside the 44px edge target without touching the title. */
+    left: 6.5px;
+  }
+
+  .home-header[data-has-bookmarks='true'] .home-bookmark-ribbon .verse-ribbon {
+    width: 31px;
+  }
+
+  /* Keep every block in the document flow. Moving the blocks with margins
+   * offset the entire mobile sheet (including its title) in narrow previews.
+   * Inner padding creates the ribbon lane without disturbing the page edge. */
+  .home-scroll-page[data-has-bookmarks='true'] > .search-row,
+  .home-scroll-page[data-has-bookmarks='true'] > .continue-row,
+  .home-scroll-page[data-has-bookmarks='true'] > .surah-list,
+  .home-scroll-page[data-has-bookmarks='true'] > .word-search-results {
+    padding-left: var(--home-bookmark-reserve);
+  }
+
+  .home-scroll-page[data-has-bookmarks='true'] .surah-row {
+    padding-left: 0;
+  }
+
+  /* The home title is part of the chapter list hierarchy: when the bookmark
+   * lane is present, it starts above the chapter numbers—not at the page edge
+   * and not above the ribbon. */
+  .home-header[data-has-bookmarks='true'] {
+    padding-left: calc(var(--home-bookmark-reserve) + var(--sheet-pad));
   }
 
   body {

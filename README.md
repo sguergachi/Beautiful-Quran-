@@ -68,6 +68,11 @@ For future runs, use:
 scripts/run_android_app.sh
 ```
 
+The emulator window opens by default. When a shell was started outside the
+desktop environment, the script reconnects to its local Xwayland display. For
+a CI or SSH shell without a display, use
+`ANDROID_EMULATOR_HEADLESS=1 scripts/run_android_app.sh`.
+
 If the emulator window does not appear or booting times out, check
 `.android-emulator.log`. To make the SDK tools available in your current shell:
 

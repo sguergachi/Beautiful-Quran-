@@ -33,8 +33,17 @@ type Props = {
   /** 0–1; fades with reader chrome while reciting. */
   chromeAlpha?: number
   interactive?: boolean
+  /** False for navigation and confirmation-only ribbons. */
+  animateOnTap?: boolean
   /** Returns true when the verse is now bookmarked. */
   onToggle: () => boolean
+  /** Replays the existing physical unfurl when this value changes above zero. */
+  unfurlSignal?: number
+  /** Geometry overrides for the same ribbon on taller non-verse sheets. */
+  edgeInset?: number
+  topInset?: number
+  bottomGap?: number
+  ariaLabel?: string
 }
 
 function parseRuby(cssColor: string): { r: number; g: number; b: number } {
@@ -62,7 +71,13 @@ export function VerseBookmarkRibbon({
   side,
   chromeAlpha = 1,
   interactive = true,
+  animateOnTap = true,
   onToggle,
+  unfurlSignal = 0,
+  edgeInset = EDGE_INSET,
+  topInset = TOP_INSET,
+  bottomGap = BOTTOM_GAP,
+  ariaLabel,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLButtonElement>(null)
@@ -105,11 +120,11 @@ export function VerseBookmarkRibbon({
     const mirrored = side === 'right'
     const ax = (logicalX: number) => (mirrored ? cssW - logicalX : logicalX)
 
-    const outer = EDGE_INSET
-    const inner = EDGE_INSET + RIBBON_WIDTH
-    const center = EDGE_INSET + RIBBON_WIDTH / 2
-    const retractedTipY = TOP_INSET + NUB_LENGTH
-    const fullLen = Math.max(retractedTipY, h - BOTTOM_GAP)
+    const outer = edgeInset
+    const inner = edgeInset + RIBBON_WIDTH
+    const center = edgeInset + RIBBON_WIDTH / 2
+    const retractedTipY = topInset + NUB_LENGTH
+    const fullLen = Math.max(retractedTipY, h - bottomGap)
 
     const progress = Math.max(0, unfurl.current)
     const tipY =
@@ -149,8 +164,8 @@ export function VerseBookmarkRibbon({
       return cloth + flutter
     }
 
-    const top = TOP_INSET + TOP_FOLD
-    const bot = Math.max(TOP_INSET + NUB_LENGTH * 0.6, tipY)
+    const top = topInset + TOP_FOLD
+    const bot = Math.max(topInset + NUB_LENGTH * 0.6, tipY)
     const span = Math.max(1, bot - top)
     const notchDepth = Math.min(NOTCH, span * 0.42)
     const steps = Math.min(72, Math.max(8, Math.floor(span / 2.5)))
@@ -225,7 +240,7 @@ export function VerseBookmarkRibbon({
       }
       ctx.restore()
     }
-  }, [bookmarked, hovered, ribbonFocused, side])
+  }, [bookmarked, hovered, ribbonFocused, side, edgeInset, topInset, bottomGap])
 
   // Keep bookmark and playback-ink colors in sync with theme tokens.
   useEffect(() => {
@@ -346,10 +361,26 @@ export function VerseBookmarkRibbon({
     [draw, stopControls],
   )
 
+  useEffect(() => {
+    if (unfurlSignal <= 0 || !bookmarked) return
+    const frame = window.requestAnimationFrame(() => runAnimation(true))
+    return () => window.cancelAnimationFrame(frame)
+  }, [bookmarked, runAnimation, unfurlSignal])
+
   useEffect(() => () => stopControls(), [stopControls])
 
   const onClick = () => {
     if (!interactive || chromeAlpha < 0.1) return
+    if (!animateOnTap) {
+      stopControls()
+      unfurl.current = 1
+      sway.current = 0
+      animating.current = false
+      userDriven.current = false
+      draw()
+      onToggle()
+      return
+    }
     const nowMarked = onToggle()
     runAnimation(nowMarked)
   }
@@ -368,7 +399,7 @@ export function VerseBookmarkRibbon({
       data-on={bookmarked || unfurl.current > 0.5 ? 'true' : 'false'}
       data-focused={focused ? 'true' : 'false'}
       data-hovered={hovered || ribbonFocused ? 'true' : 'false'}
-      aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark verse'}
+      aria-label={ariaLabel ?? (bookmarked ? 'Remove bookmark' : 'Bookmark verse')}
       aria-pressed={bookmarked}
       onClick={onClick}
       onFocus={() => setRibbonFocused(true)}

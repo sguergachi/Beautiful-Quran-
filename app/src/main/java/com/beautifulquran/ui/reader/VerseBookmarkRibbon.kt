@@ -30,10 +30,12 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.ui.theme.LocalQuranAccents
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -58,6 +60,7 @@ private const val EDGE_INSET_DP = 8f    // from the block's outer edge
 private const val RIBBON_WIDTH_DP = 11f
 private const val TOP_INSET_DP = 24f    // align the tip with the verse's first ink line
 private const val NUB_LENGTH_DP = 14f   // just the swallowtail tip peeking out
+private const val TOP_FOLD_DP = 3.5f    // soft fold over the page edge, matching web
 private const val BOTTOM_GAP_DP = 48f   // leave air above the next verse's tip
 private const val NOTCH_DP = 5.5f
 private const val WAVE_AMP_DP = 4.5f    // cloth sway while unfurling
@@ -87,6 +90,15 @@ internal fun VerseBookmarkRibbon(
     interactive: Boolean,
     onToggle: () -> Boolean,
     modifier: Modifier = Modifier,
+    /** False when the ribbon is navigation or asks before changing state. */
+    animateOnTap: Boolean = true,
+    /** Non-zero changes replay the same physical unfurl for an already saved
+     * ribbon, used when a new bookmark first arrives back on Chapters. */
+    unfurlSignal: Int = 0,
+    edgeInset: Dp = EDGE_INSET_DP.dp,
+    ribbonWidth: Dp = RIBBON_WIDTH_DP.dp,
+    topInset: Dp = TOP_INSET_DP.dp,
+    bottomGap: Dp = BOTTOM_GAP_DP.dp,
 ) {
     val mirrored = side == AyahSelectorSide.RIGHT
     val ruby = LocalQuranAccents.current.bookmarkRibbon
@@ -101,6 +113,7 @@ internal fun VerseBookmarkRibbon(
     val sway = remember { Animatable(0f) }
     var animating by remember { mutableStateOf(false) }
     var job by remember { mutableStateOf<Job?>(null) }
+    var stripSize by remember { mutableStateOf(IntSize.Zero) }
 
     // External bookmark changes snap without animation — only the tap path
     // below runs the unfurl.
@@ -154,10 +167,17 @@ internal fun VerseBookmarkRibbon(
         }
     }
 
+    LaunchedEffect(unfurlSignal) {
+        if (unfurlSignal <= 0 || !bookmarked) return@LaunchedEffect
+        // Let the returning Home sheet finish its first measure so duration
+        // and cloth travel use the ribbon's real full-page height.
+        delay(16)
+        playUnfurl(stripSize.height.toFloat().coerceAtLeast(1f))
+    }
+
     val latestOnToggle by rememberUpdatedState(onToggle)
     val latestChrome by rememberUpdatedState(chromeAlpha)
     val interaction = remember { MutableInteractionSource() }
-    var stripSize by remember { mutableStateOf(IntSize.Zero) }
 
     // Tap target is the whole strip: clickable is more reliable than a nested
     // empty pointerInput Box, and the strip already sits in the ayah block's
@@ -169,6 +189,17 @@ internal fun VerseBookmarkRibbon(
             role = Role.Button,
             onClick = {
                 if (latestChrome() < 0.1f) return@clickable
+                if (!animateOnTap) {
+                    job?.cancel()
+                    animating = false
+                    scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                        unfurl.snapTo(1f)
+                        sway.snapTo(0f)
+                    }
+                    latestOnToggle()
+                    view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                    return@clickable
+                }
                 job?.cancel()
                 animating = true
                 val nowMarked = latestOnToggle()
@@ -195,26 +226,27 @@ internal fun VerseBookmarkRibbon(
 
             val h = size.height
             if (h <= 0f) return@Canvas
-            val edgeInset = EDGE_INSET_DP.dp.toPx()
-            val ribbonW = RIBBON_WIDTH_DP.dp.toPx()
-            val topInset = TOP_INSET_DP.dp.toPx()
+            val edgeInsetPx = edgeInset.toPx()
+            val ribbonW = ribbonWidth.toPx()
+            val topInsetPx = topInset.toPx()
             val nubLen = NUB_LENGTH_DP.dp.toPx()
-            val bottomGap = BOTTOM_GAP_DP.dp.toPx()
+            val topFold = TOP_FOLD_DP.dp.toPx()
+            val bottomGapPx = bottomGap.toPx()
             val notch = NOTCH_DP.dp.toPx()
             val waveAmp = WAVE_AMP_DP.dp.toPx()
             val settleAmp = SETTLE_AMP_DP.dp.toPx()
             val nubStroke = NUB_STROKE_DP.dp.toPx()
             // Resting full length stops short of the block bottom so consecutive
             // saved ribbons (and the next verse's idle tip) never kiss.
-            val retractedTipY = topInset + nubLen
-            val fullLen = (h - bottomGap).coerceAtLeast(retractedTipY)
+            val retractedTipY = topInsetPx + nubLen
+            val fullLen = (h - bottomGapPx).coerceAtLeast(retractedTipY)
 
             fun ax(logicalX: Float): Float =
                 if (mirrored) size.width - logicalX else logicalX
 
-            val outer = edgeInset
-            val inner = edgeInset + ribbonW
-            val center = edgeInset + ribbonW / 2f
+            val outer = edgeInsetPx
+            val inner = edgeInsetPx + ribbonW
+            val center = edgeInsetPx + ribbonW / 2f
 
             val progress = unfurl.value.coerceAtLeast(0f)
             val tipY = if (progress <= 0.001f) {
@@ -253,12 +285,16 @@ internal fun VerseBookmarkRibbon(
             // Always a swallowtail tip — idle "nub" is just that tip, short and
             // faded; a saved mark is the same shape grown to the block bottom.
             val path = Path().apply {
-                val top = topInset
-                val bot = tipY.coerceAtLeast(topInset + nubLen * 0.6f)
+                val top = topInsetPx + topFold
+                val bot = tipY.coerceAtLeast(topInsetPx + nubLen * 0.6f)
                 val span = (bot - top).coerceAtLeast(1f)
                 val notchDepth = minOf(notch, span * 0.45f)
                 val steps = (span / 3f).toInt().coerceIn(6, 64)
-                moveTo(ax(outer + lateral(top)), top)
+                val outerTop = ax(outer + lateral(top))
+                val innerTop = ax(inner + lateral(top))
+                moveTo(outerTop, top)
+                quadraticTo(outerTop, top - topFold, ax(center), top - topFold)
+                quadraticTo(innerTop, top - topFold, innerTop, top)
                 for (i in 1..steps) {
                     val y = top + span * (i / steps.toFloat())
                     lineTo(ax(inner + lateral(y)), y)
@@ -276,7 +312,7 @@ internal fun VerseBookmarkRibbon(
                     0f to ruby,
                     0.55f to ruby,
                     1f to ruby.copy(alpha = 0.82f),
-                    startY = topInset,
+                    startY = topInsetPx,
                     endY = tipY.coerceAtLeast(1f),
                 )
                 drawPath(path, fill, alpha = alpha)

@@ -18,10 +18,14 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.shape.AbsoluteRoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -44,6 +48,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -180,6 +185,32 @@ fun EntranceCover(
         )
     }
 
+    // The leather board bleeds to the physical edge, but its gilt frame and
+    // ornaments must clear the camera cutout and the system-bar zones — a
+    // tooled cover never runs its rule under the lens. Pull the frame in with
+    // a book's proportions: generous head and foot margins, tighter
+    // fore-edges, each side floored at a base margin and grown to clear any
+    // safe inset on that edge. The result reads as a bound cover, not a thin
+    // rectangle hugging the screen.
+    val layoutDirection = LocalLayoutDirection.current
+    val safeInsets = WindowInsets.displayCutout.union(WindowInsets.systemBars)
+    val (frameMarginH, frameMarginV) = with(localDensity) {
+        val breathing = 8.dp.toPx()
+        val baseH = 26.dp.toPx()
+        val baseV = 56.dp.toPx()
+        val h = maxOf(
+            baseH,
+            safeInsets.getLeft(this, layoutDirection) + breathing,
+            safeInsets.getRight(this, layoutDirection) + breathing,
+        ).toDp()
+        val v = maxOf(
+            baseV,
+            safeInsets.getTop(this) + breathing,
+            safeInsets.getBottom(this) + breathing,
+        ).toDp()
+        h to v
+    }
+
     // Full-bleed leather: hide the status bar for the ceremony, restore after.
     DisposableEffect(view) {
         val window = view.context.findActivity()?.window
@@ -300,34 +331,44 @@ fun EntranceCover(
                     role = Role.Button
                 },
         ) {
-            MushafCoverFrame(
-                brightGold = accents.goldBright,
-                deepGold = accents.goldDeep,
-                embossDark = accents.embossDark,
-                embossLight = accents.embossLight,
-                sheen = sheen,
-                geometry = frameGeometry,
-                modifier = Modifier.fillMaxSize(),
-            )
-            GeneratedBorderBand(
-                spec = ornament.border,
-                seal = ornament.cornerSeal,
-                geometry = frameGeometry,
-                brightGold = accents.goldBright,
-                deepGold = accents.goldDeep,
-                embossDark = accents.embossDark,
-                embossLight = accents.embossLight,
-                sheen = sheen,
-            )
-            GeneratedCornerSeals(
-                spec = ornament.cornerSeal,
-                geometry = frameGeometry,
-                brightGold = accents.goldBright,
-                deepGold = accents.goldDeep,
-                embossDark = accents.embossDark,
-                embossLight = accents.embossLight,
-                sheen = sheen,
-            )
+            // The gilt frame, border frieze, and corner seals share one inset
+            // box so they stay concentric with each other while clearing the
+            // camera and system bars. The leather beneath them still bleeds
+            // full to the screen edge.
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = frameMarginH, vertical = frameMarginV),
+            ) {
+                MushafCoverFrame(
+                    brightGold = accents.goldBright,
+                    deepGold = accents.goldDeep,
+                    embossDark = accents.embossDark,
+                    embossLight = accents.embossLight,
+                    sheen = sheen,
+                    geometry = frameGeometry,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                GeneratedBorderBand(
+                    spec = ornament.border,
+                    seal = ornament.cornerSeal,
+                    geometry = frameGeometry,
+                    brightGold = accents.goldBright,
+                    deepGold = accents.goldDeep,
+                    embossDark = accents.embossDark,
+                    embossLight = accents.embossLight,
+                    sheen = sheen,
+                )
+                GeneratedCornerSeals(
+                    spec = ornament.cornerSeal,
+                    geometry = frameGeometry,
+                    brightGold = accents.goldBright,
+                    deepGold = accents.goldDeep,
+                    embossDark = accents.embossDark,
+                    embossLight = accents.embossLight,
+                    sheen = sheen,
+                )
+            }
 
             val medallionSize =
                 (LocalConfiguration.current.screenWidthDp * 0.52f).coerceAtMost(240f).dp

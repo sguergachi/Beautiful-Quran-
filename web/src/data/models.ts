@@ -85,6 +85,14 @@ export interface RootSummary {
   root: string
   occurrenceCount: number
   occurrences: RootOccurrence[]
+  lemmas: RootLemmaSummary[]
+}
+
+/** One exact QAC lemma/POS analysis found under a root. */
+export interface RootLemmaSummary {
+  lemma: string
+  pos: string
+  occurrenceCount: number
 }
 
 /** The word currently being recited — mirrors Android `ActiveWord`. */

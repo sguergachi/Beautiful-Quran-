@@ -6,6 +6,7 @@ import com.beautifulquran.data.QuranRepository
 import com.beautifulquran.data.SettingsRepository
 import com.beautifulquran.data.model.Reciter
 import com.beautifulquran.data.model.RootOccurrence
+import com.beautifulquran.data.model.RootLemmaSummary
 import com.beautifulquran.data.model.Segment
 import com.beautifulquran.data.model.Word
 import com.beautifulquran.data.model.WordMorphology
@@ -27,6 +28,8 @@ data class RootViewerUiState(
     val morphology: WordMorphology? = null,
     val occurrenceCount: Int = 0,
     val occurrences: List<RootOccurrence> = emptyList(),
+    /** Exact QAC lemma/POS analyses grouped beneath this root. */
+    val lemmas: List<RootLemmaSummary> = emptyList(),
     val error: String? = null,
     /** True while the header speaker is auditioning this word. */
     val isPlayingWord: Boolean = false,
@@ -86,6 +89,7 @@ class RootViewerViewModel(
                 morphology = morph,
                 occurrenceCount = summary?.occurrenceCount ?: 0,
                 occurrences = summary?.occurrences.orEmpty(),
+                lemmas = summary?.lemmas.orEmpty(),
                 error = when {
                     word == null -> "Word not found"
                     else -> null

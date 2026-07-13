@@ -13,7 +13,7 @@ no trays — only paper, and ink on paper.
 
 ## The sheet
 
-The whole app is **three flat sheets** — Chapters, Reader, Settings — viewed
+The whole app is **four flat sheets** — Bookmarks, Chapters, Reader, Settings — viewed
 one at a time. Navigation glides the next sheet in from the side (a
 quarter-width slide softened with a fade, 380 ms); nothing stacks, nothing
 floats, nothing casts a shadow.
@@ -176,6 +176,89 @@ the recede-while-playing behavior. Running-text rules follow Bringhurst's
 *Elements of Typographic Style* (45–75 character measure, natural word space,
 ragged-right setting, leading proportional to type size) and WCAG's text
 spacing / visual-presentation guidance.
+
+### Information surfaces: learned rules
+
+Lexicons, search results, bookmarks, and settings are quieter than scripture,
+but they still need a decisive composition. "Calm" must not become faint,
+empty, or ambiguous. Apply these rules before polishing individual elements:
+
+- **Answer first.** The first viewport carries the reason the surface opened.
+  A held-word view must reveal the word, root, form, and occurrence summary
+  before asking the reader to scroll. Ceremony belongs to the cover and surah
+  opening; an information surface earns space through comprehension.
+- **One reading spine.** A centred opening may introduce the subject once;
+  everything after it returns to one primary left edge, with one deliberate
+  inset for owned detail. A layout with separate label, Arabic, list, and
+  metadata axes makes related facts look unrelated. RTL controls Arabic
+  shaping and reading order, never the page alignment: Arabic elements are
+  bidi-isolated and intrinsically sized on the same content spine.
+- **Proximity expresses meaning.** Space is not decoration. Use 4–8 px/dp
+  inside one fact, 12–16 inside a row, 24 between related subgroups, and about
+  40 between major reader questions. Avoid viewport-height gaps: they grow
+  without adding meaning and push useful content below the fold. Parent gaps
+  own rhythm; arbitrary child margins do not.
+- **Use a small, explicit type scale.** The held subject is the only hero.
+  Section titles organise, Arabic forms and chapter names carry the content,
+  and labels/counts remain subordinate. Do not create a new near-equal size
+  for every fact. Arabic needs generous line height for marks and optical
+  checking with heavily vocalised words, not only simple test strings.
+- **Quiet is still legible.** Essential explanation uses confident secondary
+  ink, not several layers of muted colour plus transparency. Reserve the
+  faintest ink for genuinely optional metadata. Colour keeps one meaning:
+  gold is Quranic reference/ornament, green is action, and neither replaces a
+  textual current, selected, or expanded state.
+- **Remove implementation language.** Readers need "This root occurs 36
+  times," not "Root annotated 36 times" or "five corpus analyses." Show a
+  count once, where it changes understanding or predicts what an action will
+  reveal. Do not repeat the current item inside a related-items list.
+- **Design against the largest real record.** A five-row mock-up is not proof.
+  Validate with roots spanning thousands of occurrences, tens of analyses,
+  and most of the 114 chapters. Progressive disclosure limits initial work,
+  keeps only one dense group open, preserves Quranic order, and always keeps
+  the reader's current context in view.
+- **Affordance without chrome.** A whole row may be the tap target, but its
+  state still needs information scent: a compact count, disclosure mark,
+  visible focus, 44 px/dp target, and content motion. No ripple, container,
+  or divider is required. Nested content aligns beneath its owning label, not
+  merely some number of pixels from the sheet edge.
+- **Responsive means stable relationships.** Phones and wide screens share
+  the same hierarchy and semantic indents. Do not invent desktop columns for
+  facts that are read sequentially. Change measure, padding, and wrapping;
+  do not change what belongs together.
+- **Break a rule narrowly and record why.** An exception must solve a named
+  reading problem, remain local, and be impossible to mistake for a reusable
+  decorative habit. The root viewer's major-heading rule below anchors the eye
+  above noisy reference data; it does not license borders between rows or
+  around content.
+
+Review information surfaces with real text at a narrow phone and a wide paper
+sheet. Check the first-viewport content budget, repeated left edges, RTL/LTR
+isolation, touch and keyboard affordances, contrast, long labels, and expanded
+states. If a relationship is unclear, fix order, proximity, or alignment
+before adding decoration.
+
+### Root lexicon typography
+
+The Root Word Viewer is an information page, not a ceremonial chapter
+opening. It uses one centred held word, then one left-hand reading spine. Its
+interactive measure is at most 40 rem / 640 dp and prose is at most 34 rem /
+544 dp. Vertical space follows semantic proximity: 4–8 px/dp within one fact,
+12–16 within a row, 24 between related subgroups, and 40 between major reader
+questions. Viewport-height spacing is forbidden here; it turns tall screens
+into empty stages and pushes the answer below the fold.
+
+Arabic and English occupy separate bidi-isolated elements. The Hafs scale is
+44–52 for the held word, 32 for radicals, and 24 for forms and occurrences;
+English uses 24 Cormorant section headings, 17 EB Garamond body/actions, and
+12–14 labels/metadata. Gold identifies Quran references, green identifies
+actions, and neither substitutes for a textual current/open state.
+
+The lexicon's two major headings — Occurrences and Related forms — may carry
+a 1 px/dp rule at 9% parchment ink from the title to the right edge of the
+content measure. It is part of the heading lockup, not a border or row
+divider: it never reaches the sheet edge, never appears between rows, and
+never uses gold.
 
 ## Ornament
 
@@ -378,6 +461,125 @@ Implementation: `ui/reader/VerseBookmarkRibbon.kt`, drawn per verse inside
 `AyahBlock` (`ReaderComponents.kt`). Bookmarks persist in their own
 SharedPreferences store (`data/BookmarkRepository.kt`), never in the read-only
 `quran.db`.
+
+Once a newly marked verse returns to Chapters, the same physical ribbon used
+inside its verse block unfurls beside the title and runs to just above the page
+bottom, then remains exposed on the left edge. Its drawing stays fully unfurled
+while a separate navigation target opens Bookmarks, so tapping it—or
+pulling right from Chapters—never plays a retract before the Bookmarks sheet
+slides in from the left above it. This is a real page in the paper stack, not an
+overlay.
+
+### Chapters ribbon geometry
+
+The long Chapters ribbon is a structural part of the chapter document, not a
+decoration laid on top of it. Its visible ruby cloth begins beside the title,
+while its touch target remains available without making the cloth itself a
+wide, blank-looking control. Android permanently reserves a 28 dp Home lane,
+even before the first bookmark exists, so the chapter composition never moves
+when the ribbon appears. The lane matches the opposite page gutter exactly:
+7.5 dp of outer air, a 13 dp ribbon, then 7.5 dp of inner air. Its 28 dp target
+is a narrow Home-only exception to the usual 44 dp minimum; verse ribbons and
+the Bookmarks index keep their full 44 dp targets and 11 dp cloth.
+
+On Android, that lane is fixed to the viewport: scrolling the chapter list
+must never move the ribbon. It begins beside, and slightly below the top of,
+the single Cormorant “Beautiful Quran” masthead and keeps a small, optically
+balanced paper gutter on both sides of the ruby cloth. The Chapters masthead
+and settings rosette remain fixed above the scrolling chapter document,
+matching the web composition. The masthead does not repeat the Arabic app
+name; Arabic remains where it identifies Quranic content. The ribbon folds
+softly over the top page edge with two restrained rounded corners, matching
+the web renderer without turning its cap into a pill.
+
+There is one content rule beside that lane. On a bookmarked Chapters page,
+the title, search field, and gold chapter-number column all begin on it. The
+surah name may form a second, inner reading column, but no heading may drift
+back to the paper edge simply because it is larger. This alignment is checked
+as a relationship, not as unrelated platform padding values: web and Android
+may use their own layout primitives, yet must preserve the same visible
+anchors. Keep the gold chapter number close to its transliterated name; the
+number lane must not read as an empty decorative gutter.
+
+The ribbon's drawing and navigation are deliberately separate. Reuse
+`VerseBookmarkRibbon` for the cloth; put its Home/Chapters navigation on an
+adjacent quiet target (28 dp on Android Home, 44 px on web). That keeps the
+ribbon fully unfurled while the Bookmarks sheet opens, prevents a mark/unmark
+animation from being borrowed as navigation feedback, and leaves the shared
+component authoritative for its own visual language. Do not create another
+bookmark icon, a second ribbon shape, or a bespoke animated substitute.
+
+The bookmark index is a compact bilingual concordance, shared by Android and
+web. It uses one centered column (560 dp / 36 rem maximum) and a fixed 40 dp/px
+inner content spine from the outer title rule. The gold number belongs to the
+outer index lane, the English chapter name begins on the inner spine, and the
+isolated RTL Arabic name ends on the far-right Arabic rule. Verse copy balances
+that spine with an equal trailing gutter so its reading measure remains
+centered. Entries then stack Arabic at 24/36, translation at 17/25, and
+metadata at 14/20; the title is the only display-sized element. Spacing, not
+rules or containers, separates sections.
+
+The Bookmarks header contains only its title and the Chapters return action;
+the total marked-verse count is deliberately omitted.
+
+Within the fixed outer lane, the visible ruby edge keeps its 2 dp/px optical
+inset while the narrower gold chapter number begins 4 dp/px from the
+title/search rule. Those offsets are taken from the lane's right-hand air:
+they never widen the 44 dp/px ribbon target or change the page measure. Search
+text, chapter names, verse copy, metadata, and disclosures all begin on the
+same 40 dp/px inner spine; the Arabic chapter name reaches the far-right rule
+shared by the Arabic verse copy.
+
+The index follows one vertical rhythm on both platforms: 24 dp/px from title
+to search and from search to the first chapter label, 32 dp/px before later
+chapter groups, 12 dp/px below a chapter header, and 8 dp/px between Arabic
+verse copy and its translation. The fixed-height ayah line supplies its own
+breathing room, so no extra spacer sits between translation and metadata.
+
+### Bookmark index alignment lessons
+
+- **Name anchors before assigning padding.** This surface has four: the outer
+  title rule, the 44 dp/px index target, the 40 dp/px inner reading spine, and
+  the far-right Arabic rule. Each value expresses one relationship. Scattered
+  child padding recreates almost-aligned edges that fail as soon as the
+  viewport or platform changes.
+- **Visible ink and interaction geometry are separate.** The ribbon keeps a
+  44 dp/px target while its narrow cloth sits optically inside it. Moving the
+  cloth or chapter numeral must not move the target, widen the gutter, or push
+  the reading spine. The shared ribbon component remains the authority for the
+  cloth; page layout owns only its placement.
+- **Optical equality is not numeric equality.** A wide ruby strip and a small
+  gold numeral do not look centered at the same inset. Their 2 and 4 dp/px
+  offsets are intentionally different, but both are measured inside the same
+  lane. Tune the marked element, not the whole grid.
+- **Bilingual alignment needs both edges.** English search text, chapter names,
+  translation, and metadata begin on the inner left spine. Arabic chapter
+  names and verse copy end on one far-right rule. RTL direction shapes and
+  orders Arabic; it does not place the element on the page.
+- **Measure rhythm between visible ink, not only boxes.** A 52 dp/px search
+  field and a 44 dp/px metadata target contain internal air. Center text inside
+  those targets, then judge the visible title-to-search, search-to-section,
+  section-to-verse, and translation-to-reference gaps. Adding a spacer beside
+  an already centered target doubles the intended breathing room.
+- **A section should establish context once.** The chapter header owns the
+  chapter number and bilingual name. A bookmark row repeats only its ayah
+  number; repeating the chapter name or full reference weakens hierarchy and
+  makes a one-result section feel busier than it is.
+- **Verify relationships with real narrow data.** Check x-coordinates for the
+  outer rule and inner spine, right edges for Arabic, and ink-to-ink vertical
+  gaps with a wrapped translation and a vocalized Arabic verse. Web and Compose
+  may use different primitives, but these measured relationships must match.
+
+Results remain in Quranic order and can be searched by reference, chapter
+name, or verse text. A chapter initially shows five marked verses; its green
+inline disclosure reveals the remainder, while an active search shows every
+match. The section header establishes the chapter once; an individual result
+shows only its ayah number. The small ruby strip beside a result opens an
+inline Keep / Remove confirmation in that ayah line's fixed-height space before
+changing the mark, so the page does not jump. Keep is green, Remove is quiet
+ink, ayah numbers are gold, and ruby remains exclusive to the physical ribbon.
+Tapping the verse returns to it in the reader. The long Chapters ribbon is
+navigation only and never retracts when tapped.
 
 ## Reading modes
 

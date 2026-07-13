@@ -1,11 +1,11 @@
 /**
  * App store — paper stack, playback, bookmarks, root viewer.
  *
- * Paper stack: stackLayer 0=Chapters, 1=Reader, 2=Settings (over reader).
+ * Paper stack: -1=Bookmarks, 0=Chapters, 1=Reader, 2=Settings.
  * When no surah is open, Settings occupies layer 1.
  */
 import { useSyncExternalStore } from 'react'
-import type { ActiveWord, Reciter, Surah, SurahContent, Segment } from '../data/models'
+import type { ActiveWord, Reciter, Surah, SurahContent, Segment, Word } from '../data/models'
 import { QuranRepository } from '../data/repository'
 import {
   loadBookmarks,
@@ -26,6 +26,7 @@ import {
   readerHighlightState,
 } from '../ui/reader/ReaderHighlightState'
 import {
+  BOOKMARKS_LAYER,
   COVER_LAYER,
   READER_LAYER,
   SETTINGS_LAYER,
@@ -35,7 +36,7 @@ import {
   type StackLayer,
 } from '../ui/paper/stack'
 
-export type Sheet = 'home' | 'reader' | 'settings'
+export type Sheet = 'bookmarks' | 'home' | 'reader' | 'settings'
 
 export interface RootViewerState {
   surahId: number
@@ -43,11 +44,17 @@ export interface RootViewerState {
   position: number
   arabic: string
   translation: string
+  transliteration: string
   root: string
   lemma: string
   pos: string
   features: string
   occurrenceCount: number
+  lemmas: {
+    lemma: string
+    pos: string
+    occurrenceCount: number
+  }[]
   occurrences: {
     surahId: number
     ayahNumber: number
@@ -68,7 +75,7 @@ export interface AppState {
   loadLabel: string
   /** 0..1 while the DB bytes stream in; null for indeterminate phases. */
   loadProgress: number | null
-  /** Continuous paper-stack position: 0 Chapters · 1 Reader · 2 Settings. */
+  /** Paper-stack position: -1 Bookmarks · 0 Chapters · 1 Reader · 2 Settings. */
   stackLayer: StackLayer
   /** Derived top sheet name (for labels / legacy checks). */
   sheet: Sheet
@@ -194,7 +201,8 @@ class AppStore {
   /** Animate / snap the paper stack to a layer. */
   setStackLayer(layer: number) {
     const max = settingsLayerFor(this.hasReader())
-    const stackLayer = Math.max(COVER_LAYER, Math.min(max, Math.round(layer))) as StackLayer
+    const min = this.state.bookmarks.length > 0 ? BOOKMARKS_LAYER : COVER_LAYER
+    const stackLayer = Math.max(min, Math.min(max, Math.round(layer))) as StackLayer
     this.set({
       stackLayer,
       sheet: deriveSheet(stackLayer, this.hasReader()),
@@ -208,7 +216,11 @@ class AppStore {
       this.closeRootViewer()
       return
     }
-    this.setStackLayer(this.state.stackLayer - 1)
+    if (this.state.stackLayer === BOOKMARKS_LAYER) {
+      this.setStackLayer(COVER_LAYER)
+    } else {
+      this.setStackLayer(this.state.stackLayer - 1)
+    }
   }
 
   /** Jump to a specific sheet by clicking its peek. */
@@ -267,7 +279,8 @@ class AppStore {
   }
 
   setSheet(sheet: Sheet) {
-    if (sheet === 'home') this.setStackLayer(COVER_LAYER)
+    if (sheet === 'bookmarks') this.setStackLayer(BOOKMARKS_LAYER)
+    else if (sheet === 'home') this.setStackLayer(COVER_LAYER)
     else if (sheet === 'reader') this.setStackLayer(READER_LAYER)
     else this.setStackLayer(settingsLayerFor(this.hasReader()))
   }
@@ -609,16 +622,25 @@ class AppStore {
   /** Returns true when the verse is *now* bookmarked. */
   toggleBookmark(ayah: number): boolean {
     if (!this.state.content) return false
+    return this.toggleBookmarkAt(this.state.content.surah.id, ayah)
+  }
+
+  /** Toggle any saved verse, including rows in the global bookmark index. */
+  toggleBookmarkAt(surahId: number, ayah: number): boolean {
     const bookmarks = toggleBookmark(
       this.state.bookmarks,
-      this.state.content.surah.id,
+      surahId,
       ayah,
     )
     saveBookmarks(bookmarks)
-    this.set({ bookmarks })
-    return bookmarks.some(
-      (b) => b.surahId === this.state.content!.surah.id && b.ayah === ayah,
-    )
+    const removingLast = bookmarks.length === 0 && this.state.stackLayer === BOOKMARKS_LAYER
+    this.set({
+      bookmarks,
+      ...(removingLast
+        ? { stackLayer: COVER_LAYER as StackLayer, sheet: 'home' as Sheet }
+        : {}),
+    })
+    return bookmarks.some((b) => b.surahId === surahId && b.ayah === ayah)
   }
 
   isBookmarked(ayah: number): boolean {
@@ -644,22 +666,24 @@ class AppStore {
     this.set({ rootViewer: null, rootViewerClosing: false })
   }
 
-  openRootViewer(surahId: number, ayah: number, position: number, arabic: string, translation: string) {
-    const morph = QuranRepository.wordMorphology(surahId, ayah, position)
+  openRootViewer(surahId: number, ayah: number, word: Word) {
+    const morph = QuranRepository.wordMorphology(surahId, ayah, word.position)
     if (!morph || !morph.root) {
       this.set({
         rootViewerClosing: false,
         rootViewer: {
           surahId,
           ayah,
-          position,
-          arabic,
-          translation,
+          position: word.position,
+          arabic: word.arabic,
+          translation: word.translation,
+          transliteration: word.transliteration,
           root: '',
           lemma: morph?.lemma ?? '',
           pos: morph?.pos ?? '',
           features: morph?.features ?? '',
           occurrenceCount: 0,
+          lemmas: [],
           occurrences: [],
         },
       })
@@ -671,14 +695,16 @@ class AppStore {
       rootViewer: {
         surahId,
         ayah,
-        position,
-        arabic,
-        translation,
+        position: word.position,
+        arabic: word.arabic,
+        translation: word.translation,
+        transliteration: word.transliteration,
         root: morph.root,
         lemma: morph.lemma,
         pos: morph.pos,
         features: morph.features,
         occurrenceCount: summary?.occurrenceCount ?? 0,
+        lemmas: summary?.lemmas ?? [],
         occurrences: summary?.occurrences ?? [],
       },
     })
