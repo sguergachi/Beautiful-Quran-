@@ -1,33 +1,44 @@
 package com.beautifulquran.ui.rootviewer
 
+import com.beautifulquran.data.model.RootLemmaSummary
 import com.beautifulquran.data.model.RootOccurrence
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class RootOccurrenceSectionsTest {
     @Test
-    fun `groups by surah and truncates each chapter independently`() {
-        val occurrences = (1..7).map { occurrence(2, it) } +
-            (1..3).map { occurrence(3, it) }
-
-        val sections = rootOccurrenceSections(occurrences, expandedSurahIds = emptySet())
+    fun `groups occurrences by chapter in Quran order`() {
+        val sections = rootOccurrenceSections(
+            (1..7).map { occurrence(2, it) } + (1..3).map { occurrence(3, it) },
+        )
 
         assertEquals(listOf(2, 3), sections.map { it.surahId })
-        assertEquals(5, sections[0].visibleOccurrences.size)
-        assertEquals(2, sections[0].hiddenCount)
-        assertEquals(3, sections[1].visibleOccurrences.size)
-        assertEquals(0, sections[1].hiddenCount)
+        assertEquals(7, sections[0].occurrences.size)
+        assertEquals(3, sections[1].occurrences.size)
     }
 
     @Test
-    fun `expands only the selected chapter`() {
-        val occurrences = (1..7).map { occurrence(2, it) } +
-            (1..6).map { occurrence(3, it) }
+    fun `initial chapters substitute the current chapter without duplication`() {
+        val sections = (1..10).map { surah ->
+            RootOccurrenceSection(surah, "Chapter $surah", listOf(occurrence(surah, 1)))
+        }
 
-        val sections = rootOccurrenceSections(occurrences, expandedSurahIds = setOf(3))
+        assertEquals((1..8).toList(), initialRootSections(sections, currentSurahId = 3).map { it.surahId })
+        assertEquals(listOf(1, 2, 3, 4, 5, 6, 7, 10), initialRootSections(sections, 10).map { it.surahId })
+    }
 
-        assertEquals(5, sections[0].visibleOccurrences.size)
-        assertEquals(6, sections[1].visibleOccurrences.size)
+    @Test
+    fun `related forms exclude only the exact current analysis`() {
+        val forms = listOf(
+            RootLemmaSummary("كتب", "N", 10),
+            RootLemmaSummary("كتب", "V", 6),
+            RootLemmaSummary("كاتب", "N", 3),
+        )
+
+        assertEquals(
+            listOf(forms[1], forms[2]),
+            relatedRootForms(forms, currentLemma = "كتب", currentPos = "N"),
+        )
     }
 
     private fun occurrence(surahId: Int, ayah: Int) = RootOccurrence(

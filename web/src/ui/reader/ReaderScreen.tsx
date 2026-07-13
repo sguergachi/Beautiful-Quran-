@@ -46,6 +46,7 @@ import { SearchHitFlash, searchHitFlashTotalMs } from './SearchHitFlash'
 import { fieldWeaveBackground, GeneratedRosette } from '../theme/GeneratedOrnament'
 import { chapterOrnamentSeed, generateChapterOrnament } from '../theme/ornamentGenerator'
 import { resolveTheme } from '../App'
+import type { Word } from '../../data/models'
 
 /** Usable in-surah query — mirrors Android `SurahSearchState.activeQuery`. */
 function activeSearchQuery(active: boolean, query: string): string | null {
@@ -171,8 +172,8 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const surahIdRef = useRef(content?.surah.id ?? 0)
   surahIdRef.current = content?.surah.id ?? 0
   const onHoldWord = useCallback(
-    (a: number, pos: number, arabic: string, translation: string) => {
-      appStore.openRootViewer(surahIdRef.current, a, pos, arabic, translation)
+    (a: number, word: Word) => {
+      appStore.openRootViewer(surahIdRef.current, a, word)
     },
     [],
   )

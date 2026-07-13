@@ -5,7 +5,7 @@
  * When no surah is open, Settings occupies layer 1.
  */
 import { useSyncExternalStore } from 'react'
-import type { ActiveWord, Reciter, Surah, SurahContent, Segment } from '../data/models'
+import type { ActiveWord, Reciter, Surah, SurahContent, Segment, Word } from '../data/models'
 import { QuranRepository } from '../data/repository'
 import {
   loadBookmarks,
@@ -44,6 +44,7 @@ export interface RootViewerState {
   position: number
   arabic: string
   translation: string
+  transliteration: string
   root: string
   lemma: string
   pos: string
@@ -665,17 +666,18 @@ class AppStore {
     this.set({ rootViewer: null, rootViewerClosing: false })
   }
 
-  openRootViewer(surahId: number, ayah: number, position: number, arabic: string, translation: string) {
-    const morph = QuranRepository.wordMorphology(surahId, ayah, position)
+  openRootViewer(surahId: number, ayah: number, word: Word) {
+    const morph = QuranRepository.wordMorphology(surahId, ayah, word.position)
     if (!morph || !morph.root) {
       this.set({
         rootViewerClosing: false,
         rootViewer: {
           surahId,
           ayah,
-          position,
-          arabic,
-          translation,
+          position: word.position,
+          arabic: word.arabic,
+          translation: word.translation,
+          transliteration: word.transliteration,
           root: '',
           lemma: morph?.lemma ?? '',
           pos: morph?.pos ?? '',
@@ -693,9 +695,10 @@ class AppStore {
       rootViewer: {
         surahId,
         ayah,
-        position,
-        arabic,
-        translation,
+        position: word.position,
+        arabic: word.arabic,
+        translation: word.translation,
+        transliteration: word.transliteration,
         root: morph.root,
         lemma: morph.lemma,
         pos: morph.pos,
