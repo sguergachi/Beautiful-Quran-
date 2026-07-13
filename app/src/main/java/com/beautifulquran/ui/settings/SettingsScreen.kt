@@ -4,6 +4,7 @@ import android.os.Build
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -36,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -43,9 +45,17 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInParent
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -429,8 +439,8 @@ private fun SelectRow(
     }
 }
 
-/** On/off row: label carries the weight, the green disc trails it in the
- * switch position. Filled = on, faint ring = off. */
+/** On/off row: the label carries the weight; a green tick inks itself in at the
+ * trailing edge when on, and settles to a faint empty ring when off. */
 @Composable
 private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
@@ -445,7 +455,54 @@ private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.weight(1f),
         )
-        InkDisc(selected = checked)
+        InkCheck(checked = checked)
+    }
+}
+
+/** The on/off mark: an empty ring at rest, a green checkmark that writes itself
+ * in when toggled on — ink arriving on the page, never a Material switch. Reads
+ * its ink live from the active theme. */
+@Composable
+private fun InkCheck(checked: Boolean) {
+    val on by animateFloatAsState(
+        targetValue = if (checked) 1f else 0f,
+        animationSpec = tween(durationMillis = 280),
+        label = "checkOn",
+    )
+    val accent = MaterialTheme.colorScheme.primary
+    val outline = MaterialTheme.colorScheme.outline
+    Canvas(Modifier.size(20.dp)) {
+        val c = Offset(size.width / 2f, size.height / 2f)
+        val r = size.minDimension / 2f
+        // Resting ring, dissolving as the tick arrives.
+        drawCircle(
+            color = outline.copy(alpha = 0.5f * (1f - on)),
+            radius = r - 1.2.dp.toPx(),
+            center = c,
+            style = Stroke(width = 1.4.dp.toPx()),
+        )
+        if (on > 0f) {
+            val w = size.width
+            val h = size.height
+            val tick = Path().apply {
+                moveTo(w * 0.28f, h * 0.52f)
+                lineTo(w * 0.43f, h * 0.68f)
+                lineTo(w * 0.74f, h * 0.33f)
+            }
+            // Reveal the stroke progressively so the tick is drawn, not switched.
+            val measure = PathMeasure().apply { setPath(tick, false) }
+            val drawn = Path()
+            measure.getSegment(0f, measure.length * on, drawn, startWithMoveTo = true)
+            drawPath(
+                path = drawn,
+                color = accent,
+                style = Stroke(
+                    width = 2.dp.toPx(),
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round,
+                ),
+            )
+        }
     }
 }
 
@@ -465,7 +522,7 @@ private fun InkDisc(selected: Boolean) {
             color = outline.copy(alpha = 0.5f * (1f - fill)),
             radius = r - 1.2.dp.toPx(),
             center = c,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.4.dp.toPx()),
+            style = Stroke(width = 1.4.dp.toPx()),
         )
         // Green disc, inked in on selection.
         drawCircle(
@@ -476,8 +533,10 @@ private fun InkDisc(selected: Boolean) {
     }
 }
 
-/** Two-or-three text options on one line: the chosen one in green, the rest in
- * faint ink. Replaces the Material segmented pill (no borders, no fill). */
+/** A choice between a handful of options, all shown side by side. A green ink
+ * underline — like a reader's pen stroke under the chosen word — slides beneath
+ * the active option, so the pair reads unmistakably as "pick one." No borders,
+ * no pill, no fill: just ink and a slide (docs/DESIGN.md). */
 @Composable
 private fun <T> InlineChoiceRow(
     entries: List<T>,
@@ -485,17 +544,41 @@ private fun <T> InlineChoiceRow(
     label: (T) -> String,
     onSelect: (T) -> Unit,
 ) {
+    // Each option reports its left edge and width (px, in the Row's own space)
+    // so the underline can travel to whichever one is chosen.
+    val bounds = remember { mutableStateMapOf<Int, Pair<Float, Float>>() }
+    val selectedIndex = entries.indexOfFirst { it == selected }.coerceAtLeast(0)
+    val target = bounds[selectedIndex]
+    val accent = MaterialTheme.colorScheme.primary
+
+    val left by animateFloatAsState(target?.first ?: 0f, label = "underlineLeft")
+    val width by animateFloatAsState(target?.second ?: 0f, label = "underlineWidth")
+
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .drawBehind {
+                if (width > 0f) {
+                    val y = size.height - 1.5.dp.toPx()
+                    drawLine(
+                        color = accent,
+                        start = Offset(left, y),
+                        end = Offset(left + width, y),
+                        strokeWidth = 2.dp.toPx(),
+                        cap = StrokeCap.Round,
+                    )
+                }
+            },
+        verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(28.dp),
     ) {
-        entries.forEach { entry ->
+        entries.forEachIndexed { index, entry ->
             val isSel = entry == selected
             val color by animateColorAsState(
                 if (isSel) {
-                    MaterialTheme.colorScheme.primary
+                    MaterialTheme.colorScheme.onSurface
                 } else {
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                 },
                 label = "choiceInk",
             )
@@ -505,8 +588,12 @@ private fun <T> InlineChoiceRow(
                 fontWeight = if (isSel) FontWeight.Medium else FontWeight.Normal,
                 color = color,
                 modifier = Modifier
+                    .onGloballyPositioned { coords ->
+                        val rect = coords.boundsInParent()
+                        bounds[index] = rect.left to rect.width
+                    }
                     .quietClickable { onSelect(entry) }
-                    .padding(vertical = 6.dp),
+                    .padding(top = 4.dp, bottom = 9.dp),
             )
         }
     }
