@@ -1,5 +1,6 @@
 import { Select } from '@base-ui/react/select'
 import { InkCheckMark } from './InkCheckMark'
+import { paperSelectHaptic } from './paperHaptics'
 
 export type PaperSelectOption<T extends string = string> = {
   value: T
@@ -31,7 +32,8 @@ export function PaperSelect<T extends string>({
     <Select.Root
       value={value}
       onValueChange={(next) => {
-        if (next == null) return
+        if (next == null || next === value) return
+        paperSelectHaptic()
         onChange(next as T)
       }}
       items={options}

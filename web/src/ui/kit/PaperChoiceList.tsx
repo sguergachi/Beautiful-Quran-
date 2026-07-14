@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Radio } from '@base-ui/react/radio'
 import { RadioGroup } from '@base-ui/react/radio-group'
+import { paperSelectHaptic } from './paperHaptics'
 
 export type PaperChoiceOption<T extends string = string> = {
   value: T
@@ -34,7 +35,8 @@ export function PaperChoiceList<T extends string>({
       aria-label={ariaLabel}
       value={value}
       onValueChange={(next) => {
-        if (next == null) return
+        if (next == null || next === value) return
+        paperSelectHaptic()
         onChange(next as T)
       }}
     >

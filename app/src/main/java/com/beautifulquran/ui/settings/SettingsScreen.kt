@@ -5,6 +5,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import android.view.HapticFeedbackConstants
+import android.view.View
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
@@ -69,6 +71,7 @@ import androidx.compose.ui.layout.boundsInParent
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -92,6 +95,19 @@ import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.math.sin
+
+/** Soft selection tick — same family as ayah-rail commits, not a heavy long-press. */
+private fun View.paperSelectHaptic() {
+    performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+}
+
+/** Toggle tick — confirm when turning on, lighter clock tick when off. */
+private fun View.paperToggleHaptic(turningOn: Boolean) {
+    performHapticFeedback(
+        if (turningOn) HapticFeedbackConstants.CONTEXT_CLICK
+        else HapticFeedbackConstants.CLOCK_TICK,
+    )
+}
 
 private val ATTRIBUTIONS = """
 Quran text (Uthmani script) and Saheeh International translation via the quran-json project, from Tanzil and Al Quran Cloud.
@@ -660,12 +676,16 @@ private fun SelectRow(
     note: String? = null,
     trailing: @Composable (() -> Unit)? = null,
 ) {
+    val view = LocalView.current
     val textAlpha by animateFloatAsState(if (selected) 1f else 0.55f, label = "selectInk")
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .quietClickable(onClick = onClick)
+            .quietClickable {
+                if (!selected) view.paperSelectHaptic()
+                onClick()
+            }
             .padding(vertical = 8.dp),
     ) {
         InkDisc(selected = selected)
@@ -695,11 +715,16 @@ private fun SelectRow(
  * trailing edge when on, and settles to a faint empty ring when off. */
 @Composable
 private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    val view = LocalView.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .quietClickable { onChange(!checked) }
+            .quietClickable {
+                val next = !checked
+                view.paperToggleHaptic(turningOn = next)
+                onChange(next)
+            }
             .padding(vertical = 8.dp),
     ) {
         Text(
@@ -872,6 +897,7 @@ private fun <T> InlineChoiceRow(
     label: (T) -> String,
     onSelect: (T) -> Unit,
 ) {
+    val view = LocalView.current
     val bounds = remember { mutableStateMapOf<Int, Pair<Float, Float>>() }
     val selectedIndex = entries.indexOfFirst { it == selected }.coerceAtLeast(0)
     val target = bounds[selectedIndex]
@@ -932,7 +958,10 @@ private fun <T> InlineChoiceRow(
                         val rect = coords.boundsInParent()
                         bounds[index] = rect.left to rect.width
                     }
-                    .quietClickable { onSelect(entry) }
+                    .quietClickable {
+                        if (entry != selected) view.paperSelectHaptic()
+                        onSelect(entry)
+                    }
                     .padding(horizontal = 4.dp, vertical = 10.dp),
             )
         }
