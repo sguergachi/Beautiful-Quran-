@@ -455,7 +455,8 @@ function bowOffset(t: number, bow: number, span: number): number {
   return 0
 }
 
-function brushPressure(t: number, p: BrushCircleParams): number {
+/** Shared pressure envelope — circle mark and ink check both use this. */
+export function brushPressure(t: number, p: BrushCircleParams): number {
   const attack = Math.min(1, t / p.attack)
   const release =
     t > p.releaseStart

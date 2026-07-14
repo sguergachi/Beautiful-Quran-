@@ -736,25 +736,25 @@ private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
     }
 }
 
-/** The on/off mark: an empty ring at rest, a green calligraphic check that
- * paints itself in when toggled on — same filled-brush writing as the selector
- * circle. Reads its ink live from the active theme. */
+/** The on/off mark: empty ring at rest; when on, the **shipped baseline brush**
+ * paints a check (same peakHalf / nibBias / pressure / paintMs / alpha as the
+ * selector circle). */
 @Composable
 private fun InkCheck(checked: Boolean) {
+    val params = remember { brushCircleParams(BrushCircleStyle.BASELINE) }
     val on by animateFloatAsState(
         targetValue = if (checked) 1f else 0f,
         animationSpec = tween(
-            durationMillis = 420,
+            durationMillis = params.paintMs,
             easing = FastOutSlowInEasing,
         ),
         label = "checkOn",
     )
     val accent = MaterialTheme.colorScheme.primary
     val outline = MaterialTheme.colorScheme.outline
-    Canvas(Modifier.size(20.dp)) {
+    Canvas(Modifier.size(22.dp)) {
         val c = Offset(size.width / 2f, size.height / 2f)
         val r = size.minDimension / 2f
-        // Resting ring, dissolving as the tick arrives.
         drawCircle(
             color = outline.copy(alpha = 0.5f * (1f - on)),
             radius = r - 1.2.dp.toPx(),
@@ -762,25 +762,35 @@ private fun InkCheck(checked: Boolean) {
             style = Stroke(width = 1.4.dp.toPx()),
         )
         if (on > 0.02f) {
-            val mark = inkBrushCheckPath(size = size.minDimension, progress = on)
-            drawPath(path = mark, color = accent)
+            val mark = inkBrushCheckPath(
+                size = size.minDimension,
+                progress = on,
+                peakHalf = params.peakHalfDp.dp.toPx(),
+                params = params,
+            )
+            drawPath(path = mark, color = accent.copy(alpha = params.alpha))
         }
     }
 }
 
 /**
- * Filled calligraphic check ribbon in a square of [size] px. [progress] 0…1
- * paints along the stroke. Matches web [brushCheckPath].
+ * Filled brush check using the **same** [brushPressure] + nib model as
+ * [inkBrushCirclePath]. [peakHalf] is already in px (from peakHalfDp).
+ * Matches web [brushCheckPath] + [SHIPPED_BRUSH_KNOBS].
  */
-private fun inkBrushCheckPath(size: Float, progress: Float): Path {
+private fun inkBrushCheckPath(
+    size: Float,
+    progress: Float,
+    peakHalf: Float,
+    params: BrushCircleParams,
+): Path {
     val prog = progress.coerceIn(0.02f, 1f)
-    // Unit centerline — short stem into the valley, long rising arm.
     val center = listOf(
-        Offset(0.18f, 0.52f),
-        Offset(0.40f, 0.74f),
-        Offset(0.84f, 0.24f),
+        Offset(0.16f, 0.50f),
+        Offset(0.40f, 0.76f),
+        Offset(0.86f, 0.22f),
     )
-    val segs = 10
+    val segs = 24
     val raw = ArrayList<Offset>((center.size - 1) * segs + 1)
     for (s in 0 until center.lastIndex) {
         val a = center[s]
@@ -798,8 +808,6 @@ private fun inkBrushCheckPath(size: Float, progress: Float): Path {
         total += hypot(raw[i].x - raw[i - 1].x, raw[i].y - raw[i - 1].y)
         lens[i] = total
     }
-    val peakHalf = size * 0.085f
-    val nibBias = 0.45f
     val tops = ArrayList<Offset>()
     val bots = ArrayList<Offset>()
     for (i in raw.indices) {
@@ -814,12 +822,13 @@ private fun inkBrushCheckPath(size: Float, progress: Float): Path {
         ty /= tLen
         var nx = -ty
         var ny = tx
-        val bx = nx + (-ny) * nibBias
-        val by = ny + nx * nibBias
+        // Same nib bias as the circle brush.
+        val bx = nx + (-ny) * params.nibBias
+        val by = ny + nx * params.nibBias
         val nLen = hypot(bx, by).coerceAtLeast(1e-4f)
         nx = bx / nLen
         ny = by / nLen
-        val half = peakHalf * brushCheckPressure(t)
+        val half = peakHalf * brushPressure(t, params)
         val x = raw[i].x * size
         val y = raw[i].y * size
         tops.add(Offset(x + nx * half, y + ny * half))
@@ -845,17 +854,6 @@ private fun inkBrushCheckPath(size: Float, progress: Float): Path {
         for (i in bots.lastIndex downTo 0) lineTo(bots[i].x, bots[i].y)
         close()
     }
-}
-
-private fun brushCheckPressure(t: Float): Float {
-    val attack = (t / 0.18f).coerceIn(0f, 1f)
-    val release = if (t > 0.78f) {
-        ((1f - t) / 0.22f).coerceAtLeast(0.18f)
-    } else {
-        1f
-    }
-    val body = 0.82f + 0.22f * sin(t * PI.toFloat() * 2.2f + 0.4f)
-    return (attack * release * body).coerceAtLeast(0.15f)
 }
 
 /** The shared selection mark: a green disc that inks in when chosen and

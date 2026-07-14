@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { BRUSH_CHECK_PAINT_MS, brushCheckPath } from './brushCheck'
+import {
+  BRUSH_CHECK_PAINT_MS,
+  BRUSH_CHECK_PARAMS,
+  brushCheckPath,
+} from './brushCheck'
 
 type Props = {
   checked: boolean
@@ -9,12 +13,15 @@ type Props = {
 }
 
 /**
- * Empty ink ring at rest; when on, a calligraphic brush check paints itself
- * in accent ink — same writing gesture as the selector brush circle.
+ * Empty ink ring at rest; when on, the **shipped baseline brush** paints a
+ * check — same peakHalf / nibBias / pressure envelope / paintMs / alpha as
+ * the selector circle.
  */
-export function InkCheckMark({ checked, className, size = 20 }: Props) {
+export function InkCheckMark({ checked, className, size = 22 }: Props) {
   const [progress, setProgress] = useState(checked ? 1 : 0)
   const gen = useRef(0)
+  const paintMs = BRUSH_CHECK_PAINT_MS
+  const alpha = BRUSH_CHECK_PARAMS.alpha
 
   useEffect(() => {
     gen.current += 1
@@ -35,16 +42,16 @@ export function InkCheckMark({ checked, className, size = 20 }: Props) {
     let frame = 0
     const tick = (now: number) => {
       if (gen.current !== id) return
-      const t = Math.min(1, (now - start) / BRUSH_CHECK_PAINT_MS)
+      const t = Math.min(1, (now - start) / paintMs)
       const eased = 1 - (1 - t) ** 3
       setProgress(Math.max(0.02, eased))
       if (t < 1) frame = requestAnimationFrame(tick)
     }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [checked])
+  }, [checked, paintMs])
 
-  const d = progress > 0 ? brushCheckPath(size, progress) : ''
+  const d = progress > 0 ? brushCheckPath(size, progress, BRUSH_CHECK_PARAMS) : ''
 
   return (
     <svg
@@ -54,7 +61,6 @@ export function InkCheckMark({ checked, className, size = 20 }: Props) {
       viewBox={`0 0 ${size} ${size}`}
       aria-hidden="true"
     >
-      {/* Resting ring dissolves as the tick arrives. */}
       <circle
         className="ink-check-ring"
         cx={size / 2}
@@ -63,7 +69,13 @@ export function InkCheckMark({ checked, className, size = 20 }: Props) {
         fill="none"
         style={{ opacity: checked ? 0 : 0.5 }}
       />
-      {d ? <path className="ink-check-stroke" d={d} /> : null}
+      {d ? (
+        <path
+          className="ink-check-stroke"
+          d={d}
+          style={{ opacity: alpha }}
+        />
+      ) : null}
     </svg>
   )
 }
