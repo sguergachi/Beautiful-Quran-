@@ -2522,6 +2522,16 @@ select {
   fill: var(--accent);
 }
 
+.check-lab-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.35rem;
+  margin-bottom: 0.35rem;
+  min-height: 2.5rem;
+}
+
 .paper-field-slider {
   display: block;
   padding-block: 0.35rem 0.55rem;
