@@ -2519,13 +2519,34 @@ select {
   padding-block: 0.35rem 0.55rem;
 }
 
-/* Ink segmented row — short enums, no borders / tracks. */
+/* Ink segmented row — short enums side by side.
+ * Selected word is circled by an ink-brush stroke (see PaperSegmented). */
+.paper-segmented-wrap {
+  position: relative;
+  width: 100%;
+  overflow: visible;
+}
+
 .paper-segmented {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.15rem 0.55rem;
+  gap: 0.15rem 1.85rem;
   width: 100%;
-  padding: 0.15rem 0 0.35rem;
+  padding: 0.25rem 0 0.5rem;
+}
+
+.paper-segmented-brush {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 0;
+}
+
+.paper-segmented-brush-mark {
+  fill: var(--accent);
 }
 
 .paper-segmented-item {
@@ -2535,15 +2556,17 @@ select {
   font-family: inherit;
   font-size: 1rem;
   line-height: 1.35;
-  padding: 0.55rem 0.35rem;
+  padding: 0.5rem 0.15rem 0.7rem;
   min-height: 44px;
   color: color-mix(in srgb, var(--ink) 42%, transparent);
   cursor: pointer;
-  transition: color 160ms ease;
+  transition: color 180ms ease;
+  position: relative;
+  z-index: 1;
 }
 
 .paper-segmented-item[data-pressed] {
-  color: var(--accent);
+  color: var(--ink);
 }
 
 .paper-segmented-item:focus-visible {
@@ -2556,7 +2579,7 @@ select {
     color: color-mix(in srgb, var(--ink) 72%, transparent);
   }
   .paper-segmented-item[data-pressed]:hover {
-    color: var(--accent);
+    color: var(--ink);
   }
 }
 
@@ -2637,18 +2660,15 @@ select {
   margin-inline-start: auto;
 }
 
-.theme-swatches {
-  display: inline-flex;
-  gap: 3px;
-  padding: 3px;
-  border-radius: 8px;
-}
-
-.theme-swatch {
-  width: 16px;
-  height: 22px;
-  border-radius: 5px;
+/* Theme preview: main paper fill in a round rect with gilt rim. */
+.theme-paint {
   display: block;
+  flex-shrink: 0;
+  width: 4rem;
+  height: 1.35rem;
+  border-radius: 0.4rem;
+  border: 1.5px solid var(--gold);
+  box-sizing: border-box;
 }
 
 .settings-subfield {
@@ -4274,8 +4294,95 @@ html[data-entrance='true'] body {
 }
 
 .settings-dev-caption {
-  margin: 0.1rem 0 0.45rem;
-  color: color-mix(in srgb, var(--ink-muted) 70%, transparent);
+  margin: 0.35rem 0 0.55rem;
   font-size: 0.82rem;
   line-height: 1.35;
+  color: color-mix(in srgb, var(--ink) 52%, transparent);
+}
+
+.brush-lab-presets-toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  margin-top: 0.15rem;
+}
+
+.brush-lab-presets-current {
+  color: color-mix(in srgb, var(--ink) 48%, transparent);
+  font-size: 0.88rem;
+}
+
+.brush-lab-sliders {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+/* Exact live knobs — no slider rounding/format, for paste audits. */
+.brush-lab-verify {
+  margin: 0.65rem 0 0;
+  padding: 0.55rem 0.65rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--ink) 55%, transparent);
+  white-space: pre-wrap;
+  word-break: break-all;
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+}
+
+.brush-lab-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-top: 0.65rem;
+}
+
+.brush-lab-paste {
+  display: block;
+  width: 100%;
+  margin-top: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 4.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  border-radius: 0;
+}
+
+.brush-lab-paste:focus {
+  outline: none;
+  border-bottom-color: var(--accent);
+}
+
+.brush-lab-paste::placeholder {
+  color: color-mix(in srgb, var(--ink) 38%, transparent);
+}
+
+.settings-dev-link:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.settings-dev-link {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0.35rem 0;
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.settings-dev-link:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
 }

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { appStore, useAppState } from '../../store/appStore'
 import {
   FONT_SCALE_MAX,
@@ -5,11 +6,24 @@ import {
   FONT_SCALE_STEP,
   type AyahSelectorSide,
   type HomeBookmarkStyle,
+  type BrushCircleStyle,
   type ReadingMode,
   type ThemeMode,
 } from '../../data/settings'
 import type { PlayerState } from '../../playback/player'
 import { settingsLayerFor, type StackLayer } from '../paper/stack'
+import {
+  BRUSH_CIRCLE_STYLE_IDS,
+  BRUSH_KNOB_SLIDERS,
+  brushCircleParams,
+  formatBrushKnobsExact,
+  formatBrushKnobsVerifyLines,
+  formatBrushParamsCopy,
+  parseBrushParamsFromText,
+  SHIPPED_BRUSH_REVISION,
+  type BrushCircleParams,
+  type BrushKnobKey,
+} from '../kit/brushMark'
 import { PaperChoiceList } from '../kit/PaperChoiceList'
 import { PaperSegmented } from '../kit/PaperSegmented'
 import { PaperSelect } from '../kit/PaperSelect'
@@ -84,6 +98,155 @@ export function SettingsScreen({
   const depth = Math.max(0, stackLayer - layer)
   const showReadingToggles = s.readingMode === 'arabic_english'
 
+  // Session-only live knobs for the brush lab (not persisted).
+  const [brushParams, setBrushParams] = useState<BrushCircleParams>(() =>
+    brushCircleParams(s.brushCircleStyle),
+  )
+  const [paintToken, setPaintToken] = useState(0)
+  /** Bumps when paste/reset/preset loads so Base UI sliders remount with exact values. */
+  const [sliderEpoch, setSliderEpoch] = useState(0)
+  const [copyNote, setCopyNote] = useState<string | null>(null)
+  const [presetsOpen, setPresetsOpen] = useState(false)
+  const [pasteText, setPasteText] = useState('')
+  const pasteRef = useRef<HTMLTextAreaElement>(null)
+  const lastStyleRef = useRef(s.brushCircleStyle)
+  const lastShipRef = useRef(SHIPPED_BRUSH_REVISION)
+
+  // Reseed when the saved preset changes, or when shipped BASE revision bumps.
+  // Ship bumps always load *baseline* (bodyAmp 0.34, alpha 0.9, …) — never the
+  // active A/B variant (e.g. Hairline forces bodyAmp 0.12 and looked "wrong").
+  useEffect(() => {
+    const styleChanged = lastStyleRef.current !== s.brushCircleStyle
+    const shipChanged = lastShipRef.current !== SHIPPED_BRUSH_REVISION
+    lastStyleRef.current = s.brushCircleStyle
+    lastShipRef.current = SHIPPED_BRUSH_REVISION
+    if (shipChanged) {
+      if (s.brushCircleStyle !== 'baseline') {
+        appStore.updateSettings({ brushCircleStyle: 'baseline' })
+      }
+      setBrushParams(brushCircleParams('baseline'))
+      setPaintToken((n) => n + 1)
+      setSliderEpoch((n) => n + 1)
+    } else if (styleChanged) {
+      setBrushParams(brushCircleParams(s.brushCircleStyle))
+      setPaintToken((n) => n + 1)
+      setSliderEpoch((n) => n + 1)
+    }
+  }, [s.brushCircleStyle, SHIPPED_BRUSH_REVISION])
+
+  const setKnob = (key: BrushKnobKey, value: number) => {
+    setBrushParams((prev) => ({ ...prev, label: 'Custom', [key]: value }))
+    setPaintToken((n) => n + 1)
+  }
+
+  const loadPreset = (id: BrushCircleStyle) => {
+    appStore.updateSettings({ brushCircleStyle: id })
+    setBrushParams(brushCircleParams(id))
+    setPaintToken((n) => n + 1)
+    setSliderEpoch((n) => n + 1)
+  }
+
+  const flashNote = (msg: string) => {
+    setCopyNote(msg)
+    window.setTimeout(() => setCopyNote(null), 2200)
+  }
+
+  /** Clipboard API often fails in preview iframes — fall back to execCommand + field. */
+  const copyTextRobust = (text: string): boolean => {
+    // 1) Hidden textarea + execCommand (works without clipboard permission).
+    try {
+      const el = document.createElement('textarea')
+      el.value = text
+      el.setAttribute('readonly', '')
+      el.style.position = 'fixed'
+      el.style.top = '0'
+      el.style.left = '0'
+      el.style.width = '1px'
+      el.style.height = '1px'
+      el.style.padding = '0'
+      el.style.border = 'none'
+      el.style.outline = 'none'
+      el.style.boxShadow = 'none'
+      el.style.background = 'transparent'
+      el.style.opacity = '0'
+      document.body.appendChild(el)
+      el.focus()
+      el.select()
+      el.setSelectionRange(0, text.length)
+      const ok = document.execCommand('copy')
+      document.body.removeChild(el)
+      if (ok) return true
+    } catch {
+      // continue
+    }
+    return false
+  }
+
+  const copyParams = async () => {
+    const text = formatBrushParamsCopy(brushParams)
+    // Prefer async clipboard when available (secure context + permission).
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text)
+        flashNote('Copied TS + Kotlin params')
+        return
+      } catch {
+        // fall through
+      }
+    }
+    if (copyTextRobust(text)) {
+      flashNote('Copied TS + Kotlin params')
+      return
+    }
+    // Last resort: put text in the paste field and select it for manual copy.
+    setPasteText(text)
+    window.requestAnimationFrame(() => {
+      const field = pasteRef.current
+      if (field) {
+        field.focus()
+        field.select()
+      }
+    })
+    flashNote('Selected in field — press ⌘/Ctrl+C')
+  }
+
+  const applyPaste = (raw: string) => {
+    const parsed = parseBrushParamsFromText(raw, brushParams)
+    if (!parsed) {
+      flashNote('No brush knobs found in paste')
+      return
+    }
+    // Stay on baseline so "Reset to preset" / reseed cannot restore Hairline's
+    // bodyAmp 0.12 after a design paste.
+    if (s.brushCircleStyle !== 'baseline') {
+      lastStyleRef.current = 'baseline'
+      appStore.updateSettings({ brushCircleStyle: 'baseline' })
+    }
+    // Fresh object + remount so no slider keeps a stale internal value.
+    setBrushParams({ ...parsed, label: 'Custom' })
+    setPaintToken((n) => n + 1)
+    setSliderEpoch((n) => n + 1)
+    setPasteText(raw.trim()) // keep what was applied visible for verification
+    // List every knob so a single wrong value is obvious (bodyAmp, alpha, …).
+    flashNote(`Applied: ${formatBrushKnobsExact(parsed)}`)
+  }
+
+  const pasteFromClipboard = async () => {
+    if (navigator.clipboard?.readText) {
+      try {
+        const text = await navigator.clipboard.readText()
+        if (text.trim()) {
+          applyPaste(text)
+          return
+        }
+      } catch {
+        // fall through
+      }
+    }
+    flashNote('Paste into the field below, then Apply')
+    pasteRef.current?.focus()
+  }
+
   return (
     <div
       className="sheet"
@@ -118,6 +281,8 @@ export function SettingsScreen({
           <PaperSegmented
             aria-label="Reading mode"
             value={s.readingMode}
+            brushParams={brushParams}
+            paintToken={paintToken}
             options={READING_OPTIONS}
             onChange={(v) =>
               appStore.updateSettings({ readingMode: v as ReadingMode })
@@ -171,6 +336,8 @@ export function SettingsScreen({
           <PaperSegmented
             aria-label="Ayah selector side"
             value={s.ayahSelectorSide}
+            brushParams={brushParams}
+            paintToken={paintToken}
             options={SELECTOR_OPTIONS}
             onChange={(v) =>
               appStore.updateSettings({
@@ -202,6 +369,8 @@ export function SettingsScreen({
             <PaperSegmented
               aria-label="Playback speed"
               value={String(s.playbackSpeed)}
+              brushParams={brushParams}
+              paintToken={paintToken}
               options={SPEED_OPTIONS}
               onChange={(v) =>
                 appStore.updateSettings({ playbackSpeed: Number(v) })
@@ -213,6 +382,8 @@ export function SettingsScreen({
             <PaperSegmented
               aria-label="Repeat mode"
               value={state.player.repeatMode}
+              brushParams={brushParams}
+              paintToken={paintToken}
               options={REPEAT_OPTIONS}
               onChange={(v) =>
                 appStore.setRepeat(v as PlayerState['repeatMode'])
@@ -253,6 +424,114 @@ export function SettingsScreen({
                     appStore.updateSettings({ homeBookmarkStyle })
                   }
                 />
+              </div>
+              <div className="settings-subfield">
+                <p className="settings-sublabel">Selector brush circle</p>
+                <button
+                  type="button"
+                  className="settings-dev-link brush-lab-presets-toggle"
+                  aria-expanded={presetsOpen}
+                  onClick={() => setPresetsOpen((o) => !o)}
+                >
+                  {presetsOpen ? 'Presets ▾' : 'Presets ▸'}
+                  <span className="brush-lab-presets-current">
+                    {brushCircleParams(s.brushCircleStyle).label}
+                  </span>
+                </button>
+                {presetsOpen ? (
+                  <PaperChoiceList
+                    aria-label="Selector brush circle preset"
+                    value={s.brushCircleStyle}
+                    options={BRUSH_CIRCLE_STYLE_IDS.map((id) => ({
+                      value: id,
+                      label: brushCircleParams(id).label,
+                    }))}
+                    onChange={(v) => loadPreset(v as BrushCircleStyle)}
+                  />
+                ) : null}
+                <div className="brush-lab-sliders">
+                  {BRUSH_KNOB_SLIDERS.map((spec) => (
+                    <PaperSlider
+                      key={`${spec.key}-${sliderEpoch}`}
+                      id={`brush-${spec.key}`}
+                      label={spec.label}
+                      value={brushParams[spec.key]}
+                      min={spec.min}
+                      max={spec.max}
+                      step={spec.step}
+                      format={spec.format}
+                      onChange={(v) => setKnob(spec.key, v)}
+                    />
+                  ))}
+                </div>
+                {/* Lab label + code key + raw number (e.g. Join ° (startDeg): 254). */}
+                <pre className="brush-lab-verify" aria-live="polite">
+                  {formatBrushKnobsVerifyLines(brushParams)}
+                </pre>
+                <div className="brush-lab-actions">
+                  <button
+                    type="button"
+                    className="settings-dev-link"
+                    onClick={() => {
+                      setBrushParams(brushCircleParams(s.brushCircleStyle))
+                      setPaintToken((n) => n + 1)
+                      setSliderEpoch((n) => n + 1)
+                    }}
+                  >
+                    Reset to preset
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-dev-link"
+                    onClick={() => setPaintToken((n) => n + 1)}
+                  >
+                    Replay paint
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-dev-link"
+                    onClick={() => void copyParams()}
+                  >
+                    Copy values
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-dev-link"
+                    onClick={() => void pasteFromClipboard()}
+                  >
+                    Paste values
+                  </button>
+                </div>
+                <textarea
+                  ref={pasteRef}
+                  className="brush-lab-paste"
+                  rows={4}
+                  spellCheck={false}
+                  placeholder="Paste saved brush params here (TS or Kotlin), then Apply…"
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                      e.preventDefault()
+                      applyPaste(pasteText)
+                    }
+                  }}
+                />
+                <div className="brush-lab-actions">
+                  <button
+                    type="button"
+                    className="settings-dev-link"
+                    disabled={!pasteText.trim()}
+                    onClick={() => applyPaste(pasteText)}
+                  >
+                    Apply paste
+                  </button>
+                </div>
+                {copyNote ? (
+                  <p className="settings-dev-caption" role="status">
+                    {copyNote}
+                  </p>
+                ) : null}
               </div>
             </>
           ) : null}

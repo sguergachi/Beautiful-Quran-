@@ -1,3 +1,6 @@
+import type { BrushCircleStyle } from '../ui/kit/brushMark'
+import { BRUSH_CIRCLE_STYLE_IDS } from '../ui/kit/brushMark'
+
 export type ThemeMode = 'system' | 'light' | 'dark' | 'royal_green'
 export type ReadingMode = 'arabic_english' | 'english_only' | 'arabic_only'
 export type AyahSelectorSide = 'left' | 'right'
@@ -7,6 +10,7 @@ export const HOME_BOOKMARK_STYLES: HomeBookmarkStyle[] = [
   'top_bound',
   'saved_passages',
 ]
+export type { BrushCircleStyle }
 
 /** Match Android SettingsScreen: 0.8f..1.6f with steps = 7 (8 snap points). */
 export const FONT_SCALE_MIN = 0.8
@@ -30,6 +34,8 @@ export interface Settings {
   developerMode: boolean
   /** Developer-selectable Chapters bookmark treatment. */
   homeBookmarkStyle: HomeBookmarkStyle
+  /** Developer-only: ink-brush circle style around selected enums. */
+  brushCircleStyle: BrushCircleStyle
 }
 
 const DEFAULTS: Settings = {
@@ -46,6 +52,14 @@ const DEFAULTS: Settings = {
   playbackSpeed: 1,
   developerMode: false,
   homeBookmarkStyle: 'top_bound',
+  brushCircleStyle: 'baseline',
+}
+
+function clampBrushStyle(value: unknown): BrushCircleStyle {
+  return typeof value === 'string' &&
+    (BRUSH_CIRCLE_STYLE_IDS as string[]).includes(value)
+    ? (value as BrushCircleStyle)
+    : DEFAULTS.brushCircleStyle
 }
 
 const KEY = 'beautiful-quran-settings'
@@ -65,6 +79,9 @@ export function normalizeSettings(partial: Partial<Settings> = {}): Settings {
     )
       ? (partial.homeBookmarkStyle as HomeBookmarkStyle)
       : DEFAULTS.homeBookmarkStyle,
+    brushCircleStyle: clampBrushStyle(
+      partial.brushCircleStyle ?? DEFAULTS.brushCircleStyle,
+    ),
   }
 }
 

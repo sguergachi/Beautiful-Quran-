@@ -44,4 +44,13 @@ class DeveloperModeSettingsTest {
             alternative.copy(developerModeEnabled = false).homeBookmarkStyle,
         )
     }
+
+    @Test
+    fun `brush circle style defaults to baseline and has ten variants beyond it`() {
+        assertEquals(BrushCircleStyle.BASELINE, Settings().brushCircleStyle)
+        // Baseline + 10 developer variants for A/B feel.
+        assertEquals(11, BrushCircleStyle.entries.size)
+        val dry = Settings().copy(brushCircleStyle = BrushCircleStyle.DRY_BRUSH)
+        assertEquals(BrushCircleStyle.DRY_BRUSH, dry.brushCircleStyle)
+    }
 }

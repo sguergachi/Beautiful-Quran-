@@ -1,24 +1,28 @@
 import { useEffect, useState } from 'react'
 import type { ThemeMode } from '../../data/settings'
 
-const LIGHT = ['#FAF3E8', '#FFFBF2', '#0E5C4A', '#1C1B18']
-const DARK = ['#0A0B0C', '#111315', '#7FB8A4', '#E8E2D5']
-const ROYAL = ['#062C24', '#0A382E', '#7FB8A4', '#E8E2D5']
-
-function swatchesFor(mode: ThemeMode, systemDark: boolean): string[] {
+/** Main paper color for each theme. */
+function mainColor(mode: ThemeMode, systemDark: boolean): string {
   switch (mode) {
     case 'light':
-      return LIGHT
+      return '#FAF3E8'
     case 'dark':
-      return DARK
+      return '#0A0B0C'
     case 'royal_green':
-      return ROYAL
+      return '#062C24'
     case 'system':
-      return systemDark ? DARK : LIGHT
+      return systemDark ? '#0A0B0C' : '#FAF3E8'
   }
 }
 
-/** Match Android `themePreviewColors` — paper / surface / accent / ink chips. */
+/** Gilt rim — paper gold on light surfaces, warmer gold on dark. */
+function giltColor(mode: ThemeMode, systemDark: boolean): string {
+  const dark =
+    mode === 'dark' || mode === 'royal_green' || (mode === 'system' && systemDark)
+  return dark ? '#D9B44A' : '#C9A227'
+}
+
+/** Single rounded rect: main theme fill + gilded gold border. */
 export function ThemeSwatches({ mode }: { mode: ThemeMode }) {
   const [systemDark, setSystemDark] = useState(() =>
     typeof window !== 'undefined'
@@ -34,14 +38,13 @@ export function ThemeSwatches({ mode }: { mode: ThemeMode }) {
   }, [])
 
   return (
-    <span className="theme-swatches" aria-hidden="true">
-      {swatchesFor(mode, systemDark).map((color) => (
-        <span
-          key={`${mode}-${color}`}
-          className="theme-swatch"
-          style={{ background: color }}
-        />
-      ))}
-    </span>
+    <span
+      className="theme-paint"
+      aria-hidden="true"
+      style={{
+        background: mainColor(mode, systemDark),
+        borderColor: giltColor(mode, systemDark),
+      }}
+    />
   )
 }
