@@ -522,11 +522,13 @@ bookmark icon, a second ribbon shape, or a bespoke animated substitute.
 ### Chapters bookmark treatment
 
 Android and web developer settings compare two quiet placements without
-changing the bookmark language: a 96 dp/px ribbon bound to the top edge and a
-typographic *Saved passages* line whose number-column mark is the same ruby
-cloth. Both appear only when a bookmark exists, open the same Bookmarks sheet,
-and reuse each platform's `VerseBookmarkRibbon`; verse-level ribbons in the
-Reader never change.
+changing the bookmark language: a top-bound ribbon and a typographic *Saved
+passages* line whose number-column mark is the same ruby cloth. The web ribbon
+is 96 px tall; Android begins at the physical screen edge and carries its 96 dp
+body below the status-bar inset so the tip clears the title. Both appear only
+when a bookmark exists, open the same Bookmarks sheet, and reuse each
+platform's `VerseBookmarkRibbon`; verse-level ribbons in the Reader never
+change.
 
 The selector is visible only in developer mode, but its persisted choice stays
 active if developer mode is hidden again. The inline treatment is omitted
