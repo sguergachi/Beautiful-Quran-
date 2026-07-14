@@ -32,15 +32,15 @@ class DeveloperModeSettingsTest {
     }
 
     @Test
-    fun `home bookmark style defaults to baseline and survives developer mode`() {
+    fun `home bookmark style defaults to top bound and survives developer mode`() {
         val alternative = Settings().copy(
-            homeBookmarkStyle = HomeBookmarkStyle.COMPACT_EDGE,
+            homeBookmarkStyle = HomeBookmarkStyle.SAVED_PASSAGES,
             developerModeEnabled = true,
         )
 
-        assertEquals(HomeBookmarkStyle.LONG_RIBBON, Settings().homeBookmarkStyle)
+        assertEquals(HomeBookmarkStyle.TOP_BOUND, Settings().homeBookmarkStyle)
         assertEquals(
-            HomeBookmarkStyle.COMPACT_EDGE,
+            HomeBookmarkStyle.SAVED_PASSAGES,
             alternative.copy(developerModeEnabled = false).homeBookmarkStyle,
         )
     }

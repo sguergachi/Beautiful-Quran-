@@ -64,7 +64,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -100,10 +99,7 @@ private val HomeNumberColumn = 26.dp
 private val HomeRowRibbonGutter = (HomeNumberColumn - HomeRibbonWidth) / 2f
 private val HomeColumnGap = 4.dp
 private val HomeArabicOpticalInset = 4.dp
-private val HomeDocumentTop = 106.dp
-private val CompactRibbonHeight = 80.dp
-private val TopBoundRibbonHeight = 88.dp
-private val BottomRibbonHeight = 64.dp
+private val TopBoundRibbonHeight = 96.dp
 
 @Composable
 fun HomeScreen(
@@ -117,7 +113,7 @@ fun HomeScreen(
     coverSheetVisible: Boolean = true,
     /** Number of saved verses; zero removes the Home-page ribbon entirely. */
     bookmarkCount: Int = 0,
-    bookmarkStyle: HomeBookmarkStyle = HomeBookmarkStyle.LONG_RIBBON,
+    bookmarkStyle: HomeBookmarkStyle = HomeBookmarkStyle.TOP_BOUND,
     onOpenBookmarks: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -157,12 +153,6 @@ fun HomeScreen(
         val paneTop = searchBottom - boxTop + searchPaneTopGapPx
         val paneBottom = boxHeight - imeBottom - searchPaneBottomGapPx
         (paneBottom - paneTop).coerceAtLeast(0f).toDp()
-    }
-    val homeRibbonTop = 40.dp
-    val homeRibbonHeight = with(density) {
-        (boxHeight - homeRibbonTop.toPx() - 92.dp.toPx())
-            .coerceAtLeast(96.dp.toPx())
-            .toDp()
     }
     val searching = uiState.query.isNotBlank()
     val showSurahMatches = searching && uiState.surahs.isNotEmpty()
@@ -291,6 +281,7 @@ fun HomeScreen(
                             !searching
                         ) {
                             SavedPassagesRow(
+                                bookmarkCount = bookmarkCount,
                                 unfurlSignal = ribbonUnfurlEpoch,
                                 onClick = onOpenBookmarks,
                             )
@@ -368,9 +359,6 @@ fun HomeScreen(
 
             if (bookmarkCount > 0 && bookmarkStyle != HomeBookmarkStyle.SAVED_PASSAGES) {
                 HomeBookmarkOverlay(
-                    style = bookmarkStyle,
-                    longRibbonTop = homeRibbonTop,
-                    longRibbonHeight = homeRibbonHeight,
                     unfurlSignal = ribbonUnfurlEpoch,
                     onClick = onOpenBookmarks,
                     modifier = Modifier.matchParentSize(),
@@ -473,40 +461,19 @@ private fun HomeHeader(onOpenSettings: () -> Unit) {
     }
 }
 
-/** One cloth language in four placements; navigation remains a separate target
- * so opening Bookmarks never borrows the ribbon's retract interaction. */
+/** The top-bound cloth and navigation remain separate so opening Bookmarks
+ * never borrows the ribbon's retract interaction. */
 @Composable
 private fun HomeBookmarkOverlay(
-    style: HomeBookmarkStyle,
-    longRibbonTop: Dp,
-    longRibbonHeight: Dp,
     unfurlSignal: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier) {
-        val placement = when (style) {
-            HomeBookmarkStyle.LONG_RIBBON -> Modifier
-                .align(Alignment.TopStart)
-                .offset(y = longRibbonTop)
-                .width(HomeRibbonLane)
-                .height(longRibbonHeight)
-            HomeBookmarkStyle.COMPACT_EDGE -> Modifier
-                .align(Alignment.TopStart)
-                .offset(y = HomeDocumentTop)
-                .width(HomeRibbonLane)
-                .height(CompactRibbonHeight)
-            HomeBookmarkStyle.TOP_BOUND -> Modifier
-                .align(Alignment.TopStart)
-                .width(HomeRibbonLane)
-                .height(TopBoundRibbonHeight)
-            HomeBookmarkStyle.BOTTOM_TAIL -> Modifier
-                .align(Alignment.BottomStart)
-                .width(HomeRibbonLane)
-                .height(BottomRibbonHeight)
-            // Rendered inside the scrolling document, never by this host.
-            HomeBookmarkStyle.SAVED_PASSAGES -> Modifier
-        }
+        val placement = Modifier
+            .align(Alignment.TopStart)
+            .width(HomeRibbonLane)
+            .height(TopBoundRibbonHeight)
 
         VerseBookmarkRibbon(
             bookmarked = true,
@@ -533,14 +500,23 @@ private fun HomeBookmarkOverlay(
 
 /** A bookmark index entry written into the chapter document. */
 @Composable
-private fun SavedPassagesRow(unfurlSignal: Int, onClick: () -> Unit) {
+private fun SavedPassagesRow(
+    bookmarkCount: Int,
+    unfurlSignal: Int,
+    onClick: () -> Unit,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .quietClickable(role = Role.Button, onClick = onClick)
             .semantics { contentDescription = "Open bookmarks" }
-            .padding(vertical = 12.dp),
+            .padding(
+                start = HomeStartInset,
+                end = HomeEndInset,
+                top = 18.dp,
+                bottom = 18.dp,
+            ),
     ) {
         Box(
             modifier = Modifier
@@ -564,16 +540,17 @@ private fun SavedPassagesRow(unfurlSignal: Int, onClick: () -> Unit) {
             )
         }
         Spacer(Modifier.width(HomeColumnGap))
-        Column {
+        Column(Modifier.weight(1f)) {
             Text(
                 text = "Saved passages",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = "Return to your marked ayahs",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = if (bookmarkCount == 1) "1 saved ayah" else "$bookmarkCount saved ayahs",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
     }

@@ -44,6 +44,8 @@ type Props = {
   topInset?: number
   bottomGap?: number
   ariaLabel?: string
+  /** Paint-only use inside a larger navigation target. */
+  decorative?: boolean
 }
 
 function parseRuby(cssColor: string): { r: number; g: number; b: number } {
@@ -78,6 +80,7 @@ export function VerseBookmarkRibbon({
   topInset = TOP_INSET,
   bottomGap = BOTTOM_GAP,
   ariaLabel,
+  decorative = false,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLButtonElement>(null)
@@ -399,8 +402,14 @@ export function VerseBookmarkRibbon({
       data-on={bookmarked || unfurl.current > 0.5 ? 'true' : 'false'}
       data-focused={focused ? 'true' : 'false'}
       data-hovered={hovered || ribbonFocused ? 'true' : 'false'}
-      aria-label={ariaLabel ?? (bookmarked ? 'Remove bookmark' : 'Bookmark verse')}
-      aria-pressed={bookmarked}
+      aria-label={
+        decorative
+          ? undefined
+          : ariaLabel ?? (bookmarked ? 'Remove bookmark' : 'Bookmark verse')
+      }
+      aria-hidden={decorative || undefined}
+      aria-pressed={decorative ? undefined : bookmarked}
+      tabIndex={decorative ? -1 : undefined}
       onClick={onClick}
       onFocus={() => setRibbonFocused(true)}
       onBlur={() => setRibbonFocused(false)}

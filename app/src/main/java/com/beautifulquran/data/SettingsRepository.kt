@@ -15,7 +15,7 @@ enum class ReadingMode { ARABIC_ENGLISH, ENGLISH_ONLY }
 enum class AyahSelectorSide { LEFT, RIGHT }
 
 /** Developer-selectable bookmark treatment on the Chapters sheet. */
-enum class HomeBookmarkStyle { LONG_RIBBON, COMPACT_EDGE, TOP_BOUND, SAVED_PASSAGES, BOTTOM_TAIL }
+enum class HomeBookmarkStyle { TOP_BOUND, SAVED_PASSAGES }
 
 data class Settings(
     val reciterId: Int = 1,
@@ -37,8 +37,8 @@ data class Settings(
      *  [developerModeEnabled] is on; the tuning edits themselves are
      *  session-only and never persisted. */
     val inkLabEnabled: Boolean = false,
-    /** Experimental Chapters bookmark treatment; the long ribbon is the shipped baseline. */
-    val homeBookmarkStyle: HomeBookmarkStyle = HomeBookmarkStyle.LONG_RIBBON,
+    /** Developer-selectable Chapters bookmark treatment. */
+    val homeBookmarkStyle: HomeBookmarkStyle = HomeBookmarkStyle.TOP_BOUND,
 )
 
 /** Maps a persisted ordinal back to an enum entry, falling back to [default]
@@ -49,6 +49,16 @@ internal fun <E : Enum<E>> enumForOrdinal(entries: List<E>, ordinal: Int, defaul
 /** Reads an enum stored by ordinal, tolerating stale ordinals. */
 private inline fun <reified E : Enum<E>> SharedPreferences.enum(key: String, default: E): E =
     enumForOrdinal(enumValues<E>().toList(), getInt(key, default.ordinal), default)
+
+/** Reads the named v2 value, migrating the old five-way ordinal experiment. */
+private fun SharedPreferences.homeBookmarkStyle(): HomeBookmarkStyle =
+    getString("homeBookmarkStyleV2", null)?.let { stored ->
+        runCatching { HomeBookmarkStyle.valueOf(stored) }.getOrNull()
+    } ?: if (getInt("homeBookmarkStyle", -1) == 3) {
+        HomeBookmarkStyle.SAVED_PASSAGES
+    } else {
+        HomeBookmarkStyle.TOP_BOUND
+    }
 
 class SettingsRepository(context: Context) {
 
@@ -71,7 +81,7 @@ class SettingsRepository(context: Context) {
         lastAyah = prefs.getInt("lastAyah", 1),
         developerModeEnabled = prefs.getBoolean("developerModeEnabled", false),
         inkLabEnabled = prefs.getBoolean("inkLabEnabled", false),
-        homeBookmarkStyle = prefs.enum("homeBookmarkStyle", HomeBookmarkStyle.LONG_RIBBON),
+        homeBookmarkStyle = prefs.homeBookmarkStyle(),
     )
 
     fun update(transform: (Settings) -> Settings) {
@@ -90,7 +100,8 @@ class SettingsRepository(context: Context) {
             putInt("lastAyah", next.lastAyah)
             putBoolean("developerModeEnabled", next.developerModeEnabled)
             putBoolean("inkLabEnabled", next.inkLabEnabled)
-            putInt("homeBookmarkStyle", next.homeBookmarkStyle.ordinal)
+            putString("homeBookmarkStyleV2", next.homeBookmarkStyle.name)
+            remove("homeBookmarkStyle")
         }
     }
 }

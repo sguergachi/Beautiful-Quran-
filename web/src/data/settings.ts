@@ -1,6 +1,12 @@
 export type ThemeMode = 'system' | 'light' | 'dark' | 'royal_green'
 export type ReadingMode = 'arabic_english' | 'english_only' | 'arabic_only'
 export type AyahSelectorSide = 'left' | 'right'
+export type HomeBookmarkStyle = 'top_bound' | 'saved_passages'
+
+export const HOME_BOOKMARK_STYLES: HomeBookmarkStyle[] = [
+  'top_bound',
+  'saved_passages',
+]
 
 /** Match Android SettingsScreen: 0.8f..1.6f with steps = 7 (8 snap points). */
 export const FONT_SCALE_MIN = 0.8
@@ -22,6 +28,8 @@ export interface Settings {
   playbackSpeed: number
   /** Reveals developer tools (e.g. the Ornaments Lab). Off by default. */
   developerMode: boolean
+  /** Developer-selectable Chapters bookmark treatment. */
+  homeBookmarkStyle: HomeBookmarkStyle
 }
 
 const DEFAULTS: Settings = {
@@ -37,6 +45,7 @@ const DEFAULTS: Settings = {
   lastAyah: 1,
   playbackSpeed: 1,
   developerMode: false,
+  homeBookmarkStyle: 'top_bound',
 }
 
 const KEY = 'beautiful-quran-settings'
@@ -51,6 +60,11 @@ export function normalizeSettings(partial: Partial<Settings> = {}): Settings {
     ...DEFAULTS,
     ...partial,
     fontScale: clampFontScale(partial.fontScale ?? DEFAULTS.fontScale),
+    homeBookmarkStyle: HOME_BOOKMARK_STYLES.includes(
+      partial.homeBookmarkStyle as HomeBookmarkStyle,
+    )
+      ? (partial.homeBookmarkStyle as HomeBookmarkStyle)
+      : DEFAULTS.homeBookmarkStyle,
   }
 }
 

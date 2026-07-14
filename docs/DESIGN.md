@@ -502,11 +502,14 @@ may use their own layout primitives, yet must preserve the same visible
 anchors. Keep the gold chapter number close to its transliterated name; the
 number lane must not read as an empty decorative gutter.
 
-The Android search pill owns an even 16 dp internal inset on both ends; its
-icon and text spacing is independent of the chapter-number grid. Continue
-listening is the one full-bleed row in the scrolling chapter document: its
-quiet green wash and tap target reach both sheet edges, while its bilingual
-text remains on the same inner English and Arabic rails as the chapter rows.
+The Android and web search pills own an even 16 dp/px internal inset on both
+ends; icon and text spacing is independent of the chapter-number grid.
+Continue listening is the one full-bleed row in the scrolling chapter
+document: its quiet green wash and tap target reach both sheet edges, while
+its bilingual text remains on the same inner English and Arabic rails as the
+chapter rows. Both platforms keep the 28 dp/px outer lane, 26 dp/px number
+column, and 4 dp/px name gap; the fixed masthead pairs its title with the same
+30 dp/px gilded rosette Settings affordance.
 
 The ribbon's drawing and navigation are deliberately separate. Reuse
 `VerseBookmarkRibbon` for the cloth; put its Home/Chapters navigation on an
@@ -516,23 +519,21 @@ animation from being borrowed as navigation feedback, and leaves the shared
 component authoritative for its own visual language. Do not create another
 bookmark icon, a second ribbon shape, or a bespoke animated substitute.
 
-### Chapters bookmark design experiment
+### Chapters bookmark treatment
 
-Android developer settings can compare the long ribbon against four quieter
-placements without changing the bookmark language: a compact 80 dp fore-edge
-mark at the chapter-document boundary, an 88 dp ribbon bound to the top edge,
-a 64 dp tail at the bottom edge, and a typographic *Saved passages* line whose
-number-column mark is the same ruby cloth. The long ribbon remains the shipped
-default and comparison control. All five appear only when a bookmark exists,
-open the same Bookmarks sheet, and reuse `VerseBookmarkRibbon`; verse-level
-ribbons in the Reader never change.
+Android and web developer settings compare two quiet placements without
+changing the bookmark language: a 96 dp/px ribbon bound to the top edge and a
+typographic *Saved passages* line whose number-column mark is the same ruby
+cloth. Both appear only when a bookmark exists, open the same Bookmarks sheet,
+and reuse each platform's `VerseBookmarkRibbon`; verse-level ribbons in the
+Reader never change.
 
 The selector is visible only in developer mode, but its persisted choice stays
 active if developer mode is hidden again. The inline treatment is omitted
-during active search so results remain answer-first. It carries no count:
-“Saved passages” and “Return to your marked ayahs” are sufficient information
-scent. The other variants retain the fixed 28 dp Home lane and separate quiet
-navigation target, so switching treatments never moves the chapter document
+during active search so results remain answer-first. Its second line reports
+the live bookmark count as “1 saved ayah” or “12 saved ayahs.” The top-bound
+treatment retains the fixed 28 dp Home lane and separate
+quiet navigation target, so switching treatments never moves the chapter document
 or turns cloth animation into navigation feedback.
 
 The bookmark index is a compact bilingual concordance, shared by Android and

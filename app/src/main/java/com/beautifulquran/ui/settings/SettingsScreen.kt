@@ -337,11 +337,8 @@ private fun DeveloperSection(
     HomeBookmarkStyle.entries.forEach { style ->
         SelectRow(
             label = when (style) {
-                HomeBookmarkStyle.LONG_RIBBON -> "Long ribbon · baseline"
-                HomeBookmarkStyle.COMPACT_EDGE -> "Compact edge"
                 HomeBookmarkStyle.TOP_BOUND -> "Top-bound ribbon"
                 HomeBookmarkStyle.SAVED_PASSAGES -> "Saved passages line"
-                HomeBookmarkStyle.BOTTOM_TAIL -> "Bottom ribbon tail"
             },
             selected = settings.homeBookmarkStyle == style,
             onClick = {

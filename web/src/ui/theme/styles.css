@@ -23,6 +23,10 @@
   --sheet-pad: clamp(1.1rem, 4.5vw, 2.75rem);
   --reader-max: 40rem;
   --home-max: 40rem;
+  --home-start-inset: 28px;
+  --home-end-inset: 28px;
+  --home-number-column: 26px;
+  --home-column-gap: 4px;
   --ease-sheet: cubic-bezier(0.22, 0.61, 0.36, 1);
   --upcoming-alpha: 0.22;
   /* Paper-cover strength for recessed (Upcoming) Arabic — 1 − upcoming-alpha. */
@@ -460,8 +464,7 @@ select {
 
 .home-bookmark-ribbon {
   position: absolute;
-  top: 0;
-  left: 0;
+  left: max(0px, calc((100% - var(--home-max)) / 2));
   width: 44px;
   z-index: 8;
 }
@@ -471,13 +474,19 @@ select {
   bottom: 0;
 }
 
+.home-bookmark-top_bound {
+  top: 0;
+  height: 96px;
+}
+
 .home-header {
   --home-header-top: max(clamp(1rem, 2.5vh, 2rem), env(safe-area-inset-top, 0px));
-  padding: clamp(1rem, 2.5vh, 2rem) var(--sheet-pad) 0.5rem;
+  padding: clamp(1rem, 2.5vh, 2rem) var(--home-end-inset) 0.5rem
+    var(--home-start-inset);
   padding-top: var(--home-header-top);
   display: flex;
   position: relative;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
   max-width: var(--home-max);
@@ -493,12 +502,6 @@ select {
   letter-spacing: 0.01em;
 }
 
-/* The saved ribbon begins beside the page title, then runs down the paper.
- * It is positioned against the header rather than the search document. */
-.home-header .home-bookmark-ribbon {
-  top: var(--home-header-top);
-}
-
 /* Navigation is deliberately separated from the ribbon drawing. Clicking the
  * Home affordance opens the bookmark sheet without ever invoking the ribbon's
  * mark/unmark animation. */
@@ -506,7 +509,7 @@ select {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -6.5px;
+  left: -16px;
   width: 44px;
   padding: 0;
   background: transparent;
@@ -520,41 +523,102 @@ select {
   outline-offset: 2px;
 }
 
-.home-header .gear {
-  color: var(--ink-muted);
-  font-size: 0.92rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  opacity: 0.72;
-  padding: 0.55rem 0.15rem;
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
+.home-settings {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  display: grid;
+  place-items: center;
 }
 
 @media (hover: hover) {
-  .home-header .gear:hover {
-    opacity: 1;
-    color: var(--accent);
+  .home-settings:hover .home-rosette {
+    filter: brightness(1.08);
   }
 }
 
+.home-rosette {
+  display: block;
+  width: 30px;
+  height: 30px;
+  overflow: visible;
+}
+
+.home-rosette-relief,
+.home-rosette-face {
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.home-rosette-dark {
+  stroke: var(--emboss-dark);
+}
+
+.home-rosette-light {
+  stroke: var(--emboss-light);
+}
+
 .search-row {
-  padding: 0.35rem var(--sheet-pad) 0.65rem;
+  padding: 0.35rem var(--home-end-inset) 0.65rem var(--home-start-inset);
   max-width: var(--home-max);
   width: 100%;
   margin: 0 auto;
 }
 
+.home-search {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 56px;
+  padding: 0 16px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--paper-surface) 35%, transparent);
+}
+
+.home-search:focus-within {
+  background: color-mix(in srgb, var(--paper-surface) 45%, transparent);
+}
+
+.home-search-icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  margin-right: 12px;
+  fill: none;
+  stroke: color-mix(in srgb, var(--ink-muted) 50%, transparent);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.home-search-clear {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  display: grid;
+  place-items: center;
+  margin-right: -10px;
+  color: color-mix(in srgb, var(--ink-muted) 60%, transparent);
+}
+
+.home-search-clear svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
 /*
- * Continue card lives inside .scroll with the chapter list so it shares the
- * same horizontal column (scroll pad + --home-max). Soft green wash matches
- * Android ContinueCard (primaryContainer).
+ * Continue is one full-width line of the chapter document. Its wash reaches
+ * the document edges while its bilingual ink stays on the chapter rails.
  */
 .continue-row {
   max-width: var(--home-max);
   width: 100%;
-  margin: 0.15rem auto 1rem;
+  margin: 18px auto 16px;
   padding: 0;
 }
 
@@ -565,13 +629,9 @@ select {
   gap: 1rem;
   width: 100%;
   margin: 0;
-  padding: 1.1rem 1.35rem;
-  border-radius: 1.35rem;
-  background-color: color-mix(
-    in srgb,
-    var(--accent-container) 72%,
-    var(--paper-surface)
-  );
+  padding: 18px calc(var(--home-end-inset) + 4px) 18px
+    calc(var(--home-start-inset) + var(--home-number-column) + var(--home-column-gap));
+  background-color: color-mix(in srgb, var(--accent) 10%, transparent);
   color: var(--ink);
   text-align: start;
   min-height: 44px;
@@ -603,13 +663,65 @@ select {
   line-height: 1.2;
 }
 
+.saved-passages-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--home-column-gap);
+  width: 100%;
+  max-width: var(--home-max);
+  margin: 0 auto 16px;
+  padding: 18px var(--home-end-inset) 18px var(--home-start-inset);
+}
+
+.continue-row + .saved-passages-row {
+  margin-top: -16px;
+}
+
+.saved-passages-mark {
+  position: relative;
+  display: block;
+  flex: 0 0 var(--home-number-column);
+  width: var(--home-number-column);
+  height: 44px;
+}
+
+.saved-passages-mark .verse-ribbon {
+  width: var(--home-number-column);
+}
+
+.saved-passages-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.saved-passages-title {
+  color: color-mix(in srgb, var(--accent) 80%, var(--ink-muted));
+  font-size: 0.88rem;
+}
+
+.saved-passages-note {
+  color: var(--ink);
+  font-size: 1.08rem;
+}
+
+.saved-passages-open {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+}
+
+.saved-passages-open:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -2px;
+}
+
 @media (hover: hover) {
   .continue:hover {
-    background-color: color-mix(
-      in srgb,
-      var(--accent-container) 88%,
-      var(--paper-surface)
-    );
+    background-color: color-mix(in srgb, var(--accent) 13%, transparent);
   }
 }
 
@@ -623,7 +735,7 @@ select {
 .search-section-label {
   max-width: var(--home-max);
   margin: 0.5rem auto 0.25rem;
-  padding: 0 var(--sheet-pad);
+  padding: 0 var(--home-end-inset) 0 var(--home-start-inset);
   color: color-mix(in srgb, var(--ink-muted) 70%, transparent);
   font-size: 0.92rem;
   letter-spacing: 0.02em;
@@ -632,7 +744,7 @@ select {
 .search-empty {
   max-width: var(--home-max);
   margin: 1.5rem auto;
-  padding: 0 var(--sheet-pad);
+  padding: 0 var(--home-end-inset) 0 var(--home-start-inset);
   color: color-mix(in srgb, var(--ink-muted) 55%, transparent);
   font-size: 1.05rem;
 }
@@ -651,7 +763,7 @@ select {
   display: flex;
   align-items: baseline;
   gap: 0.65rem;
-  padding: 1.1rem var(--sheet-pad) 0.7rem;
+  padding: 1.1rem var(--home-end-inset) 0.7rem var(--home-start-inset);
   margin-bottom: 0.15rem;
   border-bottom: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
 }
@@ -685,7 +797,7 @@ select {
   flex-direction: column;
   gap: 0.28rem;
   width: 100%;
-  padding: 0.7rem var(--sheet-pad);
+  padding: 0.7rem var(--home-end-inset) 0.7rem var(--home-start-inset);
   text-align: start;
   min-height: 44px;
 }
@@ -722,7 +834,7 @@ select {
 .word-search-less {
   display: block;
   width: 100%;
-  padding: 0.75rem var(--sheet-pad);
+  padding: 0.75rem var(--home-end-inset) 0.75rem var(--home-start-inset);
   text-align: start;
   min-height: 44px;
   font-size: 0.95rem;
@@ -739,10 +851,10 @@ select {
 .surah-row {
   width: 100%;
   display: grid;
-  grid-template-columns: 2.4rem minmax(0, 1fr) auto;
-  gap: 0.75rem 0.9rem;
+  grid-template-columns: var(--home-number-column) minmax(0, 1fr) auto;
+  column-gap: var(--home-column-gap);
   align-items: baseline;
-  padding: 0.95rem var(--sheet-pad);
+  padding: 15px calc(var(--home-end-inset) + 4px) 15px var(--home-start-inset);
   text-align: start;
   min-height: 52px;
 }
@@ -771,12 +883,12 @@ select {
 }
 
 .surah-names .en {
-  font-size: 1.12rem;
+  font-size: 17px;
 }
 
 .surah-names .meta {
   color: var(--ink-muted);
-  font-size: 0.88rem;
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -784,7 +896,8 @@ select {
 
 .surah-ar {
   font-family: var(--font-arabic);
-  font-size: clamp(1.15rem, 3.5vw, 1.35rem);
+  font-size: 24px;
+  line-height: 1.6;
   direction: rtl;
 }
 
@@ -2660,23 +2773,18 @@ select {
   color: color-mix(in srgb, var(--ink-muted) 70%, transparent);
 }
 
-.search-row .paper-input {
-  width: 100%;
-  padding: 0.65rem 0;
+.search-row .home-search .paper-input {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  padding: 0;
+  font-size: 17px;
   color: var(--ink);
-  border-bottom: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
-  transition: border-color 180ms ease;
+  border: 0;
 }
 
-@media (hover: hover) {
-  .search-row .paper-input:hover,
-  .search-row .paper-input:focus {
-    border-bottom-color: color-mix(in srgb, var(--accent) 55%, transparent);
-  }
-}
-
-.search-row .paper-input:focus {
-  border-bottom-color: var(--accent);
+.search-row .home-search .paper-input::placeholder {
+  color: color-mix(in srgb, var(--ink-muted) 50%, transparent);
 }
 
 /* Animatable hole radius for the exit punch (Android InkReveal punchHole). */
@@ -3265,42 +3373,10 @@ select {
 @media (max-width: 640px) {
   :root {
     --sheet-pad: clamp(0.95rem, 4.5vw, 1.35rem);
-    --home-bookmark-reserve: 27px;
   }
 
-  /* The reusable ribbon paints a 13px cloth 9px inside its target. On Home,
-   * use a 31px visual canvas so that cloth is centred in the left lane, while
-   * an invisible 44px hit area preserves the required touch target. */
-  .home-header[data-has-bookmarks='true'] .home-bookmark-ribbon {
-    /* The header is now the positioning context: 6.5px centres the 31px
-     * visual canvas inside the 44px edge target without touching the title. */
-    left: 6.5px;
-  }
-
-  .home-header[data-has-bookmarks='true'] .home-bookmark-ribbon .verse-ribbon {
-    width: 31px;
-  }
-
-  /* Keep every block in the document flow. Moving the blocks with margins
-   * offset the entire mobile sheet (including its title) in narrow previews.
-   * Inner padding creates the ribbon lane without disturbing the page edge. */
-  .home-scroll-page[data-has-bookmarks='true'] > .search-row,
-  .home-scroll-page[data-has-bookmarks='true'] > .continue-row,
-  .home-scroll-page[data-has-bookmarks='true'] > .surah-list,
-  .home-scroll-page[data-has-bookmarks='true'] > .word-search-results {
-    padding-left: var(--home-bookmark-reserve);
-  }
-
-  .home-scroll-page[data-has-bookmarks='true'] .surah-row {
-    padding-left: 0;
-  }
-
-  /* The home title is part of the chapter list hierarchy: when the bookmark
-   * lane is present, it starts above the chapter numbers—not at the page edge
-   * and not above the ribbon. */
-  .home-header[data-has-bookmarks='true'] {
-    padding-left: calc(var(--home-bookmark-reserve) + var(--sheet-pad));
-  }
+  /* The 44px desktop target extends 16px outside the sheet on phones, leaving
+   * Android's deliberate 28px Home-edge target and the same 28px content lane. */
 
   body {
     font-size: 16px;
@@ -4191,4 +4267,15 @@ html[data-entrance='true'] body {
   border: 1px solid var(--gold-deep);
   border-radius: 6px;
   cursor: pointer;
+}
+
+.settings-dev-bookmark {
+  margin-top: 1.5rem;
+}
+
+.settings-dev-caption {
+  margin: 0.1rem 0 0.45rem;
+  color: color-mix(in srgb, var(--ink-muted) 70%, transparent);
+  font-size: 0.82rem;
+  line-height: 1.35;
 }

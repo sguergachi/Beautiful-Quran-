@@ -4,6 +4,7 @@ import {
   FONT_SCALE_MIN,
   FONT_SCALE_STEP,
   type AyahSelectorSide,
+  type HomeBookmarkStyle,
   type ReadingMode,
   type ThemeMode,
 } from '../../data/settings'
@@ -49,6 +50,11 @@ const THEME_OPTIONS: {
   { value: 'light', label: 'Paper' },
   { value: 'dark', label: 'Nightfall' },
   { value: 'royal_green', label: 'Royal green' },
+]
+
+const HOME_BOOKMARK_OPTIONS: { value: HomeBookmarkStyle; label: string }[] = [
+  { value: 'top_bound', label: 'Top-bound ribbon' },
+  { value: 'saved_passages', label: 'Saved passages line' },
 ]
 
 const SPEED_OPTIONS = [
@@ -224,15 +230,31 @@ export function SettingsScreen({
             onChange={(checked) => appStore.updateSettings({ developerMode: checked })}
           />
           {s.developerMode ? (
-            <button
-              type="button"
-              className="settings-dev-button"
-              onClick={() => {
-                location.hash = '#lab'
-              }}
-            >
-              Open Ornaments Lab
-            </button>
+            <>
+              <button
+                type="button"
+                className="settings-dev-button"
+                onClick={() => {
+                  location.hash = '#lab'
+                }}
+              >
+                Open Ornaments Lab
+              </button>
+              <div className="settings-dev-bookmark">
+                <p className="settings-sublabel">Home bookmark</p>
+                <p className="settings-dev-caption">
+                  Changes the Chapters shortcut; verse ribbons are unchanged.
+                </p>
+                <PaperChoiceList
+                  aria-label="Home bookmark"
+                  value={s.homeBookmarkStyle}
+                  options={HOME_BOOKMARK_OPTIONS}
+                  onChange={(homeBookmarkStyle) =>
+                    appStore.updateSettings({ homeBookmarkStyle })
+                  }
+                />
+              </div>
+            </>
           ) : null}
         </section>
 

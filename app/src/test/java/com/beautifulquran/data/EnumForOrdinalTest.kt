@@ -38,31 +38,31 @@ class EnumForOrdinalTest {
     }
 
     @Test
-    fun `home bookmark styles map by ordinal and stale values use baseline`() {
+    fun `home bookmark styles map by ordinal and stale values use top bound`() {
         HomeBookmarkStyle.entries.forEach { style ->
             assertEquals(
                 style,
                 enumForOrdinal(
                     HomeBookmarkStyle.entries,
                     style.ordinal,
-                    HomeBookmarkStyle.LONG_RIBBON,
+                    HomeBookmarkStyle.TOP_BOUND,
                 ),
             )
         }
         assertEquals(
-            HomeBookmarkStyle.LONG_RIBBON,
+            HomeBookmarkStyle.TOP_BOUND,
             enumForOrdinal(
                 HomeBookmarkStyle.entries,
                 99,
-                HomeBookmarkStyle.LONG_RIBBON,
+                HomeBookmarkStyle.TOP_BOUND,
             ),
         )
         assertEquals(
-            HomeBookmarkStyle.LONG_RIBBON,
+            HomeBookmarkStyle.TOP_BOUND,
             enumForOrdinal(
                 HomeBookmarkStyle.entries,
                 -1,
-                HomeBookmarkStyle.LONG_RIBBON,
+                HomeBookmarkStyle.TOP_BOUND,
             ),
         )
     }
