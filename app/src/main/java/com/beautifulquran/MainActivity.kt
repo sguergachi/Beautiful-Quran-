@@ -429,9 +429,10 @@ private fun PaperStackApp(
                 minLayer = {
                     if (bookmarkCount > 0) BOOKMARKS_LAYER else COVER_LAYER
                 },
-                maxLayer = {
-                    if (selectedSurahId == 0 && stackPosition.value <= COVER_LAYER + 0.01f) COVER_LAYER else settingsLayer
-                },
+                // When no surah is open, Settings occupies layer 1 and is
+                // reachable by swiping from Chapters. With a reader open,
+                // Settings sits at layer 2 (Cover → Reader → Settings).
+                maxLayer = { settingsLayer },
                 // The pointerInput coroutine is intentionally keyed only by
                 // navigation identity. Read a stable state holder here so the
                 // long-lived detector sees overlays that open after it starts.
@@ -440,13 +441,8 @@ private fun PaperStackApp(
                     dragStartPosition = stackPosition.value
                 },
                 onDrag = { deltaPages ->
-                    val maxLayer = if (selectedSurahId == 0 && dragStartPosition <= COVER_LAYER + 0.01f) {
-                        COVER_LAYER
-                    } else {
-                        settingsLayer
-                    }
                     // A single gesture may advance at most one layer, so a hard swipe
-                    // from the cover lands on the reader instead of overshooting to settings.
+                    // from the cover lands on the next sheet instead of overshooting.
                     val startLayer = dragStartPosition.roundToInt()
                     val minimumLayer = if (bookmarkCount > 0) {
                         BOOKMARKS_LAYER
@@ -454,7 +450,7 @@ private fun PaperStackApp(
                         COVER_LAYER
                     }
                     val lower = (startLayer - 1).coerceAtLeast(minimumLayer).toFloat()
-                    val upper = (startLayer + 1).coerceAtMost(maxLayer).toFloat()
+                    val upper = (startLayer + 1).coerceAtMost(settingsLayer.toFloat())
                     dragSnapJob?.cancel()
                     dragSnapJob = scope.launch {
                         stackPosition.snapTo(
