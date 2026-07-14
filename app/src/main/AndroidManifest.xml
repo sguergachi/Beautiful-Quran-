@@ -53,6 +53,14 @@
                 <action android:name="com.beautifulquran.action.OPEN_VERSE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+            <!-- System / Assistant search queries ("search for chapter 2"). -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.searchable"
+                android:resource="@xml/searchable" />
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />

@@ -699,6 +699,7 @@ private fun PaperStackApp(
                     animateTo(AYAH_LAYER)
                 },
                 onOpenSettings = { animateTo(SETTINGS_LAYER) },
+                onVoiceAction = ::fulfillAssistantAction,
                 // Drive the float's enter/exit from the live page turn so it
                 // slides in when returning to chapter selection and out when
                 // leaving for the reader — not only when nowPlaying flips.

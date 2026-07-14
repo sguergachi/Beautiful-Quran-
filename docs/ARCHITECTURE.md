@@ -226,12 +226,14 @@ Beautiful Quran” works for end users. Until then (and for no-app-name voice):
 
 | Path | Works today? | How |
 |---|---|---|
-| **Settings → Voice → Listen** | Yes | In-app speech: “open chapter 2”, “bookmark this”, “continue”, “bookmarks” |
+| **Home → Listen** (primary) | Yes | In-app speech under the title: “open chapter 2”, “bookmark this”, … |
+| **Settings → Voice → Listen** | Yes | Same engine; also pin Continue/Bookmarks |
 | **Pin / long-press shortcuts** | Yes | Continue & Bookmarks on the home screen / app long-press |
-| **Deep links / explicit actions** | Yes | `beautifulquran://continue` or `am start -a com.beautifulquran.action.CONTINUE` |
-| App Actions / Assistant Routines pasting App Action phrases | Only after Play review | `OPEN_APP_FEATURE` + `GET_THING` in `shortcuts.xml` |
+| **Deep links / SEARCH** | Yes | `beautifulquran://…` and system `ACTION_SEARCH` queries |
+| Hey Google App Actions | After Play review | Custom intents + BIIs in `shortcuts.xml` |
 
-Settings → **Voice** is the product surface (`VoiceSection`): Listen, run, pin.
+Queries strip trailing “on Beautiful Quran”. Scroll updates last-read so
+“bookmark this” marks the verse under the reading line.
 
 Deep-link scheme `beautifulquran://` (VIEW intent-filter on `MainActivity`):
 
