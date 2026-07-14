@@ -1,27 +1,38 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  BRUSH_CHECK_PAINT_MS,
-  BRUSH_CHECK_PARAMS,
   brushCheckPath,
+  SHIPPED_CHECK_PARAMS,
+  type BrushCheckParams,
 } from './brushCheck'
 
 type Props = {
   checked: boolean
   /** Accessible label is on the parent control. */
   className?: string
+  /** Override glyph box; defaults to [params.size]. */
   size?: number
+  /** Live lab knobs — defaults to shipped check. */
+  params?: BrushCheckParams
+  /** Bump to re-paint while checked. */
+  paintToken?: number
 }
 
 /**
- * Empty ink ring at rest; when on, the **shipped baseline brush** paints a
- * check — same peakHalf / nibBias / pressure envelope / paintMs / alpha as
- * the selector circle.
+ * Empty ink ring at rest; when on, a calligraphic brush check paints itself
+ * using [params] (developer lab or shipped defaults).
  */
-export function InkCheckMark({ checked, className, size = 22 }: Props) {
+export function InkCheckMark({
+  checked,
+  className,
+  size,
+  params = SHIPPED_CHECK_PARAMS,
+  paintToken = 0,
+}: Props) {
   const [progress, setProgress] = useState(checked ? 1 : 0)
   const gen = useRef(0)
-  const paintMs = BRUSH_CHECK_PAINT_MS
-  const alpha = BRUSH_CHECK_PARAMS.alpha
+  const box = size ?? params.size
+  const paintMs = params.paintMs
+  const alpha = params.alpha
 
   useEffect(() => {
     gen.current += 1
@@ -49,32 +60,28 @@ export function InkCheckMark({ checked, className, size = 22 }: Props) {
     }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [checked, paintMs])
+  }, [checked, paintMs, paintToken, params])
 
-  const d = progress > 0 ? brushCheckPath(size, progress, BRUSH_CHECK_PARAMS) : ''
+  const d = progress > 0 ? brushCheckPath(box, progress, params) : ''
 
   return (
     <svg
       className={className ?? 'ink-check-mark'}
-      width={size}
-      height={size}
-      viewBox={`0 0 ${size} ${size}`}
+      width={box}
+      height={box}
+      viewBox={`0 0 ${box} ${box}`}
       aria-hidden="true"
     >
       <circle
         className="ink-check-ring"
-        cx={size / 2}
-        cy={size / 2}
-        r={size / 2 - 1.5}
+        cx={box / 2}
+        cy={box / 2}
+        r={box / 2 - 1.5}
         fill="none"
         style={{ opacity: checked ? 0 : 0.5 }}
       />
       {d ? (
-        <path
-          className="ink-check-stroke"
-          d={d}
-          style={{ opacity: alpha }}
-        />
+        <path className="ink-check-stroke" d={d} style={{ opacity: alpha }} />
       ) : null}
     </svg>
   )

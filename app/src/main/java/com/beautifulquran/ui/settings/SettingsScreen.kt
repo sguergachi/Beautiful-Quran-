@@ -150,7 +150,9 @@ fun SettingsScreen(
     var brushParams by remember {
         mutableStateOf(brushCircleParams(settings.brushCircleStyle))
     }
+    var checkParams by remember { mutableStateOf(shippedCheckParams()) }
     var paintToken by remember { mutableIntStateOf(0) }
+    var checkPaintToken by remember { mutableIntStateOf(0) }
     var copyNote by remember { mutableStateOf<String?>(null) }
     // Only reseed when the preset or shipped BASE revision actually changes —
     // never wipe a live paste / slider edit on unrelated recomposition.
@@ -254,16 +256,22 @@ fun SettingsScreen(
                     label = "Word-by-word translation",
                     checked = settings.showWordGloss,
                     onChange = { v -> viewModel.settings.update { it.copy(showWordGloss = v) } },
+                    checkParams = checkParams,
+                    checkPaintToken = checkPaintToken,
                 )
                 ToggleRow(
                     label = "Transliteration",
                     checked = settings.showTransliteration,
                     onChange = { v -> viewModel.settings.update { it.copy(showTransliteration = v) } },
+                    checkParams = checkParams,
+                    checkPaintToken = checkPaintToken,
                 )
                 ToggleRow(
                     label = "Ayah translation",
                     checked = settings.showTranslation,
                     onChange = { v -> viewModel.settings.update { it.copy(showTranslation = v) } },
+                    checkParams = checkParams,
+                    checkPaintToken = checkPaintToken,
                 )
             }
 
@@ -300,7 +308,11 @@ fun SettingsScreen(
                     settings = settings,
                     brushParams = brushParams,
                     onBrushParams = { brushParams = it; paintToken++ },
+                    checkParams = checkParams,
+                    checkPaintToken = checkPaintToken,
+                    onCheckParams = { checkParams = it; checkPaintToken++ },
                     onReplayPaint = { paintToken++ },
+                    onReplayCheckPaint = { checkPaintToken++ },
                     copyNote = copyNote,
                     onCopyValues = {
                         val text = formatBrushParamsCopy(brushParams)
@@ -334,6 +346,40 @@ fun SettingsScreen(
                             brushParams = parsed
                             paintToken++
                             copyNote = "Applied pasted params"
+                        }
+                    },
+                    onCopyCheckValues = {
+                        val text = formatBrushCheckCopy(checkParams)
+                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        cm.setPrimaryClip(ClipData.newPlainText("brush check params", text))
+                        Log.d("BrushLab", text)
+                        copyNote = "Copied check params"
+                    },
+                    onPasteCheckValues = { raw ->
+                        val parsed = parseBrushCheckFromText(raw, checkParams)
+                        if (parsed == null) {
+                            copyNote = "No check knobs found in paste"
+                        } else {
+                            checkParams = parsed
+                            checkPaintToken++
+                            copyNote = "Applied check params"
+                        }
+                    },
+                    onPasteCheckFromClipboard = {
+                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val raw = cm.primaryClip
+                            ?.takeIf { it.itemCount > 0 }
+                            ?.getItemAt(0)
+                            ?.coerceToText(context)
+                            ?.toString()
+                            .orEmpty()
+                        val parsed = parseBrushCheckFromText(raw, checkParams)
+                        if (parsed == null) {
+                            copyNote = "No check knobs found in clipboard"
+                        } else {
+                            checkParams = parsed
+                            checkPaintToken++
+                            copyNote = "Applied check params"
                         }
                     },
                     onOpenTimingsLab = onOpenTimingsLab,
@@ -379,11 +425,18 @@ private fun DeveloperSection(
     settings: Settings,
     brushParams: BrushCircleParams,
     onBrushParams: (BrushCircleParams) -> Unit,
+    checkParams: BrushCheckParams,
+    checkPaintToken: Int,
+    onCheckParams: (BrushCheckParams) -> Unit,
     onReplayPaint: () -> Unit,
+    onReplayCheckPaint: () -> Unit,
     copyNote: String?,
     onCopyValues: () -> Unit,
     onPasteValues: (String) -> Unit,
     onPasteFromClipboard: () -> Unit,
+    onCopyCheckValues: () -> Unit,
+    onPasteCheckValues: (String) -> Unit,
+    onPasteCheckFromClipboard: () -> Unit,
     onOpenTimingsLab: () -> Unit,
     onOpenOrnamentsLab: () -> Unit,
     onRecordSystemTrace: () -> Unit,
@@ -445,6 +498,8 @@ private fun DeveloperSection(
         label = "Ink Lab overlay",
         checked = settings.inkLabEnabled,
         onChange = { on -> viewModel.settings.update { it.copy(inkLabEnabled = on) } },
+        checkParams = checkParams,
+        checkPaintToken = checkPaintToken,
     )
     Caption("Live sliders over the reader's highlight tuning. This session only.")
 
@@ -484,6 +539,64 @@ private fun DeveloperSection(
     }
     Spacer(Modifier.height(8.dp))
     BrushLabSliders(params = brushParams, onChange = onBrushParams)
+
+    Spacer(Modifier.height(22.dp))
+    Text("Ink check mark", style = MaterialTheme.typography.bodyLarge)
+    Spacer(Modifier.height(6.dp))
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .quietClickable {
+                // Toggle preview by flipping a local... use paint replay via onReplayCheckPaint
+                onReplayCheckPaint()
+            }
+            .padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = "Preview — see toggles above",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        InkCheck(checked = true, params = checkParams, paintToken = checkPaintToken)
+    }
+    CheckLabSliders(params = checkParams, onChange = onCheckParams)
+    Spacer(Modifier.height(6.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+        Text(
+            text = "Reset check",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .quietClickable { onCheckParams(shippedCheckParams()) }
+                .padding(vertical = 6.dp),
+        )
+        Text(
+            text = "Replay paint",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .quietClickable(onClick = onReplayCheckPaint)
+                .padding(vertical = 6.dp),
+        )
+        Text(
+            text = "Copy check",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .quietClickable(onClick = onCopyCheckValues)
+                .padding(vertical = 6.dp),
+        )
+        Text(
+            text = "Paste check",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .quietClickable(onClick = onPasteCheckFromClipboard)
+                .padding(vertical = 6.dp),
+        )
+    }
     Spacer(Modifier.height(6.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         Text(
@@ -714,7 +827,13 @@ private fun SelectRow(
 /** On/off row: the label carries the weight; a green tick inks itself in at the
  * trailing edge when on, and settles to a faint empty ring when off. */
 @Composable
-private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun ToggleRow(
+    label: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    checkParams: BrushCheckParams = shippedCheckParams(),
+    checkPaintToken: Int = 0,
+) {
     val view = LocalView.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -732,40 +851,46 @@ private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.weight(1f),
         )
-        InkCheck(checked = checked)
+        InkCheck(checked = checked, params = checkParams, paintToken = checkPaintToken)
     }
 }
 
-/** The on/off mark: empty ring at rest; when on, the **shipped baseline brush**
- * paints a check (same peakHalf / nibBias / pressure / paintMs / alpha as the
- * selector circle). */
+/** The on/off mark: empty ring at rest; lab-tunable brush check paints on. */
 @Composable
-private fun InkCheck(checked: Boolean) {
-    val params = remember { brushCircleParams(BrushCircleStyle.BASELINE) }
-    val on by animateFloatAsState(
-        targetValue = if (checked) 1f else 0f,
-        animationSpec = tween(
-            durationMillis = params.paintMs,
-            easing = FastOutSlowInEasing,
-        ),
-        label = "checkOn",
-    )
+private fun InkCheck(
+    checked: Boolean,
+    params: BrushCheckParams = shippedCheckParams(),
+    paintToken: Int = 0,
+) {
+    val paint = remember { Animatable(if (checked) 1f else 0f) }
+    LaunchedEffect(checked, paintToken, params) {
+        if (!checked) {
+            paint.snapTo(0f)
+            return@LaunchedEffect
+        }
+        paint.snapTo(0.02f)
+        paint.animateTo(
+            1f,
+            tween(durationMillis = params.paintMs, easing = FastOutSlowInEasing),
+        )
+    }
+    val progress = paint.value
     val accent = MaterialTheme.colorScheme.primary
     val outline = MaterialTheme.colorScheme.outline
-    Canvas(Modifier.size(22.dp)) {
+    val sizeDp = params.sizeDp.dp
+    Canvas(Modifier.size(sizeDp)) {
         val c = Offset(size.width / 2f, size.height / 2f)
         val r = size.minDimension / 2f
         drawCircle(
-            color = outline.copy(alpha = 0.5f * (1f - on)),
+            color = outline.copy(alpha = 0.5f * (1f - progress.coerceIn(0f, 1f))),
             radius = r - 1.2.dp.toPx(),
             center = c,
             style = Stroke(width = 1.4.dp.toPx()),
         )
-        if (on > 0.02f) {
+        if (progress > 0.02f) {
             val mark = inkBrushCheckPath(
                 size = size.minDimension,
-                progress = on,
-                peakHalf = params.peakHalfDp.dp.toPx(),
+                progress = progress,
                 params = params,
             )
             drawPath(path = mark, color = accent.copy(alpha = params.alpha))
@@ -774,21 +899,18 @@ private fun InkCheck(checked: Boolean) {
 }
 
 /**
- * Filled brush check using the **same** [brushPressure] + nib model as
- * [inkBrushCirclePath]. [peakHalf] is already in px (from peakHalfDp).
- * Matches web [brushCheckPath] + [SHIPPED_BRUSH_KNOBS].
+ * Filled brush check from lab [BrushCheckParams]. Matches web [brushCheckPath].
  */
 private fun inkBrushCheckPath(
     size: Float,
     progress: Float,
-    peakHalf: Float,
-    params: BrushCircleParams,
+    params: BrushCheckParams,
 ): Path {
     val prog = progress.coerceIn(0.02f, 1f)
     val center = listOf(
-        Offset(0.16f, 0.50f),
-        Offset(0.40f, 0.76f),
-        Offset(0.86f, 0.22f),
+        Offset(params.p0x, params.p0y),
+        Offset(params.p1x, params.p1y),
+        Offset(params.p2x, params.p2y),
     )
     val segs = 24
     val raw = ArrayList<Offset>((center.size - 1) * segs + 1)
@@ -808,6 +930,8 @@ private fun inkBrushCheckPath(
         total += hypot(raw[i].x - raw[i - 1].x, raw[i].y - raw[i - 1].y)
         lens[i] = total
     }
+    // peakHalfDp is absolute in the same unit system as sizeDp (web: peakHalf vs size px).
+    val peakHalfPx = params.peakHalfDp * (size / params.sizeDp.coerceAtLeast(1f))
     val tops = ArrayList<Offset>()
     val bots = ArrayList<Offset>()
     for (i in raw.indices) {
@@ -822,13 +946,12 @@ private fun inkBrushCheckPath(
         ty /= tLen
         var nx = -ty
         var ny = tx
-        // Same nib bias as the circle brush.
         val bx = nx + (-ny) * params.nibBias
         val by = ny + nx * params.nibBias
         val nLen = hypot(bx, by).coerceAtLeast(1e-4f)
         nx = bx / nLen
         ny = by / nLen
-        val half = peakHalf * brushPressure(t, params)
+        val half = peakHalfPx * brushCheckPressure(t, params)
         val x = raw[i].x * size
         val y = raw[i].y * size
         tops.add(Offset(x + nx * half, y + ny * half))
@@ -843,10 +966,10 @@ private fun inkBrushCheckPath(
         val y1 = (a.y + (b.y - a.y) * 0.08f) * size
         tops.clear()
         bots.clear()
-        tops.add(Offset(x0, y0 - peakHalf * 0.3f))
-        tops.add(Offset(x1, y1 - peakHalf * 0.3f))
-        bots.add(Offset(x0, y0 + peakHalf * 0.3f))
-        bots.add(Offset(x1, y1 + peakHalf * 0.3f))
+        tops.add(Offset(x0, y0 - peakHalfPx * 0.3f))
+        tops.add(Offset(x1, y1 - peakHalfPx * 0.3f))
+        bots.add(Offset(x0, y0 + peakHalfPx * 0.3f))
+        bots.add(Offset(x1, y1 + peakHalfPx * 0.3f))
     }
     return Path().apply {
         moveTo(tops[0].x, tops[0].y)
@@ -854,6 +977,18 @@ private fun inkBrushCheckPath(
         for (i in bots.lastIndex downTo 0) lineTo(bots[i].x, bots[i].y)
         close()
     }
+}
+
+private fun brushCheckPressure(t: Float, params: BrushCheckParams): Float {
+    val attack = (t / params.attack).coerceIn(0f, 1f)
+    val releaseSpan = (1f - params.releaseStart).coerceAtLeast(0.04f)
+    val release = if (t > params.releaseStart) {
+        ((1f - t) / releaseSpan).coerceAtLeast(0.12f)
+    } else {
+        1f
+    }
+    val body = 0.78f + params.bodyAmp * sin(t * PI.toFloat() * params.bodyFreq + 0.3f)
+    return (attack * release * body).coerceAtLeast(0.1f)
 }
 
 /** The shared selection mark: a green disc that inks in when chosen and
@@ -963,6 +1098,88 @@ private fun <T> InlineChoiceRow(
                     .padding(horizontal = 4.dp, vertical = 10.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun CheckLabSliders(
+    params: BrushCheckParams,
+    onChange: (BrushCheckParams) -> Unit,
+) {
+    data class Spec(
+        val label: String,
+        val value: Float,
+        val range: ClosedFloatingPointRange<Float>,
+        val integer: Boolean = false,
+        val formatValue: ((Float) -> String)? = null,
+        val set: (Float) -> BrushCheckParams,
+    )
+    val specs = listOf(
+        Spec("Stem X", params.p0x, 0.05f..0.45f, formatValue = { "%.2f".format(it) }) {
+            params.copy(p0x = it)
+        },
+        Spec("Stem Y", params.p0y, 0.2f..0.8f, formatValue = { "%.2f".format(it) }) {
+            params.copy(p0y = it)
+        },
+        Spec("Valley X", params.p1x, 0.2f..0.6f, formatValue = { "%.2f".format(it) }) {
+            params.copy(p1x = it)
+        },
+        Spec("Valley Y", params.p1y, 0.5f..0.95f, formatValue = { "%.2f".format(it) }) {
+            params.copy(p1y = it)
+        },
+        Spec("Tip X", params.p2x, 0.55f..0.98f, formatValue = { "%.2f".format(it) }) {
+            params.copy(p2x = it)
+        },
+        Spec("Tip Y", params.p2y, 0.05f..0.5f, formatValue = { "%.2f".format(it) }) {
+            params.copy(p2y = it)
+        },
+        Spec("Size", params.sizeDp, 14f..36f, integer = true) {
+            params.copy(sizeDp = it)
+        },
+        Spec("Stroke half", params.peakHalfDp, 0.6f..4.5f, formatValue = { "%.2f".format(it) }) {
+            params.copy(peakHalfDp = it)
+        },
+        Spec("Nib bias", params.nibBias, 0f..0.8f, formatValue = { "%.2f".format(it) }) {
+            params.copy(nibBias = it)
+        },
+        Spec("Attack", params.attack, 0.02f..0.4f, formatValue = { "%.3f".format(it) }) {
+            params.copy(attack = it)
+        },
+        Spec("Release start", params.releaseStart, 0.4f..0.98f, formatValue = { "%.2f".format(it) }) {
+            params.copy(releaseStart = it)
+        },
+        Spec(
+            "Body amp",
+            params.bodyAmp,
+            0f..0.6f,
+            formatValue = { "%.2f".format(it).trimEnd('0').trimEnd('.') },
+        ) {
+            params.copy(bodyAmp = it)
+        },
+        Spec("Body freq", params.bodyFreq, 0.5f..12f, formatValue = { "%.1f".format(it) }) {
+            params.copy(bodyFreq = it)
+        },
+        Spec("Paint ms", params.paintMs.toFloat(), 200f..1200f, integer = true) {
+            params.copy(paintMs = it.roundToInt())
+        },
+        Spec(
+            "Alpha",
+            params.alpha,
+            0.3f..1f,
+            formatValue = { "%.2f".format(it).trimEnd('0').trimEnd('.') },
+        ) {
+            params.copy(alpha = it)
+        },
+    )
+    specs.forEach { spec ->
+        BrushTuningSlider(
+            label = spec.label,
+            value = spec.value,
+            range = spec.range,
+            integer = spec.integer,
+            formatValue = spec.formatValue,
+            onChange = { onChange(spec.set(it)) },
+        )
     }
 }
 
@@ -1110,6 +1327,89 @@ private fun BrushTuningSlider(
     }
 }
 
+private fun formatBrushCheckCopy(p: BrushCheckParams): String {
+    fun f(v: Float, digits: Int): String {
+        val s = "%.${digits}f".format(v).trimEnd('0').trimEnd('.')
+        return s.ifEmpty { "0" }
+    }
+    return """
+// Ink check — paste into the check lab or brushCheck.ts SHIPPED_CHECK_PARAMS
+// TypeScript
+{
+  p0x: ${f(p.p0x, 2)},
+  p0y: ${f(p.p0y, 2)},
+  p1x: ${f(p.p1x, 2)},
+  p1y: ${f(p.p1y, 2)},
+  p2x: ${f(p.p2x, 2)},
+  p2y: ${f(p.p2y, 2)},
+  size: ${p.sizeDp.roundToInt()},
+  peakHalf: ${f(p.peakHalfDp, 2)},
+  nibBias: ${f(p.nibBias, 2)},
+  attack: ${f(p.attack, 3)},
+  releaseStart: ${f(p.releaseStart, 2)},
+  bodyAmp: ${f(p.bodyAmp, 2)},
+  bodyFreq: ${f(p.bodyFreq, 1)},
+  paintMs: ${p.paintMs},
+  alpha: ${f(p.alpha, 2)},
+}
+
+// Kotlin
+BrushCheckParams(
+    p0x = ${f(p.p0x, 2)}f,
+    p0y = ${f(p.p0y, 2)}f,
+    p1x = ${f(p.p1x, 2)}f,
+    p1y = ${f(p.p1y, 2)}f,
+    p2x = ${f(p.p2x, 2)}f,
+    p2y = ${f(p.p2y, 2)}f,
+    sizeDp = ${f(p.sizeDp, 1)}f,
+    peakHalfDp = ${f(p.peakHalfDp, 2)}f,
+    nibBias = ${f(p.nibBias, 2)}f,
+    attack = ${f(p.attack, 3)}f,
+    releaseStart = ${f(p.releaseStart, 2)}f,
+    bodyAmp = ${f(p.bodyAmp, 2)}f,
+    bodyFreq = ${f(p.bodyFreq, 1)}f,
+    paintMs = ${p.paintMs},
+    alpha = ${f(p.alpha, 2)}f,
+)
+""".trimIndent()
+}
+
+private fun parseBrushCheckFromText(text: String, base: BrushCheckParams): BrushCheckParams? {
+    val ts = Regex("""\{[\s\S]*?\}""").find(text)?.value
+    val kotlin = Regex("""BrushCheckParams\s*\([\s\S]*?\)""").find(text)?.value
+    val source = ts ?: kotlin ?: text
+    val re = Regex("""([A-Za-z_][A-Za-z0-9_]*)\s*[=:]\s*(-?\d+(?:\.\d+)?)f?\b""")
+    var next = base
+    var hits = 0
+    for (m in re.findAll(source)) {
+        val key = m.groupValues[1]
+        val n = m.groupValues[2].toFloatOrNull() ?: continue
+        val updated = when (key) {
+            "p0x" -> next.copy(p0x = n)
+            "p0y" -> next.copy(p0y = n)
+            "p1x" -> next.copy(p1x = n)
+            "p1y" -> next.copy(p1y = n)
+            "p2x" -> next.copy(p2x = n)
+            "p2y" -> next.copy(p2y = n)
+            "size", "sizeDp" -> next.copy(sizeDp = n)
+            "peakHalf", "peakHalfDp" -> next.copy(peakHalfDp = n)
+            "nibBias" -> next.copy(nibBias = n)
+            "attack" -> next.copy(attack = n)
+            "releaseStart" -> next.copy(releaseStart = n)
+            "bodyAmp" -> next.copy(bodyAmp = n)
+            "bodyFreq" -> next.copy(bodyFreq = n)
+            "paintMs" -> next.copy(paintMs = n.roundToInt())
+            "alpha" -> next.copy(alpha = n)
+            else -> null
+        }
+        if (updated != null) {
+            next = updated
+            hits++
+        }
+    }
+    return if (hits > 0) next else null
+}
+
 private fun formatBrushParamsCopy(p: BrushCircleParams): String {
     fun f(v: Float, digits: Int): String {
         val s = "%.${digits}f".format(v).trimEnd('0').trimEnd('.')
@@ -1212,6 +1512,27 @@ private fun parseBrushParamsFromText(text: String, base: BrushCircleParams): Bru
 private const val SHIPPED_BRUSH_REVISION = 9
 
 /** Dimensionless (dp-valued) knobs for one ink-brush circle style. */
+/** Lab-tunable ink check. Keep in lockstep with web brushCheck.ts. */
+private data class BrushCheckParams(
+    val p0x: Float = 0.16f,
+    val p0y: Float = 0.5f,
+    val p1x: Float = 0.4f,
+    val p1y: Float = 0.76f,
+    val p2x: Float = 0.86f,
+    val p2y: Float = 0.22f,
+    val sizeDp: Float = 22f,
+    val peakHalfDp: Float = 2.2f,
+    val nibBias: Float = 0.58f,
+    val attack: Float = 0.195f,
+    val releaseStart: Float = 0.6f,
+    val bodyAmp: Float = 0.34f,
+    val bodyFreq: Float = 5f,
+    val paintMs: Int = 620,
+    val alpha: Float = 0.9f,
+)
+
+private fun shippedCheckParams() = BrushCheckParams()
+
 private data class BrushCircleParams(
     val label: String,
     val padXDp: Float = 15.5f,
