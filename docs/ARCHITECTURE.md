@@ -226,7 +226,7 @@ Beautiful Quran” works for end users. Until then (and for no-app-name voice):
 
 | Path | Works today? | How |
 |---|---|---|
-| **Settings → Voice → Listen** | Yes | In-app speech: “continue”, “bookmarks”, “bookmark this”, `2:255` |
+| **Settings → Voice → Listen** | Yes | In-app speech: “open chapter 2”, “bookmark this”, “continue”, “bookmarks” |
 | **Pin / long-press shortcuts** | Yes | Continue & Bookmarks on the home screen / app long-press |
 | **Deep links / explicit actions** | Yes | `beautifulquran://continue` or `am start -a com.beautifulquran.action.CONTINUE` |
 | App Actions / Assistant Routines pasting App Action phrases | Only after Play review | `OPEN_APP_FEATURE` + `GET_THING` in `shortcuts.xml` |

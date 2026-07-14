@@ -310,6 +310,14 @@ fun ReaderScreen(
     val scrolledAyah = focusController.focusedAyah
     val scrolledAyahPosition = focusController.focusedPosition
 
+    // Keep last-read (and Assistant "bookmark this") on the verse under the
+    // reading line — not only jumps / playback, which previously left scroll
+    // position out of settings and bookmarked the wrong ayah.
+    LaunchedEffect(scrolledAyah.value, surahId) {
+        val ayah = scrolledAyah.value
+        if (ayah >= 1) viewModel.onAyahBecameActive(ayah)
+    }
+
     // While reciting, chrome recedes into the paper — the words and core
     // transport controls stay present. Read inside graphicsLayer / Canvas
     // draw blocks so the fade is draw-phase-only (docs/PERFORMANCE.md).

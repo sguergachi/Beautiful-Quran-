@@ -173,17 +173,17 @@ fun SettingsScreen(
     ) { result ->
         val spoken = result.data
             ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            ?.firstOrNull()
             .orEmpty()
-        val action = AssistantIntents.parseSpokenCommand(spoken)
+        val action = spoken.firstNotNullOfOrNull { AssistantIntents.parseSpokenCommand(it) }
         if (action != null) {
             voiceNote = null
             onVoiceAction(action)
         } else {
-            voiceNote = if (spoken.isBlank()) {
+            val heard = spoken.firstOrNull().orEmpty()
+            voiceNote = if (heard.isBlank()) {
                 "Didn't catch that — try again"
             } else {
-                "Heard “$spoken” — try continue, bookmarks, or 2:255"
+                "Heard “$heard” — try open chapter 2, bookmark this, or continue"
             }
         }
     }
@@ -1936,7 +1936,10 @@ private fun VoiceSection(
     onPin: (VoiceShortcut) -> Unit,
     onRun: (VoiceShortcut) -> Unit,
 ) {
-    Caption(VoiceRoutines.LISTEN_HINT)
+    Caption(
+        "Say open chapter 2, bookmark this, continue, or bookmarks. " +
+            "Works here without naming the app.",
+    )
     Spacer(Modifier.height(10.dp))
     Text(
         text = "Listen",

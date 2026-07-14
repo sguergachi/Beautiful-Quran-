@@ -54,5 +54,5 @@ object VoiceRoutines {
 
     /** Phrases the in-app listener understands (shown as a quiet hint). */
     const val LISTEN_HINT =
-        "Say continue, bookmarks, bookmark this, or a verse like 2:255"
+        "Say open chapter 2, bookmark this, continue, or bookmarks"
 }
