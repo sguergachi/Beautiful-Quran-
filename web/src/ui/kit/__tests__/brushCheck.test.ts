@@ -1,43 +1,44 @@
 import { describe, expect, it } from 'vitest'
 import {
-  BRUSH_CHECK_PAINT_MS,
-  BRUSH_CHECK_PARAMS,
+  BRUSH_CHECK_KNOB_KEYS,
   brushCheckPath,
+  formatBrushCheckCopy,
+  parseBrushCheckFromText,
+  SHIPPED_CHECK_PARAMS,
 } from '../brushCheck'
-import { SHIPPED_BRUSH_KNOBS, brushPressure } from '../brushMark'
 
-describe('brushCheckPath (shipped baseline brush check)', () => {
-  it('uses shipped brush knobs (not a separate style)', () => {
-    expect(BRUSH_CHECK_PARAMS.peakHalf).toBe(SHIPPED_BRUSH_KNOBS.peakHalf)
-    expect(BRUSH_CHECK_PARAMS.nibBias).toBe(SHIPPED_BRUSH_KNOBS.nibBias)
-    expect(BRUSH_CHECK_PARAMS.attack).toBe(SHIPPED_BRUSH_KNOBS.attack)
-    expect(BRUSH_CHECK_PARAMS.releaseStart).toBe(SHIPPED_BRUSH_KNOBS.releaseStart)
-    expect(BRUSH_CHECK_PARAMS.bodyAmp).toBe(SHIPPED_BRUSH_KNOBS.bodyAmp)
-    expect(BRUSH_CHECK_PARAMS.bodyFreq).toBe(SHIPPED_BRUSH_KNOBS.bodyFreq)
-    expect(BRUSH_CHECK_PARAMS.alpha).toBe(SHIPPED_BRUSH_KNOBS.alpha)
-    expect(BRUSH_CHECK_PAINT_MS).toBe(SHIPPED_BRUSH_KNOBS.paintMs)
-  })
-
-  it('shares pressure envelope with the circle brush', () => {
-    const t = 0.4
-    expect(brushPressure(t, BRUSH_CHECK_PARAMS)).toBe(
-      brushPressure(t, { ...SHIPPED_BRUSH_KNOBS, label: 'x' }),
-    )
+describe('brushCheckPath + lab params', () => {
+  it('ships all lab knobs', () => {
+    expect(BRUSH_CHECK_KNOB_KEYS).toHaveLength(15)
+    for (const k of BRUSH_CHECK_KNOB_KEYS) {
+      expect(SHIPPED_CHECK_PARAMS[k]).toBeTypeOf('number')
+    }
   })
 
   it('returns a closed filled path', () => {
-    const d = brushCheckPath(22, 1)
+    const d = brushCheckPath(22, 1, SHIPPED_CHECK_PARAMS)
     expect(d.startsWith('M')).toBe(true)
     expect(d.endsWith('Z')).toBe(true)
   })
 
-  it('grows as the brush paints the check', () => {
-    const early = brushCheckPath(22, 0.15)
-    const full = brushCheckPath(22, 1)
+  it('grows as the brush paints', () => {
+    const early = brushCheckPath(22, 0.15, SHIPPED_CHECK_PARAMS)
+    const full = brushCheckPath(22, 1, SHIPPED_CHECK_PARAMS)
     expect(early.length).toBeLessThan(full.length)
   })
 
-  it('is deterministic', () => {
-    expect(brushCheckPath(22, 0.6)).toBe(brushCheckPath(22, 0.6))
+  it('geometry knobs change the path', () => {
+    const a = brushCheckPath(22, 1, SHIPPED_CHECK_PARAMS)
+    const b = brushCheckPath(22, 1, { ...SHIPPED_CHECK_PARAMS, p1y: 0.9, peakHalf: 3.5 })
+    expect(a).not.toBe(b)
+  })
+
+  it('round-trips copy/paste', () => {
+    const custom = { ...SHIPPED_CHECK_PARAMS, p0x: 0.2, bodyAmp: 0.4, paintMs: 700 }
+    const text = formatBrushCheckCopy(custom)
+    const parsed = parseBrushCheckFromText(text)!
+    expect(parsed.p0x).toBeCloseTo(0.2, 5)
+    expect(parsed.bodyAmp).toBeCloseTo(0.4, 5)
+    expect(parsed.paintMs).toBe(700)
   })
 })

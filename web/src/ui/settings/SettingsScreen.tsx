@@ -13,6 +13,15 @@ import {
 import type { PlayerState } from '../../playback/player'
 import { settingsLayerFor, type StackLayer } from '../paper/stack'
 import {
+  BRUSH_CHECK_KNOB_SLIDERS,
+  formatBrushCheckCopy,
+  formatBrushCheckVerifyLines,
+  parseBrushCheckFromText,
+  SHIPPED_CHECK_PARAMS,
+  type BrushCheckKnobKey,
+  type BrushCheckParams,
+} from '../kit/brushCheck'
+import {
   BRUSH_CIRCLE_STYLE_IDS,
   BRUSH_KNOB_SLIDERS,
   brushCircleParams,
@@ -24,6 +33,7 @@ import {
   type BrushCircleParams,
   type BrushKnobKey,
 } from '../kit/brushMark'
+import { InkCheckMark } from '../kit/InkCheckMark'
 import { PaperChoiceList } from '../kit/PaperChoiceList'
 import { PaperSegmented } from '../kit/PaperSegmented'
 import { PaperSelect } from '../kit/PaperSelect'
@@ -98,17 +108,25 @@ export function SettingsScreen({
   const depth = Math.max(0, stackLayer - layer)
   const showReadingToggles = s.readingMode === 'arabic_english'
 
-  // Session-only live knobs for the brush lab (not persisted).
+  // Session-only live knobs for the brush labs (not persisted).
   const [brushParams, setBrushParams] = useState<BrushCircleParams>(() =>
     brushCircleParams(s.brushCircleStyle),
   )
+  const [checkParams, setCheckParams] = useState<BrushCheckParams>(() => ({
+    ...SHIPPED_CHECK_PARAMS,
+  }))
   const [paintToken, setPaintToken] = useState(0)
+  const [checkPaintToken, setCheckPaintToken] = useState(0)
+  const [checkPreviewOn, setCheckPreviewOn] = useState(true)
   /** Bumps when paste/reset/preset loads so Base UI sliders remount with exact values. */
   const [sliderEpoch, setSliderEpoch] = useState(0)
+  const [checkSliderEpoch, setCheckSliderEpoch] = useState(0)
   const [copyNote, setCopyNote] = useState<string | null>(null)
   const [presetsOpen, setPresetsOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
+  const [checkPasteText, setCheckPasteText] = useState('')
   const pasteRef = useRef<HTMLTextAreaElement>(null)
+  const checkPasteRef = useRef<HTMLTextAreaElement>(null)
   const lastStyleRef = useRef(s.brushCircleStyle)
   const lastShipRef = useRef(SHIPPED_BRUSH_REVISION)
 
@@ -137,6 +155,11 @@ export function SettingsScreen({
   const setKnob = (key: BrushKnobKey, value: number) => {
     setBrushParams((prev) => ({ ...prev, label: 'Custom', [key]: value }))
     setPaintToken((n) => n + 1)
+  }
+
+  const setCheckKnob = (key: BrushCheckKnobKey, value: number) => {
+    setCheckParams((prev) => ({ ...prev, [key]: value }))
+    setCheckPaintToken((n) => n + 1)
   }
 
   const loadPreset = (id: BrushCircleStyle) => {
@@ -231,6 +254,58 @@ export function SettingsScreen({
     flashNote(`Applied: ${formatBrushKnobsExact(parsed)}`)
   }
 
+  const copyCheckParams = async () => {
+    const text = formatBrushCheckCopy(checkParams)
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text)
+        flashNote('Copied check params')
+        return
+      } catch {
+        // fall through
+      }
+    }
+    if (copyTextRobust(text)) {
+      flashNote('Copied check params')
+      return
+    }
+    setCheckPasteText(text)
+    window.requestAnimationFrame(() => {
+      checkPasteRef.current?.focus()
+      checkPasteRef.current?.select()
+    })
+    flashNote('Selected in field — press ⌘/Ctrl+C')
+  }
+
+  const applyCheckPaste = (raw: string) => {
+    const parsed = parseBrushCheckFromText(raw, checkParams)
+    if (!parsed) {
+      flashNote('No check knobs found in paste')
+      return
+    }
+    setCheckParams(parsed)
+    setCheckPaintToken((n) => n + 1)
+    setCheckSliderEpoch((n) => n + 1)
+    setCheckPasteText(raw.trim())
+    flashNote('Applied check params')
+  }
+
+  const pasteCheckFromClipboard = async () => {
+    if (navigator.clipboard?.readText) {
+      try {
+        const text = await navigator.clipboard.readText()
+        if (text.trim()) {
+          applyCheckPaste(text)
+          return
+        }
+      } catch {
+        // fall through
+      }
+    }
+    flashNote('Paste into the check field below, then Apply')
+    checkPasteRef.current?.focus()
+  }
+
   const pasteFromClipboard = async () => {
     if (navigator.clipboard?.readText) {
       try {
@@ -310,12 +385,16 @@ export function SettingsScreen({
               id="setting-gloss"
               label="Word-by-word translation"
               checked={s.showWordGloss}
+              checkParams={checkParams}
+              paintToken={checkPaintToken}
               onChange={(checked) => appStore.updateSettings({ showWordGloss: checked })}
             />
             <PaperSwitch
               id="setting-translit"
               label="Transliteration"
               checked={s.showTransliteration}
+              checkParams={checkParams}
+              paintToken={checkPaintToken}
               onChange={(checked) =>
                 appStore.updateSettings({ showTransliteration: checked })
               }
@@ -324,6 +403,8 @@ export function SettingsScreen({
               id="setting-translation"
               label="Ayah translation"
               checked={s.showTranslation}
+              checkParams={checkParams}
+              paintToken={checkPaintToken}
               onChange={(checked) =>
                 appStore.updateSettings({ showTranslation: checked })
               }
@@ -398,6 +479,8 @@ export function SettingsScreen({
             id="setting-developer"
             label="Developer mode"
             checked={s.developerMode}
+            checkParams={checkParams}
+            paintToken={checkPaintToken}
             onChange={(checked) => appStore.updateSettings({ developerMode: checked })}
           />
           {s.developerMode ? (
@@ -532,6 +615,107 @@ export function SettingsScreen({
                     {copyNote}
                   </p>
                 ) : null}
+              </div>
+
+              <div className="settings-subfield">
+                <p className="settings-sublabel">Ink check mark</p>
+                <div className="check-lab-preview">
+                  <button
+                    type="button"
+                    className="settings-dev-link"
+                    onClick={() => {
+                      setCheckPreviewOn((v) => !v)
+                      setCheckPaintToken((n) => n + 1)
+                    }}
+                  >
+                    {checkPreviewOn ? 'Preview on' : 'Preview off'} — tap to toggle
+                  </button>
+                  <InkCheckMark
+                    checked={checkPreviewOn}
+                    params={checkParams}
+                    paintToken={checkPaintToken}
+                  />
+                </div>
+                <div className="brush-lab-sliders">
+                  {BRUSH_CHECK_KNOB_SLIDERS.map((spec) => (
+                    <PaperSlider
+                      key={`${spec.key}-${checkSliderEpoch}`}
+                      id={`check-${spec.key}`}
+                      label={spec.label}
+                      value={checkParams[spec.key]}
+                      min={spec.min}
+                      max={spec.max}
+                      step={spec.step}
+                      format={spec.format}
+                      onChange={(v) => setCheckKnob(spec.key, v)}
+                    />
+                  ))}
+                </div>
+                <pre className="brush-lab-verify" aria-live="polite">
+                  {formatBrushCheckVerifyLines(checkParams)}
+                </pre>
+                <div className="brush-lab-actions">
+                  <button
+                    type="button"
+                    className="settings-dev-link"
+                    onClick={() => {
+                      setCheckParams({ ...SHIPPED_CHECK_PARAMS })
+                      setCheckPaintToken((n) => n + 1)
+                      setCheckSliderEpoch((n) => n + 1)
+                    }}
+                  >
+                    Reset check
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-dev-link"
+                    onClick={() => {
+                      setCheckPreviewOn(true)
+                      setCheckPaintToken((n) => n + 1)
+                    }}
+                  >
+                    Replay paint
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-dev-link"
+                    onClick={() => void copyCheckParams()}
+                  >
+                    Copy values
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-dev-link"
+                    onClick={() => void pasteCheckFromClipboard()}
+                  >
+                    Paste values
+                  </button>
+                </div>
+                <textarea
+                  ref={checkPasteRef}
+                  className="brush-lab-paste"
+                  rows={4}
+                  spellCheck={false}
+                  placeholder="Paste check params here (TS or Kotlin), then Apply…"
+                  value={checkPasteText}
+                  onChange={(e) => setCheckPasteText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                      e.preventDefault()
+                      applyCheckPaste(checkPasteText)
+                    }
+                  }}
+                />
+                <div className="brush-lab-actions">
+                  <button
+                    type="button"
+                    className="settings-dev-link"
+                    disabled={!checkPasteText.trim()}
+                    onClick={() => applyCheckPaste(checkPasteText)}
+                  >
+                    Apply paste
+                  </button>
+                </div>
               </div>
             </>
           ) : null}
