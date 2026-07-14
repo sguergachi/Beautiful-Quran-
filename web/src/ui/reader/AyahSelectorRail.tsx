@@ -288,20 +288,30 @@ export const AyahSelectorRail = forwardRef<AyahSelectorRailHandle, Props>(
         const thickness = MIN_THICKNESS + (MAX_THICKNESS - MIN_THICKNESS) * focus
         const alpha = (0.1 + 0.62 * focus) * arrival * edgeFade
         const isSelected = ayah === selectedAyah
+        const isBookmarked = bookmarkedAyahs?.has(ayah) ?? false
         const bar = railTickBarRect(layout, side, length, thickness)
 
+        // Gold = dial focus; ruby = saved verse; ink = ordinary tick.
         ctx.beginPath()
         roundRect(ctx, bar.x, y - thickness / 2, bar.width, thickness, thickness)
         ctx.fillStyle = isSelected
           ? withAlpha(gold, 0.96 * arrival)
-          : withAlpha(ink, alpha)
+          : isBookmarked
+            ? withAlpha(ruby, (0.55 + 0.35 * focus) * arrival * edgeFade)
+            : withAlpha(ink, alpha)
         ctx.fill()
 
-        if (isSelected || (major && focus > 0.35)) {
+        if (isSelected || isBookmarked || (major && focus > 0.35)) {
           const labelAlpha = isSelected
             ? 0.95 * arrival
-            : (0.18 + 0.46 * focus) * arrival * edgeFade
-          ctx.fillStyle = isSelected ? withAlpha(gold, labelAlpha) : withAlpha(ink, labelAlpha)
+            : isBookmarked
+              ? (0.4 + 0.5 * focus) * arrival * edgeFade
+              : (0.18 + 0.46 * focus) * arrival * edgeFade
+          ctx.fillStyle = isSelected
+            ? withAlpha(gold, labelAlpha)
+            : isBookmarked
+              ? withAlpha(ruby, labelAlpha)
+              : withAlpha(ink, labelAlpha)
           ctx.font = isSelected
             ? '700 11px "EB Garamond", "Times New Roman", serif'
             : '600 8.5px "EB Garamond", "Times New Roman", serif'

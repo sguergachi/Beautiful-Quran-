@@ -1723,13 +1723,19 @@ select {
   text-align: right;
 }
 
-/* Arabic-only continuous line: middle-align the smaller mark to the glyphs. */
+/*
+ * Arabic-only continuous line: share the Hafs word baseline (Android
+ * ResponsiveHafsAyah — smaller SpanStyle in the same AnnotatedString).
+ * A tall middle-aligned box was wrong here: it parks the ornament low
+ * relative to the glyph bodies. Gloss mode still uses a fixed Arabic-line
+ * box because word columns include gloss rows.
+ */
 .hafs-ayah > .ayah-mark {
-  display: inline-flex;
-  align-items: center;
-  vertical-align: middle;
-  /* Parent body size × line-height — mark keeps its own smaller font-size. */
-  height: calc(1.85rem * var(--font-scale, 1) * 2);
+  display: inline-block;
+  vertical-align: baseline;
+  line-height: 1;
+  /* Hafs' ornament sits low inside its reported line box — lift paint only. */
+  transform: translateY(-0.22em);
 }
 
 @media (hover: hover) {
@@ -3440,10 +3446,6 @@ select {
 
   .hafs-ayah {
     font-size: calc(1.65rem * var(--font-scale, 1));
-  }
-
-  .hafs-ayah > .ayah-mark {
-    height: calc(1.65rem * var(--font-scale, 1) * 2);
   }
 
   .player-bar {
