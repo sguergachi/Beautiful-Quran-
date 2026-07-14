@@ -80,6 +80,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.BuildConfig
 import com.beautifulquran.R
+import com.beautifulquran.assistant.VoiceRoutine
+import com.beautifulquran.assistant.VoiceRoutines
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.BrushCircleStyle
 import com.beautifulquran.data.HomeBookmarkStyle
@@ -154,6 +156,7 @@ fun SettingsScreen(
     var paintToken by remember { mutableIntStateOf(0) }
     var checkPaintToken by remember { mutableIntStateOf(0) }
     var copyNote by remember { mutableStateOf<String?>(null) }
+    var voiceCopyNote by remember { mutableStateOf<String?>(null) }
     // Only reseed when the preset or shipped BASE revision actually changes —
     // never wipe a live paste / slider edit on unrelated recomposition.
     // Ship bumps always load baseline (not Hairline's bodyAmp 0.12, etc.).
@@ -300,6 +303,18 @@ fun SettingsScreen(
                     trailing = { ThemeColorPreview(mode = mode) },
                 )
             }
+
+            Section("Voice")
+            VoiceRoutinesSection(
+                copyNote = voiceCopyNote,
+                onCopyAction = { routine ->
+                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    cm.setPrimaryClip(
+                        ClipData.newPlainText("Assistant routine action", routine.routineAction),
+                    )
+                    voiceCopyNote = "Copied action for “${routine.say}”"
+                },
+            )
 
             if (settings.developerModeEnabled) {
                 Spacer(Modifier.height(44.dp))
@@ -1837,6 +1852,44 @@ private val ThemeMode.label: String
         ThemeMode.DARK -> "Nightfall"
         ThemeMode.ROYAL_GREEN -> "Royal green"
     }
+
+// ── Voice / Assistant Routines ─────────────────────────────────────────────
+
+/**
+ * How to speak short phrases without naming the app: Google Assistant Routines
+ * run the full App Action (which includes the app name) behind a custom starter.
+ */
+@Composable
+private fun VoiceRoutinesSection(
+    copyNote: String?,
+    onCopyAction: (VoiceRoutine) -> Unit,
+) {
+    Caption(
+        "Google Home → Routines → New. Starter: the short phrase. " +
+            "Action → Try adding your own → paste (tap a row to copy).",
+    )
+    Spacer(Modifier.height(12.dp))
+    VoiceRoutines.all.forEach { routine ->
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .quietClickable { onCopyAction(routine) }
+                .padding(vertical = 10.dp),
+        ) {
+            Text(
+                text = "“${routine.say}”",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(2.dp))
+            Caption(routine.does)
+        }
+    }
+    if (copyNote != null) {
+        Spacer(Modifier.height(4.dp))
+        Caption(copyNote)
+    }
+}
 
 // ── Quiet typographic helpers ──────────────────────────────────────────────
 

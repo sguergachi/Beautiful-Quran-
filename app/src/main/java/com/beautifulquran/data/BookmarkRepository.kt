@@ -66,6 +66,21 @@ class BookmarkRepository(context: Context) {
         return !already
     }
 
+    /**
+     * Ensures the verse is bookmarked without ever removing it.
+     * Returns `true` when a new bookmark was written (idempotent for Assistant
+     * "save bookmark" so a second request never unmarks).
+     */
+    fun ensure(surahId: Int, ayah: Int): Boolean {
+        if (surahId < 1 || ayah < 1) return false
+        if (isBookmarked(surahId, ayah)) return false
+        val next = (_bookmarks.value + Bookmark(surahId, ayah, System.currentTimeMillis()))
+            .sortedWith(byPosition)
+        _bookmarks.value = next
+        prefs.edit { putStringSet(KEY, next.map(::encode).toSet()) }
+        return true
+    }
+
     companion object {
         private const val KEY = "bookmarks"
 

@@ -5,4 +5,15 @@
     <string name="notification_permission_message">Allow notifications so you can pause, resume, and skip recitation from the lock screen or while using other apps.</string>
     <string name="notification_permission_allow">Allow</string>
     <string name="notification_permission_not_now">Not now</string>
+
+    <!-- Launcher / App Actions shortcuts -->
+    <string name="shortcut_continue_short">Continue</string>
+    <string name="shortcut_continue_long">Continue last read verse</string>
+    <string name="shortcut_bookmarks_short">Bookmarks</string>
+    <string name="shortcut_bookmarks_long">Open saved verses</string>
+    <string name="shortcut_save_bookmark_short">Save bookmark</string>
+    <string name="shortcut_save_bookmark_long">Bookmark the current verse</string>
+    <string name="shortcut_verse_short">Verse</string>
+    <string name="shortcut_verse_long">Open a verse</string>
 </resources>
+

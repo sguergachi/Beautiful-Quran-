@@ -1,5 +1,6 @@
 package com.beautifulquran
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.compose.BackHandler
@@ -54,6 +55,8 @@ import androidx.compose.ui.zIndex
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.beautifulquran.assistant.AssistantAction
+import com.beautifulquran.assistant.AssistantIntents
 import com.beautifulquran.data.HomeBookmarkStyle
 import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.AppViewModelFactory
@@ -87,6 +90,7 @@ import com.beautifulquran.ui.theme.TimingsLabAccents
 import com.beautifulquran.ui.theme.absorbPointerEvents
 import com.beautifulquran.ui.theme.contrastingOverlayColorScheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -101,21 +105,32 @@ private const val ROOT_RETURN_DISMISS_MS = 30_000L
 
 class MainActivity : ComponentActivity() {
 
+    /** Assistant / deep-link / Routine actions waiting for the paper stack. */
+    private val pendingAssistantAction = MutableStateFlow<AssistantAction?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        pendingAssistantAction.value = AssistantIntents.parse(intent)
 
         val app = application as QuranApp
 
         setContent {
             val settings by app.settings.settings.collectAsStateWithLifecycle()
+            val assistantAction by pendingAssistantAction.collectAsStateWithLifecycle()
             val systemDark = isSystemInDarkTheme()
             val usesNightfall = settings.themeMode == ThemeMode.DARK ||
                 (settings.themeMode == ThemeMode.SYSTEM && systemDark)
             // The entrance ceremony plays once per cold start; saveable so a
-            // rotation or process-restore never replays it mid-session.
-            var entranceDone by rememberSaveable { mutableStateOf(false) }
+            // rotation or process-restore never replays it mid-session. Deep
+            // links / Routines skip it so the user lands on the target.
+            var entranceDone by rememberSaveable {
+                mutableStateOf(AssistantIntents.parse(intent) != null)
+            }
+            LaunchedEffect(assistantAction) {
+                if (assistantAction != null) entranceDone = true
+            }
 
             SideEffect {
                 val statusBarStyle = if (usesNightfall || !entranceDone) {
@@ -143,6 +158,8 @@ class MainActivity : ComponentActivity() {
                     developerModeEnabled = settings.developerModeEnabled,
                     homeBookmarkStyle = settings.homeBookmarkStyle,
                     entranceVisible = !entranceDone,
+                    pendingAssistantAction = assistantAction,
+                    onAssistantActionConsumed = { pendingAssistantAction.value = null },
                     onRecordSystemTrace = {
                         DevProfiling.recordSystemTrace(this@MainActivity)
                     },
@@ -153,6 +170,12 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingAssistantAction.value = AssistantIntents.parse(intent)
     }
 
     private companion object {
@@ -177,9 +200,12 @@ private fun PaperStackApp(
     developerModeEnabled: Boolean,
     homeBookmarkStyle: HomeBookmarkStyle,
     entranceVisible: Boolean,
+    pendingAssistantAction: AssistantAction? = null,
+    onAssistantActionConsumed: () -> Unit = {},
     onRecordSystemTrace: () -> Unit,
     onEntranceFinished: () -> Unit,
 ) {
+    val app = LocalContext.current.applicationContext as QuranApp
     val homeViewModel: HomeViewModel = viewModel(factory = AppViewModelFactory)
     val bookmarksViewModel: BookmarksViewModel = viewModel(factory = AppViewModelFactory)
     val readerViewModel: ReaderViewModel = viewModel(factory = AppViewModelFactory)
@@ -187,6 +213,7 @@ private fun PaperStackApp(
     val timingsLabViewModel: TimingsLabViewModel = viewModel(factory = AppViewModelFactory)
     val ornamentsLabViewModel: OrnamentsLabViewModel = viewModel(factory = AppViewModelFactory)
     val rootViewerViewModel: RootViewerViewModel = viewModel(factory = AppViewModelFactory)
+    val settings by app.settings.settings.collectAsStateWithLifecycle()
     val bookmarkCount by bookmarksViewModel.bookmarkCount.collectAsStateWithLifecycle()
 
     var selectedSurahId by rememberSaveable { mutableIntStateOf(0) }
@@ -275,6 +302,50 @@ private fun PaperStackApp(
 
     fun animateTo(layer: Int) {
         scope.launch { settleTo(layer) }
+    }
+
+    fun openVerseFromAssistant(surahId: Int, ayah: Int) {
+        if (surahId !in 1..114) return
+        if (surahId != selectedSurahId) readerViewModel.load(surahId)
+        selectedSurahId = surahId
+        selectedStartAyah = ayah.coerceAtLeast(1)
+        selectedStartWord = 0
+        jumpEpoch++
+        animateTo(AYAH_LAYER)
+    }
+
+    // Deep links, App Actions, and Assistant Routines land here once the stack is up.
+    LaunchedEffect(pendingAssistantAction) {
+        val action = pendingAssistantAction ?: return@LaunchedEffect
+        when (action) {
+            is AssistantAction.OpenVerse -> {
+                openVerseFromAssistant(action.surahId, action.ayah)
+            }
+            AssistantAction.OpenBookmarks -> {
+                if (bookmarkCount > 0) {
+                    animateTo(BOOKMARKS_LAYER)
+                } else {
+                    animateTo(COVER_LAYER)
+                }
+            }
+            AssistantAction.ContinueReading -> {
+                val surah = settings.lastSurah
+                if (surah in 1..114) {
+                    openVerseFromAssistant(surah, settings.lastAyah.coerceAtLeast(1))
+                } else {
+                    animateTo(COVER_LAYER)
+                }
+            }
+            AssistantAction.SaveBookmark -> {
+                val surah = settings.lastSurah
+                val ayah = settings.lastAyah.coerceAtLeast(1)
+                if (surah in 1..114) {
+                    app.bookmarks.ensure(surah, ayah)
+                    openVerseFromAssistant(surah, ayah)
+                }
+            }
+        }
+        onAssistantActionConsumed()
     }
 
     LaunchedEffect(bookmarkCount) {
