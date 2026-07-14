@@ -54,7 +54,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -86,6 +88,10 @@ private enum class EntrancePhase { Arriving, Dua, Opening }
 /** أعوذ بالله من الشيطان الرجيم — shown in text before the cover opens. */
 private const val ISTIADHA_ARABIC = "أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَٰنِ ٱلرَّجِيمِ"
 private const val ISTIADHA_ENGLISH = "I seek refuge in Allah from Shaytan, the accursed"
+
+/** Isti'adha type size — shared by the rendered line and the width measure
+ *  that sizes the cover's fore-edge margin so the du'a stays inside the frame. */
+private const val DUA_ARABIC_SP = 24f
 
 /** The sheet breathing in from the system splash. */
 private const val SHEET_FADE_MS = 550
@@ -185,24 +191,45 @@ fun EntranceCover(
         )
     }
 
+    // The isti'adha is the widest thing the frame must enclose, so measure it
+    // once and let the fore-edge margin answer to it: the inner gilt rule has
+    // to clear the du'a line (both are centred on the screen) with a small
+    // gap, or the Arabic runs over the border frieze.
+    val configuration = LocalConfiguration.current
+    val textMeasurer = rememberTextMeasurer()
+    val duaWidthPx = remember(textMeasurer, localDensity.density) {
+        textMeasurer.measure(
+            text = ISTIADHA_ARABIC,
+            style = TextStyle(fontFamily = HafsFontFamily, fontSize = DUA_ARABIC_SP.sp),
+        ).size.width.toFloat()
+    }
+
     // The leather board bleeds to the physical edge, but its gilt frame and
     // ornaments must clear the camera cutout and the system-bar zones — a
     // tooled cover never runs its rule under the lens. Pull the frame in with
     // a book's proportions: generous head and foot margins, tighter
-    // fore-edges, each side floored at a base margin and grown to clear any
-    // safe inset on that edge. The result reads as a bound cover, not a thin
-    // rectangle hugging the screen.
+    // fore-edges. Each side is floored to clear its safe inset; the fore-edge
+    // then only widens (never past the base margin) as far as it must to seat
+    // the du'a inside the inner rule.
     val layoutDirection = LocalLayoutDirection.current
     val safeInsets = WindowInsets.displayCutout.union(WindowInsets.systemBars)
     val (frameMarginH, frameMarginV) = with(localDensity) {
         val breathing = 8.dp.toPx()
         val baseH = 26.dp.toPx()
         val baseV = 56.dp.toPx()
-        val h = maxOf(
-            baseH,
+        val floorH = maxOf(
+            10.dp.toPx(),
             safeInsets.getLeft(this, layoutDirection) + breathing,
             safeInsets.getRight(this, layoutDirection) + breathing,
-        ).toDp()
+        )
+        // Largest fore-edge margin at which the inner rule still clears the
+        // du'a: screenHalf − duaHalf − gap − (inner rule's inset in the box).
+        val duaGap = 14.dp.toPx()
+        val allowH = configuration.screenWidthDp.dp.toPx() / 2f -
+            duaWidthPx / 2f - duaGap - frameGeometry.innerInsetPx
+        // Never past the base margin, never under the safe-inset floor — the
+        // floor wins if a side cutout ever demands more than the base.
+        val h = allowH.coerceAtMost(baseH).coerceAtLeast(floorH).toDp()
         val v = maxOf(
             baseV,
             safeInsets.getTop(this) + breathing,
@@ -429,7 +456,7 @@ fun EntranceCover(
                     Text(
                         text = ISTIADHA_ARABIC,
                         fontFamily = HafsFontFamily,
-                        fontSize = 24.sp,
+                        fontSize = DUA_ARABIC_SP.sp,
                         lineHeight = 1.9.em,
                         textAlign = TextAlign.Center,
                         color = CoverParchment,
