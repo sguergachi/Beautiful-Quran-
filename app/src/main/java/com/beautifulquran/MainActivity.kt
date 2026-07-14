@@ -145,7 +145,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     when (settings.themeMode) {
                         ThemeMode.ROYAL_GREEN -> SystemBarStyle.dark(Color.TRANSPARENT)
-                        else -> SystemBarStyle.dark(Color.BLACK)
+                        else -> SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
                     }
                 }
                 enableEdgeToEdge(statusBarStyle = statusBarStyle)
