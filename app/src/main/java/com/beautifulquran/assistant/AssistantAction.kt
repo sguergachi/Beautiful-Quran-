@@ -4,41 +4,32 @@ import android.content.Intent
 import android.net.Uri
 
 /**
- * Actions Google Assistant (and deep links / launcher shortcuts) can ask the
- * app to perform. Parsing is pure so JVM unit tests cover the contract without
- * Compose or Activity plumbing.
+ * Actions the reader can fulfill from deep links, launcher shortcuts, in-app
+ * voice, or (after Play review) Google App Actions.
  */
 sealed class AssistantAction {
-    /** Open the reader at [surahId]:[ayah]. */
     data class OpenVerse(val surahId: Int, val ayah: Int) : AssistantAction()
-
-    /** Reveal the bookmarks index sheet. */
     data object OpenBookmarks : AssistantAction()
-
-    /** Resume the last-read verse (settings `lastSurah` / `lastAyah`). */
     data object ContinueReading : AssistantAction()
-
-    /** Bookmark the currently selected / last-read verse. */
     data object SaveBookmark : AssistantAction()
 }
 
 /**
- * Intent extras, deep-link scheme, and feature ids shared with
- * `res/xml/shortcuts.xml` App Actions inventory.
+ * Intent extras, schemes, and feature ids shared with `shortcuts.xml`.
  */
 object AssistantIntents {
     const val SCHEME = "beautifulquran"
 
-    /** OPEN_APP_FEATURE → Intent extra key for the matched feature inventory id. */
+    const val ACTION_CONTINUE = "com.beautifulquran.action.CONTINUE"
+    const val ACTION_BOOKMARKS = "com.beautifulquran.action.OPEN_BOOKMARKS"
+    const val ACTION_SAVE_BOOKMARK = "com.beautifulquran.action.SAVE_BOOKMARK"
+    const val ACTION_OPEN_VERSE = "com.beautifulquran.action.OPEN_VERSE"
+
     const val EXTRA_FEATURE = "feature"
-
-    /** GET_THING → Intent extra key for the spoken search string. */
     const val EXTRA_QUERY = "q"
-
     const val EXTRA_SURAH = "surah"
     const val EXTRA_AYAH = "ayah"
 
-    /** Inventory / deep-link feature ids (must match `shortcutId`s in shortcuts.xml). */
     const val FEATURE_CONTINUE = "continue"
     const val FEATURE_BOOKMARKS = "bookmarks"
     const val FEATURE_SAVE_BOOKMARK = "save_bookmark"
@@ -51,12 +42,12 @@ object AssistantIntents {
         RegexOption.IGNORE_CASE,
     )
 
-    /** Resolves an [Intent] from Assistant, a deep link, or an explicit extra. */
     fun parse(intent: Intent?): AssistantAction? {
         if (intent == null) return null
+        parseAction(intent.action)?.let { return it }
         intent.dataString?.let { parseDeepLink(it) }?.let { return it }
         parseFeature(intent.getStringExtra(EXTRA_FEATURE))?.let { return it }
-        intent.getStringExtra(EXTRA_QUERY)?.let { parseVerseQuery(it) }?.let { return it }
+        intent.getStringExtra(EXTRA_QUERY)?.let { parseSpokenCommand(it) }?.let { return it }
         val surah = intent.getIntExtra(EXTRA_SURAH, 0)
         if (surah in 1..114) {
             val ayah = intent.getIntExtra(EXTRA_AYAH, 1).coerceAtLeast(1)
@@ -65,15 +56,19 @@ object AssistantIntents {
         return null
     }
 
-    /** Deep-link entry for Android [Uri]s (manifest / App Actions). */
     fun parseData(uri: Uri?): AssistantAction? = uri?.toString()?.let(::parseDeepLink)
+
+    fun parseAction(action: String?): AssistantAction? = when (action) {
+        ACTION_CONTINUE -> AssistantAction.ContinueReading
+        ACTION_BOOKMARKS -> AssistantAction.OpenBookmarks
+        ACTION_SAVE_BOOKMARK -> AssistantAction.SaveBookmark
+        ACTION_OPEN_VERSE -> null // needs surah/ayah extras
+        else -> null
+    }
 
     /**
      * Deep links: `beautifulquran://continue`, `…/bookmarks`, `…/bookmark/save`,
      * `…/verse/2/255`, `…/verse?surah=2&ayah=255`.
-     *
-     * String-based (not `java.net.URI`) so ids like `save_bookmark` work —
-     * underscores are illegal in URI hostnames but fine in our custom scheme.
      */
     fun parseDeepLink(uriString: String): AssistantAction? {
         val raw = uriString.trim()
@@ -109,16 +104,37 @@ object AssistantIntents {
         FEATURE_SAVE_BOOKMARK, "save bookmark", "bookmark verse", "save verse",
         "mark verse", "add bookmark",
         -> AssistantAction.SaveBookmark
-        FEATURE_VERSE -> null // needs surah/ayah from other extras or query
-        else -> parseVerseQuery(feature)
+        FEATURE_VERSE -> null
+        else -> parseSpokenCommand(feature)
     }
 
-    /** Interprets a free-form verse reference from GET_THING or spoken feature text. */
-    fun parseVerseQuery(raw: String): AssistantAction.OpenVerse? {
-        val q = raw.trim()
+    /**
+     * Free-form phrases from in-app speech (or GET_THING). Accepts command words
+     * and verse refs — no app name required because the user is already here.
+     */
+    fun parseSpokenCommand(raw: String): AssistantAction? {
+        val q = normalizeSpoken(raw)
         if (q.isEmpty()) return null
 
-        // `2:255` / `2:`
+        when {
+            q.matches(Regex("""^(continue|resume|continue reading|continue listening|last read|where i left off)$""")) ->
+                return AssistantAction.ContinueReading
+            q.matches(Regex("""^(bookmarks?|saved( passages| verses)?|marked verses|open bookmarks?)$""")) ->
+                return AssistantAction.OpenBookmarks
+            q.matches(
+                Regex(
+                    """^(save( a)? bookmark|bookmark( this)?( verse)?|save( this)? verse|mark( this)? verse|add bookmark)$""",
+                ),
+            ) -> return AssistantAction.SaveBookmark
+        }
+
+        return parseVerseQuery(q)
+    }
+
+    fun parseVerseQuery(raw: String): AssistantAction.OpenVerse? {
+        val q = normalizeSpoken(raw)
+        if (q.isEmpty()) return null
+
         val colon = q.indexOf(':')
         if (colon > 0) {
             val surah = q.substring(0, colon).trim().toIntOrNull() ?: return null
@@ -133,10 +149,15 @@ object AssistantIntents {
             return openVerseOrNull(surah, ayah)
         }
 
-        // Bare surah number → chapter opening.
         q.toIntOrNull()?.let { return openVerseOrNull(it, 1) }
         return null
     }
+
+    private fun normalizeSpoken(raw: String): String =
+        raw.trim()
+            .lowercase()
+            .replace(Regex("[\"'“”]"), "")
+            .replace(Regex("\\s+"), " ")
 
     private fun parseVerseRoute(route: String, rawQuery: String?): AssistantAction.OpenVerse? {
         val match = pathVerse.matchEntire(route) ?: return null
@@ -153,9 +174,7 @@ object AssistantIntents {
         return raw.split('&').mapNotNull { pair ->
             val eq = pair.indexOf('=')
             if (eq <= 0) return@mapNotNull null
-            val key = pair.substring(0, eq)
-            val value = pair.substring(eq + 1)
-            key to value
+            pair.substring(0, eq) to pair.substring(eq + 1)
         }.toMap()
     }
 

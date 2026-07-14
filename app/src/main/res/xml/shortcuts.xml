@@ -1,20 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  App Actions + static launcher shortcuts.
+  Launcher long-press shortcuts + App Actions capabilities.
 
-  Capabilities map Google Assistant built-in intents to MainActivity.
-  Inventory shortcuts (enabled=false) supply OPEN_APP_FEATURE feature names;
-  enabled shortcuts also appear on long-press of the launcher icon.
-
-  OPEN_APP_FEATURE lists a foreground intent first: while MainActivity is on
-  screen, Assistant matches without the app name ("Open bookmarks", "Continue
-  reading"). Background / cold start still needs "... on Beautiful Quran".
+  Deep-link / explicit-action intents work immediately.
+  OPEN_APP_FEATURE / GET_THING only work after Play App Actions review
+  (or the App Actions test-tool preview).
 -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- In-app search / open a verse by reference.
-         GET_THING does not support foreground invocation — cold start only
-         with app name: "search for 2:255 on Beautiful Quran". -->
     <capability android:name="actions.intent.GET_THING">
         <intent
             android:action="android.intent.action.VIEW"
@@ -26,9 +19,7 @@
         </intent>
     </capability>
 
-    <!-- Named features: continue, bookmarks, save bookmark. -->
     <capability android:name="actions.intent.OPEN_APP_FEATURE">
-        <!-- Foreground first: no app name while MainActivity is open. -->
         <intent
             android:action="android.intent.action.VIEW"
             android:targetPackage="com.beautifulquran"
@@ -40,7 +31,6 @@
                 android:key="requiredForegroundActivity"
                 android:value="com.beautifulquran/com.beautifulquran.MainActivity" />
         </intent>
-        <!-- Background / cold start: "... on Beautiful Quran". -->
         <intent
             android:action="android.intent.action.VIEW"
             android:targetPackage="com.beautifulquran"
@@ -51,7 +41,6 @@
         </intent>
     </capability>
 
-    <!-- Inline inventory for OPEN_APP_FEATURE (Assistant matches spoken names). -->
     <shortcut
         android:shortcutId="continue"
         android:enabled="true"
@@ -59,7 +48,7 @@
         android:shortcutShortLabel="@string/shortcut_continue_short"
         android:shortcutLongLabel="@string/shortcut_continue_long">
         <intent
-            android:action="android.intent.action.VIEW"
+            android:action="com.beautifulquran.action.CONTINUE"
             android:targetPackage="com.beautifulquran"
             android:targetClass="com.beautifulquran.MainActivity"
             android:data="beautifulquran://continue" />
@@ -77,7 +66,7 @@
         android:shortcutShortLabel="@string/shortcut_bookmarks_short"
         android:shortcutLongLabel="@string/shortcut_bookmarks_long">
         <intent
-            android:action="android.intent.action.VIEW"
+            android:action="com.beautifulquran.action.OPEN_BOOKMARKS"
             android:targetPackage="com.beautifulquran"
             android:targetClass="com.beautifulquran.MainActivity"
             android:data="beautifulquran://bookmarks" />
@@ -94,7 +83,7 @@
         android:shortcutShortLabel="@string/shortcut_save_bookmark_short"
         android:shortcutLongLabel="@string/shortcut_save_bookmark_long">
         <intent
-            android:action="android.intent.action.VIEW"
+            android:action="com.beautifulquran.action.SAVE_BOOKMARK"
             android:targetPackage="com.beautifulquran"
             android:targetClass="com.beautifulquran.MainActivity"
             android:data="beautifulquran://bookmark/save" />
