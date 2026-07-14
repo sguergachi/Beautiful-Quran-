@@ -1,6 +1,7 @@
 export { PaperSelect } from './PaperSelect'
 export type { PaperSelectOption } from './PaperSelect'
 export { PaperSwitch } from './PaperSwitch'
+export { InkCheckMark } from './InkCheckMark'
 export { PaperSlider } from './PaperSlider'
 export { PaperInput } from './PaperInput'
 export { PaperSegmented } from './PaperSegmented'

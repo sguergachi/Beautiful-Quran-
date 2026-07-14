@@ -40,9 +40,12 @@ type Props = {
   /** Replays the existing physical unfurl when this value changes above zero. */
   unfurlSignal?: number
   /** Geometry overrides for the same ribbon on taller non-verse sheets. */
+  edgeInset?: number
   topInset?: number
   bottomGap?: number
   ariaLabel?: string
+  /** Paint-only use inside a larger navigation target. */
+  decorative?: boolean
 }
 
 function parseRuby(cssColor: string): { r: number; g: number; b: number } {
@@ -73,9 +76,11 @@ export function VerseBookmarkRibbon({
   animateOnTap = true,
   onToggle,
   unfurlSignal = 0,
+  edgeInset = EDGE_INSET,
   topInset = TOP_INSET,
   bottomGap = BOTTOM_GAP,
   ariaLabel,
+  decorative = false,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLButtonElement>(null)
@@ -118,9 +123,9 @@ export function VerseBookmarkRibbon({
     const mirrored = side === 'right'
     const ax = (logicalX: number) => (mirrored ? cssW - logicalX : logicalX)
 
-    const outer = EDGE_INSET
-    const inner = EDGE_INSET + RIBBON_WIDTH
-    const center = EDGE_INSET + RIBBON_WIDTH / 2
+    const outer = edgeInset
+    const inner = edgeInset + RIBBON_WIDTH
+    const center = edgeInset + RIBBON_WIDTH / 2
     const retractedTipY = topInset + NUB_LENGTH
     const fullLen = Math.max(retractedTipY, h - bottomGap)
 
@@ -238,7 +243,7 @@ export function VerseBookmarkRibbon({
       }
       ctx.restore()
     }
-  }, [bookmarked, hovered, ribbonFocused, side, topInset, bottomGap])
+  }, [bookmarked, hovered, ribbonFocused, side, edgeInset, topInset, bottomGap])
 
   // Keep bookmark and playback-ink colors in sync with theme tokens.
   useEffect(() => {
@@ -397,8 +402,14 @@ export function VerseBookmarkRibbon({
       data-on={bookmarked || unfurl.current > 0.5 ? 'true' : 'false'}
       data-focused={focused ? 'true' : 'false'}
       data-hovered={hovered || ribbonFocused ? 'true' : 'false'}
-      aria-label={ariaLabel ?? (bookmarked ? 'Remove bookmark' : 'Bookmark verse')}
-      aria-pressed={bookmarked}
+      aria-label={
+        decorative
+          ? undefined
+          : ariaLabel ?? (bookmarked ? 'Remove bookmark' : 'Bookmark verse')
+      }
+      aria-hidden={decorative || undefined}
+      aria-pressed={decorative ? undefined : bookmarked}
+      tabIndex={decorative ? -1 : undefined}
       onClick={onClick}
       onFocus={() => setRibbonFocused(true)}
       onBlur={() => setRibbonFocused(false)}

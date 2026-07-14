@@ -1,4 +1,6 @@
 import { Select } from '@base-ui/react/select'
+import { InkCheckMark } from './InkCheckMark'
+import { paperSelectHaptic } from './paperHaptics'
 
 export type PaperSelectOption<T extends string = string> = {
   value: T
@@ -30,7 +32,8 @@ export function PaperSelect<T extends string>({
     <Select.Root
       value={value}
       onValueChange={(next) => {
-        if (next == null) return
+        if (next == null || next === value) return
+        paperSelectHaptic()
         onChange(next as T)
       }}
       items={options}
@@ -65,7 +68,7 @@ export function PaperSelect<T extends string>({
                     {opt.label}
                   </Select.ItemText>
                   <Select.ItemIndicator className="paper-select-check" aria-hidden="true">
-                    <Check />
+                    <InkCheckMark checked size={14} />
                   </Select.ItemIndicator>
                 </Select.Item>
               ))}
@@ -91,16 +94,4 @@ function Chevron() {
   )
 }
 
-function Check() {
-  return (
-    <svg viewBox="0 0 12 12" width="12" height="12" fill="none" aria-hidden="true">
-      <path
-        d="M2.2 6.2 L4.8 8.7 L9.8 3.3"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
+

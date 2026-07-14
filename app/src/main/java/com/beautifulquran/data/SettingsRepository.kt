@@ -14,6 +14,28 @@ enum class ReadingMode { ARABIC_ENGLISH, ENGLISH_ONLY }
 /** Which screen edge the ayah selector rail lives on. */
 enum class AyahSelectorSide { LEFT, RIGHT }
 
+/** Developer-selectable bookmark treatment on the Chapters sheet. */
+enum class HomeBookmarkStyle { TOP_BOUND, SAVED_PASSAGES }
+
+/**
+ * Ink-brush circle variants for settings selectors. [BASELINE] is the shipped
+ * mark; the rest are developer-only A/B options (see Settings → Developer).
+ * Keep labels/params in lockstep with web `BrushCircleStyle` in brushMark.ts.
+ */
+enum class BrushCircleStyle {
+    BASELINE,
+    HAIRLINE,
+    HEAVY,
+    TIGHT,
+    LOOSE,
+    SHARP_NIB,
+    SOFT_NIB,
+    LONG_OVERSHOOT,
+    CLOSED_RING,
+    LIVELY,
+    DRY_BRUSH,
+}
+
 data class Settings(
     val reciterId: Int = 1,
     val fontScale: Float = 1f,
@@ -34,6 +56,10 @@ data class Settings(
      *  [developerModeEnabled] is on; the tuning edits themselves are
      *  session-only and never persisted. */
     val inkLabEnabled: Boolean = false,
+    /** Developer-selectable Chapters bookmark treatment. */
+    val homeBookmarkStyle: HomeBookmarkStyle = HomeBookmarkStyle.TOP_BOUND,
+    /** Developer-only: which ink-brush circle to paint around selected enums. */
+    val brushCircleStyle: BrushCircleStyle = BrushCircleStyle.BASELINE,
 )
 
 /** Maps a persisted ordinal back to an enum entry, falling back to [default]
@@ -44,6 +70,16 @@ internal fun <E : Enum<E>> enumForOrdinal(entries: List<E>, ordinal: Int, defaul
 /** Reads an enum stored by ordinal, tolerating stale ordinals. */
 private inline fun <reified E : Enum<E>> SharedPreferences.enum(key: String, default: E): E =
     enumForOrdinal(enumValues<E>().toList(), getInt(key, default.ordinal), default)
+
+/** Reads the named v2 value, migrating the old five-way ordinal experiment. */
+private fun SharedPreferences.homeBookmarkStyle(): HomeBookmarkStyle =
+    getString("homeBookmarkStyleV2", null)?.let { stored ->
+        runCatching { HomeBookmarkStyle.valueOf(stored) }.getOrNull()
+    } ?: if (getInt("homeBookmarkStyle", -1) == 3) {
+        HomeBookmarkStyle.SAVED_PASSAGES
+    } else {
+        HomeBookmarkStyle.TOP_BOUND
+    }
 
 class SettingsRepository(context: Context) {
 
@@ -66,6 +102,8 @@ class SettingsRepository(context: Context) {
         lastAyah = prefs.getInt("lastAyah", 1),
         developerModeEnabled = prefs.getBoolean("developerModeEnabled", false),
         inkLabEnabled = prefs.getBoolean("inkLabEnabled", false),
+        homeBookmarkStyle = prefs.homeBookmarkStyle(),
+        brushCircleStyle = prefs.enum("brushCircleStyle", BrushCircleStyle.BASELINE),
     )
 
     fun update(transform: (Settings) -> Settings) {
@@ -84,6 +122,9 @@ class SettingsRepository(context: Context) {
             putInt("lastAyah", next.lastAyah)
             putBoolean("developerModeEnabled", next.developerModeEnabled)
             putBoolean("inkLabEnabled", next.inkLabEnabled)
+            putString("homeBookmarkStyleV2", next.homeBookmarkStyle.name)
+            remove("homeBookmarkStyle")
+            putInt("brushCircleStyle", next.brushCircleStyle.ordinal)
         }
     }
 }

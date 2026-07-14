@@ -27,6 +27,24 @@ require_file() {
   [[ -e "$1" ]] || fail "$2"
 }
 
+restore_local_display() {
+  [[ "$ANDROID_EMULATOR_HEADLESS" == "1" || -n "${DISPLAY:-}" ]] && return
+
+  local socket xauthority
+  for socket in /tmp/.X11-unix/X*; do
+    [[ -S "$socket" ]] || continue
+    export DISPLAY=":${socket##*/X}"
+    for xauthority in "/run/user/$(id -u)"/xauth_* "$HOME/.Xauthority"; do
+      if [[ -r "$xauthority" ]]; then
+        export XAUTHORITY="$xauthority"
+        break
+      fi
+    done
+    log "Using local X11 display: $DISPLAY"
+    return
+  done
+}
+
 emulator_serial() {
   "$ADB" devices | awk '/^emulator-[0-9]+[[:space:]]+device$/ { print $1; exit }'
 }
@@ -45,10 +63,8 @@ start_emulator_if_needed() {
     -netspeed full
   )
 
-  # The emulator initializes Qt before booting Android. On a CI or SSH shell
-  # without a display server that fails immediately unless its window is off.
-  if [[ "$ANDROID_EMULATOR_HEADLESS" == "1" || ( "$ANDROID_EMULATOR_HEADLESS" != "0" && -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ) ]]; then
-    log "No graphical display detected; starting headless"
+  if [[ "$ANDROID_EMULATOR_HEADLESS" == "1" ]]; then
+    log "Starting headless"
     emulator_args+=(-no-window)
   fi
 
@@ -101,6 +117,7 @@ main() {
   require_file "$ADB" "adb not found. Run scripts/setup_android_emulator.sh first."
 
   build_quran_db_if_missing
+  restore_local_display
 
   serial="$(start_emulator_if_needed)"
   wait_for_boot "$serial"

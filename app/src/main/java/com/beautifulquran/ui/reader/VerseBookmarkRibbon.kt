@@ -60,6 +60,7 @@ private const val EDGE_INSET_DP = 8f    // from the block's outer edge
 private const val RIBBON_WIDTH_DP = 11f
 private const val TOP_INSET_DP = 24f    // align the tip with the verse's first ink line
 private const val NUB_LENGTH_DP = 14f   // just the swallowtail tip peeking out
+private const val TOP_FOLD_DP = 3.5f    // soft fold over the page edge, matching web
 private const val BOTTOM_GAP_DP = 48f   // leave air above the next verse's tip
 private const val NOTCH_DP = 5.5f
 private const val WAVE_AMP_DP = 4.5f    // cloth sway while unfurling
@@ -94,6 +95,8 @@ internal fun VerseBookmarkRibbon(
     /** Non-zero changes replay the same physical unfurl for an already saved
      * ribbon, used when a new bookmark first arrives back on Chapters. */
     unfurlSignal: Int = 0,
+    edgeInset: Dp = EDGE_INSET_DP.dp,
+    ribbonWidth: Dp = RIBBON_WIDTH_DP.dp,
     topInset: Dp = TOP_INSET_DP.dp,
     bottomGap: Dp = BOTTOM_GAP_DP.dp,
 ) {
@@ -223,10 +226,11 @@ internal fun VerseBookmarkRibbon(
 
             val h = size.height
             if (h <= 0f) return@Canvas
-            val edgeInset = EDGE_INSET_DP.dp.toPx()
-            val ribbonW = RIBBON_WIDTH_DP.dp.toPx()
+            val edgeInsetPx = edgeInset.toPx()
+            val ribbonW = ribbonWidth.toPx()
             val topInsetPx = topInset.toPx()
             val nubLen = NUB_LENGTH_DP.dp.toPx()
+            val topFold = TOP_FOLD_DP.dp.toPx()
             val bottomGapPx = bottomGap.toPx()
             val notch = NOTCH_DP.dp.toPx()
             val waveAmp = WAVE_AMP_DP.dp.toPx()
@@ -240,9 +244,9 @@ internal fun VerseBookmarkRibbon(
             fun ax(logicalX: Float): Float =
                 if (mirrored) size.width - logicalX else logicalX
 
-            val outer = edgeInset
-            val inner = edgeInset + ribbonW
-            val center = edgeInset + ribbonW / 2f
+            val outer = edgeInsetPx
+            val inner = edgeInsetPx + ribbonW
+            val center = edgeInsetPx + ribbonW / 2f
 
             val progress = unfurl.value.coerceAtLeast(0f)
             val tipY = if (progress <= 0.001f) {
@@ -281,13 +285,16 @@ internal fun VerseBookmarkRibbon(
             // Always a swallowtail tip — idle "nub" is just that tip, short and
             // faded; a saved mark is the same shape grown to the block bottom.
             val path = Path().apply {
-                val top = topInsetPx
+                val top = topInsetPx + topFold
                 val bot = tipY.coerceAtLeast(topInsetPx + nubLen * 0.6f)
                 val span = (bot - top).coerceAtLeast(1f)
                 val notchDepth = minOf(notch, span * 0.45f)
                 val steps = (span / 3f).toInt().coerceIn(6, 64)
-                moveTo(ax(outer + lateral(top)), top)
-                lineTo(ax(inner + lateral(top)), top)
+                val outerTop = ax(outer + lateral(top))
+                val innerTop = ax(inner + lateral(top))
+                moveTo(outerTop, top)
+                quadraticTo(outerTop, top - topFold, ax(center), top - topFold)
+                quadraticTo(innerTop, top - topFold, innerTop, top)
                 for (i in 1..steps) {
                     val y = top + span * (i / steps.toFloat())
                     lineTo(ax(inner + lateral(y)), y)

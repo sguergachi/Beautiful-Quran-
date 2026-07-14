@@ -331,6 +331,16 @@ Three sheets, hand-rolled paper stack (no router chrome):
    Word search keeps the query in local home state (no global store fan-out),
    builds its slim in-memory index on demand (never during chapter browsing),
    and scans cooperatively with cancellation so typing stays responsive.
+   Its fixed masthead, 30 px gilded Settings rosette, rounded search field,
+   full-width continue wash, and compact 28 / 26 / 4 px chapter grid mirror
+   the Android Home sheet while the whole composition remains centred at a
+   640 px maximum measure.
+   Developer settings expose the same two persisted bookmark treatments as
+   Android—a 96 px top-bound ribbon and the *Saved passages* line—while both
+   open the same left-hand Bookmarks sheet. The inline line follows the
+   Continue row's weight, spacing, and 28 / 26 / 4 px rule, and stays out of
+   active search results; changing this Home treatment never changes Reader
+   ribbons.
 2. **Reader** — header + ayahs + icon player bar; mushaf page breaks
    (whisper-gold hairline with Western + Arabic-Indic page numbers, Android
    `PageBreak` parity) between ayahs that start a new Madinah page; once the

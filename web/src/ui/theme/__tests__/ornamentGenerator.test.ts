@@ -58,7 +58,7 @@ describe('ornamentGenerator', () => {
       check(o.cornerSeal.strokes.length > 0, `${at}: seal strokes`)
       check(o.border.strokes.length > 0, `${at}: border strokes`)
       check(o.border.period > 0.5, `${at}: border period`)
-      check(o.field.strokes.length >= 8, `${at}: field strokes`)
+      check(o.field.strokes.length >= 2, `${at}: field strokes`)
       check(o.field.cellW > 0 && o.field.cellH > 0, `${at}: field cell`)
 
       // The medallion has no bezel; the seal's petal tips must aim down
@@ -119,22 +119,22 @@ describe('ornamentGenerator', () => {
     }
   })
 
-  it('field pattern is continuous across cell edges', () => {
+  it('star-and-cross field kisses at every cell-edge midpoint', () => {
+    // The star's four cardinal points must land exactly on the cell-edge
+    // midpoints, so when the cell tiles each star meets its orthogonal
+    // neighbour tip-to-tip — the seam-free continuity of the weave.
     for (const seed of [5, 8, 21, 100, 4242]) {
       const f = generateCoverOrnament(seed).field
-      const starts = f.strokes.map((s) => s.points[0]!)
-      for (const s of starts) {
-        let mates = 0
-        for (const t of starts) {
-          for (let dx = -1; dx <= 1; dx++) {
-            for (let dy = -1; dy <= 1; dy++) {
-              const tx = t.x + dx * f.cellW
-              const ty = t.y + dy * f.cellH
-              if (Math.abs(tx - s.x) < 1e-6 && Math.abs(ty - s.y) < 1e-6) mates++
-            }
-          }
-        }
-        expect(mates, `seed ${seed}: lonely ray`).toBeGreaterThanOrEqual(2)
+      const verts = f.strokes.flatMap((s) => s.points)
+      const midpoints = [
+        { x: f.cellW / 2, y: 0 },
+        { x: f.cellW / 2, y: f.cellH },
+        { x: 0, y: f.cellH / 2 },
+        { x: f.cellW, y: f.cellH / 2 },
+      ]
+      for (const m of midpoints) {
+        const hit = verts.some((v) => Math.abs(v.x - m.x) < 1e-9 && Math.abs(v.y - m.y) < 1e-9)
+        expect(hit, `seed ${seed}: no star point at edge midpoint (${m.x}, ${m.y})`).toBe(true)
       }
     }
   })
@@ -157,18 +157,20 @@ describe('ornamentGenerator', () => {
     expect(violations).toEqual([])
   })
 
-  it('a seed sample uses every fold, motif family, tiling, and border', () => {
+  it('a seed sample uses every fold, field style, and border', () => {
     const folds = new Set<number>()
-    const tilings = new Set<string>()
+    const fieldStyles = new Set<number>()
     const borders = new Set<string>()
     for (let seed = 0; seed < 200; seed++) {
       const o = generateCoverOrnament(seed)
       folds.add(o.medallion.fold)
-      tilings.add(`${o.field.cellW.toFixed(3)}x${o.field.cellH.toFixed(3)}`)
+      // Star style (khatam = 2 strokes vs octagram = 1) and centre-mark
+      // presence both shift the field's stroke count.
+      fieldStyles.add(o.field.strokes.length)
       borders.add(`${o.border.strokes.length}/${o.border.dots.length}`)
     }
     expect([...folds].sort((a, b) => a - b)).toEqual([8, 10, 12, 16])
-    expect(tilings.size).toBe(3)
+    expect(fieldStyles.size).toBeGreaterThanOrEqual(3)
     expect(borders.size).toBeGreaterThanOrEqual(3)
   })
 

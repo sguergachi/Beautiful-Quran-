@@ -1,4 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import {
   IconBuffering,
   IconClose,
@@ -24,6 +30,8 @@ import { BOOKMARKS_LAYER, type StackLayer } from '../paper/stack'
 
 export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const state = useAppState()
+  const hasBookmarks = state.bookmarks.length > 0
+  const bookmarkStyle = state.settings.homeBookmarkStyle
   // Local query — typing must not emit through appStore (that re-renders the
   // whole paper stack, including the mounted reader under the cover).
   const [search, setSearch] = useState('')
@@ -41,8 +49,6 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const previousBookmarkCount = useRef(state.bookmarks.length)
   const pendingRibbonUnfurl = useRef(false)
   const [ribbonUnfurlSignal, setRibbonUnfurlSignal] = useState(0)
-  const homeTitleRef = useRef<HTMLHeadingElement>(null)
-  const [ribbonHeight, setRibbonHeight] = useState(0)
 
   useEffect(() => {
     setExpandedSurahIds(new Set())
@@ -78,22 +84,6 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
     pendingRibbonUnfurl.current = false
     setRibbonUnfurlSignal((value) => value + 1)
   }, [stackLayer])
-
-  useLayoutEffect(() => {
-    const title = homeTitleRef.current
-    if (!title) return
-    const measure = () => {
-      setRibbonHeight(Math.max(96, window.innerHeight - title.getBoundingClientRect().top - 92))
-    }
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(title)
-    window.addEventListener('resize', measure)
-    return () => {
-      observer.disconnect()
-      window.removeEventListener('resize', measure)
-    }
-  }, [])
 
   const wordSections = useMemo(
     () => sectionWordSearchHits(wordHits, expandedSurahIds),
@@ -144,7 +134,6 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
     filtered.length === 0 &&
     wordSections.length === 0 &&
     !wordLoading
-
   const prepareChapter = (surahId: number) => {
     appStore.prepareSurah(surahId)
   }
@@ -167,38 +156,38 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
       ) : null}
 
       <div className="sheet-frame">
-        <header
-          className="home-header"
-          data-has-bookmarks={state.bookmarks.length > 0 || undefined}
-        >
-          {state.bookmarks.length > 0 ? (
-            <div className="home-bookmark-ribbon" style={{ height: ribbonHeight }}>
-              <VerseBookmarkRibbon
-                bookmarked
-                focused
-                side="left"
-                interactive={false}
-                animateOnTap={false}
-                topInset={0}
-                bottomGap={0}
-                unfurlSignal={ribbonUnfurlSignal}
-                onToggle={() => true}
-              />
-              <button
-                type="button"
-                className="home-bookmark-open"
-                aria-label="Open bookmarks"
-                onClick={() => appStore.revealLayer(BOOKMARKS_LAYER)}
-              />
-            </div>
-          ) : null}
-          <h1 ref={homeTitleRef}>Beautiful Quran</h1>
+        {hasBookmarks && bookmarkStyle !== 'saved_passages' ? (
+          <div className={`home-bookmark-ribbon home-bookmark-${bookmarkStyle}`}>
+            <VerseBookmarkRibbon
+              bookmarked
+              focused
+              side="left"
+              interactive={false}
+              animateOnTap={false}
+              topInset={0}
+              bottomGap={0}
+              edgeInset={7.5}
+              unfurlSignal={ribbonUnfurlSignal}
+              onToggle={() => true}
+              decorative
+            />
+            <button
+              type="button"
+              className="home-bookmark-open"
+              aria-label="Open bookmarks"
+              onClick={() => appStore.revealLayer(BOOKMARKS_LAYER)}
+            />
+          </div>
+        ) : null}
+        <header className="home-header" data-has-bookmarks={hasBookmarks || undefined}>
+          <h1>Beautiful Quran</h1>
           <button
             type="button"
-            className="gear"
+            className="home-settings"
+            aria-label="Open settings"
             onClick={() => appStore.setSheet('settings')}
           >
-            Settings
+            <HomeRosette />
           </button>
         </header>
 
@@ -206,18 +195,31 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
           <div className={`scroll${showFloat ? ' scroll-with-float' : ''}`}>
             <div
               className="home-scroll-page"
-              data-has-bookmarks={state.bookmarks.length > 0 || undefined}
+              data-has-bookmarks={hasBookmarks || undefined}
             >
               <div className="search-row">
-                <PaperInput
-                  id="chapter-search"
-                  name="chapter-search"
-                  type="search"
-                  placeholder="Search surah, word, or 2:255"
-                  value={search}
-                  onValueChange={setSearch}
-                  aria-label="Search surah, word, or ayah reference"
-                />
+                <div className="home-search">
+                  <SearchIcon />
+                  <PaperInput
+                    id="chapter-search"
+                    name="chapter-search"
+                    type="search"
+                    placeholder="Search surah, word, or 2:255"
+                    value={search}
+                    onValueChange={setSearch}
+                    aria-label="Search surah, word, or ayah reference"
+                  />
+                  {search ? (
+                    <button
+                      type="button"
+                      className="home-search-clear"
+                      aria-label="Clear search"
+                      onClick={() => setSearch('')}
+                    >
+                      <ClearIcon />
+                    </button>
+                  ) : null}
+                </div>
               </div>
 
             {continueSurah ? (
@@ -248,6 +250,39 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     {continueSurah.nameArabic}
                   </span>
                 </button>
+              </div>
+            ) : null}
+
+            {hasBookmarks && bookmarkStyle === 'saved_passages' && !searching ? (
+              <div className="saved-passages-row">
+                <span className="saved-passages-mark" aria-hidden="true">
+                  <VerseBookmarkRibbon
+                    bookmarked
+                    focused
+                    side="left"
+                    interactive={false}
+                    animateOnTap={false}
+                    topInset={0}
+                    bottomGap={0}
+                    edgeInset={6.5}
+                    unfurlSignal={ribbonUnfurlSignal}
+                    onToggle={() => true}
+                    decorative
+                  />
+                </span>
+                <span className="saved-passages-copy">
+                  <span className="saved-passages-title">Saved passages</span>
+                  <span className="saved-passages-note">
+                    {state.bookmarks.length}{' '}
+                    {state.bookmarks.length === 1 ? 'saved ayah' : 'saved ayahs'}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className="saved-passages-open"
+                  aria-label="Open bookmarks"
+                  onClick={() => appStore.revealLayer(BOOKMARKS_LAYER)}
+                />
               </div>
             ) : null}
 
@@ -380,6 +415,72 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
         </div>
       ) : null}
     </div>
+  )
+}
+
+function HomeRosette() {
+  const gradientId = useId()
+  const octagram = Array.from({ length: 9 }, (_, i) => {
+    const k = (i * 3) % 8
+    const angle = ((22.5 + k * 45) * Math.PI) / 180
+    return `${50 + 33 * Math.cos(angle)},${50 + 33 * Math.sin(angle)}`
+  }).join(' ')
+  const geometry = (
+    <>
+      <path d="M17.5 17.5H82.5V82.5H17.5ZM50 4L96 50 50 96 4 50Z" />
+      <polyline points={octagram} />
+    </>
+  )
+
+  return (
+    <svg className="home-rosette" viewBox="0 0 100 100" aria-hidden="true">
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="35" x2="100" y2="65">
+          <stop offset="0" stopColor="var(--gold-deep)" />
+          <stop offset="0.5" stopColor="var(--gold-bright)" />
+          <stop offset="1" stopColor="var(--gold-deep)" />
+        </linearGradient>
+      </defs>
+      <g className="home-rosette-relief home-rosette-dark" transform="translate(0.8 0.8)">
+        {geometry}
+      </g>
+      <g className="home-rosette-relief home-rosette-light" transform="translate(-0.8 -0.8)">
+        {geometry}
+      </g>
+      <g className="home-rosette-face" stroke={`url(#${gradientId})`}>
+        {geometry}
+      </g>
+      <circle cx="50" cy="50" r="3.5" fill={`url(#${gradientId})`} />
+      {Array.from({ length: 8 }, (_, k) => {
+        const angle = (k * Math.PI) / 4
+        return (
+          <circle
+            key={k}
+            cx={50 + 46 * Math.cos(angle)}
+            cy={50 + 46 * Math.sin(angle)}
+            r="1.8"
+            fill={`url(#${gradientId})`}
+          />
+        )
+      })}
+    </svg>
+  )
+}
+
+function SearchIcon() {
+  return (
+    <svg className="home-search-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m15.4 15.4 4.2 4.2" />
+    </svg>
+  )
+}
+
+function ClearIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m7 7 10 10M17 7 7 17" />
+    </svg>
   )
 }
 

@@ -36,4 +36,52 @@ class EnumForOrdinalTest {
             enumForOrdinal(AyahSelectorSide.entries, -1, AyahSelectorSide.LEFT),
         )
     }
+
+    @Test
+    fun `home bookmark styles map by ordinal and stale values use top bound`() {
+        HomeBookmarkStyle.entries.forEach { style ->
+            assertEquals(
+                style,
+                enumForOrdinal(
+                    HomeBookmarkStyle.entries,
+                    style.ordinal,
+                    HomeBookmarkStyle.TOP_BOUND,
+                ),
+            )
+        }
+        assertEquals(
+            HomeBookmarkStyle.TOP_BOUND,
+            enumForOrdinal(
+                HomeBookmarkStyle.entries,
+                99,
+                HomeBookmarkStyle.TOP_BOUND,
+            ),
+        )
+        assertEquals(
+            HomeBookmarkStyle.TOP_BOUND,
+            enumForOrdinal(
+                HomeBookmarkStyle.entries,
+                -1,
+                HomeBookmarkStyle.TOP_BOUND,
+            ),
+        )
+    }
+
+    @Test
+    fun `brush circle styles map by ordinal and stale values use baseline`() {
+        BrushCircleStyle.entries.forEach { style ->
+            assertEquals(
+                style,
+                enumForOrdinal(
+                    BrushCircleStyle.entries,
+                    style.ordinal,
+                    BrushCircleStyle.BASELINE,
+                ),
+            )
+        }
+        assertEquals(
+            BrushCircleStyle.BASELINE,
+            enumForOrdinal(BrushCircleStyle.entries, 99, BrushCircleStyle.BASELINE),
+        )
+    }
 }

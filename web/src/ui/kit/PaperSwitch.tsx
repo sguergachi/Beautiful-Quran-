@@ -1,4 +1,5 @@
-import { Switch } from '@base-ui/react/switch'
+import { InkCheckMark } from './InkCheckMark'
+import { paperToggleHaptic } from './paperHaptics'
 
 type Props = {
   id?: string
@@ -7,24 +8,29 @@ type Props = {
   onChange: (checked: boolean) => void
 }
 
-/** Paper-styled Base UI Switch — accent ink when on, no Material track chrome. */
+/**
+ * On/off row: label carries the weight; a calligraphic ink check writes itself
+ * in at the trailing edge when on (Android `ToggleRow` / `InkCheck` parity).
+ */
 export function PaperSwitch({ id, label, checked, onChange }: Props) {
   return (
-    <div className="setting-row paper-field">
-      <label className="paper-field-label" htmlFor={id}>
-        {label}
-      </label>
-      <Switch.Root
+    <div className="setting-row paper-field paper-field-check">
+      <button
+        type="button"
         id={id}
-        checked={checked}
-        onCheckedChange={onChange}
-        nativeButton
-        render={<button type="button" />}
-        className="paper-switch"
+        role="switch"
+        aria-checked={checked}
         aria-label={label}
+        className="paper-check-row"
+        onClick={() => {
+          const next = !checked
+          paperToggleHaptic(next)
+          onChange(next)
+        }}
       >
-        <Switch.Thumb className="paper-switch-thumb" />
-      </Switch.Root>
+        <span className="paper-field-label paper-check-label">{label}</span>
+        <InkCheckMark checked={checked} />
+      </button>
     </div>
   )
 }

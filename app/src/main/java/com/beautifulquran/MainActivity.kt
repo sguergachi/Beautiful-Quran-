@@ -54,9 +54,12 @@ import androidx.compose.ui.zIndex
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.beautifulquran.data.HomeBookmarkStyle
 import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.AppViewModelFactory
 import com.beautifulquran.ui.PageTurnSounds
+import com.beautifulquran.ornamentslab.OrnamentsLabScreen
+import com.beautifulquran.ornamentslab.OrnamentsLabViewModel
 import com.beautifulquran.ui.bookmarks.BookmarksScreen
 import com.beautifulquran.ui.bookmarks.BookmarksViewModel
 import com.beautifulquran.ui.entrance.EntranceCover
@@ -138,6 +141,7 @@ class MainActivity : ComponentActivity() {
                 PaperStackApp(
                     themeMode = settings.themeMode,
                     developerModeEnabled = settings.developerModeEnabled,
+                    homeBookmarkStyle = settings.homeBookmarkStyle,
                     entranceVisible = !entranceDone,
                     onRecordSystemTrace = {
                         DevProfiling.recordSystemTrace(this@MainActivity)
@@ -171,6 +175,7 @@ private val StackMotionEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
 private fun PaperStackApp(
     themeMode: ThemeMode,
     developerModeEnabled: Boolean,
+    homeBookmarkStyle: HomeBookmarkStyle,
     entranceVisible: Boolean,
     onRecordSystemTrace: () -> Unit,
     onEntranceFinished: () -> Unit,
@@ -180,6 +185,7 @@ private fun PaperStackApp(
     val readerViewModel: ReaderViewModel = viewModel(factory = AppViewModelFactory)
     val settingsViewModel: SettingsViewModel = viewModel(factory = AppViewModelFactory)
     val timingsLabViewModel: TimingsLabViewModel = viewModel(factory = AppViewModelFactory)
+    val ornamentsLabViewModel: OrnamentsLabViewModel = viewModel(factory = AppViewModelFactory)
     val rootViewerViewModel: RootViewerViewModel = viewModel(factory = AppViewModelFactory)
     val bookmarkCount by bookmarksViewModel.bookmarkCount.collectAsStateWithLifecycle()
 
@@ -198,9 +204,13 @@ private fun PaperStackApp(
     var rootVisible by remember { mutableStateOf(false) }
     /** Developer-mode chooser after a word hold (Root Viewer vs Timings Lab). */
     var chooserVisible by remember { mutableStateOf(false) }
+    /** The Ornaments Lab — same stack-level ink-bleed pattern as the Timings
+     *  Lab; it only ever opens from Settings, never from a word hold. */
+    var ornamentsLabVisible by remember { mutableStateOf(false) }
     var chooserRendered by remember { mutableStateOf(false) }
     var rootRendered by remember { mutableStateOf(false) }
     var labRendered by remember { mutableStateOf(false) }
+    var ornamentsLabRendered by remember { mutableStateOf(false) }
     var readerInkOverlayVisible by remember { mutableStateOf(false) }
     var rootPlaybackSnapshot by remember { mutableStateOf<ReaderPlaybackSnapshot?>(null) }
     var pendingWord by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
@@ -227,8 +237,8 @@ private fun PaperStackApp(
     }
     val scope = rememberCoroutineScope()
     val settingsLayer = if (selectedSurahId == 0) AYAH_LAYER else SETTINGS_LAYER
-    val overlayBlocking = labVisible || rootVisible || chooserVisible ||
-        labRendered || rootRendered || chooserRendered || readerInkOverlayVisible
+    val overlayBlocking = labVisible || rootVisible || chooserVisible || ornamentsLabVisible ||
+        labRendered || rootRendered || chooserRendered || ornamentsLabRendered || readerInkOverlayVisible
     val stackGesturesBlocked = rememberUpdatedState(
         ayahSelectorExpanded || overlayBlocking || entranceVisible,
     )
@@ -289,6 +299,15 @@ private fun PaperStackApp(
         if (!labVisible) return
         timingsLabViewModel.onExit()
         labVisible = false
+    }
+
+    fun openOrnamentsLab() {
+        if (!developerModeEnabled) return
+        ornamentsLabVisible = true
+    }
+
+    fun closeOrnamentsLab() {
+        ornamentsLabVisible = false
     }
 
     fun openRootViewer(surahId: Int, ayah: Int, wordPosition: Int) {
@@ -391,6 +410,7 @@ private fun PaperStackApp(
     }
     BackHandler(enabled = rootVisible) { closeRootViewer() }
     BackHandler(enabled = labVisible) { closeTimingsLab() }
+    BackHandler(enabled = ornamentsLabVisible) { closeOrnamentsLab() }
 
     LaunchedEffect(selectedSurahId) {
         ayahSelectorExpanded = false
@@ -482,6 +502,7 @@ private fun PaperStackApp(
                     animateTo(if (selectedSurahId == 0) COVER_LAYER else AYAH_LAYER)
                 },
                 onOpenTimingsLab = { openTimingsLab() },
+                onOpenOrnamentsLab = { openOrnamentsLab() },
                 onRecordSystemTrace = onRecordSystemTrace,
             )
         }
@@ -591,6 +612,7 @@ private fun PaperStackApp(
                 // leaving for the reader — not only when nowPlaying flips.
                 coverSheetVisible = coverSheetVisible,
                 bookmarkCount = bookmarkCount,
+                bookmarkStyle = homeBookmarkStyle,
                 onOpenBookmarks = { animateTo(BOOKMARKS_LAYER) },
             )
         }
@@ -644,6 +666,29 @@ private fun PaperStackApp(
                         TimingsLabScreen(
                             viewModel = timingsLabViewModel,
                             onBack = ::closeTimingsLab,
+                        )
+                    }
+                }
+            }
+        }
+
+        // The Ornaments Lab — same ink-bleed language, its own overlay slot
+        // since it can rise independently of the Timings Lab (both are
+        // Settings-only entry points, never simultaneous, but kept distinct
+        // so each closes back to exactly the page it bloomed from).
+        InkRevealOverlay(
+            visible = ornamentsLabVisible,
+            backgroundColor = overlayColors.background,
+            modifier = Modifier.zIndex(5f),
+            onRenderedChange = { ornamentsLabRendered = it },
+        ) {
+            MaterialTheme(colorScheme = overlayColors, typography = MaterialTheme.typography) {
+                CompositionLocalProvider(LocalQuranAccents provides TimingsLabAccents) {
+                    Box(Modifier.fillMaxSize()) {
+                        Box(Modifier.matchParentSize().absorbPointerEvents())
+                        OrnamentsLabScreen(
+                            viewModel = ornamentsLabViewModel,
+                            onBack = ::closeOrnamentsLab,
                         )
                     }
                 }
@@ -704,6 +749,7 @@ private fun Modifier.paperLayerTransform(
             translationX = -(width + STACK_OFFSCREEN_OVERSCAN_DP * density) *
                 (1f - reveal)
             rotationY = -4f * (1f - reveal)
+            shadowElevation = 22f * reveal
             alpha = if (position <= 0f) 1f else 0f
         }
         PaperLayer.Cover -> {
@@ -744,7 +790,7 @@ private fun Modifier.paperDropShadow(
     drawContent()
     val position = stackPosition()
     val turning = when (layer) {
-        PaperLayer.Bookmarks -> 0f
+        PaperLayer.Bookmarks -> (-position).coerceIn(0f, 1f)
         PaperLayer.Cover -> position.coerceIn(0f, 1f)
         PaperLayer.Ayah -> (position - 1f).coerceIn(0f, 1f)
         PaperLayer.Settings -> 0f
