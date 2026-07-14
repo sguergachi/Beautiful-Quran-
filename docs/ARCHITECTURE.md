@@ -209,6 +209,51 @@ notification controls, audio focus, becoming-noisy handling, wake mode for
 streaming. Audio flows through a `CacheDataSource` backed by a 1 GB LRU
 `SimpleCache`, so an ayah streams once and replays from disk afterwards.
 
+## Google Assistant / App Actions
+
+`assistant/AssistantAction.kt` is a pure parser for deep links and App Actions
+intents. `res/xml/shortcuts.xml` declares:
+
+| Capability | What it does |
+|---|---|
+| `OPEN_APP_FEATURE` | Named features: **continue**, **bookmarks**, **save bookmark** (inline inventory synonyms in `arrays.xml`) |
+| `GET_THING` | Free-form verse lookup via `thing.name` → query (`2:255`, `surah 2 ayah 255`, bare surah number) |
+
+### Saying the app name — prefer Routines
+
+**Primary path: Google Assistant Routines** (`assistant/VoiceRoutines.kt`,
+Settings → **Voice**). The user speaks only a short starter; the routine’s
+action runs the full App Action (including the app name) so they never say
+“Beautiful Quran”:
+
+| When you say… | Does… |
+|---|---|
+| Continue Quran | Last-read verse |
+| Quran bookmarks | Bookmarks index |
+| Bookmark this verse | Save current / last-read verse |
+| Ayat al-Kursi *(example)* | Open 2:255 (edit action for any verse) |
+
+Setup: Google Home → Routines → New → starter phrase → Add action →
+**Try adding your own** → paste (tap a row in Settings → Voice to copy).
+
+**Also:** `OPEN_APP_FEATURE` has foreground invocation (`requiredForegroundActivity`)
+so while MainActivity is open, “Open bookmarks” / “Continue reading” /
+“Save bookmark” work without the app name. Background / cold start still needs
+“… on Beautiful Quran” unless a Routine wraps it. `GET_THING` has no foreground
+support.
+
+Deep-link scheme `beautifulquran://` (VIEW intent-filter on `MainActivity`):
+
+- `beautifulquran://continue` — last-read verse (`settings.lastSurah` / `lastAyah`)
+- `beautifulquran://bookmarks` — bookmarks index (falls back to Chapters if empty)
+- `beautifulquran://bookmark/save` — ensure-bookmark on the current/last verse, then open it
+- `beautifulquran://verse/2/255` or `…/verse?surah=2&ayah=255` — open that verse
+
+Launcher long-press exposes **Continue** and **Bookmarks**. Cold-start deep
+links skip the entrance cover. Fulfillment lives in `PaperStackApp` (no
+navigation library). App Actions still need Play Console review for end-user
+Assistant invocation; `adb` deep links work regardless.
+
 ## UI structure
 
 Four full-screen "sheets", one visible at a time. Navigation is a
