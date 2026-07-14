@@ -16,28 +16,26 @@ class VoiceRoutinesTest {
     }
 
     @Test
-    fun `routine actions name the app so starters never need to`() {
-        VoiceRoutines.all.forEach { routine ->
-            assertTrue(
-                "${routine.id} action should invoke the app by name",
-                routine.routineAction.contains(VoiceRoutines.APP_INVOCATION_NAME),
-            )
-            assertTrue(
-                "${routine.id} starter should stay short (no app name)",
-                !routine.say.contains(VoiceRoutines.APP_INVOCATION_NAME, ignoreCase = true),
-            )
+    fun `pinable shortcuts have deep links that parse`() {
+        VoiceRoutines.all.filter { it.pinable }.forEach { shortcut ->
+            val action = AssistantIntents.parseDeepLink(shortcut.deepLink)
+            assertTrue("${shortcut.id} should parse", action != null)
         }
     }
 
     @Test
-    fun `deep links parse to the matching actions`() {
+    fun `continue and bookmarks deep links match explicit actions`() {
         assertEquals(
             AssistantAction.ContinueReading,
-            AssistantIntents.parseDeepLink(VoiceRoutines.all.first { it.id == "continue" }.deepLink),
+            AssistantIntents.parseDeepLink(
+                VoiceRoutines.all.first { it.id == "continue" }.deepLink,
+            ),
         )
         assertEquals(
             AssistantAction.OpenBookmarks,
-            AssistantIntents.parseDeepLink(VoiceRoutines.all.first { it.id == "bookmarks" }.deepLink),
+            AssistantIntents.parseDeepLink(
+                VoiceRoutines.all.first { it.id == "bookmarks" }.deepLink,
+            ),
         )
         assertEquals(
             AssistantAction.SaveBookmark,

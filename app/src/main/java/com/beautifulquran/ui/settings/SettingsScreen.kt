@@ -1,13 +1,20 @@
 package com.beautifulquran.ui.settings
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
+import android.speech.RecognizerIntent
 import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.view.View
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -80,8 +87,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.BuildConfig
 import com.beautifulquran.R
-import com.beautifulquran.assistant.VoiceRoutine
+import com.beautifulquran.assistant.AssistantAction
+import com.beautifulquran.assistant.AssistantIntents
 import com.beautifulquran.assistant.VoiceRoutines
+import com.beautifulquran.assistant.VoiceShortcut
+import com.beautifulquran.assistant.VoiceShortcuts
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.BrushCircleStyle
 import com.beautifulquran.data.HomeBookmarkStyle
@@ -141,6 +151,7 @@ fun SettingsScreen(
     onOpenTimingsLab: () -> Unit = {},
     onOpenOrnamentsLab: () -> Unit = {},
     onRecordSystemTrace: () -> Unit = {},
+    onVoiceAction: (AssistantAction) -> Unit = {},
 ) {
     val settings by viewModel.settings.settings.collectAsStateWithLifecycle()
     val reciters by viewModel.reciters.collectAsStateWithLifecycle()
@@ -156,7 +167,53 @@ fun SettingsScreen(
     var paintToken by remember { mutableIntStateOf(0) }
     var checkPaintToken by remember { mutableIntStateOf(0) }
     var copyNote by remember { mutableStateOf<String?>(null) }
-    var voiceCopyNote by remember { mutableStateOf<String?>(null) }
+    var voiceNote by remember { mutableStateOf<String?>(null) }
+    val speechLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val spoken = result.data
+            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull()
+            .orEmpty()
+        val action = AssistantIntents.parseSpokenCommand(spoken)
+        if (action != null) {
+            voiceNote = null
+            onVoiceAction(action)
+        } else {
+            voiceNote = if (spoken.isBlank()) {
+                "Didn't catch that — try again"
+            } else {
+                "Heard “$spoken” — try continue, bookmarks, or 2:255"
+            }
+        }
+    }
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            speechLauncher.launch(voiceRecognizerIntent())
+        } else {
+            voiceNote = "Microphone permission is needed to listen"
+        }
+    }
+    fun startListening() {
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            return
+        }
+        val intent = voiceRecognizerIntent()
+        val canResolve = intent.resolveActivity(context.packageManager) != null
+        if (!canResolve) {
+            voiceNote = "No speech recognition app is installed on this device"
+            return
+        }
+        runCatching { speechLauncher.launch(intent) }
+            .onFailure { voiceNote = "Couldn't start the microphone" }
+    }
     // Only reseed when the preset or shipped BASE revision actually changes —
     // never wipe a live paste / slider edit on unrelated recomposition.
     // Ship bumps always load baseline (not Hairline's bodyAmp 0.12, etc.).
@@ -305,14 +362,27 @@ fun SettingsScreen(
             }
 
             Section("Voice")
-            VoiceRoutinesSection(
-                copyNote = voiceCopyNote,
-                onCopyAction = { routine ->
-                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    cm.setPrimaryClip(
-                        ClipData.newPlainText("Assistant routine action", routine.routineAction),
-                    )
-                    voiceCopyNote = "Copied action for “${routine.say}”"
+            VoiceSection(
+                note = voiceNote,
+                onListen = { startListening() },
+                onPin = { shortcut ->
+                    val ok = VoiceShortcuts.pin(context, shortcut)
+                    voiceNote = if (ok) {
+                        "Pin “${shortcut.label}” on your home screen"
+                    } else {
+                        "This launcher can't pin shortcuts"
+                    }
+                },
+                onRun = { shortcut ->
+                    val action = AssistantIntents.parseDeepLink(shortcut.deepLink)
+                        ?: AssistantIntents.parseAction(shortcut.intentAction)
+                    if (action != null) {
+                        voiceNote = null
+                        onVoiceAction(action)
+                    } else if (shortcut.id == "verse_example") {
+                        voiceNote = null
+                        onVoiceAction(AssistantAction.OpenVerse(2, 255))
+                    }
                 },
             )
 
@@ -1853,43 +1923,81 @@ private val ThemeMode.label: String
         ThemeMode.ROYAL_GREEN -> "Royal green"
     }
 
-// ── Voice / Assistant Routines ─────────────────────────────────────────────
+// ── Voice (in-app listen + home-screen pins) ───────────────────────────────
 
 /**
- * How to speak short phrases without naming the app: Google Assistant Routines
- * run the full App Action (which includes the app name) behind a custom starter.
+ * Works without Google App Actions Play review: speak short phrases in-app,
+ * pin Continue/Bookmarks to the home screen, or long-press the app icon.
  */
 @Composable
-private fun VoiceRoutinesSection(
-    copyNote: String?,
-    onCopyAction: (VoiceRoutine) -> Unit,
+private fun VoiceSection(
+    note: String?,
+    onListen: () -> Unit,
+    onPin: (VoiceShortcut) -> Unit,
+    onRun: (VoiceShortcut) -> Unit,
 ) {
-    Caption(
-        "Google Home → Routines → New. Starter: the short phrase. " +
-            "Action → Try adding your own → paste (tap a row to copy).",
+    Caption(VoiceRoutines.LISTEN_HINT)
+    Spacer(Modifier.height(10.dp))
+    Text(
+        text = "Listen",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier
+            .quietClickable(onClick = onListen)
+            .padding(vertical = 8.dp),
     )
     Spacer(Modifier.height(12.dp))
-    VoiceRoutines.all.forEach { routine ->
-        Column(
+    Caption("Or open / pin a shortcut (no app name, works offline):")
+    Spacer(Modifier.height(6.dp))
+    VoiceRoutines.all.forEach { shortcut ->
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .quietClickable { onCopyAction(routine) }
-                .padding(vertical = 10.dp),
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = "“${routine.say}”",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.height(2.dp))
-            Caption(routine.does)
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .quietClickable { onRun(shortcut) },
+            ) {
+                Text(
+                    text = shortcut.label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.height(2.dp))
+                Caption(shortcut.does)
+            }
+            if (shortcut.pinable) {
+                Text(
+                    text = "Pin",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .quietClickable { onPin(shortcut) }
+                        .padding(start = 12.dp, top = 8.dp, bottom = 8.dp),
+                )
+            }
         }
     }
-    if (copyNote != null) {
+    if (note != null) {
         Spacer(Modifier.height(4.dp))
-        Caption(copyNote)
+        Caption(note)
     }
 }
+
+private fun voiceRecognizerIntent(): Intent =
+    Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+        putExtra(
+            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+        )
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE, java.util.Locale.getDefault())
+        putExtra(RecognizerIntent.EXTRA_PROMPT, VoiceRoutines.LISTEN_HINT)
+        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+        putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+    }
 
 // ── Quiet typographic helpers ──────────────────────────────────────────────
 

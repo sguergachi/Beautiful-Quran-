@@ -7,6 +7,17 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Android 11+ package visibility: without this, speech recognition never resolves. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+    </queries>
 
     <application
         android:name=".QuranApp"
@@ -27,12 +38,20 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Deep links for App Actions, launcher shortcuts, and adb tests. -->
+            <!-- Custom-scheme deep links (launcher pins, adb, automation). -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="beautifulquran" />
+            </intent-filter>
+            <!-- Explicit actions: reliable for pins and `am start -a …`. -->
+            <intent-filter>
+                <action android:name="com.beautifulquran.action.CONTINUE" />
+                <action android:name="com.beautifulquran.action.OPEN_BOOKMARKS" />
+                <action android:name="com.beautifulquran.action.SAVE_BOOKMARK" />
+                <action android:name="com.beautifulquran.action.OPEN_VERSE" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
             <meta-data
                 android:name="android.app.shortcuts"

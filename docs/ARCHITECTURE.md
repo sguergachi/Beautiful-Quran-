@@ -219,28 +219,19 @@ intents. `res/xml/shortcuts.xml` declares:
 | `OPEN_APP_FEATURE` | Named features: **continue**, **bookmarks**, **save bookmark** (inline inventory synonyms in `arrays.xml`) |
 | `GET_THING` | Free-form verse lookup via `thing.name` → query (`2:255`, `surah 2 ayah 255`, bare surah number) |
 
-### Saying the app name — prefer Routines
+### How to use (what actually works)
 
-**Primary path: Google Assistant Routines** (`assistant/VoiceRoutines.kt`,
-Settings → **Voice**). The user speaks only a short starter; the routine’s
-action runs the full App Action (including the app name) so they never say
-“Beautiful Quran”:
+Google **App Actions need Play Console review** before “Hey Google, … on
+Beautiful Quran” works for end users. Until then (and for no-app-name voice):
 
-| When you say… | Does… |
-|---|---|
-| Continue Quran | Last-read verse |
-| Quran bookmarks | Bookmarks index |
-| Bookmark this verse | Save current / last-read verse |
-| Ayat al-Kursi *(example)* | Open 2:255 (edit action for any verse) |
+| Path | Works today? | How |
+|---|---|---|
+| **Settings → Voice → Listen** | Yes | In-app speech: “continue”, “bookmarks”, “bookmark this”, `2:255` |
+| **Pin / long-press shortcuts** | Yes | Continue & Bookmarks on the home screen / app long-press |
+| **Deep links / explicit actions** | Yes | `beautifulquran://continue` or `am start -a com.beautifulquran.action.CONTINUE` |
+| App Actions / Assistant Routines pasting App Action phrases | Only after Play review | `OPEN_APP_FEATURE` + `GET_THING` in `shortcuts.xml` |
 
-Setup: Google Home → Routines → New → starter phrase → Add action →
-**Try adding your own** → paste (tap a row in Settings → Voice to copy).
-
-**Also:** `OPEN_APP_FEATURE` has foreground invocation (`requiredForegroundActivity`)
-so while MainActivity is open, “Open bookmarks” / “Continue reading” /
-“Save bookmark” work without the app name. Background / cold start still needs
-“… on Beautiful Quran” unless a Routine wraps it. `GET_THING` has no foreground
-support.
+Settings → **Voice** is the product surface (`VoiceSection`): Listen, run, pin.
 
 Deep-link scheme `beautifulquran://` (VIEW intent-filter on `MainActivity`):
 

@@ -1,59 +1,58 @@
 package com.beautifulquran.assistant
 
 /**
- * Suggested Google Assistant **Routines** so the user never has to say the app
- * name. They speak only the short [say] starter; the routine silently runs
- * [routineAction] (full App Action query) or opens [deepLink].
- *
- * Pure data — Settings renders it; unit tests lock the contract.
+ * Home-screen / voice entry points that work **without** Google App Actions
+ * Play review. Pinning uses [androidx.core.content.pm.ShortcutManagerCompat];
+ * deep links work via adb, launcher long-press, and automation apps.
  */
-data class VoiceRoutine(
+data class VoiceShortcut(
     val id: String,
-    /** Short phrase the user says to Google ("Continue Quran"). */
-    val say: String,
-    /** One-line description of what lands in the app. */
+    /** Short label on the home-screen pin and launcher long-press. */
+    val label: String,
     val does: String,
-    /**
-     * Full Assistant query for Routine → Add action → "Try adding your own".
-     * Includes the app name once, in the automation, not in speech.
-     */
-    val routineAction: String,
-    /** Same fulfillment as App Actions / adb deep links. */
     val deepLink: String,
+    /** Explicit action for reliable `am start -a …` / Shortcut intents. */
+    val intentAction: String,
+    val pinable: Boolean,
 )
 
-/** Recommended routines for the four main voice entry points. */
 object VoiceRoutines {
-    const val APP_INVOCATION_NAME = "Beautiful Quran"
-
-    val all: List<VoiceRoutine> = listOf(
-        VoiceRoutine(
+    val all: List<VoiceShortcut> = listOf(
+        VoiceShortcut(
             id = AssistantIntents.FEATURE_CONTINUE,
-            say = "Continue Quran",
+            label = "Continue",
             does = "Open your last-read verse",
-            routineAction = "Continue reading on $APP_INVOCATION_NAME",
             deepLink = "${AssistantIntents.SCHEME}://${AssistantIntents.FEATURE_CONTINUE}",
+            intentAction = AssistantIntents.ACTION_CONTINUE,
+            pinable = true,
         ),
-        VoiceRoutine(
+        VoiceShortcut(
             id = AssistantIntents.FEATURE_BOOKMARKS,
-            say = "Quran bookmarks",
+            label = "Bookmarks",
             does = "Open the bookmarks index",
-            routineAction = "Open bookmarks on $APP_INVOCATION_NAME",
             deepLink = "${AssistantIntents.SCHEME}://${AssistantIntents.FEATURE_BOOKMARKS}",
+            intentAction = AssistantIntents.ACTION_BOOKMARKS,
+            pinable = true,
         ),
-        VoiceRoutine(
+        VoiceShortcut(
             id = AssistantIntents.FEATURE_SAVE_BOOKMARK,
-            say = "Bookmark this verse",
+            label = "Save bookmark",
             does = "Save the current / last-read verse",
-            routineAction = "Save bookmark on $APP_INVOCATION_NAME",
             deepLink = "${AssistantIntents.SCHEME}://bookmark/save",
+            intentAction = AssistantIntents.ACTION_SAVE_BOOKMARK,
+            pinable = false,
         ),
-        VoiceRoutine(
+        VoiceShortcut(
             id = "verse_example",
-            say = "Ayat al-Kursi",
-            does = "Open 2:255 — edit the action for any verse",
-            routineAction = "Search for 2:255 on $APP_INVOCATION_NAME",
+            label = "2:255",
+            does = "Open Ayat al-Kursi (example verse deep link)",
             deepLink = "${AssistantIntents.SCHEME}://verse/2/255",
+            intentAction = AssistantIntents.ACTION_OPEN_VERSE,
+            pinable = false,
         ),
     )
+
+    /** Phrases the in-app listener understands (shown as a quiet hint). */
+    const val LISTEN_HINT =
+        "Say continue, bookmarks, bookmark this, or a verse like 2:255"
 }

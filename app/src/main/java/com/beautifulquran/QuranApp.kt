@@ -1,6 +1,7 @@
 package com.beautifulquran
 
 import android.app.Application
+import com.beautifulquran.assistant.VoiceShortcuts
 import com.beautifulquran.data.BookmarkRepository
 import com.beautifulquran.data.QuranDatabase
 import com.beautifulquran.data.QuranRepository
@@ -34,5 +35,7 @@ class QuranApp : Application() {
         player = PlayerController(this)
         timingOverrides = overrides
         ornamentSeeds = OrnamentSeedStore(this)
+        // Long-press app icon → Continue / Bookmarks (works without App Actions review).
+        VoiceShortcuts.publishDynamic(this)
     }
 }

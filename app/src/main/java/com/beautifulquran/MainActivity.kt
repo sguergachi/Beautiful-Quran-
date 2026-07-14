@@ -317,9 +317,7 @@ private fun PaperStackApp(
         animateTo(AYAH_LAYER)
     }
 
-    // Deep links, App Actions, and Assistant Routines land here once the stack is up.
-    LaunchedEffect(pendingAssistantAction) {
-        val action = pendingAssistantAction ?: return@LaunchedEffect
+    fun fulfillAssistantAction(action: AssistantAction) {
         when (action) {
             is AssistantAction.OpenVerse -> {
                 openVerseFromAssistant(action.surahId, action.ayah)
@@ -336,18 +334,29 @@ private fun PaperStackApp(
                 if (surah in 1..114) {
                     openVerseFromAssistant(surah, settings.lastAyah.coerceAtLeast(1))
                 } else {
-                    animateTo(COVER_LAYER)
+                    // No saved position yet — open Al-Fatiha rather than looking broken.
+                    openVerseFromAssistant(1, 1)
                 }
             }
             AssistantAction.SaveBookmark -> {
-                val surah = settings.lastSurah
-                val ayah = settings.lastAyah.coerceAtLeast(1)
+                val surah = settings.lastSurah.takeIf { it in 1..114 } ?: selectedSurahId
+                val ayah = when {
+                    surah == selectedSurahId && selectedStartAyah > 0 -> selectedStartAyah
+                    settings.lastSurah == surah -> settings.lastAyah.coerceAtLeast(1)
+                    else -> 1
+                }
                 if (surah in 1..114) {
                     app.bookmarks.ensure(surah, ayah)
                     openVerseFromAssistant(surah, ayah)
                 }
             }
         }
+    }
+
+    // Deep links, pinned shortcuts, and App Actions land here once the stack is up.
+    LaunchedEffect(pendingAssistantAction) {
+        val action = pendingAssistantAction ?: return@LaunchedEffect
+        fulfillAssistantAction(action)
         onAssistantActionConsumed()
     }
 
@@ -574,6 +583,7 @@ private fun PaperStackApp(
                 onOpenTimingsLab = { openTimingsLab() },
                 onOpenOrnamentsLab = { openOrnamentsLab() },
                 onRecordSystemTrace = onRecordSystemTrace,
+                onVoiceAction = ::fulfillAssistantAction,
             )
         }
 
