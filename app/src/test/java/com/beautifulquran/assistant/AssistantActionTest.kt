@@ -45,6 +45,14 @@ class AssistantActionTest {
             AssistantIntents.parseSpokenCommand("Open Chapter 2."),
         )
         assertEquals(
+            AssistantAction.OpenVerse(2, 1),
+            AssistantIntents.parseSpokenCommand("open chapter 2 on Beautiful Quran"),
+        )
+        assertEquals(
+            AssistantAction.SaveBookmark,
+            AssistantIntents.parseSpokenCommand("bookmark this on Beautiful Quran"),
+        )
+        assertEquals(
             AssistantAction.OpenVerse(18, 1),
             AssistantIntents.parseSpokenCommand("go to surah 18"),
         )

@@ -1,11 +1,12 @@
 package com.beautifulquran.assistant
 
+import android.app.SearchManager
 import android.content.Intent
 import android.net.Uri
 
 /**
  * Actions the reader can fulfill from deep links, launcher shortcuts, in-app
- * voice, or Google App Actions / custom intents.
+ * voice, system search, or Google App Actions / custom intents.
  */
 sealed class AssistantAction {
     data class OpenVerse(val surahId: Int, val ayah: Int) : AssistantAction()
@@ -19,6 +20,7 @@ sealed class AssistantAction {
  */
 object AssistantIntents {
     const val SCHEME = "beautifulquran"
+    const val APP_NAME = "beautiful quran"
 
     const val ACTION_CONTINUE = "com.beautifulquran.action.CONTINUE"
     const val ACTION_BOOKMARKS = "com.beautifulquran.action.OPEN_BOOKMARKS"
@@ -46,7 +48,7 @@ object AssistantIntents {
 
     /**
      * Natural chapter opens: "open chapter 2", "go to surah 18", "chapter 2",
-     * "open surah 2 ayah 255".
+     * "open surah 2 ayah 255", including trailing "on Beautiful Quran".
      */
     private val openChapter = Regex(
         """^(?:(?:please\s+)?(?:open|go to|show|read|jump to)\s+)?(?:chapter|surah|sura|ch\.?)\s+(\d{1,3})(?:\s+(?:ayah|aya|verse)\s+(\d{1,3}))?$""",
@@ -59,22 +61,32 @@ object AssistantIntents {
         RegexOption.IGNORE_CASE,
     )
 
+    /** Assistant often appends the app name; strip it before matching. */
+    private val appNameSuffix = Regex(
+        """\s+(?:on|in|using|with|via)\s+(?:the\s+)?(?:app\s+)?beautiful\s+quran\s*$""",
+        RegexOption.IGNORE_CASE,
+    )
+
     fun parse(intent: Intent?): AssistantAction? {
         if (intent == null) return null
         parseAction(intent.action)?.let { return it }
         intent.dataString?.let { parseDeepLink(it) }?.let { return it }
         parseFeature(intent.getStringExtra(EXTRA_FEATURE))?.let { return it }
-        // GET_THING / free-form: try every candidate string Assistant may send.
+
+        // Free-form candidates: App Actions GET_THING, SEARCH, custom extras.
         sequenceOf(
             intent.getStringExtra(EXTRA_QUERY),
+            intent.getStringExtra(SearchManager.QUERY),
             intent.getStringExtra(Intent.EXTRA_TEXT),
             intent.getStringExtra("query"),
             intent.getStringExtra("name"),
+            intent.getStringExtra("thing.name"),
         ).mapNotNull { it?.takeIf(String::isNotBlank) }
             .forEach { candidate ->
                 parseSpokenCommand(candidate)?.let { return it }
             }
-        // Custom intent parameters (open chapter $surah).
+
+        // Custom intent / url-template parameters (open chapter $surah).
         val surah = intent.getIntExtra(EXTRA_SURAH, 0)
             .takeIf { it > 0 }
             ?: intent.getStringExtra(EXTRA_SURAH)?.toIntOrNull()
@@ -95,6 +107,7 @@ object AssistantIntents {
         ACTION_CONTINUE -> AssistantAction.ContinueReading
         ACTION_BOOKMARKS -> AssistantAction.OpenBookmarks
         ACTION_SAVE_BOOKMARK -> AssistantAction.SaveBookmark
+        Intent.ACTION_SEARCH -> null // query in extras
         ACTION_OPEN_VERSE -> null
         else -> null
     }
@@ -126,9 +139,9 @@ object AssistantIntents {
     }
 
     fun parseFeature(feature: String?): AssistantAction? = when (
-        feature?.trim()?.lowercase()
+        normalizeSpoken(feature ?: "")
     ) {
-        null, "" -> null
+        "" -> null
         FEATURE_CONTINUE, "resume", "continue reading", "continue listening",
         "last read", "last verse",
         -> AssistantAction.ContinueReading
@@ -138,11 +151,11 @@ object AssistantIntents {
         "mark verse", "add bookmark", "bookmark this",
         -> AssistantAction.SaveBookmark
         FEATURE_VERSE -> null
-        else -> parseSpokenCommand(feature)
+        else -> parseSpokenCommand(feature ?: "")
     }
 
     /**
-     * Free-form phrases from in-app speech, GET_THING, or spoken feature text.
+     * Free-form phrases from in-app speech, GET_THING, SEARCH, or Assistant.
      */
     fun parseSpokenCommand(raw: String): AssistantAction? {
         val q = normalizeSpoken(raw)
@@ -198,14 +211,18 @@ object AssistantIntents {
             return openVerseOrNull(surah, ayah)
         }
 
-        // Bare surah number → chapter opening (avoid matching year-like noise).
         q.toIntOrNull()?.takeIf { it in 1..114 }?.let { return openVerseOrNull(it, 1) }
         return null
     }
 
-    private fun normalizeSpoken(raw: String): String =
+    /**
+     * Lowercase, strip punctuation, and drop trailing "on Beautiful Quran"
+     * (how Assistant often phrases App Action / search queries).
+     */
+    internal fun normalizeSpoken(raw: String): String =
         raw.trim()
             .lowercase()
+            .replace(appNameSuffix, "")
             .replace(Regex("[\"'“”.,!?…]"), "")
             .replace(Regex("\\s+"), " ")
             .trim()

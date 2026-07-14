@@ -71,6 +71,9 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.drop
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.res.stringResource
+import com.beautifulquran.R
+import com.beautifulquran.assistant.AssistantAction
 import com.beautifulquran.data.model.Surah
 import com.beautifulquran.data.model.SurahWordSearchSection
 import com.beautifulquran.data.model.WordSearchHit
@@ -84,6 +87,7 @@ import com.beautifulquran.ui.theme.GildedRosette
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.verticalFadingEdges
+import com.beautifulquran.ui.voice.rememberVoiceListen
 
 /** The search field leads the scrolling document beneath the fixed masthead. */
 private const val SEARCH_ITEM_INDEX = 0
@@ -109,6 +113,8 @@ fun HomeScreen(
      *  reader can flash that word; null for surah / reference / continue. */
     onOpenSurah: (surahId: Int, ayah: Int?, wordPosition: Int?) -> Unit,
     onOpenSettings: () -> Unit,
+    /** Voice command (in-app Listen) — open chapter, bookmark this, etc. */
+    onVoiceAction: (AssistantAction) -> Unit = {},
     /** True while the paper stack is on (or near) the chapter list — drives
      *  the floating transport's enter/exit across page turns. */
     coverSheetVisible: Boolean = true,
@@ -236,7 +242,10 @@ fun HomeScreen(
                     .widthIn(max = 640.dp)
                     .fillMaxWidth(),
             ) {
-                HomeHeader(onOpenSettings)
+                HomeHeader(
+                    onOpenSettings = onOpenSettings,
+                    onVoiceAction = onVoiceAction,
+                )
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
@@ -424,9 +433,13 @@ fun HomeScreen(
 }
 
 @Composable
-private fun HomeHeader(onOpenSettings: () -> Unit) {
+private fun HomeHeader(
+    onOpenSettings: () -> Unit,
+    onVoiceAction: (AssistantAction) -> Unit,
+) {
     val accents = LocalQuranAccents.current
     val titleSheen = remember { mutableStateOf(0.35f) }
+    val voice = rememberVoiceListen(onAction = onVoiceAction)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -443,7 +456,25 @@ private fun HomeHeader(onOpenSettings: () -> Unit) {
                 ),
                 color = MaterialTheme.colorScheme.onBackground,
             )
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = stringResource(R.string.voice_listen),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .quietClickable(role = Role.Button, onClick = voice.start)
+                    .semantics { contentDescription = "Listen for a voice command" }
+                    .padding(vertical = 4.dp),
+            )
+            if (voice.note != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = voice.note,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                )
+            }
+            Spacer(Modifier.height(14.dp))
         }
         Box(
             contentAlignment = Alignment.Center,

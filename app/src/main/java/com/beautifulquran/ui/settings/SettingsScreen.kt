@@ -1,20 +1,13 @@
 package com.beautifulquran.ui.settings
 
-import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
-import android.speech.RecognizerIntent
 import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.view.View
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
-import androidx.core.content.ContextCompat
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -93,6 +86,7 @@ import com.beautifulquran.assistant.VoiceRoutines
 import com.beautifulquran.assistant.VoiceShortcut
 import com.beautifulquran.assistant.VoiceShortcuts
 import com.beautifulquran.data.AyahSelectorSide
+import com.beautifulquran.ui.voice.rememberVoiceListen
 import com.beautifulquran.data.BrushCircleStyle
 import com.beautifulquran.data.HomeBookmarkStyle
 import com.beautifulquran.data.ReadingMode
@@ -167,53 +161,8 @@ fun SettingsScreen(
     var paintToken by remember { mutableIntStateOf(0) }
     var checkPaintToken by remember { mutableIntStateOf(0) }
     var copyNote by remember { mutableStateOf<String?>(null) }
-    var voiceNote by remember { mutableStateOf<String?>(null) }
-    val speechLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult(),
-    ) { result ->
-        val spoken = result.data
-            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            .orEmpty()
-        val action = spoken.firstNotNullOfOrNull { AssistantIntents.parseSpokenCommand(it) }
-        if (action != null) {
-            voiceNote = null
-            onVoiceAction(action)
-        } else {
-            val heard = spoken.firstOrNull().orEmpty()
-            voiceNote = if (heard.isBlank()) {
-                "Didn't catch that — try again"
-            } else {
-                "Heard “$heard” — try open chapter 2, bookmark this, or continue"
-            }
-        }
-    }
-    val micPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        if (granted) {
-            speechLauncher.launch(voiceRecognizerIntent())
-        } else {
-            voiceNote = "Microphone permission is needed to listen"
-        }
-    }
-    fun startListening() {
-        val granted = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.RECORD_AUDIO,
-        ) == PackageManager.PERMISSION_GRANTED
-        if (!granted) {
-            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-            return
-        }
-        val intent = voiceRecognizerIntent()
-        val canResolve = intent.resolveActivity(context.packageManager) != null
-        if (!canResolve) {
-            voiceNote = "No speech recognition app is installed on this device"
-            return
-        }
-        runCatching { speechLauncher.launch(intent) }
-            .onFailure { voiceNote = "Couldn't start the microphone" }
-    }
+    var pinNote by remember { mutableStateOf<String?>(null) }
+    val voice = rememberVoiceListen(onAction = onVoiceAction)
     // Only reseed when the preset or shipped BASE revision actually changes —
     // never wipe a live paste / slider edit on unrelated recomposition.
     // Ship bumps always load baseline (not Hairline's bodyAmp 0.12, etc.).
@@ -363,11 +312,11 @@ fun SettingsScreen(
 
             Section("Voice")
             VoiceSection(
-                note = voiceNote,
-                onListen = { startListening() },
+                note = voice.note ?: pinNote,
+                onListen = voice.start,
                 onPin = { shortcut ->
                     val ok = VoiceShortcuts.pin(context, shortcut)
-                    voiceNote = if (ok) {
+                    pinNote = if (ok) {
                         "Pin “${shortcut.label}” on your home screen"
                     } else {
                         "This launcher can't pin shortcuts"
@@ -377,10 +326,10 @@ fun SettingsScreen(
                     val action = AssistantIntents.parseDeepLink(shortcut.deepLink)
                         ?: AssistantIntents.parseAction(shortcut.intentAction)
                     if (action != null) {
-                        voiceNote = null
+                        pinNote = null
                         onVoiceAction(action)
                     } else if (shortcut.id == "verse_example") {
-                        voiceNote = null
+                        pinNote = null
                         onVoiceAction(AssistantAction.OpenVerse(2, 255))
                     }
                 },
@@ -1937,12 +1886,12 @@ private fun VoiceSection(
     onRun: (VoiceShortcut) -> Unit,
 ) {
     Caption(
-        "Say open chapter 2, bookmark this, continue, or bookmarks. " +
-            "Works here without naming the app.",
+        "Tap Listen on the home page or here. Say open chapter 2, " +
+            "bookmark this, continue, or bookmarks — no app name needed.",
     )
     Spacer(Modifier.height(10.dp))
     Text(
-        text = "Listen",
+        text = stringResource(R.string.voice_listen),
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier
@@ -1950,7 +1899,7 @@ private fun VoiceSection(
             .padding(vertical = 8.dp),
     )
     Spacer(Modifier.height(12.dp))
-    Caption("Or open / pin a shortcut (no app name, works offline):")
+    Caption("Or open / pin a shortcut (works offline):")
     Spacer(Modifier.height(6.dp))
     VoiceRoutines.all.forEach { shortcut ->
         Row(
@@ -1989,18 +1938,6 @@ private fun VoiceSection(
         Caption(note)
     }
 }
-
-private fun voiceRecognizerIntent(): Intent =
-    Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-        putExtra(
-            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
-        )
-        putExtra(RecognizerIntent.EXTRA_LANGUAGE, java.util.Locale.getDefault())
-        putExtra(RecognizerIntent.EXTRA_PROMPT, VoiceRoutines.LISTEN_HINT)
-        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
-        putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
-    }
 
 // ── Quiet typographic helpers ──────────────────────────────────────────────
 
