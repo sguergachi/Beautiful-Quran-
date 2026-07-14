@@ -201,11 +201,18 @@ fun SettingsScreen(
             context,
             Manifest.permission.RECORD_AUDIO,
         ) == PackageManager.PERMISSION_GRANTED
-        if (granted) {
-            speechLauncher.launch(voiceRecognizerIntent())
-        } else {
+        if (!granted) {
             micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            return
         }
+        val intent = voiceRecognizerIntent()
+        val canResolve = intent.resolveActivity(context.packageManager) != null
+        if (!canResolve) {
+            voiceNote = "No speech recognition app is installed on this device"
+            return
+        }
+        runCatching { speechLauncher.launch(intent) }
+            .onFailure { voiceNote = "Couldn't start the microphone" }
     }
     // Only reseed when the preset or shipped BASE revision actually changes —
     // never wipe a live paste / slider edit on unrelated recomposition.
@@ -1986,8 +1993,10 @@ private fun voiceRecognizerIntent(): Intent =
             RecognizerIntent.EXTRA_LANGUAGE_MODEL,
             RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
         )
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE, java.util.Locale.getDefault())
         putExtra(RecognizerIntent.EXTRA_PROMPT, VoiceRoutines.LISTEN_HINT)
-        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+        putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
     }
 
 // ── Quiet typographic helpers ──────────────────────────────────────────────

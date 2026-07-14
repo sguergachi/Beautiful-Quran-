@@ -9,8 +9,14 @@ import androidx.core.graphics.drawable.IconCompat
 import com.beautifulquran.MainActivity
 import com.beautifulquran.R
 
-/** Builds and pins launcher shortcuts that open the reader via explicit intents. */
+/** Builds, publishes, and pins launcher shortcuts via VIEW deep links. */
 object VoiceShortcuts {
+
+    fun publishDynamic(context: Context) {
+        val pinable = VoiceRoutines.all.filter { it.pinable }.mapNotNull { build(context, it) }
+        if (pinable.isEmpty()) return
+        ShortcutManagerCompat.setDynamicShortcuts(context, pinable)
+    }
 
     fun pin(context: Context, shortcut: VoiceShortcut): Boolean {
         if (!shortcut.pinable) return false
@@ -20,11 +26,13 @@ object VoiceShortcuts {
     }
 
     fun build(context: Context, shortcut: VoiceShortcut): ShortcutInfoCompat? {
-        val intent = Intent(shortcut.intentAction).apply {
+        // Prefer VIEW + deep link so the manifest scheme filter matches cleanly
+        // (custom actions + data confuse some launchers).
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(shortcut.deepLink)).apply {
             setClass(context, MainActivity::class.java)
-            data = Uri.parse(shortcut.deepLink)
-            // Avoid stacking a second task when already open.
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP
             if (shortcut.id == "verse_example") {
                 putExtra(AssistantIntents.EXTRA_SURAH, 2)
                 putExtra(AssistantIntents.EXTRA_AYAH, 255)
