@@ -450,7 +450,7 @@ private fun PaperStackApp(
                         COVER_LAYER
                     }
                     val lower = (startLayer - 1).coerceAtLeast(minimumLayer).toFloat()
-                    val upper = (startLayer + 1).coerceAtMost(settingsLayer.toFloat())
+                    val upper = (startLayer + 1).coerceAtMost(settingsLayer).toFloat()
                     dragSnapJob?.cancel()
                     dragSnapJob = scope.launch {
                         stackPosition.snapTo(
