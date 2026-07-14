@@ -2467,7 +2467,6 @@ select {
 
 .paper-select-check {
   flex-shrink: 0;
-  color: var(--accent);
   display: inline-flex;
   opacity: 0;
 }
@@ -2476,42 +2475,51 @@ select {
   opacity: 1;
 }
 
-.paper-switch {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  width: 2.6rem;
-  height: 1.45rem;
-  flex-shrink: 0;
-  padding: 0.15rem;
+/* On/off row — label + calligraphic ink check (Android ToggleRow parity). */
+.paper-field-check {
+  padding-block: 0.15rem;
+}
+
+.paper-check-row {
+  appearance: none;
   border: none;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--ink) 14%, transparent);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.35rem 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
   cursor: pointer;
-  transition: background-color 180ms ease;
+  text-align: start;
 }
 
-.paper-switch[data-checked] {
-  background: color-mix(in srgb, var(--accent) 78%, var(--paper));
-}
-
-.paper-switch:focus-visible {
+.paper-check-row:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: 3px;
 }
 
-.paper-switch-thumb {
-  display: block;
-  width: 1.05rem;
-  height: 1.05rem;
-  border-radius: 50%;
-  background: var(--paper-surface);
-  transition: translate 180ms var(--ease-sheet);
-  translate: 0 0;
+.paper-check-label {
+  flex: 1;
+  min-width: 0;
 }
 
-.paper-switch[data-checked] .paper-switch-thumb {
-  translate: 1.15rem 0;
+.ink-check-mark {
+  flex-shrink: 0;
+  display: block;
+}
+
+.ink-check-ring {
+  stroke: color-mix(in srgb, var(--ink) 42%, transparent);
+  stroke-width: 1.4;
+  transition: opacity 220ms ease;
+}
+
+.ink-check-stroke {
+  fill: var(--accent);
 }
 
 .paper-field-slider {

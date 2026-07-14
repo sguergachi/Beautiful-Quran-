@@ -711,14 +711,17 @@ private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
     }
 }
 
-/** The on/off mark: an empty ring at rest, a green checkmark that writes itself
- * in when toggled on — ink arriving on the page, never a Material switch. Reads
- * its ink live from the active theme. */
+/** The on/off mark: an empty ring at rest, a green calligraphic check that
+ * paints itself in when toggled on — same filled-brush writing as the selector
+ * circle. Reads its ink live from the active theme. */
 @Composable
 private fun InkCheck(checked: Boolean) {
     val on by animateFloatAsState(
         targetValue = if (checked) 1f else 0f,
-        animationSpec = tween(durationMillis = 280),
+        animationSpec = tween(
+            durationMillis = 420,
+            easing = FastOutSlowInEasing,
+        ),
         label = "checkOn",
     )
     val accent = MaterialTheme.colorScheme.primary
@@ -733,29 +736,101 @@ private fun InkCheck(checked: Boolean) {
             center = c,
             style = Stroke(width = 1.4.dp.toPx()),
         )
-        if (on > 0f) {
-            val w = size.width
-            val h = size.height
-            val tick = Path().apply {
-                moveTo(w * 0.28f, h * 0.52f)
-                lineTo(w * 0.43f, h * 0.68f)
-                lineTo(w * 0.74f, h * 0.33f)
-            }
-            // Reveal the stroke progressively so the tick is drawn, not switched.
-            val measure = PathMeasure().apply { setPath(tick, false) }
-            val drawn = Path()
-            measure.getSegment(0f, measure.length * on, drawn, startWithMoveTo = true)
-            drawPath(
-                path = drawn,
-                color = accent,
-                style = Stroke(
-                    width = 2.dp.toPx(),
-                    cap = StrokeCap.Round,
-                    join = StrokeJoin.Round,
-                ),
-            )
+        if (on > 0.02f) {
+            val mark = inkBrushCheckPath(size = size.minDimension, progress = on)
+            drawPath(path = mark, color = accent)
         }
     }
+}
+
+/**
+ * Filled calligraphic check ribbon in a square of [size] px. [progress] 0…1
+ * paints along the stroke. Matches web [brushCheckPath].
+ */
+private fun inkBrushCheckPath(size: Float, progress: Float): Path {
+    val prog = progress.coerceIn(0.02f, 1f)
+    // Unit centerline — short stem into the valley, long rising arm.
+    val center = listOf(
+        Offset(0.18f, 0.52f),
+        Offset(0.40f, 0.74f),
+        Offset(0.84f, 0.24f),
+    )
+    val segs = 10
+    val raw = ArrayList<Offset>((center.size - 1) * segs + 1)
+    for (s in 0 until center.lastIndex) {
+        val a = center[s]
+        val b = center[s + 1]
+        for (i in 0 until segs) {
+            val u = i / segs.toFloat()
+            raw.add(Offset(a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u))
+        }
+    }
+    raw.add(center.last())
+
+    var total = 0f
+    val lens = FloatArray(raw.size)
+    for (i in 1 until raw.size) {
+        total += hypot(raw[i].x - raw[i - 1].x, raw[i].y - raw[i - 1].y)
+        lens[i] = total
+    }
+    val peakHalf = size * 0.085f
+    val nibBias = 0.45f
+    val tops = ArrayList<Offset>()
+    val bots = ArrayList<Offset>()
+    for (i in raw.indices) {
+        val t = if (total > 0f) lens[i] / total else 0f
+        if (t > prog && tops.isNotEmpty()) break
+        val prev = raw[maxOf(0, i - 1)]
+        val next = raw[minOf(raw.lastIndex, i + 1)]
+        var tx = next.x - prev.x
+        var ty = next.y - prev.y
+        val tLen = hypot(tx, ty).coerceAtLeast(1e-4f)
+        tx /= tLen
+        ty /= tLen
+        var nx = -ty
+        var ny = tx
+        val bx = nx + (-ny) * nibBias
+        val by = ny + nx * nibBias
+        val nLen = hypot(bx, by).coerceAtLeast(1e-4f)
+        nx = bx / nLen
+        ny = by / nLen
+        val half = peakHalf * brushCheckPressure(t)
+        val x = raw[i].x * size
+        val y = raw[i].y * size
+        tops.add(Offset(x + nx * half, y + ny * half))
+        bots.add(Offset(x - nx * half, y - ny * half))
+    }
+    if (tops.size < 2) {
+        val a = raw[0]
+        val b = raw[1]
+        val x0 = a.x * size
+        val y0 = a.y * size
+        val x1 = (a.x + (b.x - a.x) * 0.08f) * size
+        val y1 = (a.y + (b.y - a.y) * 0.08f) * size
+        tops.clear()
+        bots.clear()
+        tops.add(Offset(x0, y0 - peakHalf * 0.3f))
+        tops.add(Offset(x1, y1 - peakHalf * 0.3f))
+        bots.add(Offset(x0, y0 + peakHalf * 0.3f))
+        bots.add(Offset(x1, y1 + peakHalf * 0.3f))
+    }
+    return Path().apply {
+        moveTo(tops[0].x, tops[0].y)
+        for (i in 1 until tops.size) lineTo(tops[i].x, tops[i].y)
+        for (i in bots.lastIndex downTo 0) lineTo(bots[i].x, bots[i].y)
+        close()
+    }
+}
+
+private fun brushCheckPressure(t: Float): Float {
+    val attack = (t / 0.18f).coerceIn(0f, 1f)
+    val release = if (t > 0.78f) {
+        ((1f - t) / 0.22f).coerceAtLeast(0.18f)
+    } else {
+        1f
+    }
+    val body = 0.82f + 0.22f * sin(t * PI.toFloat() * 2.2f + 0.4f)
+    return (attack * release * body).coerceAtLeast(0.15f)
 }
 
 /** The shared selection mark: a green disc that inks in when chosen and
