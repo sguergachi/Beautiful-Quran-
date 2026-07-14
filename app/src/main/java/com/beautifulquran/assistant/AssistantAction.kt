@@ -5,7 +5,7 @@ import android.net.Uri
 
 /**
  * Actions the reader can fulfill from deep links, launcher shortcuts, in-app
- * voice, or (after Play review) Google App Actions.
+ * voice, or Google App Actions / custom intents.
  */
 sealed class AssistantAction {
     data class OpenVerse(val surahId: Int, val ayah: Int) : AssistantAction()
@@ -37,8 +37,25 @@ object AssistantIntents {
 
     private val schemePrefix = "$SCHEME://"
     private val pathVerse = Regex("""^verse(?:/(\d{1,3})(?:/(\d{1,3}))?)?$""", RegexOption.IGNORE_CASE)
+
+    /** `2:255`, `2 255`, `surah 2 ayah 255` — separator required so "18" ≠ 1:8. */
     private val spokenVerse = Regex(
-        """^(?:surah\s+)?(\d{1,3})(?:\s*(?::|ayah|verse|,)\s*|\s+)(\d{1,3})$""",
+        """^(?:(?:surah|sura|chapter|ch\.?)\s+)?(\d{1,3})(?:\s*:\s*|\s+(?:ayah|aya|verse)\s+|\s*,\s*|\s+)(\d{1,3})$""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /**
+     * Natural chapter opens: "open chapter 2", "go to surah 18", "chapter 2",
+     * "open surah 2 ayah 255".
+     */
+    private val openChapter = Regex(
+        """^(?:(?:please\s+)?(?:open|go to|show|read|jump to)\s+)?(?:chapter|surah|sura|ch\.?)\s+(\d{1,3})(?:\s+(?:ayah|aya|verse)\s+(\d{1,3}))?$""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** "open 2", "go to 2" → chapter opening. */
+    private val openNumber = Regex(
+        """^(?:open|go to|show|read|jump to)\s+(\d{1,3})$""",
         RegexOption.IGNORE_CASE,
     )
 
@@ -47,11 +64,27 @@ object AssistantIntents {
         parseAction(intent.action)?.let { return it }
         intent.dataString?.let { parseDeepLink(it) }?.let { return it }
         parseFeature(intent.getStringExtra(EXTRA_FEATURE))?.let { return it }
-        intent.getStringExtra(EXTRA_QUERY)?.let { parseSpokenCommand(it) }?.let { return it }
+        // GET_THING / free-form: try every candidate string Assistant may send.
+        sequenceOf(
+            intent.getStringExtra(EXTRA_QUERY),
+            intent.getStringExtra(Intent.EXTRA_TEXT),
+            intent.getStringExtra("query"),
+            intent.getStringExtra("name"),
+        ).mapNotNull { it?.takeIf(String::isNotBlank) }
+            .forEach { candidate ->
+                parseSpokenCommand(candidate)?.let { return it }
+            }
+        // Custom intent parameters (open chapter $surah).
         val surah = intent.getIntExtra(EXTRA_SURAH, 0)
+            .takeIf { it > 0 }
+            ?: intent.getStringExtra(EXTRA_SURAH)?.toIntOrNull()
+            ?: 0
         if (surah in 1..114) {
-            val ayah = intent.getIntExtra(EXTRA_AYAH, 1).coerceAtLeast(1)
-            return AssistantAction.OpenVerse(surah, ayah)
+            val ayah = intent.getIntExtra(EXTRA_AYAH, 0)
+                .takeIf { it > 0 }
+                ?: intent.getStringExtra(EXTRA_AYAH)?.toIntOrNull()
+                ?: 1
+            return AssistantAction.OpenVerse(surah, ayah.coerceAtLeast(1))
         }
         return null
     }
@@ -62,7 +95,7 @@ object AssistantIntents {
         ACTION_CONTINUE -> AssistantAction.ContinueReading
         ACTION_BOOKMARKS -> AssistantAction.OpenBookmarks
         ACTION_SAVE_BOOKMARK -> AssistantAction.SaveBookmark
-        ACTION_OPEN_VERSE -> null // needs surah/ayah extras
+        ACTION_OPEN_VERSE -> null
         else -> null
     }
 
@@ -102,28 +135,33 @@ object AssistantIntents {
         FEATURE_BOOKMARKS, "bookmark", "saved", "saved passages", "marked verses",
         -> AssistantAction.OpenBookmarks
         FEATURE_SAVE_BOOKMARK, "save bookmark", "bookmark verse", "save verse",
-        "mark verse", "add bookmark",
+        "mark verse", "add bookmark", "bookmark this",
         -> AssistantAction.SaveBookmark
         FEATURE_VERSE -> null
         else -> parseSpokenCommand(feature)
     }
 
     /**
-     * Free-form phrases from in-app speech (or GET_THING). Accepts command words
-     * and verse refs — no app name required because the user is already here.
+     * Free-form phrases from in-app speech, GET_THING, or spoken feature text.
      */
     fun parseSpokenCommand(raw: String): AssistantAction? {
         val q = normalizeSpoken(raw)
         if (q.isEmpty()) return null
 
         when {
-            q.matches(Regex("""^(continue|resume|continue reading|continue listening|last read|where i left off)$""")) ->
-                return AssistantAction.ContinueReading
-            q.matches(Regex("""^(bookmarks?|saved( passages| verses)?|marked verses|open bookmarks?)$""")) ->
-                return AssistantAction.OpenBookmarks
             q.matches(
                 Regex(
-                    """^(save( a)? bookmark|bookmark( this)?( verse)?|save( this)? verse|mark( this)? verse|add bookmark)$""",
+                    """^(continue|resume|continue reading|continue listening|last read|where i left off)$""",
+                ),
+            ) -> return AssistantAction.ContinueReading
+            q.matches(
+                Regex(
+                    """^(bookmarks?|saved( passages| verses)?|marked verses|open bookmarks?)$""",
+                ),
+            ) -> return AssistantAction.OpenBookmarks
+            q.matches(
+                Regex(
+                    """^(save(?: a)? bookmark|bookmark(?: this)?(?: verse)?(?: it)?|save(?: this)? verse|mark(?: this)? verse|add bookmark)$""",
                 ),
             ) -> return AssistantAction.SaveBookmark
         }
@@ -134,6 +172,17 @@ object AssistantIntents {
     fun parseVerseQuery(raw: String): AssistantAction.OpenVerse? {
         val q = normalizeSpoken(raw)
         if (q.isEmpty()) return null
+
+        openChapter.matchEntire(q)?.let { m ->
+            val surah = m.groupValues[1].toIntOrNull() ?: return null
+            val ayah = m.groupValues.getOrNull(2)?.takeIf { it.isNotEmpty() }?.toIntOrNull() ?: 1
+            return openVerseOrNull(surah, ayah)
+        }
+
+        openNumber.matchEntire(q)?.let { m ->
+            val surah = m.groupValues[1].toIntOrNull() ?: return null
+            return openVerseOrNull(surah, 1)
+        }
 
         val colon = q.indexOf(':')
         if (colon > 0) {
@@ -149,15 +198,17 @@ object AssistantIntents {
             return openVerseOrNull(surah, ayah)
         }
 
-        q.toIntOrNull()?.let { return openVerseOrNull(it, 1) }
+        // Bare surah number → chapter opening (avoid matching year-like noise).
+        q.toIntOrNull()?.takeIf { it in 1..114 }?.let { return openVerseOrNull(it, 1) }
         return null
     }
 
     private fun normalizeSpoken(raw: String): String =
         raw.trim()
             .lowercase()
-            .replace(Regex("[\"'“”]"), "")
+            .replace(Regex("[\"'“”.,!?…]"), "")
             .replace(Regex("\\s+"), " ")
+            .trim()
 
     private fun parseVerseRoute(route: String, rawQuery: String?): AssistantAction.OpenVerse? {
         val match = pathVerse.matchEntire(route) ?: return null

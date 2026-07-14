@@ -436,7 +436,25 @@ class ReaderViewModel(
     }
 
     private fun rememberPosition(ayah: Int) {
-        settings.update { it.copy(lastSurah = surahId, lastAyah = ayah) }
+        if (surahId in 1..114 && ayah >= 1) {
+            settings.update { it.copy(lastSurah = surahId, lastAyah = ayah) }
+        }
+    }
+
+    /**
+     * Best-effort verse for Assistant "bookmark this": the loaded chapter and
+     * the last ayah that became active in it (scroll / playback), not the
+     * jump-in start ayah.
+     */
+    fun currentVerseForBookmark(): Pair<Int, Int>? {
+        val surah = surahId.takeIf { it in 1..114 } ?: return null
+        val last = settings.settings.value
+        val ayah = if (last.lastSurah == surah) {
+            last.lastAyah.coerceAtLeast(1)
+        } else {
+            1
+        }
+        return surah to ayah
     }
 
     /** Pauses a live reading session and returns enough state to restore it. */

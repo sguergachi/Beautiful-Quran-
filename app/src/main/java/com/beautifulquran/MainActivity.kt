@@ -339,15 +339,27 @@ private fun PaperStackApp(
                 }
             }
             AssistantAction.SaveBookmark -> {
-                val surah = settings.lastSurah.takeIf { it in 1..114 } ?: selectedSurahId
-                val ayah = when {
-                    surah == selectedSurahId && selectedStartAyah > 0 -> selectedStartAyah
-                    settings.lastSurah == surah -> settings.lastAyah.coerceAtLeast(1)
-                    else -> 1
-                }
-                if (surah in 1..114) {
-                    app.bookmarks.ensure(surah, ayah)
+                // Prefer the verse currently focused in the reader (last active
+                // ayah), not the open-start ayah — that was bookmarking the
+                // wrong place after the user scrolled.
+                val fromReader = readerViewModel.currentVerseForBookmark()
+                val surah = fromReader?.first
+                    ?: selectedSurahId.takeIf { it in 1..114 }
+                    ?: settings.lastSurah.takeIf { it in 1..114 }
+                    ?: return
+                val ayah = fromReader?.second
+                    ?: if (settings.lastSurah == surah) {
+                        settings.lastAyah.coerceAtLeast(1)
+                    } else {
+                        selectedStartAyah.coerceAtLeast(1)
+                    }
+                app.bookmarks.ensure(surah, ayah)
+                // Stay put when already on this chapter so the ribbon appears
+                // in place; only jump when we need to open the reader.
+                if (selectedSurahId != surah) {
                     openVerseFromAssistant(surah, ayah)
+                } else {
+                    animateTo(AYAH_LAYER)
                 }
             }
         }

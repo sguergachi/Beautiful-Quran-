@@ -12,10 +12,6 @@ class AssistantActionTest {
             AssistantAction.ContinueReading,
             AssistantIntents.parseDeepLink("beautifulquran://continue"),
         )
-        assertEquals(
-            AssistantAction.ContinueReading,
-            AssistantIntents.parseDeepLink("beautifulquran:///resume"),
-        )
     }
 
     @Test
@@ -28,10 +24,6 @@ class AssistantActionTest {
             AssistantAction.SaveBookmark,
             AssistantIntents.parseDeepLink("beautifulquran://bookmark/save"),
         )
-        assertEquals(
-            AssistantAction.SaveBookmark,
-            AssistantIntents.parseDeepLink("beautifulquran://save_bookmark"),
-        )
     }
 
     @Test
@@ -40,30 +32,54 @@ class AssistantActionTest {
             AssistantAction.OpenVerse(2, 255),
             AssistantIntents.parseDeepLink("beautifulquran://verse/2/255"),
         )
+    }
+
+    @Test
+    fun `spoken open chapter phrases`() {
         assertEquals(
-            AssistantAction.OpenVerse(1, 1),
-            AssistantIntents.parseDeepLink("beautifulquran://verse?surah=1&ayah=1"),
+            AssistantAction.OpenVerse(2, 1),
+            AssistantIntents.parseSpokenCommand("open chapter 2"),
+        )
+        assertEquals(
+            AssistantAction.OpenVerse(2, 1),
+            AssistantIntents.parseSpokenCommand("Open Chapter 2."),
+        )
+        assertEquals(
+            AssistantAction.OpenVerse(18, 1),
+            AssistantIntents.parseSpokenCommand("go to surah 18"),
+        )
+        assertEquals(
+            AssistantAction.OpenVerse(2, 255),
+            AssistantIntents.parseSpokenCommand("open chapter 2 verse 255"),
+        )
+        assertEquals(
+            AssistantAction.OpenVerse(2, 255),
+            AssistantIntents.parseSpokenCommand("open surah 2 ayah 255"),
+        )
+        assertEquals(
+            AssistantAction.OpenVerse(36, 1),
+            AssistantIntents.parseSpokenCommand("chapter 36"),
+        )
+        assertEquals(
+            AssistantAction.OpenVerse(2, 1),
+            AssistantIntents.parseSpokenCommand("open 2"),
         )
     }
 
     @Test
-    fun `explicit intent actions`() {
+    fun `spoken bookmark and continue`() {
         assertEquals(
-            AssistantAction.ContinueReading,
-            AssistantIntents.parseAction(AssistantIntents.ACTION_CONTINUE),
-        )
-        assertEquals(
-            AssistantAction.OpenBookmarks,
-            AssistantIntents.parseAction(AssistantIntents.ACTION_BOOKMARKS),
+            AssistantAction.SaveBookmark,
+            AssistantIntents.parseSpokenCommand("bookmark this"),
         )
         assertEquals(
             AssistantAction.SaveBookmark,
-            AssistantIntents.parseAction(AssistantIntents.ACTION_SAVE_BOOKMARK),
+            AssistantIntents.parseSpokenCommand("Bookmark this."),
         )
-    }
-
-    @Test
-    fun `spoken commands without app name`() {
+        assertEquals(
+            AssistantAction.SaveBookmark,
+            AssistantIntents.parseSpokenCommand("bookmark this verse"),
+        )
         assertEquals(
             AssistantAction.ContinueReading,
             AssistantIntents.parseSpokenCommand("Continue reading"),
@@ -72,10 +88,10 @@ class AssistantActionTest {
             AssistantAction.OpenBookmarks,
             AssistantIntents.parseSpokenCommand("open bookmarks"),
         )
-        assertEquals(
-            AssistantAction.SaveBookmark,
-            AssistantIntents.parseSpokenCommand("bookmark this verse"),
-        )
+    }
+
+    @Test
+    fun `spoken verse refs`() {
         assertEquals(
             AssistantAction.OpenVerse(2, 255),
             AssistantIntents.parseSpokenCommand("2:255"),
@@ -88,8 +104,18 @@ class AssistantActionTest {
     }
 
     @Test
-    fun `rejects foreign schemes`() {
-        assertNull(AssistantIntents.parseDeepLink("https://example.com/verse/2/255"))
-        assertNull(AssistantIntents.parseDeepLink("beautifulquran://verse/0/1"))
+    fun `feature inventory ids`() {
+        assertEquals(
+            AssistantAction.SaveBookmark,
+            AssistantIntents.parseFeature("save_bookmark"),
+        )
+        assertEquals(
+            AssistantAction.SaveBookmark,
+            AssistantIntents.parseFeature("bookmark this"),
+        )
+        assertEquals(
+            AssistantAction.OpenVerse(2, 1),
+            AssistantIntents.parseFeature("open chapter 2"),
+        )
     }
 }

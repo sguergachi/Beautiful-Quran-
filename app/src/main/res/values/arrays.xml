@@ -33,4 +33,32 @@
         <item>surah</item>
         <item>chapter</item>
     </string-array>
+
+    <!-- Custom intent query patterns ($surah / $ayah = schema.org/Number). -->
+    <string-array name="assistant_open_chapter_queries">
+        <item>open chapter $surah</item>
+        <item>open surah $surah</item>
+        <item>open sura $surah</item>
+        <item>go to chapter $surah</item>
+        <item>go to surah $surah</item>
+        <item>show chapter $surah</item>
+        <item>read chapter $surah</item>
+        <item>chapter $surah</item>
+        <item>surah $surah</item>
+        <item>open chapter $surah verse $ayah</item>
+        <item>open chapter $surah ayah $ayah</item>
+        <item>open surah $surah ayah $ayah</item>
+        <item>open surah $surah verse $ayah</item>
+        <item>go to surah $surah ayah $ayah</item>
+    </string-array>
+    <string-array name="assistant_bookmark_queries">
+        <item>bookmark this</item>
+        <item>bookmark this verse</item>
+        <item>save bookmark</item>
+        <item>save this verse</item>
+        <item>mark this verse</item>
+        <item>bookmark verse</item>
+        <item>add bookmark</item>
+    </string-array>
 </resources>
+
