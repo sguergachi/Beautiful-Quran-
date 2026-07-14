@@ -66,4 +66,22 @@ class EnumForOrdinalTest {
             ),
         )
     }
+
+    @Test
+    fun `brush circle styles map by ordinal and stale values use baseline`() {
+        BrushCircleStyle.entries.forEach { style ->
+            assertEquals(
+                style,
+                enumForOrdinal(
+                    BrushCircleStyle.entries,
+                    style.ordinal,
+                    BrushCircleStyle.BASELINE,
+                ),
+            )
+        }
+        assertEquals(
+            BrushCircleStyle.BASELINE,
+            enumForOrdinal(BrushCircleStyle.entries, 99, BrushCircleStyle.BASELINE),
+        )
+    }
 }

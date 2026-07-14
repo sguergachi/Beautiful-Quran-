@@ -17,6 +17,25 @@ enum class AyahSelectorSide { LEFT, RIGHT }
 /** Developer-selectable bookmark treatment on the Chapters sheet. */
 enum class HomeBookmarkStyle { LONG_RIBBON, COMPACT_EDGE, TOP_BOUND, SAVED_PASSAGES, BOTTOM_TAIL }
 
+/**
+ * Ink-brush circle variants for settings selectors. [BASELINE] is the shipped
+ * mark; the rest are developer-only A/B options (see Settings → Developer).
+ * Keep labels/params in lockstep with web `BrushCircleStyle` in brushMark.ts.
+ */
+enum class BrushCircleStyle {
+    BASELINE,
+    HAIRLINE,
+    HEAVY,
+    TIGHT,
+    LOOSE,
+    SHARP_NIB,
+    SOFT_NIB,
+    LONG_OVERSHOOT,
+    CLOSED_RING,
+    LIVELY,
+    DRY_BRUSH,
+}
+
 data class Settings(
     val reciterId: Int = 1,
     val fontScale: Float = 1f,
@@ -39,6 +58,8 @@ data class Settings(
     val inkLabEnabled: Boolean = false,
     /** Experimental Chapters bookmark treatment; the long ribbon is the shipped baseline. */
     val homeBookmarkStyle: HomeBookmarkStyle = HomeBookmarkStyle.LONG_RIBBON,
+    /** Developer-only: which ink-brush circle to paint around selected enums. */
+    val brushCircleStyle: BrushCircleStyle = BrushCircleStyle.BASELINE,
 )
 
 /** Maps a persisted ordinal back to an enum entry, falling back to [default]
@@ -72,6 +93,7 @@ class SettingsRepository(context: Context) {
         developerModeEnabled = prefs.getBoolean("developerModeEnabled", false),
         inkLabEnabled = prefs.getBoolean("inkLabEnabled", false),
         homeBookmarkStyle = prefs.enum("homeBookmarkStyle", HomeBookmarkStyle.LONG_RIBBON),
+        brushCircleStyle = prefs.enum("brushCircleStyle", BrushCircleStyle.BASELINE),
     )
 
     fun update(transform: (Settings) -> Settings) {
@@ -91,6 +113,7 @@ class SettingsRepository(context: Context) {
             putBoolean("developerModeEnabled", next.developerModeEnabled)
             putBoolean("inkLabEnabled", next.inkLabEnabled)
             putInt("homeBookmarkStyle", next.homeBookmarkStyle.ordinal)
+            putInt("brushCircleStyle", next.brushCircleStyle.ordinal)
         }
     }
 }
