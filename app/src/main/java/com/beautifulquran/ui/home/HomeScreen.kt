@@ -64,6 +64,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -359,9 +360,12 @@ fun HomeScreen(
 
             if (bookmarkCount > 0 && bookmarkStyle != HomeBookmarkStyle.SAVED_PASSAGES) {
                 HomeBookmarkOverlay(
+                    height = TopBoundRibbonHeight + padding.calculateTopPadding(),
                     unfurlSignal = ribbonUnfurlEpoch,
                     onClick = onOpenBookmarks,
-                    modifier = Modifier.matchParentSize(),
+                    modifier = Modifier
+                        .matchParentSize()
+                        .offset(y = -padding.calculateTopPadding()),
                 )
             }
 
@@ -465,6 +469,7 @@ private fun HomeHeader(onOpenSettings: () -> Unit) {
  * never borrows the ribbon's retract interaction. */
 @Composable
 private fun HomeBookmarkOverlay(
+    height: Dp,
     unfurlSignal: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -473,7 +478,7 @@ private fun HomeBookmarkOverlay(
         val placement = Modifier
             .align(Alignment.TopStart)
             .width(HomeRibbonLane)
-            .height(TopBoundRibbonHeight)
+            .height(height)
 
         VerseBookmarkRibbon(
             bookmarked = true,
