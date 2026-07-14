@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Spoken names for OPEN_APP_FEATURE inline inventory. -->
+    <string-array name="assistant_continue_synonyms">
+        <item>continue</item>
+        <item>continue reading</item>
+        <item>continue listening</item>
+        <item>resume</item>
+        <item>last read</item>
+        <item>last verse</item>
+        <item>where I left off</item>
+    </string-array>
+    <string-array name="assistant_bookmarks_synonyms">
+        <item>bookmarks</item>
+        <item>bookmark</item>
+        <item>saved</item>
+        <item>saved passages</item>
+        <item>saved verses</item>
+        <item>marked verses</item>
+    </string-array>
+    <string-array name="assistant_save_bookmark_synonyms">
+        <item>save bookmark</item>
+        <item>bookmark verse</item>
+        <item>save verse</item>
+        <item>mark verse</item>
+        <item>add bookmark</item>
+        <item>bookmark this</item>
+    </string-array>
+    <string-array name="assistant_verse_synonyms">
+        <item>verse</item>
+        <item>ayah</item>
+        <item>sura</item>
+        <item>surah</item>
+        <item>chapter</item>
+    </string-array>
+</resources>

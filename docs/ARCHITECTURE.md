@@ -209,6 +209,43 @@ notification controls, audio focus, becoming-noisy handling, wake mode for
 streaming. Audio flows through a `CacheDataSource` backed by a 1 GB LRU
 `SimpleCache`, so an ayah streams once and replays from disk afterwards.
 
+## Google Assistant / App Actions
+
+`assistant/AssistantAction.kt` is a pure parser for deep links and App Actions
+intents. `res/xml/shortcuts.xml` declares:
+
+| Capability | What it does |
+|---|---|
+| `OPEN_APP_FEATURE` | Named features: **continue**, **bookmarks**, **save bookmark** (inline inventory synonyms in `arrays.xml`) |
+| `GET_THING` | Free-form verse lookup via `thing.name` → query (`2:255`, `surah 2 ayah 255`, bare surah number) |
+
+### Saying the app name
+
+`OPEN_APP_FEATURE` uses **foreground app invocation**: the first fulfillment
+intent sets `requiredForegroundActivity` to `MainActivity`. While that activity
+is on screen, Assistant matches without the app name:
+
+- “Open bookmarks”
+- “Continue reading” / “Continue listening”
+- “Save bookmark” / “Bookmark this”
+
+From the background or a cold start, Google still requires the app name for
+third-party App Actions (“… on Beautiful Quran”). `GET_THING` (open a verse by
+reference) does **not** support foreground invocation at all — always
+“search for 2:255 on Beautiful Quran”.
+
+Deep-link scheme `beautifulquran://` (VIEW intent-filter on `MainActivity`):
+
+- `beautifulquran://continue` — last-read verse (`settings.lastSurah` / `lastAyah`)
+- `beautifulquran://bookmarks` — bookmarks index (falls back to Chapters if empty)
+- `beautifulquran://bookmark/save` — ensure-bookmark on the current/last verse, then open it
+- `beautifulquran://verse/2/255` or `…/verse?surah=2&ayah=255` — open that verse
+
+Launcher long-press exposes **Continue** and **Bookmarks**. Cold-start deep
+links skip the entrance cover. Fulfillment lives in `PaperStackApp` (no
+navigation library). App Actions still need Play Console review for end-user
+Assistant invocation; `adb` deep links work regardless.
+
 ## UI structure
 
 Four full-screen "sheets", one visible at a time. Navigation is a
