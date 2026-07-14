@@ -120,6 +120,8 @@ internal fun AyahSelectorRail(
     side: AyahSelectorSide,
     currentAyah: State<Int>,
     currentPosition: State<Float>,
+    /** Ayah numbers bookmarked in this surah — ruby ticks on the collapsed stack. */
+    bookmarkedAyahs: Set<Int> = emptySet(),
     chromeAlpha: () -> Float,
     /** Plain boolean for the touch-target gate, so composition never reads the
      * animated [chromeAlpha] (which would recompose the rail on every fade
@@ -320,6 +322,35 @@ internal fun AyahSelectorRail(
                         size = Size(collapsedBarW, collapsedBarHeight),
                         cornerRadius = collapsedCorner,
                     )
+                }
+
+                // Ruby marks sit on the same stack as the symbolic bars: each
+                // bookmarked ayah maps to a fractional position so the reader
+                // can see where marks fall without opening the wheel.
+                if (bookmarkedAyahs.isNotEmpty()) {
+                    val markH = 2.dp.toPx()
+                    val markW = 8.dp.toPx() + markH
+                    val markCorner = CornerRadius(markH, markH)
+                    val halfBars = (collapsedBarsCount - 1) / 2f
+                    for (ayah in bookmarkedAyahs) {
+                        if (ayah !in 1..ayahCount) continue
+                        val progress = if (ayahCount > 1) {
+                            ((ayah - 1f) / (ayahCount - 1).toFloat()).coerceIn(0f, 1f)
+                        } else {
+                            0f
+                        }
+                        val pos = progress * (collapsedBarsCount - 1)
+                        val y = centerY + (pos - halfBars) * collapsedStep
+                        drawRoundRect(
+                            color = accents.bookmarkRibbon.copy(alpha = 0.88f * collapsedAlpha),
+                            topLeft = Offset(
+                                rectLeft(collapsedX - markH, markW),
+                                y - markH / 2f,
+                            ),
+                            size = Size(markW, markH),
+                            cornerRadius = markCorner,
+                        )
+                    }
                 }
             }
 

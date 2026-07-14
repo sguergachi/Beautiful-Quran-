@@ -957,6 +957,7 @@ fun ReaderScreen(
                 side = selectorSide,
                 currentAyah = railCurrentAyah,
                 currentPosition = railCurrentPosition,
+                bookmarkedAyahs = bookmarkedAyahs,
                 chromeAlpha = { topBarAlpha.value },
                 interactive = !recitingActive,
                 onJumpToAyah = { requestedJumpAyah = it },

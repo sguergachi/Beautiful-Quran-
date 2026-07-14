@@ -28,7 +28,7 @@ import {
   IconSearch,
   IconTune,
 } from '../icons/PlaybackIcons'
-import { AyahSelectorRail } from './AyahSelectorRail'
+import { AyahSelectorRail, type AyahSelectorRailHandle } from './AyahSelectorRail'
 import { OrnateSurahTitle } from './OrnateSurahTitle'
 import { PageBreak } from './PageBreak'
 import { buildReaderItems, sliceReaderItems } from './readerItems'
@@ -124,8 +124,22 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const focus = focusRef.current
   const initialAyah = Math.max(1, state.settings.lastAyah || 1)
   const [focusedAyah, setFocusedAyah] = useState(initialAyah)
-  /** Continuous readout for the rail marker (Android `focusedPosition`). */
-  const [focusedPosition, setFocusedPosition] = useState(initialAyah)
+  /**
+   * Continuous readout for the rail marker (Android `focusedPosition`).
+   *
+   * Kept in a ref rather than React state because it changes every scroll
+   * frame; routing it through React would re-render the whole reader (and
+   * walk every mounted ayah's memo comparator) 60×/s during scroll. The
+   * rail reads it live via [AyahSelectorRailHandle.schedulePaint] and
+   * redraws its canvas on the next animation frame — no React reconciliation
+   * for the continuous position. Discrete ayah boundaries still go through
+   * [setFocusedAyah] so the focused prop on the matching ayah block flips.
+   */
+  const focusedPositionRef = useRef(initialAyah)
+  const railHandleRef = useRef<AyahSelectorRailHandle | null>(null)
+  const bumpRail = useCallback(() => {
+    railHandleRef.current?.schedulePaint()
+  }, [])
   const [showReturn, setShowReturn] = useState(false)
   const [returnPointUp, setReturnPointUp] = useState(false)
   const [activeExceedsViewport, setActiveExceedsViewport] = useState(false)
@@ -287,10 +301,12 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     const handle = window.setTimeout(() => {
       pendingJumpAyah.current = target
       setFocusedAyah(target)
-      setFocusedPosition(target)
+      focusedPositionRef.current = target
+      bumpRail()
       void focusAyah(target, { animate: true, preRoll: true }).finally(() => {
         setFocusedAyah(target)
-        setFocusedPosition(target)
+        focusedPositionRef.current = target
+        bumpRail()
         pendingJumpAyah.current = null
       })
     }, delay)
@@ -389,7 +405,10 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       if (pendingJumpAyah.current != null) {
         const pinned = pendingJumpAyah.current
         setFocusedAyah((prev) => (prev === pinned ? prev : pinned))
-        setFocusedPosition((prev) => (prev === pinned ? prev : pinned))
+        if (focusedPositionRef.current !== pinned) {
+          focusedPositionRef.current = pinned
+          bumpRail()
+        }
         setActiveExceedsViewport(focus.exceedsViewport(state.activeAyah))
         if (focusTarget != null && !state.followEnabled) {
           const placement = focus.placementOf(focusTarget)
@@ -405,7 +424,13 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
         content.surah.ayahCount,
         Math.max(1, Math.floor(nextPos)),
       )
-      setFocusedPosition((prev) => (prev === nextPos ? prev : nextPos))
+      // Continuous scroll readout: write the ref + nudge the rail canvas to
+      // repaint — never React state, otherwise the whole reader reconciles
+      // 60×/s during scroll (every mounted ayah's memo comparator runs).
+      if (focusedPositionRef.current !== nextPos) {
+        focusedPositionRef.current = nextPos
+        bumpRail()
+      }
       setFocusedAyah((prev) => (prev === next ? prev : next))
       setActiveExceedsViewport(focus.exceedsViewport(state.activeAyah))
 
@@ -519,6 +544,16 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     content?.surah.id,
   ])
 
+  // While reciting, the rail tracks the active ayah (not the scroll readout,
+  // which [update] skips during programmatic glides). Sync the ref whenever
+  // the active ayah changes so the rail's next paint lands on the new verse.
+  useEffect(() => {
+    if (recitingActive && state.activeAyah != null) {
+      focusedPositionRef.current = state.activeAyah
+      bumpRail()
+    }
+  }, [state.activeAyah, recitingActive, bumpRail])
+
   // Display reflow (font / mode / gloss) — re-home the pinned verse.
   const layoutReady = useRef(false)
   useEffect(() => {
@@ -570,7 +605,8 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     appStore.onAyahBecameActive(targetAyah)
     pendingJumpAyah.current = targetAyah
     setFocusedAyah(targetAyah)
-    setFocusedPosition(targetAyah)
+    focusedPositionRef.current = targetAyah
+    bumpRail()
     const seekPromise = thisSurahLoaded
       ? appStore.seekToAyah(targetAyah)
       : Promise.resolve()
@@ -581,7 +617,8 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       // Keep the committed jump target — readout can briefly report the
       // previous ayah while the home-scroll settles on the anchor.
       setFocusedAyah(targetAyah)
-      setFocusedPosition(targetAyah)
+      focusedPositionRef.current = targetAyah
+      bumpRail()
       // Clear only if no newer jump superseded this one (Android finally guard).
       if (pendingJumpAyah.current === targetAyah) {
         pendingJumpAyah.current = null
@@ -642,16 +679,16 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   // Rail tracks the recitation only while playing; otherwise the reading line.
   const railAyah =
     recitingActive && state.activeAyah != null ? state.activeAyah : focusedAyah
-  const railPosition =
-    recitingActive && state.activeAyah != null ? state.activeAyah : focusedPosition
 
   // Keep the rail off under-sheets — when Settings (or any sheet above) is
   // open, a peek of the reader must not show the dial hanging beside it.
   const rail = isTop ? (
     <AyahSelectorRail
+      ref={railHandleRef}
       ayahCount={ayahCount}
       currentAyah={railAyah}
-      currentPosition={railPosition}
+      currentPositionRef={focusedPositionRef}
+      bookmarkedAyahs={bookmarkedAyahs}
       side={side}
       receded={receded}
       onJump={jumpToAyah}
