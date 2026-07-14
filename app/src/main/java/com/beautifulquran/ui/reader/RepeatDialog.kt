@@ -34,7 +34,7 @@ import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.quietClickable
 
 /** How playback should loop, chosen on the repeat sheet. */
-enum class RepeatChoice { OFF, ONE_AYAH, WHOLE_SURAH, AYAH_RANGE }
+enum class RepeatChoice { OFF, ONE_AYAH, WHOLE_SURAH, AYAH_RANGE, NEXT_N_AYAHS }
 
 /**
  * A quiet sheet for choosing how the recitation repeats. Picking "a range of
@@ -52,9 +52,14 @@ fun RepeatDialog(
     onRepeatRange: (Int, Int) -> Unit,
 ) {
     val safeAyahCount = ayahCount.coerceAtLeast(1)
+    val safeCurrentAyah = (currentAyah ?: 1).coerceIn(1, safeAyahCount)
+    val isNextNRange = repeatRange != null &&
+        repeatRange.first == safeCurrentAyah &&
+        repeatRange.first < repeatRange.last
     var choice by remember {
         mutableStateOf(
             when {
+                isNextNRange -> RepeatChoice.NEXT_N_AYAHS
                 repeatRange != null && repeatRange.first == repeatRange.last -> RepeatChoice.ONE_AYAH
                 repeatRange != null -> RepeatChoice.AYAH_RANGE
                 repeatMode == Player.REPEAT_MODE_ONE -> RepeatChoice.ONE_AYAH
@@ -64,10 +69,20 @@ fun RepeatDialog(
         )
     }
     var from by remember {
-        mutableIntStateOf((repeatRange?.first ?: currentAyah ?: 1).coerceIn(1, safeAyahCount))
+        mutableIntStateOf((repeatRange?.first ?: safeCurrentAyah).coerceIn(1, safeAyahCount))
     }
     var to by remember {
         mutableIntStateOf((repeatRange?.last ?: safeAyahCount).coerceIn(1, safeAyahCount))
+    }
+    val maxNextNCount = (safeAyahCount - safeCurrentAyah + 1).coerceAtLeast(1)
+    var nextNCount by remember {
+        mutableIntStateOf(
+            if (isNextNRange) {
+                repeatRange!!.count().coerceIn(1, maxNextNCount)
+            } else {
+                2.coerceIn(1, maxNextNCount)
+            },
+        )
     }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -93,11 +108,20 @@ fun RepeatDialog(
                 RepeatOption("A range of ayahs", choice == RepeatChoice.AYAH_RANGE) {
                     choice = RepeatChoice.AYAH_RANGE
                 }
+                RepeatOption("Next N ayahs", choice == RepeatChoice.NEXT_N_AYAHS) {
+                    choice = RepeatChoice.NEXT_N_AYAHS
+                }
 
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(if (choice == RepeatChoice.AYAH_RANGE) 298.dp else 0.dp),
+                        .height(
+                            when (choice) {
+                                RepeatChoice.AYAH_RANGE -> 298.dp
+                                RepeatChoice.NEXT_N_AYAHS -> 180.dp
+                                else -> 0.dp
+                            },
+                        ),
                 ) {
                     if (choice == RepeatChoice.AYAH_RANGE) {
                         Column(Modifier.padding(top = 8.dp)) {
@@ -121,6 +145,20 @@ fun RepeatDialog(
                                 },
                             )
                         }
+                    } else if (choice == RepeatChoice.NEXT_N_AYAHS) {
+                        Column(Modifier.padding(top = 8.dp)) {
+                            Text(
+                                text = "Repeat $nextNCount ayah${if (nextNCount == 1) "" else "s"} from ayah $safeCurrentAyah",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            RepeatCountDial(
+                                count = nextNCount,
+                                maxCount = maxNextNCount,
+                                onCountChange = { nextNCount = it },
+                            )
+                        }
                     }
                 }
 
@@ -137,6 +175,10 @@ fun RepeatDialog(
                                 RepeatChoice.ONE_AYAH -> onRepeatMode(Player.REPEAT_MODE_ONE)
                                 RepeatChoice.WHOLE_SURAH -> onRepeatMode(Player.REPEAT_MODE_ALL)
                                 RepeatChoice.AYAH_RANGE -> onRepeatRange(from, to)
+                                RepeatChoice.NEXT_N_AYAHS -> onRepeatRange(
+                                    safeCurrentAyah,
+                                    safeCurrentAyah + nextNCount - 1,
+                                )
                             }
                             onDismiss()
                         },
@@ -224,6 +266,49 @@ private fun RepeatRangeDials(
                 ) { index, selected ->
                     RepeatNumberItem(index + 1, selected)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RepeatCountDial(
+    count: Int,
+    maxCount: Int,
+    onCountChange: (Int) -> Unit,
+) {
+    val accents = LocalQuranAccents.current
+    val itemHeight = 42.dp
+    val safeMaxCount = maxCount.coerceAtLeast(1)
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        RepeatWheelLabel("Count", Modifier.fillMaxWidth())
+        Spacer(Modifier.height(4.dp))
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(208.dp),
+        ) {
+            val wheelEdgePadding = ((maxHeight - itemHeight) / 2).coerceAtLeast(0.dp)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth(0.5f)
+                    .height(itemHeight)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(accents.gold.copy(alpha = 0.12f)),
+            )
+            SearchDialWheel(
+                itemCount = safeMaxCount,
+                selectedIndex = (count - 1).coerceIn(0, safeMaxCount - 1),
+                itemHeight = itemHeight,
+                edgePadding = wheelEdgePadding,
+                onSelectedIndexChange = { onCountChange(it + 1) },
+                modifier = Modifier.fillMaxWidth(),
+            ) { index, selected ->
+                RepeatNumberItem(index + 1, selected)
             }
         }
     }
