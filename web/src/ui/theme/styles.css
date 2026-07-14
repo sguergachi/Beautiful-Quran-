@@ -1332,8 +1332,9 @@ select {
 .ayah-mark {
   font-family: var(--font-arabic);
   color: var(--gold);
-  font-size: 0.95rem;
-  margin-inline-start: 0.35rem;
+  /* Android AyahNumberMark: 20sp against 30sp Arabic word body. */
+  font-size: calc(var(--word-arabic-size, 1.8rem) * 20 / 30);
+  margin-inline-start: 0.15rem;
   transition: opacity var(--ayah-mark-fade-ms) var(--recede-ease);
   line-height: 1;
 }
@@ -1350,6 +1351,12 @@ select {
   height: calc(var(--word-arabic-size) * var(--word-arabic-line));
   /* Match .word-unit padding-top so the box lines up with the glyph row. */
   margin-block-start: 0.2rem;
+  /*
+   * Word tiles use a generous column-gap (0.8rem) so gloss columns breathe.
+   * The closing ornament is not another tile — Android FlowRow only spaces
+   * it by 2dp. Cancel most of the flex gap so ﴿N﴾ sits near the last word.
+   */
+  margin-inline-start: calc(0.1rem - 0.8rem);
   /* Hafs' ornament sits low inside its reported line box. Lift only its paint;
      the fixed Arabic-line box above continues to own row alignment. */
   transform: translateY(-0.22em);
@@ -1746,6 +1753,9 @@ select {
   display: inline-block;
   vertical-align: middle;
   line-height: 1;
+  /* Same 20/30 body ratio as Android continuous ResponsiveHafsAyah. */
+  font-size: 0.67em;
+  margin-inline-start: 0.2em;
   /* Hafs ornament brackets hang low in the em box — lift paint only. */
   transform: translateY(-0.18em);
 }
