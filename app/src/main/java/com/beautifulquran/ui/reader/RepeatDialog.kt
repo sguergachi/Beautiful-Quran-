@@ -38,8 +38,9 @@ enum class RepeatChoice { OFF, ONE_AYAH, WHOLE_SURAH, AYAH_RANGE, NEXT_N_AYAHS }
 
 /**
  * A quiet sheet for choosing how the recitation repeats. Picking "a range of
- * ayahs" reveals two vertical wheels to bound the loop; everything applies on
- * Done.
+ * ayahs" reveals two vertical wheels to bound the loop; picking "next N ayahs"
+ * reveals a single wheel that counts forward from the current ayah. Everything
+ * applies on Done.
  */
 @Composable
 fun RepeatDialog(
@@ -118,7 +119,7 @@ fun RepeatDialog(
                         .height(
                             when (choice) {
                                 RepeatChoice.AYAH_RANGE -> 298.dp
-                                RepeatChoice.NEXT_N_AYAHS -> 180.dp
+                                RepeatChoice.NEXT_N_AYAHS -> 298.dp
                                 else -> 0.dp
                             },
                         ),
