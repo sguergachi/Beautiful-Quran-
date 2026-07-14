@@ -1,43 +1,38 @@
 /**
- * Calligraphic ink-check path — same filled-brush ribbon idea as
- * [brushMarkPath], scaled for a compact settings tick. Keep in lockstep with
- * Android `inkBrushCheckPath` in SettingsScreen.
+ * Calligraphic ink-check — same shipped brush as the selector circle
+ * ([SHIPPED_BRUSH_KNOBS] / [brushPressure]). Keep in lockstep with Android
+ * `inkBrushCheckPath` in SettingsScreen.
  */
+import {
+  brushPressure,
+  SHIPPED_BRUSH_KNOBS,
+  type BrushCircleParams,
+} from './brushMark'
 
-/** Paint duration for the check writing itself (ms). */
-export const BRUSH_CHECK_PAINT_MS = 420
+/** Paint duration = shipped brush paintMs. */
+export const BRUSH_CHECK_PAINT_MS = SHIPPED_BRUSH_KNOBS.paintMs
 
-/** Peak half-width of the check stroke in unit space (0…1 box). */
-const PEAK_HALF = 0.085
-const NIB_BIAS = 0.45
-const ATTACK = 0.18
-const RELEASE_START = 0.78
-const BODY_AMP = 0.22
+/** Shipped baseline knobs (with label) for pressure / nib / alpha. */
+export const BRUSH_CHECK_PARAMS: BrushCircleParams = {
+  ...SHIPPED_BRUSH_KNOBS,
+  label: 'Check',
+}
 
 /**
  * Centerline of the check in unit coordinates (0…1). Short stem into the
- * valley, then a long rising arm — classic pen check proportions.
+ * valley, then a long rising arm.
  */
 const CENTER: readonly { x: number; y: number }[] = [
-  { x: 0.18, y: 0.52 },
-  { x: 0.40, y: 0.74 },
-  { x: 0.84, y: 0.24 },
+  { x: 0.16, y: 0.50 },
+  { x: 0.40, y: 0.76 },
+  { x: 0.86, y: 0.22 },
 ]
-
-function pressure(t: number): number {
-  const attack = Math.min(1, t / ATTACK)
-  const release =
-    t > RELEASE_START
-      ? Math.max(0.18, (1 - t) / Math.max(0.04, 1 - RELEASE_START))
-      : 1
-  const body = 0.82 + BODY_AMP * Math.sin(t * Math.PI * 2.2 + 0.4)
-  return Math.max(0.15, attack * release * body)
-}
 
 /** Densified centerline samples with cumulative length fractions. */
 function samples(): { x: number; y: number; t: number }[] {
   const raw: { x: number; y: number }[] = []
-  const segs = 10
+  // Match circle density feel (~72 samples along the stroke).
+  const segs = 24
   for (let s = 0; s < CENTER.length - 1; s++) {
     const a = CENTER[s]
     const b = CENTER[s + 1]
@@ -64,14 +59,18 @@ function samples(): { x: number; y: number; t: number }[] {
 const SAMPLES = samples()
 
 /**
- * Filled brush check in a square of [size] CSS/SVG units.
- * `progress` 0…1 paints along the stroke (same ease as the circle mark).
+ * Filled brush check in a square of [size] CSS/SVG units, using the shipped
+ * baseline brush (peakHalf, nibBias, attack, release, bodyAmp/Freq).
+ * `progress` 0…1 paints along the stroke.
  */
-export function brushCheckPath(size: number, progress: number): string {
+export function brushCheckPath(
+  size: number,
+  progress: number,
+  params: BrushCircleParams = BRUSH_CHECK_PARAMS,
+): string {
   const prog = Math.min(1, Math.max(0.02, progress))
   const pts = SAMPLES.filter((p) => p.t <= prog)
   if (pts.length < 2) {
-    // Tiny stub so the path is never empty mid-frame.
     const a = SAMPLES[0]
     const b = SAMPLES[1]
     pts.length = 0
@@ -82,6 +81,9 @@ export function brushCheckPath(size: number, progress: number): string {
     })
   }
 
+  // Scale peakHalf for the glyph: shipped 2.2 is absolute px for word circles;
+  // for a compact check, keep that absolute weight so the stroke *feels* the same.
+  const peakHalf = params.peakHalf
   const tops: { x: number; y: number }[] = []
   const bots: { x: number; y: number }[] = []
 
@@ -94,15 +96,15 @@ export function brushCheckPath(size: number, progress: number): string {
     const tLen = Math.hypot(tx, ty) || 1
     tx /= tLen
     ty /= tLen
-    // Perpendicular + fixed nib bias (qalam slant).
+    // Perpendicular + shipped nib bias (qalam slant from the lab).
     let nx = -ty
     let ny = tx
-    const bx = nx + -ny * NIB_BIAS
-    const by = ny + nx * NIB_BIAS
+    const bx = nx + -ny * params.nibBias
+    const by = ny + nx * params.nibBias
     const nLen = Math.hypot(bx, by) || 1
     nx = bx / nLen
     ny = by / nLen
-    const half = size * PEAK_HALF * pressure(p.t)
+    const half = peakHalf * brushPressure(p.t, params)
     const x = p.x * size
     const y = p.y * size
     tops.push({ x: x + nx * half, y: y + ny * half })
