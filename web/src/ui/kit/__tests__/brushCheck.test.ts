@@ -15,21 +15,41 @@ describe('brushCheckPath + lab params', () => {
     }
   })
 
+  it('locks the settled lab design bit-for-bit', () => {
+    expect(SHIPPED_CHECK_PARAMS).toEqual({
+      p0x: 0.1,
+      p0y: 0.49,
+      p1x: 0.39,
+      p1y: 0.8,
+      p2x: 0.73,
+      p2y: 0.11,
+      size: 24,
+      peakHalf: 1.68,
+      nibBias: 0.56,
+      attack: 0.184,
+      releaseStart: 0.74,
+      bodyAmp: 0.1,
+      bodyFreq: 2.2,
+      paintMs: 833,
+      alpha: 0.75,
+    })
+  })
+
   it('returns a closed filled path', () => {
-    const d = brushCheckPath(22, 1, SHIPPED_CHECK_PARAMS)
+    const d = brushCheckPath(24, 1, SHIPPED_CHECK_PARAMS)
     expect(d.startsWith('M')).toBe(true)
     expect(d.endsWith('Z')).toBe(true)
   })
 
   it('grows as the brush paints', () => {
-    const early = brushCheckPath(22, 0.15, SHIPPED_CHECK_PARAMS)
-    const full = brushCheckPath(22, 1, SHIPPED_CHECK_PARAMS)
+    const early = brushCheckPath(24, 0.15, SHIPPED_CHECK_PARAMS)
+    const full = brushCheckPath(24, 1, SHIPPED_CHECK_PARAMS)
     expect(early.length).toBeLessThan(full.length)
   })
 
   it('geometry knobs change the path', () => {
-    const a = brushCheckPath(22, 1, SHIPPED_CHECK_PARAMS)
-    const b = brushCheckPath(22, 1, { ...SHIPPED_CHECK_PARAMS, p1y: 0.9, peakHalf: 3.5 })
+    const a = brushCheckPath(24, 1, SHIPPED_CHECK_PARAMS)
+    const b = brushCheckPath(24, 1, { ...SHIPPED_CHECK_PARAMS, p1y: 0.9, peakHalf: 3.5 })
     expect(a).not.toBe(b)
   })
 
