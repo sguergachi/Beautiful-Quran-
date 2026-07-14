@@ -44,7 +44,7 @@
     <shortcut
         android:shortcutId="continue"
         android:enabled="true"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_launcher_foreground"
         android:shortcutShortLabel="@string/shortcut_continue_short"
         android:shortcutLongLabel="@string/shortcut_continue_long">
         <intent
@@ -62,7 +62,7 @@
     <shortcut
         android:shortcutId="bookmarks"
         android:enabled="true"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_launcher_foreground"
         android:shortcutShortLabel="@string/shortcut_bookmarks_short"
         android:shortcutLongLabel="@string/shortcut_bookmarks_long">
         <intent
