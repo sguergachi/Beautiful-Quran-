@@ -589,12 +589,18 @@ export class PlayerController {
 
   /**
    * Seek to [positionMs] within [ayah] and play — Android `seekToWordAndPlay`.
-   * Word taps never include the basmalah preface. Range-repeat is cleared so
-   * a mid-ayah start does not stay trapped in a prior loop window.
+   * Word taps never include the basmalah preface. Range-repeat is kept when
+   * [ayah] is inside the loop; jumping outside abandons it.
    */
   async seekToWordAndPlay(ayah: number, positionMs: number) {
     if (!this.content || !this.reciter) return
-    if (this.state.repeatMode === 'range') {
+    const range = this.state.repeatRange
+    const keepRange =
+      this.state.repeatMode === 'range' &&
+      range != null &&
+      ayah >= range.first &&
+      ayah <= range.last
+    if (this.state.repeatMode === 'range' && !keepRange) {
       this.patch({ repeatMode: 'off', repeatRange: null })
       this.active.loop = false
     }
