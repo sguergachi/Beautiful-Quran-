@@ -207,6 +207,20 @@ export const AyahSelectorRail = forwardRef<AyahSelectorRailHandle, Props>(
 
     if (collapsedAlpha > 0.01) {
       const halfSpan = Math.max(1, (collapsedCount - 1) / 2)
+      // Bookmarks recolor the nearest existing bar — no extra mark beside it.
+      const bookmarkedBars = new Set<number>()
+      if (bookmarkedAyahs) {
+        for (const ayah of bookmarkedAyahs) {
+          if (ayah < 1 || ayah > ayahCount) continue
+          const progress = ayahCount > 1 ? (ayah - 1) / (ayahCount - 1) : 0
+          bookmarkedBars.add(
+            Math.min(
+              collapsedCount - 1,
+              Math.max(0, Math.round(progress * (collapsedCount - 1))),
+            ),
+          )
+        }
+      }
       for (let index = 0; index < collapsedCount; index++) {
         const relative = index - (collapsedCount - 1) / 2
         const y = centerY + relative * collapsedStep
@@ -221,26 +235,10 @@ export const AyahSelectorRail = forwardRef<AyahSelectorRailHandle, Props>(
         const rect = railCollapsedBarRect(cssW, side, growFrom, barW, COLLAPSED_BAR_H, exit)
         ctx.beginPath()
         roundRect(ctx, rect.x, y - COLLAPSED_BAR_H / 2, rect.width, COLLAPSED_BAR_H, COLLAPSED_BAR_H)
-        ctx.fillStyle = withAlpha(ink, alpha)
+        ctx.fillStyle = bookmarkedBars.has(index)
+          ? withAlpha(ruby, (0.55 + 0.35 * focus) * exit)
+          : withAlpha(ink, alpha)
         ctx.fill()
-      }
-
-      // Ruby marks on the same stack geometry as the symbolic bars.
-      if (bookmarkedAyahs && bookmarkedAyahs.size > 0) {
-        const markH = 2
-        const markW = 8
-        const halfBars = (collapsedCount - 1) / 2
-        for (const ayah of bookmarkedAyahs) {
-          if (ayah < 1 || ayah > ayahCount) continue
-          const progress = ayahCount > 1 ? (ayah - 1) / (ayahCount - 1) : 0
-          const pos = progress * (collapsedCount - 1)
-          const y = centerY + (pos - halfBars) * collapsedStep
-          const rect = railCollapsedBarRect(cssW, side, growFrom, markW, markH, collapsedAlpha)
-          ctx.beginPath()
-          roundRect(ctx, rect.x, y - markH / 2, rect.width, markH, markH)
-          ctx.fillStyle = withAlpha(ruby, 0.88 * collapsedAlpha)
-          ctx.fill()
-        }
       }
     }
 
