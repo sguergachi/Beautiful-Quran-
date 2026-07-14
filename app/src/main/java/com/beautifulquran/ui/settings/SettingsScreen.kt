@@ -562,7 +562,7 @@ private fun DeveloperSection(
         InkCheck(checked = true, params = checkParams, paintToken = checkPaintToken)
     }
     CheckLabSliders(params = checkParams, onChange = onCheckParams)
-    Spacer(modifier.height(6.dp))
+    Spacer(Modifier.height(6.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         Text(
             text = "Reset check",
