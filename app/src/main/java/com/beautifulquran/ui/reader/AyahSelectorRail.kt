@@ -409,14 +409,17 @@ internal fun AyahSelectorRail(
                     val tickCorner = CornerRadius(tickThickness, tickThickness)
                     val alpha = (0.1f + 0.62f * focus) * arrival * edgeFade
                     val isSelected = ayah == selectedAyah
+                    val isBookmarked = ayah in bookmarkedAyahs
                     // Start behind the screen edge so the rounded left cap is
                     // hidden and the visible end sits truly flush at x = 0.
                     val tickFullWidth = length + tickThickness
+                    // Gold = dial focus; ruby = saved verse; ink = ordinary tick.
+                    // Focus wins when a bookmarked ayah is under the finger.
                     drawRoundRect(
-                        color = if (isSelected) {
-                            accents.gold.copy(alpha = 0.96f * arrival)
-                        } else {
-                            onSurface.copy(alpha = alpha)
+                        color = when {
+                            isSelected -> accents.gold.copy(alpha = 0.96f * arrival)
+                            isBookmarked -> accents.bookmarkRibbon.copy(alpha = (0.55f + 0.35f * focus) * arrival * edgeFade)
+                            else -> onSurface.copy(alpha = alpha)
                         },
                         topLeft = Offset(
                             rectLeft(wheelX - tickThickness, tickFullWidth),
@@ -441,10 +444,14 @@ internal fun AyahSelectorRail(
                             cornerRadius = tickCorner,
                         )
                     }
-                    numberPaint.color = if (isSelected) {
-                        accents.gold.copy(alpha = 0.95f * arrival).toArgb()
-                    } else {
-                        onSurface.copy(alpha = (0.18f + 0.46f * focus) * arrival * edgeFade).toArgb()
+                    numberPaint.color = when {
+                        isSelected -> accents.gold.copy(alpha = 0.95f * arrival).toArgb()
+                        isBookmarked -> accents.bookmarkRibbon
+                            .copy(alpha = (0.4f + 0.5f * focus) * arrival * edgeFade)
+                            .toArgb()
+                        else -> onSurface
+                            .copy(alpha = (0.18f + 0.46f * focus) * arrival * edgeFade)
+                            .toArgb()
                     }
                     numberPaint.textSize = if (isSelected) 11.sp.toPx() else 8.5.sp.toPx()
                     drawIntoCanvas { canvas ->

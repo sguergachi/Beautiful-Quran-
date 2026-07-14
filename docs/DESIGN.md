@@ -435,12 +435,13 @@ weight.
 
 Part of each verse block — not a floating overlay that tracks the list. The
 selector answers *where do I go*; the ribbon answers *what did I mark*. The
-collapsed ayah rail also carries small ruby ticks at each bookmarked ayah's
-fractional position in the chapter, so marks are visible without opening the
-wheel. The ribbon lives in the block's outer margin on the edge **opposite**
-the ayah selector (the selector side is a setting), and both ribbon and rail
-ticks obey the same chrome rules: they fade with the rest of the chrome and
-vanish entirely while reciting.
+ayah rail also carries ruby marks for saved verses: fractional ticks on the
+collapsed stack, and ruby-tinted bars (and numbers) on the expanded wheel so
+marks stay visible while scrubbing. Gold still means dial focus — a bookmarked
+ayah under the finger is gold, not ruby. The ribbon lives in the block's outer
+margin on the edge **opposite** the ayah selector (the selector side is a
+setting), and both ribbon and rail marks obey the same chrome rules: they fade
+with the rest of the chrome and vanish entirely while reciting.
 
 - **Unified with the verse.** The ribbon is composed inside `AyahBlock`, so its
   height *is* the block's height (Arabic, gloss, and translation together). It
