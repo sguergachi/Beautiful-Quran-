@@ -419,11 +419,14 @@ class ReaderViewModel(
     fun playFromWord(ayah: Int, positionMs: Long) {
         val reciter = _uiState.value.currentReciter ?: return
         val np = playerState.value.nowPlaying
+        // Keep the loop when the tapped verse is inside the active range;
+        // only abandon it when the user jumps outside.
+        val keepRepeat = playerState.value.repeatRange?.let { ayah in it } == true
         if (np != null && np.surahId == surahId && np.reciterId == reciter.id) {
-            player.clearRepeatRange()
+            if (!keepRepeat) player.clearRepeatRange()
             player.seekToWordAndPlay(ayah, positionMs)
             rememberPosition(ayah)
-        } else if (startSurah(ayah, startPositionMs = positionMs, preserveRepeatRange = false)) {
+        } else if (startSurah(ayah, startPositionMs = positionMs, preserveRepeatRange = keepRepeat)) {
             rememberPosition(ayah)
         }
     }
