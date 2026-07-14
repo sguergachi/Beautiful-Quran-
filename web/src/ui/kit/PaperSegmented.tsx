@@ -7,6 +7,7 @@ import {
   type BrushCircleParams,
   type BrushCircleStyle,
 } from './brushMark'
+import { paperSelectHaptic } from './paperHaptics'
 
 export type PaperSegmentedOption<T extends string = string> = {
   value: T
@@ -133,7 +134,9 @@ export function PaperSegmented<T extends string>({
         value={[value]}
         onValueChange={(next) => {
           const picked = next[0]
-          if (picked != null) onChange(picked as T)
+          if (picked == null || picked === value) return
+          paperSelectHaptic()
+          onChange(picked as T)
         }}
       >
         {options.map((opt) => (

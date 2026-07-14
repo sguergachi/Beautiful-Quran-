@@ -1,4 +1,5 @@
 import { InkCheckMark } from './InkCheckMark'
+import { paperToggleHaptic } from './paperHaptics'
 
 type Props = {
   id?: string
@@ -21,7 +22,11 @@ export function PaperSwitch({ id, label, checked, onChange }: Props) {
         aria-checked={checked}
         aria-label={label}
         className="paper-check-row"
-        onClick={() => onChange(!checked)}
+        onClick={() => {
+          const next = !checked
+          paperToggleHaptic(next)
+          onChange(next)
+        }}
       >
         <span className="paper-field-label paper-check-label">{label}</span>
         <InkCheckMark checked={checked} />
