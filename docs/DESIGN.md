@@ -135,10 +135,12 @@ Two themes, both "paper":
 Gold never marks interaction; green never decorates. One accent each.
 
 **Ruby** `#B3122F` (paper) / `#D64358` (nightfall + royal green) is the one
-deliberate third hue, and it belongs to exactly one thing: a saved verse on the
-[bookmark ribbon](#bookmark-ribbon). It is walled off from gold (ornament) and
-green (interaction) precisely so "my marks" can never be misread as decoration
-or as a control — a bookmark is the reader's own ink, not the app's.
+deliberate third hue, and it belongs to saved-verse ink: the
+[bookmark ribbon](#bookmark-ribbon) and matching ticks on the ayah selector
+rail that show where marks fall in the chapter. It is walled off from gold
+(ornament) and green (interaction) precisely so "my marks" can never be
+misread as decoration or as a control — a bookmark is the reader's own ink,
+not the app's.
 
 ## Type
 
@@ -432,10 +434,13 @@ weight.
 ## Bookmark ribbon
 
 Part of each verse block — not a floating overlay that tracks the list. The
-selector answers *where do I go*; the ribbon answers *what did I mark*. It
-lives in the block's outer margin on the edge **opposite** the ayah selector
-(the selector side is a setting), and it obeys the same chrome rules: it fades
-with the rest of the chrome and vanishes entirely while reciting.
+selector answers *where do I go*; the ribbon answers *what did I mark*. The
+collapsed ayah rail also carries small ruby ticks at each bookmarked ayah's
+fractional position in the chapter, so marks are visible without opening the
+wheel. The ribbon lives in the block's outer margin on the edge **opposite**
+the ayah selector (the selector side is a setting), and both ribbon and rail
+ticks obey the same chrome rules: they fade with the rest of the chrome and
+vanish entirely while reciting.
 
 - **Unified with the verse.** The ribbon is composed inside `AyahBlock`, so its
   height *is* the block's height (Arabic, gloss, and translation together). It

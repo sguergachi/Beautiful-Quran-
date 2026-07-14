@@ -1,8 +1,11 @@
 import {
+  forwardRef,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useRef,
   useState,
+  type MutableRefObject,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { animate, type AnimationPlaybackControls } from 'motion'
@@ -43,12 +46,28 @@ const VERTICAL_FADE_PX = 82
 const COLLAPSED_BAR_H = 1.5
 const COLLAPSED_BAR_W = 10
 
+/**
+ * Imperative handle exposed via `ref`. The reader writes the continuous
+ * scroll readout into a ref (not React state) so per-frame position changes
+ * do not reconcile the whole reader tree — it then bumps `schedulePaint`
+ * so the canvas redraws on the next animation frame.
+ */
+export interface AyahSelectorRailHandle {
+  schedulePaint: () => void
+}
+
 type Props = {
   ayahCount: number
   /** Reading / recitation ayah the collapsed stack tracks. */
   currentAyah: number
-  /** Fractional position (1…ayahCount) when available; falls back to currentAyah. */
-  currentPosition?: number
+  /**
+   * Continuous reading position (1…ayahCount) read live from a ref so the
+   * rail can track scroll without its parent re-rendering every frame.
+   * Falls back to [currentAyah] when absent.
+   */
+  currentPositionRef?: MutableRefObject<number> | null
+  /** Ayah numbers bookmarked in this surah — ruby ticks on the collapsed stack. */
+  bookmarkedAyahs?: ReadonlySet<number>
   /** Which sheet edge the overlay rail sits on. */
   side: 'left' | 'right'
   receded: boolean
@@ -113,35 +132,39 @@ function railGrowFrom(): RailGrowFrom {
  * `AyahSelectorRail`. A no-drag tap selects the visible tick under the
  * pointer, not an absolute track fraction.
  */
-export function AyahSelectorRail({
-  ayahCount,
-  currentAyah,
-  currentPosition,
-  side,
-  receded,
-  onJump,
-}: Props) {
-  const rootRef = useRef<HTMLDivElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const dialRef = useRef(currentPosition ?? currentAyah)
-  const expandRef = useRef(0)
-  const hoverRef = useRef(false)
-  const draggingRef = useRef(false)
-  const draggedRef = useRef(false)
-  const lastClientYRef = useRef<number | null>(null)
-  const rafRef = useRef(0)
-  const expandTargetRef = useRef(0)
-  const expandControlsRef = useRef<AnimationPlaybackControls | null>(null)
-  const readingPosRef = useRef(currentPosition ?? currentAyah)
-  const [ariaAyah, setAriaAyah] = useState(currentAyah)
+export const AyahSelectorRail = forwardRef<AyahSelectorRailHandle, Props>(
+  function AyahSelectorRail(
+    {
+      ayahCount,
+      currentAyah,
+      currentPositionRef,
+      bookmarkedAyahs,
+      side,
+      receded,
+      onJump,
+    }: Props,
+    ref,
+  ) {
+    const rootRef = useRef<HTMLDivElement>(null)
+    const canvasRef = useRef<HTMLCanvasElement>(null)
+    const dialRef = useRef(currentPositionRef?.current ?? currentAyah)
+    const expandRef = useRef(0)
+    const hoverRef = useRef(false)
+    const draggingRef = useRef(false)
+    const draggedRef = useRef(false)
+    const lastClientYRef = useRef<number | null>(null)
+    const rafRef = useRef(0)
+    const expandTargetRef = useRef(0)
+    const expandControlsRef = useRef<AnimationPlaybackControls | null>(null)
+    const [ariaAyah, setAriaAyah] = useState(currentAyah)
 
-  readingPosRef.current = currentPosition ?? currentAyah
+    const readingPos = () => currentPositionRef?.current ?? currentAyah
 
-  useEffect(() => {
-    if (!hoverRef.current && !draggingRef.current) {
-      setAriaAyah(currentAyah)
-    }
-  }, [currentAyah])
+    useEffect(() => {
+      if (!hoverRef.current && !draggingRef.current) {
+        setAriaAyah(currentAyah)
+      }
+    }, [currentAyah])
 
   const paint = useCallback(() => {
     const canvas = canvasRef.current
@@ -170,6 +193,7 @@ export function AyahSelectorRail({
 
     const ink = readCssColor(root, '--ink', '#1c1b18')
     const gold = readCssColor(root, '--gold', '#c9a227')
+    const ruby = readCssColor(root, '--bookmark', '#b3122f')
     const expand = expandRef.current
     const collapsedAlpha = 1 - expand
     const centerY = cssH * 0.5
@@ -177,7 +201,7 @@ export function AyahSelectorRail({
     const collapsedCount = symbolicAyahBarCount(ayahCount)
     const collapsedSpacing = Math.min(8, Math.max(4, 72 / collapsedCount))
     const collapsedStep = COLLAPSED_BAR_H + collapsedSpacing
-    const readPos = Math.min(ayahCount, Math.max(1, readingPosRef.current))
+    const readPos = Math.min(ayahCount, Math.max(1, readingPos()))
     const readProgress = ayahCount > 1 ? (readPos - 1) / (ayahCount - 1) : 0
     const collapsedActive = readProgress * (collapsedCount - 1)
 
@@ -199,6 +223,24 @@ export function AyahSelectorRail({
         roundRect(ctx, rect.x, y - COLLAPSED_BAR_H / 2, rect.width, COLLAPSED_BAR_H, COLLAPSED_BAR_H)
         ctx.fillStyle = withAlpha(ink, alpha)
         ctx.fill()
+      }
+
+      // Ruby marks on the same stack geometry as the symbolic bars.
+      if (bookmarkedAyahs && bookmarkedAyahs.size > 0) {
+        const markH = 2
+        const markW = 8
+        const halfBars = (collapsedCount - 1) / 2
+        for (const ayah of bookmarkedAyahs) {
+          if (ayah < 1 || ayah > ayahCount) continue
+          const progress = ayahCount > 1 ? (ayah - 1) / (ayahCount - 1) : 0
+          const pos = progress * (collapsedCount - 1)
+          const y = centerY + (pos - halfBars) * collapsedStep
+          const rect = railCollapsedBarRect(cssW, side, growFrom, markW, markH, collapsedAlpha)
+          ctx.beginPath()
+          roundRect(ctx, rect.x, y - markH / 2, rect.width, markH, markH)
+          ctx.fillStyle = withAlpha(ruby, 0.88 * collapsedAlpha)
+          ctx.fill()
+        }
       }
     }
 
@@ -267,7 +309,7 @@ export function AyahSelectorRail({
         }
       }
     }
-  }, [ayahCount, side])
+  }, [ayahCount, bookmarkedAyahs, side])
 
   const schedulePaint = useCallback(() => {
     if (rafRef.current) return
@@ -280,15 +322,21 @@ export function AyahSelectorRail({
         !draggingRef.current &&
         !hoverRef.current
       ) {
-        dialRef.current = readingPosRef.current
+        dialRef.current = readingPos()
       }
       paint()
     })
   }, [paint])
 
+  useImperativeHandle(
+    ref,
+    () => ({ schedulePaint }),
+    [schedulePaint],
+  )
+
   useEffect(() => {
     schedulePaint()
-  }, [ayahCount, currentAyah, currentPosition, schedulePaint])
+  }, [ayahCount, bookmarkedAyahs, currentAyah, schedulePaint])
 
   useEffect(() => {
     const onResize = () => schedulePaint()
@@ -425,7 +473,7 @@ export function AyahSelectorRail({
     lastClientYRef.current = e.clientY
     e.currentTarget.setPointerCapture(e.pointerId)
     if (expandTargetRef.current < 0.5) {
-      dialRef.current = readingPosRef.current
+      dialRef.current = readingPos()
     }
     setExpanded(true)
     schedulePaint()
@@ -490,7 +538,8 @@ export function AyahSelectorRail({
       <canvas ref={canvasRef} className="ayah-rail-canvas" aria-hidden="true" />
     </div>
   )
-}
+  }
+)
 
 function roundRect(
   ctx: CanvasRenderingContext2D,
