@@ -136,7 +136,7 @@ Gold never marks interaction; green never decorates. One accent each.
 
 **Ruby** `#B3122F` (paper) / `#D64358` (nightfall + royal green) is the one
 deliberate third hue, and it belongs to saved-verse ink: the
-[bookmark ribbon](#bookmark-ribbon) and matching ticks on the ayah selector
+[bookmark ribbon](#bookmark-ribbon) and recolored bars on the ayah selector
 rail that show where marks fall in the chapter. It is walled off from gold
 (ornament) and green (interaction) precisely so "my marks" can never be
 misread as decoration or as a control — a bookmark is the reader's own ink,
@@ -435,11 +435,13 @@ weight.
 
 Part of each verse block — not a floating overlay that tracks the list. The
 selector answers *where do I go*; the ribbon answers *what did I mark*. The
-collapsed ayah rail also carries small ruby ticks at each bookmarked ayah's
-fractional position in the chapter, so marks are visible without opening the
-wheel. The ribbon lives in the block's outer margin on the edge **opposite**
+ayah rail also carries ruby for saved verses: on the collapsed stack the
+nearest existing bar is recolored (no extra mark), and on the expanded wheel
+bookmarked ticks and numbers tint ruby so marks stay visible while scrubbing.
+Gold still means dial focus — a bookmarked ayah under the finger is gold, not
+ruby. The ribbon lives in the block's outer margin on the edge **opposite**
 the ayah selector (the selector side is a setting), and both ribbon and rail
-ticks obey the same chrome rules: they fade with the rest of the chrome and
+marks obey the same chrome rules: they fade with the rest of the chrome and
 vanish entirely while reciting.
 
 - **Unified with the verse.** The ribbon is composed inside `AyahBlock`, so its

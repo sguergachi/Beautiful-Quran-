@@ -207,6 +207,20 @@ export const AyahSelectorRail = forwardRef<AyahSelectorRailHandle, Props>(
 
     if (collapsedAlpha > 0.01) {
       const halfSpan = Math.max(1, (collapsedCount - 1) / 2)
+      // Bookmarks recolor the nearest existing bar — no extra mark beside it.
+      const bookmarkedBars = new Set<number>()
+      if (bookmarkedAyahs) {
+        for (const ayah of bookmarkedAyahs) {
+          if (ayah < 1 || ayah > ayahCount) continue
+          const progress = ayahCount > 1 ? (ayah - 1) / (ayahCount - 1) : 0
+          bookmarkedBars.add(
+            Math.min(
+              collapsedCount - 1,
+              Math.max(0, Math.round(progress * (collapsedCount - 1))),
+            ),
+          )
+        }
+      }
       for (let index = 0; index < collapsedCount; index++) {
         const relative = index - (collapsedCount - 1) / 2
         const y = centerY + relative * collapsedStep
@@ -221,26 +235,10 @@ export const AyahSelectorRail = forwardRef<AyahSelectorRailHandle, Props>(
         const rect = railCollapsedBarRect(cssW, side, growFrom, barW, COLLAPSED_BAR_H, exit)
         ctx.beginPath()
         roundRect(ctx, rect.x, y - COLLAPSED_BAR_H / 2, rect.width, COLLAPSED_BAR_H, COLLAPSED_BAR_H)
-        ctx.fillStyle = withAlpha(ink, alpha)
+        ctx.fillStyle = bookmarkedBars.has(index)
+          ? withAlpha(ruby, (0.55 + 0.35 * focus) * exit)
+          : withAlpha(ink, alpha)
         ctx.fill()
-      }
-
-      // Ruby marks on the same stack geometry as the symbolic bars.
-      if (bookmarkedAyahs && bookmarkedAyahs.size > 0) {
-        const markH = 2
-        const markW = 8
-        const halfBars = (collapsedCount - 1) / 2
-        for (const ayah of bookmarkedAyahs) {
-          if (ayah < 1 || ayah > ayahCount) continue
-          const progress = ayahCount > 1 ? (ayah - 1) / (ayahCount - 1) : 0
-          const pos = progress * (collapsedCount - 1)
-          const y = centerY + (pos - halfBars) * collapsedStep
-          const rect = railCollapsedBarRect(cssW, side, growFrom, markW, markH, collapsedAlpha)
-          ctx.beginPath()
-          roundRect(ctx, rect.x, y - markH / 2, rect.width, markH, markH)
-          ctx.fillStyle = withAlpha(ruby, 0.88 * collapsedAlpha)
-          ctx.fill()
-        }
       }
     }
 
@@ -288,20 +286,30 @@ export const AyahSelectorRail = forwardRef<AyahSelectorRailHandle, Props>(
         const thickness = MIN_THICKNESS + (MAX_THICKNESS - MIN_THICKNESS) * focus
         const alpha = (0.1 + 0.62 * focus) * arrival * edgeFade
         const isSelected = ayah === selectedAyah
+        const isBookmarked = bookmarkedAyahs?.has(ayah) ?? false
         const bar = railTickBarRect(layout, side, length, thickness)
 
+        // Gold = dial focus; ruby = saved verse; ink = ordinary tick.
         ctx.beginPath()
         roundRect(ctx, bar.x, y - thickness / 2, bar.width, thickness, thickness)
         ctx.fillStyle = isSelected
           ? withAlpha(gold, 0.96 * arrival)
-          : withAlpha(ink, alpha)
+          : isBookmarked
+            ? withAlpha(ruby, (0.55 + 0.35 * focus) * arrival * edgeFade)
+            : withAlpha(ink, alpha)
         ctx.fill()
 
-        if (isSelected || (major && focus > 0.35)) {
+        if (isSelected || isBookmarked || (major && focus > 0.35)) {
           const labelAlpha = isSelected
             ? 0.95 * arrival
-            : (0.18 + 0.46 * focus) * arrival * edgeFade
-          ctx.fillStyle = isSelected ? withAlpha(gold, labelAlpha) : withAlpha(ink, labelAlpha)
+            : isBookmarked
+              ? (0.4 + 0.5 * focus) * arrival * edgeFade
+              : (0.18 + 0.46 * focus) * arrival * edgeFade
+          ctx.fillStyle = isSelected
+            ? withAlpha(gold, labelAlpha)
+            : isBookmarked
+              ? withAlpha(ruby, labelAlpha)
+              : withAlpha(ink, labelAlpha)
           ctx.font = isSelected
             ? '700 11px "EB Garamond", "Times New Roman", serif'
             : '600 8.5px "EB Garamond", "Times New Roman", serif'

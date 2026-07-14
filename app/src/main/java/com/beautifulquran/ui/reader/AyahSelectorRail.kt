@@ -291,10 +291,30 @@ internal fun AyahSelectorRail(
             if (collapsedAlpha > 0.01f) {
                 // Symbolic summary of the surah: bar count grows with ayah
                 // count (sqrt-mapped), and the glow slides through the stack
-                // as the reader moves through the surah.
+                // as the reader moves through the surah. Bookmarks recolor the
+                // nearest existing bar rather than adding a second mark.
                 val collapsedBarWidth = 10.dp.toPx()
                 val collapsedCorner = CornerRadius(collapsedBarHeight, collapsedBarHeight)
                 val halfSpan = ((collapsedBarsCount - 1) / 2f).coerceAtLeast(1f)
+                val bookmarkedBarIndices = if (bookmarkedAyahs.isEmpty()) {
+                    emptySet()
+                } else {
+                    buildSet {
+                        for (ayah in bookmarkedAyahs) {
+                            if (ayah !in 1..ayahCount) continue
+                            val progress = if (ayahCount > 1) {
+                                ((ayah - 1f) / (ayahCount - 1).toFloat()).coerceIn(0f, 1f)
+                            } else {
+                                0f
+                            }
+                            add(
+                                (progress * (collapsedBarsCount - 1))
+                                    .roundToInt()
+                                    .coerceIn(0, collapsedBarsCount - 1),
+                            )
+                        }
+                    }
+                }
 
                 for (index in 0 until collapsedBarsCount) {
                     val relative = index - (collapsedBarsCount - 1) / 2f
@@ -310,8 +330,14 @@ internal fun AyahSelectorRail(
                     // Left cap hidden behind the screen edge so the bars read
                     // as flush at x = 0 despite the rounded corners.
                     val collapsedBarW = collapsedBarWidth * (0.7f + 0.45f * focus) + collapsedBarHeight
+                    val inkAlpha = (0.18f + 0.72f * focus) * exit
+                    val barColor = if (index in bookmarkedBarIndices) {
+                        accents.bookmarkRibbon.copy(alpha = (0.55f + 0.35f * focus) * exit)
+                    } else {
+                        onSurface.copy(alpha = inkAlpha)
+                    }
                     drawRoundRect(
-                        color = onSurface.copy(alpha = (0.18f + 0.72f * focus) * exit),
+                        color = barColor,
                         topLeft = Offset(
                             rectLeft(
                                 collapsedX - collapsedBarHeight - (1f - exit) * 4.dp.toPx(),
@@ -322,35 +348,6 @@ internal fun AyahSelectorRail(
                         size = Size(collapsedBarW, collapsedBarHeight),
                         cornerRadius = collapsedCorner,
                     )
-                }
-
-                // Ruby marks sit on the same stack as the symbolic bars: each
-                // bookmarked ayah maps to a fractional position so the reader
-                // can see where marks fall without opening the wheel.
-                if (bookmarkedAyahs.isNotEmpty()) {
-                    val markH = 2.dp.toPx()
-                    val markW = 8.dp.toPx() + markH
-                    val markCorner = CornerRadius(markH, markH)
-                    val halfBars = (collapsedBarsCount - 1) / 2f
-                    for (ayah in bookmarkedAyahs) {
-                        if (ayah !in 1..ayahCount) continue
-                        val progress = if (ayahCount > 1) {
-                            ((ayah - 1f) / (ayahCount - 1).toFloat()).coerceIn(0f, 1f)
-                        } else {
-                            0f
-                        }
-                        val pos = progress * (collapsedBarsCount - 1)
-                        val y = centerY + (pos - halfBars) * collapsedStep
-                        drawRoundRect(
-                            color = accents.bookmarkRibbon.copy(alpha = 0.88f * collapsedAlpha),
-                            topLeft = Offset(
-                                rectLeft(collapsedX - markH, markW),
-                                y - markH / 2f,
-                            ),
-                            size = Size(markW, markH),
-                            cornerRadius = markCorner,
-                        )
-                    }
                 }
             }
 
@@ -409,14 +406,17 @@ internal fun AyahSelectorRail(
                     val tickCorner = CornerRadius(tickThickness, tickThickness)
                     val alpha = (0.1f + 0.62f * focus) * arrival * edgeFade
                     val isSelected = ayah == selectedAyah
+                    val isBookmarked = ayah in bookmarkedAyahs
                     // Start behind the screen edge so the rounded left cap is
                     // hidden and the visible end sits truly flush at x = 0.
                     val tickFullWidth = length + tickThickness
+                    // Gold = dial focus; ruby = saved verse; ink = ordinary tick.
+                    // Focus wins when a bookmarked ayah is under the finger.
                     drawRoundRect(
-                        color = if (isSelected) {
-                            accents.gold.copy(alpha = 0.96f * arrival)
-                        } else {
-                            onSurface.copy(alpha = alpha)
+                        color = when {
+                            isSelected -> accents.gold.copy(alpha = 0.96f * arrival)
+                            isBookmarked -> accents.bookmarkRibbon.copy(alpha = (0.55f + 0.35f * focus) * arrival * edgeFade)
+                            else -> onSurface.copy(alpha = alpha)
                         },
                         topLeft = Offset(
                             rectLeft(wheelX - tickThickness, tickFullWidth),
@@ -441,10 +441,14 @@ internal fun AyahSelectorRail(
                             cornerRadius = tickCorner,
                         )
                     }
-                    numberPaint.color = if (isSelected) {
-                        accents.gold.copy(alpha = 0.95f * arrival).toArgb()
-                    } else {
-                        onSurface.copy(alpha = (0.18f + 0.46f * focus) * arrival * edgeFade).toArgb()
+                    numberPaint.color = when {
+                        isSelected -> accents.gold.copy(alpha = 0.95f * arrival).toArgb()
+                        isBookmarked -> accents.bookmarkRibbon
+                            .copy(alpha = (0.4f + 0.5f * focus) * arrival * edgeFade)
+                            .toArgb()
+                        else -> onSurface
+                            .copy(alpha = (0.18f + 0.46f * focus) * arrival * edgeFade)
+                            .toArgb()
                     }
                     numberPaint.textSize = if (isSelected) 11.sp.toPx() else 8.5.sp.toPx()
                     drawIntoCanvas { canvas ->
