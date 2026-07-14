@@ -1724,18 +1724,30 @@ select {
 }
 
 /*
- * Arabic-only continuous line: share the Hafs word baseline (Android
- * ResponsiveHafsAyah — smaller SpanStyle in the same AnnotatedString).
- * A tall middle-aligned box was wrong here: it parks the ornament low
- * relative to the glyph bodies. Gloss mode still uses a fixed Arabic-line
- * box because word columns include gloss rows.
+ * Arabic-only continuous line: mid-align the mark with the word shells.
+ *
+ * Baseline sharing is unreliable here. Each word is a nested inline-block
+ * (.hafs-shell → .word-ink-slot → display:block .hafs-glyph) with
+ * `contain: layout`; several engines then take the shell's baseline as its
+ * bottom margin edge. The smaller ﴿N﴾ drops under the letter bodies even
+ * though both runs are Hafs. Aligning both shells and the mark to `middle`
+ * puts them on the same mid-line; a light paint lift then corrects Hafs
+ * ornament brackets (yMin ≈ −0.33 em).
+ *
+ * Gloss mode still uses a fixed Arabic-line box (word columns include gloss
+ * rows). Do not bring back a full line-height flex box on this path — that
+ * was the earlier mis-alignment.
  */
+.hafs-ayah .hafs-shell {
+  vertical-align: middle;
+}
+
 .hafs-ayah > .ayah-mark {
   display: inline-block;
-  vertical-align: baseline;
+  vertical-align: middle;
   line-height: 1;
-  /* Hafs' ornament sits low inside its reported line box — lift paint only. */
-  transform: translateY(-0.22em);
+  /* Hafs ornament brackets hang low in the em box — lift paint only. */
+  transform: translateY(-0.18em);
 }
 
 @media (hover: hover) {
