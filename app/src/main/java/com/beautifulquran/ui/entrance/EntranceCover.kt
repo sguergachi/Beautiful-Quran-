@@ -215,8 +215,8 @@ fun EntranceCover(
     val safeInsets = WindowInsets.displayCutout.union(WindowInsets.systemBars)
     val (frameMarginH, frameMarginV) = with(localDensity) {
         val breathing = 8.dp.toPx()
-        val baseH = 26.dp.toPx()
-        val baseV = 56.dp.toPx()
+        val baseH = 16.dp.toPx()
+        val baseV = 44.dp.toPx()
         val floorH = maxOf(
             10.dp.toPx(),
             safeInsets.getLeft(this, layoutDirection) + breathing,
