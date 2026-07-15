@@ -82,7 +82,7 @@ object AssistantIntents {
 
     /** Assistant often appends the app name; strip it before matching. */
     private val appNameSuffix = Regex(
-        """\s+(?:on|in|using|with|via)\s+(?:the\s+)?(?:app\s+)?beautiful\s+quran(?:\s+app)?\s*$""",
+        """\s+(?:on|in|using|with|via|from)\s+(?:the\s+)?(?:app\s+)?beautiful\s+quran(?:\s+app)?\s*$""",
         RegexOption.IGNORE_CASE,
     )
 
