@@ -1353,10 +1353,10 @@ select {
   margin-block-start: 0.2rem;
   /*
    * Word tiles use a generous column-gap (0.8rem) so gloss columns breathe.
-   * The closing ornament is not another tile — Android FlowRow only spaces
-   * it by 2dp. Cancel most of the flex gap so ﴿N﴾ sits near the last word.
+   * The closing ornament is not another tile — pull it in from full tile
+   * spacing, but leave a little air so it does not crowd the last word.
    */
-  margin-inline-start: calc(0.1rem - 0.8rem);
+  margin-inline-start: calc(0.4rem - 0.8rem);
   /* Hafs' ornament sits low inside its reported line box. Lift only its paint;
      the fixed Arabic-line box above continues to own row alignment. */
   transform: translateY(-0.22em);
