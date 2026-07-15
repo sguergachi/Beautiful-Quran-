@@ -145,7 +145,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     when (settings.themeMode) {
                         ThemeMode.ROYAL_GREEN -> SystemBarStyle.dark(Color.TRANSPARENT)
-                        else -> SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                        else -> SystemBarStyle.light(PAPER_STATUS_BAR, PAPER_STATUS_BAR)
                     }
                 }
                 enableEdgeToEdge(statusBarStyle = statusBarStyle)
@@ -183,6 +183,7 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         const val NIGHTFALL_STATUS_BAR = 0xFF0A0B0C.toInt()
+        const val PAPER_STATUS_BAR = 0xFFFAF3E8.toInt()
     }
 }
 
