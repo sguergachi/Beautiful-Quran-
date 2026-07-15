@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.androidx.baselineprofile)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
 }
 
 /** CI exports unset secrets as empty strings; treat those as absent. */
@@ -145,6 +146,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.guava)
     implementation(libs.xz)
     implementation(libs.androidx.profileinstaller)
+    implementation(libs.androidx.appfunctions)
+    ksp(libs.androidx.appfunctions.compiler)
 
     baselineProfile(project(":baselineprofile"))
 

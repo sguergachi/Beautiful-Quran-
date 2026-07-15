@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AppFunctionAppMetadata xmlns:appfn="http://schemas.android.com/apk/androidx.appfunctions"
+    appfn:description="Beautiful Quran provides hands-free Quran recitation, reader navigation, search, bookmarks, and reader preferences.
+
+Operational Patterns:
+- Chapter and verse parameters work across the complete Quran; an omitted verse means verse 1.
+- Playback transport, speed, repeat ranges, and reciter selection operate without opening an in-app voice surface.
+- Foreground functions navigate the visible paper stack and resolve 'this verse' from the reader's current focus.
+- Reader preference updates preserve every omitted setting.
+
+Constraints:
+- Chapters are numbered 1 through 114.
+- Verse numbers must exist within the selected chapter.
+- Foreground navigation and context-dependent bookmarking are available only while the activity is visible."
+    appfn:displayDescription="@string/appfunctions_description" />

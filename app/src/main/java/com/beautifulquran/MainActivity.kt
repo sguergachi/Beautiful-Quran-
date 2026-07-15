@@ -57,6 +57,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.beautifulquran.assistant.AssistantAction
 import com.beautifulquran.assistant.AssistantIntents
+import com.beautifulquran.assistant.ForegroundAppFunctions
 import com.beautifulquran.data.HomeBookmarkStyle
 import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.AppViewModelFactory
@@ -107,6 +108,20 @@ class MainActivity : ComponentActivity() {
 
     /** Assistant / deep-link / Routine actions waiting for the paper stack. */
     private val pendingAssistantAction = MutableStateFlow<AssistantAction?>(null)
+    private var foregroundAppFunctions: ForegroundAppFunctions? = null
+
+    override fun onStart() {
+        super.onStart()
+        if (android.os.Build.VERSION.SDK_INT >= 37) {
+            foregroundAppFunctions = ForegroundAppFunctions(this).also { it.register() }
+        }
+    }
+
+    override fun onStop() {
+        foregroundAppFunctions?.unregister()
+        foregroundAppFunctions = null
+        super.onStop()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -117,6 +132,9 @@ class MainActivity : ComponentActivity() {
         val app = application as QuranApp
 
         setContent {
+            LaunchedEffect(Unit) {
+                app.assistantActions.collect { pendingAssistantAction.value = it }
+            }
             val settings by app.settings.settings.collectAsStateWithLifecycle()
             val assistantAction by pendingAssistantAction.collectAsStateWithLifecycle()
             val systemDark = isSystemInDarkTheme()
@@ -392,6 +410,12 @@ private fun PaperStackApp(
                 } else {
                     animateTo(COVER_LAYER)
                 }
+            }
+            AssistantAction.OpenChapters -> animateTo(COVER_LAYER)
+            AssistantAction.OpenSettings -> animateTo(settingsLayer)
+            is AssistantAction.Search -> {
+                homeViewModel.onQueryChange(action.query)
+                animateTo(COVER_LAYER)
             }
             is AssistantAction.ContinueReading -> {
                 val surah = settings.lastSurah

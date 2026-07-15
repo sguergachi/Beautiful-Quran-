@@ -19,6 +19,9 @@ sealed class AssistantAction {
         val play: Boolean = false,
     ) : AssistantAction()
     data object OpenBookmarks : AssistantAction()
+    data object OpenChapters : AssistantAction()
+    data object OpenSettings : AssistantAction()
+    data class Search(val query: String) : AssistantAction()
 
     /** Reopen the last-read verse; [play] resumes recitation there. */
     data class ContinueReading(val play: Boolean = false) : AssistantAction()
