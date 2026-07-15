@@ -139,7 +139,7 @@ class MainActivity : ComponentActivity() {
                         when {
                             !entranceDone -> Color.BLACK
                             usesNightfall -> NIGHTFALL_STATUS_BAR
-                            else -> Color.TRANSPARENT
+                            else -> ROYAL_GREEN_STATUS_BAR
                         },
                     )
                 } else {
@@ -180,6 +180,7 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         const val NIGHTFALL_STATUS_BAR = 0xFF0A0B0C.toInt()
+        const val ROYAL_GREEN_STATUS_BAR = 0xFF062C24.toInt()
     }
 }
 
