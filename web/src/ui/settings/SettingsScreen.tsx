@@ -18,6 +18,7 @@ import {
   formatBrushCheckVerifyLines,
   parseBrushCheckFromText,
   SHIPPED_CHECK_PARAMS,
+  SHIPPED_CHECK_REVISION,
   type BrushCheckKnobKey,
   type BrushCheckParams,
 } from '../kit/brushCheck'
@@ -129,6 +130,7 @@ export function SettingsScreen({
   const checkPasteRef = useRef<HTMLTextAreaElement>(null)
   const lastStyleRef = useRef(s.brushCircleStyle)
   const lastShipRef = useRef(SHIPPED_BRUSH_REVISION)
+  const lastCheckShipRef = useRef(SHIPPED_CHECK_REVISION)
 
   // Reseed when the saved preset changes, or when shipped BASE revision bumps.
   // Ship bumps always load *baseline* (bodyAmp 0.34, alpha 0.9, …) — never the
@@ -151,6 +153,15 @@ export function SettingsScreen({
       setSliderEpoch((n) => n + 1)
     }
   }, [s.brushCircleStyle, SHIPPED_BRUSH_REVISION])
+
+  // Reseed check lab when shipped check design changes.
+  useEffect(() => {
+    if (lastCheckShipRef.current === SHIPPED_CHECK_REVISION) return
+    lastCheckShipRef.current = SHIPPED_CHECK_REVISION
+    setCheckParams({ ...SHIPPED_CHECK_PARAMS })
+    setCheckPaintToken((n) => n + 1)
+    setCheckSliderEpoch((n) => n + 1)
+  }, [SHIPPED_CHECK_REVISION])
 
   const setKnob = (key: BrushKnobKey, value: number) => {
     setBrushParams((prev) => ({ ...prev, label: 'Custom', [key]: value }))
