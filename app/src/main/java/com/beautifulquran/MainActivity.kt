@@ -133,14 +133,14 @@ class MainActivity : ComponentActivity() {
             }
 
             SideEffect {
-                val statusBarStyle = if (usesNightfall || !entranceDone) {
-                    // The entrance cover hides the status bar; while it is up
-                    // (and in nightfall) icons stay light for the brief frames
-                    // around show/hide. In paper mode paint that strip black so
-                    // it never flashes the light window background before the
-                    // leather cover draws.
+                val isRoyalGreen = settings.themeMode == ThemeMode.ROYAL_GREEN
+                val statusBarStyle = if (usesNightfall || isRoyalGreen || !entranceDone) {
                     SystemBarStyle.dark(
-                        if (usesNightfall) NIGHTFALL_STATUS_BAR else Color.BLACK,
+                        when {
+                            !entranceDone -> Color.BLACK
+                            usesNightfall -> NIGHTFALL_STATUS_BAR
+                            else -> Color.TRANSPARENT
+                        },
                     )
                 } else {
                     SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
