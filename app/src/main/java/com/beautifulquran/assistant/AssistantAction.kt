@@ -5,13 +5,13 @@ import android.content.Intent
 import android.net.Uri
 
 /**
- * Actions the reader can fulfill from deep links, launcher shortcuts, in-app
- * voice, system search, or Google App Actions / custom intents.
+ * Actions the reader can fulfill from Android intents, deep links, launcher
+ * shortcuts, system search, or Google App Actions.
  */
 sealed class AssistantAction {
     /**
      * Open the reader at [surahId]:[ayah]. When [play] is true, start recitation
-     * there (in-app Listen "play chapter 2" — Gemini cannot target sideloaded apps).
+     * there (for example, an Android media play-from-search request).
      */
     data class OpenVerse(
         val surahId: Int,
@@ -19,7 +19,9 @@ sealed class AssistantAction {
         val play: Boolean = false,
     ) : AssistantAction()
     data object OpenBookmarks : AssistantAction()
-    data object ContinueReading : AssistantAction()
+
+    /** Reopen the last-read verse; [play] resumes recitation there. */
+    data class ContinueReading(val play: Boolean = false) : AssistantAction()
     data object SaveBookmark : AssistantAction()
 }
 
@@ -63,12 +65,9 @@ object AssistantIntents {
         RegexOption.IGNORE_CASE,
     )
 
-    /**
-     * Play / recite — must win over open-only so Gemini-style "play chapter 2"
-     * is handled in-app (Listen) instead of leaving the user stuck on YouTube.
-     */
-    private val playChapter = Regex(
-        """^(?:please\s+)?(?:play|recite|listen to)\s+(?:(?:chapter|surah|sura|ch\.?)\s+)?(\d{1,3})(?:\s+(?:ayah|aya|verse)\s+(\d{1,3}))?$""",
+    /** Play / recite prefix supplied by Android media search or App Actions. */
+    private val playPrefix = Regex(
+        """^(?:please\s+)?(?:play|recite|listen to)\s+(.+)$""",
         RegexOption.IGNORE_CASE,
     )
 
@@ -80,12 +79,17 @@ object AssistantIntents {
 
     /** Assistant often appends the app name; strip it before matching. */
     private val appNameSuffix = Regex(
-        """\s+(?:on|in|using|with|via)\s+(?:the\s+)?(?:app\s+)?beautiful\s+quran\s*$""",
+        """\s+(?:on|in|using|with|via)\s+(?:the\s+)?(?:app\s+)?beautiful\s+quran(?:\s+app)?\s*$""",
         RegexOption.IGNORE_CASE,
     )
 
+    const val ACTION_MEDIA_PLAY_FROM_SEARCH = "android.media.action.MEDIA_PLAY_FROM_SEARCH"
+
     fun parse(intent: Intent?): AssistantAction? {
         if (intent == null) return null
+        if (intent.action == ACTION_MEDIA_PLAY_FROM_SEARCH) {
+            return parsePlaySearch(intent.getStringExtra(SearchManager.QUERY))
+        }
         parseAction(intent.action)?.let { return it }
         intent.dataString?.let { parseDeepLink(it) }?.let { return it }
         parseFeature(intent.getStringExtra(EXTRA_FEATURE))?.let { return it }
@@ -121,7 +125,7 @@ object AssistantIntents {
     fun parseData(uri: Uri?): AssistantAction? = uri?.toString()?.let(::parseDeepLink)
 
     fun parseAction(action: String?): AssistantAction? = when (action) {
-        ACTION_CONTINUE -> AssistantAction.ContinueReading
+        ACTION_CONTINUE -> AssistantAction.ContinueReading()
         ACTION_BOOKMARKS -> AssistantAction.OpenBookmarks
         ACTION_SAVE_BOOKMARK -> AssistantAction.SaveBookmark
         Intent.ACTION_SEARCH -> null // query in extras
@@ -145,7 +149,7 @@ object AssistantIntents {
 
         return when {
             route == FEATURE_CONTINUE || route == "resume" || route == "last" ->
-                AssistantAction.ContinueReading
+                AssistantAction.ContinueReading(play = parsePlayQuery(queryPart))
             route == FEATURE_BOOKMARKS || route == "bookmark" ->
                 AssistantAction.OpenBookmarks
             route == "bookmark/save" || route == FEATURE_SAVE_BOOKMARK ||
@@ -161,7 +165,7 @@ object AssistantIntents {
         "" -> null
         FEATURE_CONTINUE, "resume", "continue reading", "continue listening",
         "last read", "last verse",
-        -> AssistantAction.ContinueReading
+        -> AssistantAction.ContinueReading()
         FEATURE_BOOKMARKS, "bookmark", "saved", "saved passages", "marked verses",
         -> AssistantAction.OpenBookmarks
         FEATURE_SAVE_BOOKMARK, "save bookmark", "bookmark verse", "save verse",
@@ -171,9 +175,17 @@ object AssistantIntents {
         else -> parseSpokenCommand(feature ?: "")
     }
 
-    /**
-     * Free-form phrases from in-app speech, GET_THING, SEARCH, or Assistant.
-     */
+    /** Convert a media voice-search request into an action that always plays. */
+    fun parsePlaySearch(query: String?): AssistantAction = when (
+        val parsed = query?.takeIf(String::isNotBlank)?.let(::parseSpokenCommand)
+    ) {
+        is AssistantAction.OpenVerse -> parsed.copy(play = true)
+        is AssistantAction.ContinueReading -> parsed.copy(play = true)
+        is AssistantAction -> parsed
+        null -> AssistantAction.ContinueReading(play = true)
+    }
+
+    /** Free-form phrases supplied by Android search or Assistant intents. */
     fun parseSpokenCommand(raw: String): AssistantAction? {
         val q = normalizeSpoken(raw)
         if (q.isEmpty()) return null
@@ -183,7 +195,7 @@ object AssistantIntents {
                 Regex(
                     """^(continue|resume|continue reading|continue listening|last read|where i left off)$""",
                 ),
-            ) -> return AssistantAction.ContinueReading
+            ) -> return AssistantAction.ContinueReading()
             q.matches(
                 Regex(
                     """^(bookmarks?|saved( passages| verses)?|marked verses|open bookmarks?)$""",
@@ -203,11 +215,16 @@ object AssistantIntents {
         val q = normalizeSpoken(raw)
         if (q.isEmpty()) return null
 
-        playChapter.matchEntire(q)?.let { m ->
-            val surah = m.groupValues[1].toIntOrNull() ?: return null
-            val ayah = m.groupValues.getOrNull(2)?.takeIf { it.isNotEmpty() }?.toIntOrNull() ?: 1
-            return openVerseOrNull(surah, ayah, play = true)
+        playPrefix.matchEntire(q)?.let { m ->
+            return parseVerseReference(m.groupValues[1])?.copy(play = true)
         }
+        return parseVerseReference(q)
+    }
+
+    /** A bare verse reference: "chapter 2", "2:255", or "surah 2 ayah 255". */
+    private fun parseVerseReference(reference: String): AssistantAction.OpenVerse? {
+        val q = reference.trim()
+        if (q.isEmpty()) return null
 
         openChapter.matchEntire(q)?.let { m ->
             val surah = m.groupValues[1].toIntOrNull() ?: return null
@@ -257,7 +274,7 @@ object AssistantIntents {
         val query = parseQuery(rawQuery)
         val surah = pathSurah ?: query[EXTRA_SURAH]?.toIntOrNull() ?: return null
         val ayah = pathAyah ?: query[EXTRA_AYAH]?.toIntOrNull() ?: 1
-        return openVerseOrNull(surah, ayah)
+        return openVerseOrNull(surah, ayah, play = parsePlayQuery(rawQuery))
     }
 
     private fun parseQuery(raw: String?): Map<String, String> {
@@ -268,6 +285,9 @@ object AssistantIntents {
             pair.substring(0, eq) to pair.substring(eq + 1)
         }.toMap()
     }
+
+    private fun parsePlayQuery(raw: String?): Boolean =
+        parseQuery(raw)["play"] in setOf("1", "true")
 
     private fun openVerseOrNull(
         surah: Int,

@@ -333,13 +333,17 @@ private fun PaperStackApp(
                     animateTo(COVER_LAYER)
                 }
             }
-            AssistantAction.ContinueReading -> {
+            is AssistantAction.ContinueReading -> {
                 val surah = settings.lastSurah
                 if (surah in 1..114) {
-                    openVerseFromAssistant(surah, settings.lastAyah.coerceAtLeast(1))
+                    openVerseFromAssistant(
+                        surah,
+                        settings.lastAyah.coerceAtLeast(1),
+                        play = action.play,
+                    )
                 } else {
                     // No saved position yet — open Al-Fatiha rather than looking broken.
-                    openVerseFromAssistant(1, 1)
+                    openVerseFromAssistant(1, 1, play = action.play)
                 }
             }
             AssistantAction.SaveBookmark -> {
@@ -599,7 +603,6 @@ private fun PaperStackApp(
                 onOpenTimingsLab = { openTimingsLab() },
                 onOpenOrnamentsLab = { openOrnamentsLab() },
                 onRecordSystemTrace = onRecordSystemTrace,
-                onVoiceAction = ::fulfillAssistantAction,
             )
         }
 
@@ -703,7 +706,6 @@ private fun PaperStackApp(
                     animateTo(AYAH_LAYER)
                 },
                 onOpenSettings = { animateTo(SETTINGS_LAYER) },
-                onVoiceAction = ::fulfillAssistantAction,
                 // Drive the float's enter/exit from the live page turn so it
                 // slides in when returning to chapter selection and out when
                 // leaving for the reader — not only when nowPlaying flips.

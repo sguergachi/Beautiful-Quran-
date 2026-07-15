@@ -9,7 +9,7 @@ class AssistantActionTest {
     @Test
     fun `deep link continue`() {
         assertEquals(
-            AssistantAction.ContinueReading,
+            AssistantAction.ContinueReading(),
             AssistantIntents.parseDeepLink("beautifulquran://continue"),
         )
     }
@@ -31,6 +31,14 @@ class AssistantActionTest {
         assertEquals(
             AssistantAction.OpenVerse(2, 255),
             AssistantIntents.parseDeepLink("beautifulquran://verse/2/255"),
+        )
+        assertEquals(
+            AssistantAction.OpenVerse(2, 255, play = true),
+            AssistantIntents.parseDeepLink("beautifulquran://verse/2/255?play=true"),
+        )
+        assertEquals(
+            AssistantAction.ContinueReading(play = true),
+            AssistantIntents.parseDeepLink("beautifulquran://continue?play=true"),
         )
     }
 
@@ -109,7 +117,7 @@ class AssistantActionTest {
             AssistantIntents.parseSpokenCommand("bookmark this verse"),
         )
         assertEquals(
-            AssistantAction.ContinueReading,
+            AssistantAction.ContinueReading(),
             AssistantIntents.parseSpokenCommand("Continue reading"),
         )
         assertEquals(
@@ -129,6 +137,30 @@ class AssistantActionTest {
             AssistantIntents.parseSpokenCommand("18"),
         )
         assertNull(AssistantIntents.parseSpokenCommand("not a command"))
+    }
+
+    @Test
+    fun `media play search always starts audio`() {
+        assertEquals(
+            AssistantAction.OpenVerse(2, 1, play = true),
+            AssistantIntents.parsePlaySearch("chapter 2"),
+        )
+        assertEquals(
+            AssistantAction.OpenVerse(36, 12, play = true),
+            AssistantIntents.parsePlaySearch("surah 36 ayah 12"),
+        )
+        assertEquals(
+            AssistantAction.OpenVerse(2, 255, play = true),
+            AssistantIntents.parsePlaySearch("play 2:255 on the Beautiful Quran app"),
+        )
+        assertEquals(
+            AssistantAction.ContinueReading(play = true),
+            AssistantIntents.parsePlaySearch(null),
+        )
+        assertEquals(
+            AssistantAction.ContinueReading(play = true),
+            AssistantIntents.parsePlaySearch("not a chapter"),
+        )
     }
 
     @Test
