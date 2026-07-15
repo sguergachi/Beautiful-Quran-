@@ -5,13 +5,13 @@ import android.content.Intent
 import android.net.Uri
 
 /**
- * Actions the reader can fulfill from deep links, launcher shortcuts, in-app
- * voice, system search, or Google App Actions / custom intents.
+ * Actions the reader can fulfill from Android intents, deep links, launcher
+ * shortcuts, system search, or Google App Actions.
  */
 sealed class AssistantAction {
     /**
      * Open the reader at [surahId]:[ayah]. When [play] is true, start recitation
-     * there (in-app Listen "play chapter 2" — Gemini cannot target sideloaded apps).
+     * there (for example, an Android media play-from-search request).
      */
     data class OpenVerse(
         val surahId: Int,
@@ -65,12 +65,7 @@ object AssistantIntents {
         RegexOption.IGNORE_CASE,
     )
 
-    /**
-     * Play / recite prefix — must win over open-only so Gemini-style "play
-     * chapter 2" is handled in-app (Listen) instead of leaving the user stuck
-     * on YouTube. Whatever follows is parsed as a normal verse reference, so
-     * "play 2:255" and "listen to surah 18" both work.
-     */
+    /** Play / recite prefix supplied by Android media search or App Actions. */
     private val playPrefix = Regex(
         """^(?:please\s+)?(?:play|recite|listen to)\s+(.+)$""",
         RegexOption.IGNORE_CASE,
@@ -88,11 +83,6 @@ object AssistantIntents {
         RegexOption.IGNORE_CASE,
     )
 
-    /**
-     * The one voice hook that works for sideloaded installs: "Hey Google,
-     * play chapter 2 on Beautiful Quran" fires this intent with the query in
-     * [SearchManager.QUERY] — no Play Console review involved.
-     */
     const val ACTION_MEDIA_PLAY_FROM_SEARCH = "android.media.action.MEDIA_PLAY_FROM_SEARCH"
 
     fun parse(intent: Intent?): AssistantAction? {
@@ -159,7 +149,7 @@ object AssistantIntents {
 
         return when {
             route == FEATURE_CONTINUE || route == "resume" || route == "last" ->
-                AssistantAction.ContinueReading()
+                AssistantAction.ContinueReading(play = parsePlayQuery(queryPart))
             route == FEATURE_BOOKMARKS || route == "bookmark" ->
                 AssistantAction.OpenBookmarks
             route == "bookmark/save" || route == FEATURE_SAVE_BOOKMARK ||
@@ -185,12 +175,7 @@ object AssistantIntents {
         else -> parseSpokenCommand(feature ?: "")
     }
 
-    /**
-     * A voice "play …" request aimed at this app (media play-from-search).
-     * The user asked for recitation, so the answer is always audible: verse
-     * queries play, and anything unparseable resumes the last-read verse
-     * rather than silently doing nothing.
-     */
+    /** Convert a media voice-search request into an action that always plays. */
     fun parsePlaySearch(query: String?): AssistantAction = when (
         val parsed = query?.takeIf(String::isNotBlank)?.let(::parseSpokenCommand)
     ) {
@@ -200,9 +185,7 @@ object AssistantIntents {
         null -> AssistantAction.ContinueReading(play = true)
     }
 
-    /**
-     * Free-form phrases from in-app speech, GET_THING, SEARCH, or Assistant.
-     */
+    /** Free-form phrases supplied by Android search or Assistant intents. */
     fun parseSpokenCommand(raw: String): AssistantAction? {
         val q = normalizeSpoken(raw)
         if (q.isEmpty()) return null
@@ -238,7 +221,7 @@ object AssistantIntents {
         return parseVerseReference(q)
     }
 
-    /** A bare verse reference: "chapter 2", "2:255", "surah 2 ayah 255", "18". */
+    /** A bare verse reference: "chapter 2", "2:255", or "surah 2 ayah 255". */
     private fun parseVerseReference(reference: String): AssistantAction.OpenVerse? {
         val q = reference.trim()
         if (q.isEmpty()) return null
@@ -291,7 +274,7 @@ object AssistantIntents {
         val query = parseQuery(rawQuery)
         val surah = pathSurah ?: query[EXTRA_SURAH]?.toIntOrNull() ?: return null
         val ayah = pathAyah ?: query[EXTRA_AYAH]?.toIntOrNull() ?: 1
-        return openVerseOrNull(surah, ayah)
+        return openVerseOrNull(surah, ayah, play = parsePlayQuery(rawQuery))
     }
 
     private fun parseQuery(raw: String?): Map<String, String> {
@@ -303,8 +286,15 @@ object AssistantIntents {
         }.toMap()
     }
 
-    private fun openVerseOrNull(surah: Int, ayah: Int): AssistantAction.OpenVerse? {
+    private fun parsePlayQuery(raw: String?): Boolean =
+        parseQuery(raw)["play"] in setOf("1", "true")
+
+    private fun openVerseOrNull(
+        surah: Int,
+        ayah: Int,
+        play: Boolean = false,
+    ): AssistantAction.OpenVerse? {
         if (surah !in 1..114 || ayah < 1) return null
-        return AssistantAction.OpenVerse(surah, ayah)
+        return AssistantAction.OpenVerse(surah, ayah, play = play)
     }
 }

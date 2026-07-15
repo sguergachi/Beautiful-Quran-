@@ -32,6 +32,14 @@ class AssistantActionTest {
             AssistantAction.OpenVerse(2, 255),
             AssistantIntents.parseDeepLink("beautifulquran://verse/2/255"),
         )
+        assertEquals(
+            AssistantAction.OpenVerse(2, 255, play = true),
+            AssistantIntents.parseDeepLink("beautifulquran://verse/2/255?play=true"),
+        )
+        assertEquals(
+            AssistantAction.ContinueReading(play = true),
+            AssistantIntents.parseDeepLink("beautifulquran://continue?play=true"),
+        )
     }
 
     @Test

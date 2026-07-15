@@ -83,7 +83,7 @@ class ReaderViewModel(
 
     private var surahId: Int = 0
 
-    /** After [load] finishes, start recitation from this ayah (in-app voice play). */
+    /** After [load] finishes, start recitation from this ayah (Assistant/media intent). */
     private var pendingPlayAyah: Int? = null
 
     /** Drives [bookmarkedAyahs]: the surah currently loaded into the reader, so
@@ -269,7 +269,7 @@ class ReaderViewModel(
 
     /**
      * Loads [surahId]. When [startPlaybackAtAyah] is set, starts recitation from
-     * that ayah once content is ready (in-app "play chapter 2").
+     * that ayah once content is ready (for example, "play chapter 2").
      */
     fun load(surahId: Int, startPlaybackAtAyah: Int? = null) {
         if (

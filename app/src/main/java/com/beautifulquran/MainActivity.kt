@@ -611,7 +611,6 @@ private fun PaperStackApp(
                 onOpenTimingsLab = { openTimingsLab() },
                 onOpenOrnamentsLab = { openOrnamentsLab() },
                 onRecordSystemTrace = onRecordSystemTrace,
-                onVoiceAction = ::fulfillAssistantAction,
             )
         }
 
@@ -640,7 +639,6 @@ private fun PaperStackApp(
                         rootReturnVisible = rootReturnVisible,
                         keepStatusBarVisible = overlayBlocking,
                         onInkOverlayVisibilityChange = { readerInkOverlayVisible = it },
-                        onVoiceAction = ::fulfillAssistantAction,
                     )
                 }
 
@@ -716,7 +714,6 @@ private fun PaperStackApp(
                     animateTo(AYAH_LAYER)
                 },
                 onOpenSettings = { animateTo(SETTINGS_LAYER) },
-                onVoiceAction = ::fulfillAssistantAction,
                 // Drive the float's enter/exit from the live page turn so it
                 // slides in when returning to chapter selection and out when
                 // leaving for the reader — not only when nowPlaying flips.

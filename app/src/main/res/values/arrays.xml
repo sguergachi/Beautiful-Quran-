@@ -51,6 +51,20 @@
         <item>open surah $surah verse $ayah</item>
         <item>go to surah $surah ayah $ayah</item>
     </string-array>
+    <string-array name="assistant_play_chapter_queries">
+        <item>play chapter $surah</item>
+        <item>play surah $surah</item>
+        <item>play sura $surah</item>
+        <item>recite chapter $surah</item>
+        <item>recite surah $surah</item>
+        <item>listen to chapter $surah</item>
+        <item>listen to surah $surah</item>
+        <item>play chapter $surah verse $ayah</item>
+        <item>play chapter $surah ayah $ayah</item>
+        <item>play surah $surah verse $ayah</item>
+        <item>play surah $surah ayah $ayah</item>
+        <item>recite surah $surah ayah $ayah</item>
+    </string-array>
     <string-array name="assistant_bookmark_queries">
         <item>bookmark this</item>
         <item>bookmark this verse</item>
@@ -61,4 +75,3 @@
         <item>add bookmark</item>
     </string-array>
 </resources>
-
