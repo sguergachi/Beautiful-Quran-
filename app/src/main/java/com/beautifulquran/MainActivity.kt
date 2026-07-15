@@ -133,17 +133,20 @@ class MainActivity : ComponentActivity() {
             }
 
             SideEffect {
-                val isRoyalGreen = settings.themeMode == ThemeMode.ROYAL_GREEN
-                val statusBarStyle = if (usesNightfall || isRoyalGreen || !entranceDone) {
+                val statusBarStyle = if (usesNightfall || !entranceDone) {
+                    // The entrance cover hides the status bar; while it is up
+                    // (and in nightfall) icons stay light for the brief frames
+                    // around show/hide. In paper mode paint that strip black so
+                    // it never flashes the light window background before the
+                    // leather cover draws.
                     SystemBarStyle.dark(
-                        when {
-                            !entranceDone -> Color.BLACK
-                            usesNightfall -> NIGHTFALL_STATUS_BAR
-                            else -> ROYAL_GREEN_STATUS_BAR
-                        },
+                        if (usesNightfall) NIGHTFALL_STATUS_BAR else Color.BLACK,
                     )
                 } else {
-                    SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                    when (settings.themeMode) {
+                        ThemeMode.ROYAL_GREEN -> SystemBarStyle.dark(Color.TRANSPARENT)
+                        else -> SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                    }
                 }
                 enableEdgeToEdge(statusBarStyle = statusBarStyle)
             }
@@ -180,7 +183,6 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         const val NIGHTFALL_STATUS_BAR = 0xFF0A0B0C.toInt()
-        const val ROYAL_GREEN_STATUS_BAR = 0xFF062C24.toInt()
     }
 }
 
