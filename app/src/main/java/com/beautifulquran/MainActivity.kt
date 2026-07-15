@@ -143,10 +143,7 @@ class MainActivity : ComponentActivity() {
                         if (usesNightfall) NIGHTFALL_STATUS_BAR else Color.BLACK,
                     )
                 } else {
-                    when (settings.themeMode) {
-                        ThemeMode.ROYAL_GREEN -> SystemBarStyle.dark(Color.TRANSPARENT)
-                        else -> SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
-                    }
+                    SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
                 }
                 enableEdgeToEdge(statusBarStyle = statusBarStyle)
             }
