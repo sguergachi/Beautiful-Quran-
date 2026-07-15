@@ -2,15 +2,12 @@ package com.beautifulquran.playback
 
 import android.content.ComponentName
 import android.content.Context
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.beautifulquran.data.model.Reciter
-import com.beautifulquran.domain.BASMALAH_PLAYLIST_AYAH
-import com.beautifulquran.domain.surahOpensWithBasmalahPreface
+import com.beautifulquran.data.model.Surah
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -140,6 +137,8 @@ class PlayerController(private val context: Context) {
     )
 
     private fun syncFromController(player: Player, forcePlaying: Boolean = false) {
+        basmalahLeadIn = player.mediaItemCount > 0 &&
+            parseMediaId(player.getMediaItemAt(0).mediaId)?.ayah == 0
         val ended = player.playbackState == Player.STATE_ENDED
         _state.value = _state.value.copy(
             isPlaying = player.isPlaying || forcePlaying,
@@ -264,52 +263,19 @@ class PlayerController(private val context: Context) {
         if (boundedRange == null) repeatEndPositionMs = null
         _state.value = _state.value.copy(repeatRange = boundedRange)
 
-        val withBasmalah = includeBasmalahLeadIn && surahOpensWithBasmalahPreface(surahId)
-        basmalahLeadIn = withBasmalah
+        val queue = recitationQueue(
+            surah = Surah(surahId, "", surahName, "", "", ayahCount),
+            reciter = reciter,
+            startAyah = boundedRange?.let { startAyah.coerceIn(it.first, it.last) } ?: startAyah,
+            includeBasmalahLeadIn = includeBasmalahLeadIn,
+            startWithBasmalah = startWithBasmalah,
+        )
+        basmalahLeadIn = queue.hasBasmalahLeadIn
 
         withController { c ->
-            val items = buildList {
-                if (withBasmalah) {
-                    add(
-                        MediaItem.Builder()
-                            .setMediaId(mediaId(surahId, BASMALAH_PLAYLIST_AYAH, reciter.id))
-                            .setUri(reciter.basmalahAudioUrl())
-                            .setMediaMetadata(
-                                MediaMetadata.Builder()
-                                    .setTitle("$surahName • Basmalah")
-                                    .setArtist(reciter.name)
-                                    .build(),
-                            )
-                            .build(),
-                    )
-                }
-                for (ayah in 1..ayahCount) {
-                    add(
-                        MediaItem.Builder()
-                            .setMediaId(mediaId(surahId, ayah, reciter.id))
-                            .setUri(reciter.audioUrl(surahId, ayah))
-                            .setMediaMetadata(
-                                MediaMetadata.Builder()
-                                    .setTitle("$surahName • Ayah $ayah")
-                                    .setArtist(reciter.name)
-                                    .build(),
-                            )
-                            .build(),
-                    )
-                }
-            }
-            val effectiveStartAyah = boundedRange
-                ?.let { startAyah.coerceIn(it.first, it.last) }
-                ?: startAyah
-            val startAtBasmalah =
-                withBasmalah && startWithBasmalah && effectiveStartAyah == 1
-            val startIndex = if (startAtBasmalah) {
-                0
-            } else {
-                playlistIndex(effectiveStartAyah)
-            }
-            val startPos = if (startAtBasmalah) 0L else startPositionMs
-            c.setMediaItems(items, startIndex, startPos)
+            val startPos = if (queue.startIndex == 0 && queue.hasBasmalahLeadIn) 0L
+            else startPositionMs
+            c.setMediaItems(queue.items, queue.startIndex, startPos)
             c.prepare()
             c.play()
             if (boundedRange != null) startRepeatBoundaryMonitor()

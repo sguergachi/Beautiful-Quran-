@@ -114,7 +114,7 @@ per-item derivedStateOf in the reader list  ──►  one ayah recomposes
 ```
 
 - `PlayerController` wraps a `MediaController` connected to `PlaybackService`
-  (a `MediaSessionService`), mirroring player callbacks into a
+  (a `MediaLibraryService`), mirroring player callbacks into a
   `PlayerUiState` StateFlow. Playlists are one `MediaItem` per ayah with
   `mediaId = "surah:ayah:reciterId"`, so `currentMediaItemIndex` ↔ ayah is a
   trivial mapping and ayah-repeat is just `REPEAT_MODE_ONE`. Surahs that open
@@ -204,10 +204,12 @@ ReaderFocusController ── holds the LazyListState; the sole writer to it
 
 ## Playback
 
-`PlaybackService` is a standard `MediaSessionService`: lock-screen and
-notification controls, audio focus, becoming-noisy handling, wake mode for
-streaming. Audio flows through a `CacheDataSource` backed by a 1 GB LRU
-`SimpleCache`, so an ayah streams once and replays from disk afterwards.
+`PlaybackService` is a `MediaLibraryService`: lock-screen and notification
+controls, audio focus, becoming-noisy handling, wake mode for streaming, plus a
+browsable/searchable catalog of all 114 surahs for Assistant, Android Auto, and
+other media clients. Search requests are expanded into the same complete ayah
+queue used by the reader. Audio flows through a `CacheDataSource` backed by a
+1 GB LRU `SimpleCache`, so an ayah streams once and replays from disk afterwards.
 
 ## Gemini / Google Assistant
 
@@ -241,10 +243,11 @@ available.
 
 The public compatibility paths remain:
 
-- `android.media.action.MEDIA_PLAY_FROM_SEARCH` in the manifest handles media
-  voice search such as “Hey Google, play chapter 2 on Beautiful Quran.” The
-  search query opens the requested chapter/ayah and starts recitation; an empty
-  query resumes the last-read verse with audio.
+- `PlaybackService` registers both the Media3 `MediaLibraryService` and platform
+  `MediaBrowserService` interfaces. Assistant can connect to its media session,
+  browse all chapters, and send play-from-search queries such as “play chapter
+  2 on Beautiful Quran.” The legacy `MEDIA_PLAY_FROM_SEARCH` activity intent is
+  retained for clients that launch media searches by intent.
 - `res/xml/shortcuts.xml` declares App Actions capabilities. Assistant turns
   these into normal Android deep links handled by `MainActivity`.
 

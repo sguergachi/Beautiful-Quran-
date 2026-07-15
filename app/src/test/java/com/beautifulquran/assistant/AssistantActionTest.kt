@@ -53,6 +53,10 @@ class AssistantActionTest {
             AssistantIntents.parseSpokenCommand("play chapter 2 on Beautiful Quran"),
         )
         assertEquals(
+            AssistantAction.OpenVerse(2, 1, play = true),
+            AssistantIntents.parseSpokenCommand("play chapter 2 from the Beautiful Quran"),
+        )
+        assertEquals(
             AssistantAction.OpenVerse(18, 1, play = true),
             AssistantIntents.parseSpokenCommand("recite surah 18"),
         )

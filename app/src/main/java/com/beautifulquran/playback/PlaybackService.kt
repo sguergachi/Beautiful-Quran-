@@ -6,6 +6,8 @@ import android.net.ConnectivityManager
 import androidx.core.content.getSystemService
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
@@ -16,14 +18,30 @@ import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.session.LibraryResult
+import androidx.media3.session.MediaLibraryService
+import androidx.media3.session.MediaLibraryService.LibraryParams
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaSessionService
+import com.beautifulquran.QuranApp
+import com.beautifulquran.assistant.AssistantAction
+import com.beautifulquran.assistant.AssistantIntents
+import com.beautifulquran.data.model.Surah
 import com.beautifulquran.domain.BASMALAH_PLAYLIST_AYAH
+import com.google.common.collect.ImmutableList
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.guava.future
 
-class PlaybackService : MediaSessionService() {
+class PlaybackService : MediaLibraryService() {
 
-    private var mediaSession: MediaSession? = null
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var mediaSession: MediaLibrarySession? = null
     private var prefetcher: AudioPrefetcher? = null
 
     override fun onCreate() {
@@ -69,7 +87,7 @@ class PlaybackService : MediaSessionService() {
         player.addListener(PrefetchListener(player, prefetcher))
         player.addListener(BasmalahSkipListener(player))
 
-        mediaSession = MediaSession.Builder(this, player).build()
+        mediaSession = MediaLibrarySession.Builder(this, player, LibraryCallback()).build()
     }
 
     /**
@@ -122,8 +140,187 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
         mediaSession
+
+    /** Quran chapters exposed to Assistant, Android Auto, and other media browsers. */
+    private inner class LibraryCallback : MediaLibrarySession.Callback {
+
+        override fun onGetLibraryRoot(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<MediaItem>> =
+            Futures.immediateFuture(LibraryResult.ofItem(rootItem(), params))
+
+        override fun onGetChildren(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            parentId: String,
+            page: Int,
+            pageSize: Int,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = serviceScope.future {
+            if (parentId != LIBRARY_ROOT) return@future LibraryResult.ofError(
+                LibraryResult.RESULT_ERROR_BAD_VALUE,
+                params,
+            )
+            LibraryResult.ofItemList(chapters().paged(page, pageSize).map(::chapterItem), params)
+        }
+
+        override fun onGetItem(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            mediaId: String,
+        ): ListenableFuture<LibraryResult<MediaItem>> = serviceScope.future {
+            val chapter = mediaId.chapterNumber()?.let { id -> chapters().firstOrNull { it.id == id } }
+                ?: return@future LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+            LibraryResult.ofItem(chapterItem(chapter), null)
+        }
+
+        override fun onSearch(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            query: String,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<Void>> = serviceScope.future {
+            val count = searchChapters(query, chapters()).size
+            session.notifySearchResultChanged(browser, query, count, params)
+            LibraryResult.ofVoid(params)
+        }
+
+        override fun onGetSearchResult(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            query: String,
+            page: Int,
+            pageSize: Int,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = serviceScope.future {
+            val items = searchChapters(query, chapters()).paged(page, pageSize).map(::chapterItem)
+            LibraryResult.ofItemList(items, params)
+        }
+
+        override fun onAddMediaItems(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: List<MediaItem>,
+        ): ListenableFuture<List<MediaItem>> {
+            if (mediaItems.all { it.localConfiguration?.uri != null }) {
+                return Futures.immediateFuture(mediaItems)
+            }
+            return serviceScope.future { requestedQueue(mediaItems.firstOrNull()).items }
+        }
+
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            isForPlayback: Boolean,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = serviceScope.future {
+            val queue = requestedQueue(null)
+            MediaSession.MediaItemsWithStartPosition(queue.items, queue.startIndex, 0L)
+        }
+
+        override fun onSetMediaItems(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: List<MediaItem>,
+            startIndex: Int,
+            startPositionMs: Long,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            if (mediaItems.isNotEmpty() && mediaItems.all { it.localConfiguration?.uri != null }) {
+                return Futures.immediateFuture(
+                    MediaSession.MediaItemsWithStartPosition(mediaItems, startIndex, startPositionMs),
+                )
+            }
+            return serviceScope.future {
+                val queue = requestedQueue(mediaItems.firstOrNull())
+                MediaSession.MediaItemsWithStartPosition(queue.items, queue.startIndex, 0L)
+            }
+        }
+    }
+
+    private suspend fun chapters(): List<Surah> = (application as QuranApp).repository.surahs()
+
+    private suspend fun requestedQueue(item: MediaItem?): RecitationQueue {
+        val app = application as QuranApp
+        val (surah, ayah) = requestedVerse(item, chapters())
+        val reciters = app.repository.reciters()
+        val reciter = reciters.firstOrNull { it.id == app.settings.settings.value.reciterId }
+            ?: reciters.first()
+        app.settings.update { it.copy(lastSurah = surah.id, lastAyah = ayah) }
+        return recitationQueue(surah, reciter, ayah, startWithBasmalah = ayah == 1)
+    }
+
+    private fun requestedVerse(item: MediaItem?, surahs: List<Surah>): Pair<Surah, Int> {
+        val app = application as QuranApp
+        val settings = app.settings.settings.value
+        val mediaParts = item?.mediaId?.removePrefix(CHAPTER_PREFIX)?.split(':').orEmpty()
+        val mediaSurah = mediaParts.getOrNull(0)?.toIntOrNull()
+        val mediaAyah = mediaParts.getOrNull(1)?.toIntOrNull()
+        val query = item?.requestMetadata?.searchQuery
+        val spoken = query?.let(AssistantIntents::parseSpokenCommand) as? AssistantAction.OpenVerse
+        val requestedSurah = mediaSurah ?: spoken?.surahId
+        val surah = surahs.firstOrNull { it.id == requestedSurah }
+            ?: query?.let { findNamedChapter(it, surahs) }
+            ?: surahs.firstOrNull { it.id == settings.lastSurah }
+            ?: surahs.first()
+        val ayah = mediaAyah ?: spoken?.ayah ?: if (requestedSurah != null) 1 else settings.lastAyah
+        return surah to ayah.coerceIn(1, surah.ayahCount)
+    }
+
+    private fun searchChapters(query: String, surahs: List<Surah>): List<Surah> {
+        val spoken = AssistantIntents.parseSpokenCommand(query) as? AssistantAction.OpenVerse
+        spoken?.let { action -> return surahs.filter { it.id == action.surahId } }
+        val key = query.catalogKey()
+        return surahs.filter { surah ->
+            surah.id.toString() == key || listOf(
+                surah.nameTransliteration,
+                surah.nameTranslation,
+                surah.nameArabic,
+            ).any { it.catalogKey().contains(key) }
+        }
+    }
+
+    private fun findNamedChapter(query: String, surahs: List<Surah>): Surah? =
+        searchChapters(query, surahs).singleOrNull()
+
+    private fun rootItem(): MediaItem = MediaItem.Builder()
+        .setMediaId(LIBRARY_ROOT)
+        .setMediaMetadata(
+            MediaMetadata.Builder()
+                .setTitle("Beautiful Quran")
+                .setIsBrowsable(true)
+                .setIsPlayable(false)
+                .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_AUDIO_BOOKS)
+                .build(),
+        )
+        .build()
+
+    private fun chapterItem(surah: Surah): MediaItem = MediaItem.Builder()
+        .setMediaId("$CHAPTER_PREFIX${surah.id}")
+        .setMediaMetadata(
+            MediaMetadata.Builder()
+                .setTitle("Chapter ${surah.id} • ${surah.nameTransliteration}")
+                .setSubtitle(surah.nameTranslation)
+                .setIsBrowsable(false)
+                .setIsPlayable(true)
+                .setMediaType(MediaMetadata.MEDIA_TYPE_AUDIO_BOOK)
+                .build(),
+        )
+        .build()
+
+    private fun String.chapterNumber(): Int? =
+        takeIf { it.startsWith(CHAPTER_PREFIX) }?.removePrefix(CHAPTER_PREFIX)?.substringBefore(':')?.toIntOrNull()
+
+    private fun String.catalogKey(): String = lowercase()
+        .replace(Regex("(?:play|recite|listen to|chapter|surah|sura|beautiful quran)"), " ")
+        .filter(Char::isLetterOrDigit)
+
+    private fun <T> List<T>.paged(page: Int, pageSize: Int): List<T> {
+        if (page < 0 || pageSize <= 0) return emptyList()
+        return drop(page * pageSize).take(pageSize)
+    }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         // Dismissing the app from Recents ("force close") must stop the
@@ -138,6 +335,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        serviceScope.cancel()
         prefetcher?.release()
         prefetcher = null
         mediaSession?.run {
@@ -149,6 +347,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     companion object {
+        private const val LIBRARY_ROOT = "quran"
+        private const val CHAPTER_PREFIX = "chapter:"
         /** Recently-heard surahs stay offline for a while: audio is small
          * (a few MB per surah), so a 1 GB LRU budget holds hundreds of them. */
         private const val CACHE_BYTES = 1024L * 1024 * 1024
