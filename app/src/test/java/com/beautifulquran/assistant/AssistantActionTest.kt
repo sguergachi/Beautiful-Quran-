@@ -35,6 +35,26 @@ class AssistantActionTest {
     }
 
     @Test
+    fun `spoken play chapter starts recitation`() {
+        assertEquals(
+            AssistantAction.OpenVerse(2, 1, play = true),
+            AssistantIntents.parseSpokenCommand("play chapter 2"),
+        )
+        assertEquals(
+            AssistantAction.OpenVerse(2, 1, play = true),
+            AssistantIntents.parseSpokenCommand("play chapter 2 on Beautiful Quran"),
+        )
+        assertEquals(
+            AssistantAction.OpenVerse(18, 1, play = true),
+            AssistantIntents.parseSpokenCommand("recite surah 18"),
+        )
+        assertEquals(
+            AssistantAction.OpenVerse(36, 12, play = true),
+            AssistantIntents.parseSpokenCommand("play chapter 36 verse 12"),
+        )
+    }
+
+    @Test
     fun `spoken open chapter phrases`() {
         assertEquals(
             AssistantAction.OpenVerse(2, 1),

@@ -83,6 +83,9 @@ class ReaderViewModel(
 
     private var surahId: Int = 0
 
+    /** After [load] finishes, start recitation from this ayah (in-app voice play). */
+    private var pendingPlayAyah: Int? = null
+
     /** Drives [bookmarkedAyahs]: the surah currently loaded into the reader, so
      * each verse ribbon only ever renders marks for the verses on screen. */
     private val loadedSurah = MutableStateFlow(0)
@@ -264,15 +267,27 @@ class ReaderViewModel(
         }
     }
 
-    fun load(surahId: Int) {
+    /**
+     * Loads [surahId]. When [startPlaybackAtAyah] is set, starts recitation from
+     * that ayah once content is ready (in-app "play chapter 2").
+     */
+    fun load(surahId: Int, startPlaybackAtAyah: Int? = null) {
         if (
             this.surahId == surahId &&
             (_uiState.value.content != null || _uiState.value.isLoading)
         ) {
+            if (startPlaybackAtAyah != null) {
+                if (_uiState.value.content != null) {
+                    playFromAyah(startPlaybackAtAyah)
+                } else {
+                    pendingPlayAyah = startPlaybackAtAyah
+                }
+            }
             return
         }
         this.surahId = surahId
         loadedSurah.value = surahId
+        pendingPlayAyah = startPlaybackAtAyah
         installTimings(emptyMap())
         _uiState.value = ReaderUiState(
             reciters = _uiState.value.reciters,
@@ -296,6 +311,11 @@ class ReaderViewModel(
                 hasTimings = loadedTimings.isNotEmpty(),
                 isLoading = false,
             )
+            val playAyah = pendingPlayAyah
+            pendingPlayAyah = null
+            if (playAyah != null) {
+                playFromAyah(playAyah)
+            }
         }
     }
 

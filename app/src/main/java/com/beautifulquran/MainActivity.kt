@@ -307,11 +307,14 @@ private fun PaperStackApp(
         scope.launch { settleTo(layer) }
     }
 
-    fun openVerseFromAssistant(surahId: Int, ayah: Int) {
+    fun openVerseFromAssistant(surahId: Int, ayah: Int, play: Boolean = false) {
         if (surahId !in 1..114) return
-        if (surahId != selectedSurahId) readerViewModel.load(surahId)
+        val startAyah = ayah.coerceAtLeast(1)
+        // load() is a no-op when this surah is already open — still pass play
+        // so "play chapter 2" restarts recitation in place.
+        readerViewModel.load(surahId, startPlaybackAtAyah = startAyah.takeIf { play })
         selectedSurahId = surahId
-        selectedStartAyah = ayah.coerceAtLeast(1)
+        selectedStartAyah = startAyah
         selectedStartWord = 0
         jumpEpoch++
         animateTo(AYAH_LAYER)
@@ -320,7 +323,7 @@ private fun PaperStackApp(
     fun fulfillAssistantAction(action: AssistantAction) {
         when (action) {
             is AssistantAction.OpenVerse -> {
-                openVerseFromAssistant(action.surahId, action.ayah)
+                openVerseFromAssistant(action.surahId, action.ayah, play = action.play)
             }
             AssistantAction.OpenBookmarks -> {
                 if (bookmarkCount > 0) {
