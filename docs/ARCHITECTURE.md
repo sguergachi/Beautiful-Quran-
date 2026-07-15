@@ -226,15 +226,21 @@ Beautiful Quran” works for end users. Until then (and for no-app-name voice):
 
 | Path | Works today? | How |
 |---|---|---|
+| **Reader → mic (top bar)** | Yes | “play chapter 2”, “bookmark this” while looking at the verse |
 | **Home → Listen** (primary) | Yes | “play chapter 2”, “open chapter 2”, “bookmark this”, … |
 | **Settings → Voice → Listen** | Yes | Same engine; also pin Continue/Bookmarks |
+| **“Hey Google, play chapter 2 on Beautiful Quran”** | Yes* | `MEDIA_PLAY_FROM_SEARCH` intent-filter — plain intent resolution, no Play review. (*subject to Assistant/Gemini routing the phrase to the named app) |
 | **Pin / long-press shortcuts** | Yes | Continue & Bookmarks on the home screen / app long-press |
 | **Deep links / SEARCH** | Yes | `beautifulquran://…` and system `ACTION_SEARCH` queries |
-| Gemini / Hey Google (GitHub APK) | **No** | App Actions only register for Play Store apps |
+| Gemini / Hey Google App Actions (GitHub APK) | **No** | App Actions only register for Play Store apps |
 
-Sideloaded GitHub builds are invisible to Gemini; freeform “play chapter 2”
-goes to YouTube Music. Use **Listen** in the app. “play chapter …” opens the
-reader and starts recitation. Queries strip trailing “on Beautiful Quran”.
+Sideloaded GitHub builds are invisible to Gemini App Actions; freeform
+“play chapter 2” (no app name) goes to YouTube Music, and “bookmark this”
+cannot reach the app through the phone assistant at all — use the in-app
+mic/Listen. “play chapter …” opens the reader and starts recitation. Queries
+strip trailing “on (the) Beautiful Quran (app)”. A `MEDIA_PLAY_FROM_SEARCH`
+whose query doesn’t parse resumes the last-read verse with recitation — a
+voice “play …” should always answer with audio, never a silent no-op.
 
 Deep-link scheme `beautifulquran://` (VIEW intent-filter on `MainActivity`):
 

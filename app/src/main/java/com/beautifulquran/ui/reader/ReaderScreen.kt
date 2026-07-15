@@ -41,6 +41,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.MicNone
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -86,9 +87,11 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import com.beautifulquran.assistant.AssistantAction
 import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.domain.BASMALAH_PLAYLIST_AYAH
+import com.beautifulquran.ui.voice.rememberVoiceListen
 import com.beautifulquran.ui.reader.focus.FocusEngine
 import com.beautifulquran.ui.reader.focus.rememberReaderFocusController
 import com.beautifulquran.ui.theme.FloatingPaperControl
@@ -146,6 +149,10 @@ fun ReaderScreen(
     /** Reports reader-owned ink surfaces to the paper stack so a horizontal
      * page turn cannot begin while the surface is entering, open, or closing. */
     onInkOverlayVisibilityChange: (Boolean) -> Unit = {},
+    /** In-app voice command ("play chapter 2", "bookmark this") from the
+     *  top-bar Listen mark — fulfilled by MainActivity like any Assistant
+     *  intent, so "bookmark this" targets the verse currently in focus. */
+    onVoiceAction: (AssistantAction) -> Unit = {},
 ) {
     LaunchedEffect(surahId) { viewModel.load(surahId) }
     DisposableEffect(onAyahSelectorExpandedChange) {
@@ -179,6 +186,17 @@ fun ReaderScreen(
     var requestedJumpAyah by remember { mutableIntStateOf(0) }
     val haptics = LocalHapticFeedback.current
     val onRootReturnUserMovedLatest = rememberUpdatedState(onRootReturnUserMoved)
+
+    // In-app voice: the reader's own Listen mark, for "play chapter 2" or
+    // "bookmark this" spoken while looking at the verse (the phone assistant
+    // cannot deliver those to a sideloaded app).
+    val voice = rememberVoiceListen(onAction = onVoiceAction)
+    LaunchedEffect(voice.note) {
+        if (voice.note != null) {
+            delay(6_000)
+            voice.clearNote()
+        }
+    }
 
     // In-surah English search: matches are ayahs whose translation or any
     // word gloss contains the query.
@@ -644,6 +662,16 @@ fun ReaderScreen(
                         }
                     } else {
                         IconButton(
+                            onClick = voice.start,
+                            enabled = !recitingActive,
+                        ) {
+                            Icon(
+                                Icons.Rounded.MicNone,
+                                contentDescription = "Listen for a voice command",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                            )
+                        }
+                        IconButton(
                             onClick = { search.active = true },
                             enabled = !recitingActive,
                         ) {
@@ -681,6 +709,23 @@ fun ReaderScreen(
                 ) {
                     Text(
                         text = playerState.error.orEmpty(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                    )
+                }
+                // A missed voice command answers the same way — a quiet line
+                // in the page that dissolves on its own.
+                AnimatedVisibility(
+                    visible = voice.note != null,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                ) {
+                    Text(
+                        text = voice.note.orEmpty(),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         textAlign = TextAlign.Center,
