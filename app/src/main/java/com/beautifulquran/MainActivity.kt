@@ -152,9 +152,7 @@ class MainActivity : ComponentActivity() {
 
             SideEffect {
                 val statusBarStyle = when {
-                    usesNightfall ->
-                        SystemBarStyle.dark(NIGHTFALL_STATUS_BAR)
-                    settings.themeMode == ThemeMode.ROYAL_GREEN ->
+                    usesNightfall || settings.themeMode == ThemeMode.ROYAL_GREEN ->
                         SystemBarStyle.dark(Color.TRANSPARENT)
                     else -> SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
                 }
@@ -189,10 +187,6 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         pendingAssistantAction.value = AssistantIntents.parse(intent)
-    }
-
-    private companion object {
-        const val NIGHTFALL_STATUS_BAR = 0xFF0A0B0C.toInt()
     }
 }
 
