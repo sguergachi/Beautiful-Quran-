@@ -58,6 +58,13 @@
                 <action android:name="android.intent.action.SEARCH" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+            <!-- Assistant voice play: "Hey Google, play chapter 2 on Beautiful
+                 Quran". Plain intent resolution — unlike App Actions this works
+                 for sideloaded installs, no Play Console review. -->
+            <intent-filter>
+                <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
             <meta-data
                 android:name="android.app.searchable"
                 android:resource="@xml/searchable" />

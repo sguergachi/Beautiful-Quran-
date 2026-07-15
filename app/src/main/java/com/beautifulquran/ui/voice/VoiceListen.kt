@@ -25,6 +25,8 @@ import java.util.Locale
 data class VoiceListenState(
     val note: String?,
     val start: () -> Unit,
+    /** Lets a host surface dissolve the note after showing it for a while. */
+    val clearNote: () -> Unit = {},
 )
 
 @Composable
@@ -78,7 +80,7 @@ fun rememberVoiceListen(
         }
     }
 
-    return VoiceListenState(note = note, start = start)
+    return VoiceListenState(note = note, start = start, clearNote = { note = null })
 }
 
 private fun launchSpeech(
@@ -91,7 +93,9 @@ private fun launchSpeech(
             RecognizerIntent.EXTRA_LANGUAGE_MODEL,
             RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
         )
-        putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+        // EXTRA_LANGUAGE expects an IETF tag string; a Serializable Locale is
+        // ignored (or trips up) recognizers.
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
         putExtra(RecognizerIntent.EXTRA_PROMPT, VoiceRoutines.LISTEN_HINT)
         putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
     }

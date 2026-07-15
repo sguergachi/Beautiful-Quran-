@@ -308,74 +308,6 @@ private fun PaperStackApp(
         scope.launch { settleTo(layer) }
     }
 
-    fun openVerseFromAssistant(surahId: Int, ayah: Int, play: Boolean = false) {
-        if (surahId !in 1..114) return
-        val startAyah = ayah.coerceAtLeast(1)
-        // load() is a no-op when this surah is already open — still pass play
-        // so "play chapter 2" restarts recitation in place.
-        readerViewModel.load(surahId, startPlaybackAtAyah = startAyah.takeIf { play })
-        selectedSurahId = surahId
-        selectedStartAyah = startAyah
-        selectedStartWord = 0
-        jumpEpoch++
-        animateTo(AYAH_LAYER)
-    }
-
-    fun fulfillAssistantAction(action: AssistantAction) {
-        when (action) {
-            is AssistantAction.OpenVerse -> {
-                openVerseFromAssistant(action.surahId, action.ayah, play = action.play)
-            }
-            AssistantAction.OpenBookmarks -> {
-                if (bookmarkCount > 0) {
-                    animateTo(BOOKMARKS_LAYER)
-                } else {
-                    animateTo(COVER_LAYER)
-                }
-            }
-            AssistantAction.ContinueReading -> {
-                val surah = settings.lastSurah
-                if (surah in 1..114) {
-                    openVerseFromAssistant(surah, settings.lastAyah.coerceAtLeast(1))
-                } else {
-                    // No saved position yet — open Al-Fatiha rather than looking broken.
-                    openVerseFromAssistant(1, 1)
-                }
-            }
-            AssistantAction.SaveBookmark -> {
-                // Prefer the verse currently focused in the reader (last active
-                // ayah), not the open-start ayah — that was bookmarking the
-                // wrong place after the user scrolled.
-                val fromReader = readerViewModel.currentVerseForBookmark()
-                val surah = fromReader?.first
-                    ?: selectedSurahId.takeIf { it in 1..114 }
-                    ?: settings.lastSurah.takeIf { it in 1..114 }
-                    ?: return
-                val ayah = fromReader?.second
-                    ?: if (settings.lastSurah == surah) {
-                        settings.lastAyah.coerceAtLeast(1)
-                    } else {
-                        selectedStartAyah.coerceAtLeast(1)
-                    }
-                app.bookmarks.ensure(surah, ayah)
-                // Stay put when already on this chapter so the ribbon appears
-                // in place; only jump when we need to open the reader.
-                if (selectedSurahId != surah) {
-                    openVerseFromAssistant(surah, ayah)
-                } else {
-                    animateTo(AYAH_LAYER)
-                }
-            }
-        }
-    }
-
-    // Deep links, pinned shortcuts, and App Actions land here once the stack is up.
-    LaunchedEffect(pendingAssistantAction) {
-        val action = pendingAssistantAction ?: return@LaunchedEffect
-        fulfillAssistantAction(action)
-        onAssistantActionConsumed()
-    }
-
     LaunchedEffect(bookmarkCount) {
         if (bookmarkCount == 0 && stackPosition.value < COVER_LAYER) {
             settleTo(COVER_LAYER)
@@ -426,6 +358,86 @@ private fun PaperStackApp(
         if (resumeReading && snapshot != null) {
             readerViewModel.resumeAfterRootViewer(snapshot)
         }
+    }
+
+    fun openVerseFromAssistant(surahId: Int, ayah: Int, play: Boolean = false) {
+        if (surahId !in 1..114) return
+        val startAyah = ayah.coerceAtLeast(1)
+        // load() is a no-op when this surah is already open — still pass play
+        // so "play chapter 2" restarts recitation in place.
+        readerViewModel.load(surahId, startPlaybackAtAyah = startAyah.takeIf { play })
+        selectedSurahId = surahId
+        selectedStartAyah = startAyah
+        selectedStartWord = 0
+        jumpEpoch++
+        animateTo(AYAH_LAYER)
+    }
+
+    fun fulfillAssistantAction(action: AssistantAction) {
+        // A voice command answers on the page itself — any ink surface riding
+        // over the stack (labs, root lexicon, chooser) would swallow the
+        // response, so lower them before the stack moves.
+        chooserVisible = false
+        pendingWord = null
+        closeTimingsLab()
+        closeOrnamentsLab()
+        closeRootViewer(resumeReading = false)
+        when (action) {
+            is AssistantAction.OpenVerse -> {
+                openVerseFromAssistant(action.surahId, action.ayah, play = action.play)
+            }
+            AssistantAction.OpenBookmarks -> {
+                if (bookmarkCount > 0) {
+                    animateTo(BOOKMARKS_LAYER)
+                } else {
+                    animateTo(COVER_LAYER)
+                }
+            }
+            is AssistantAction.ContinueReading -> {
+                val surah = settings.lastSurah
+                if (surah in 1..114) {
+                    openVerseFromAssistant(
+                        surah,
+                        settings.lastAyah.coerceAtLeast(1),
+                        play = action.play,
+                    )
+                } else {
+                    // No saved position yet — open Al-Fatiha rather than looking broken.
+                    openVerseFromAssistant(1, 1, play = action.play)
+                }
+            }
+            AssistantAction.SaveBookmark -> {
+                // Prefer the verse currently focused in the reader (last active
+                // ayah), not the open-start ayah — that was bookmarking the
+                // wrong place after the user scrolled.
+                val fromReader = readerViewModel.currentVerseForBookmark()
+                val surah = fromReader?.first
+                    ?: selectedSurahId.takeIf { it in 1..114 }
+                    ?: settings.lastSurah.takeIf { it in 1..114 }
+                    ?: return
+                val ayah = fromReader?.second
+                    ?: if (settings.lastSurah == surah) {
+                        settings.lastAyah.coerceAtLeast(1)
+                    } else {
+                        selectedStartAyah.coerceAtLeast(1)
+                    }
+                app.bookmarks.ensure(surah, ayah)
+                // Stay put when already on this chapter so the ribbon appears
+                // in place; only jump when we need to open the reader.
+                if (selectedSurahId != surah) {
+                    openVerseFromAssistant(surah, ayah)
+                } else {
+                    animateTo(AYAH_LAYER)
+                }
+            }
+        }
+    }
+
+    // Deep links, pinned shortcuts, and App Actions land here once the stack is up.
+    LaunchedEffect(pendingAssistantAction) {
+        val action = pendingAssistantAction ?: return@LaunchedEffect
+        fulfillAssistantAction(action)
+        onAssistantActionConsumed()
     }
 
     fun onWordLongPress(surahId: Int, ayah: Int, wordPosition: Int) {
@@ -628,6 +640,7 @@ private fun PaperStackApp(
                         rootReturnVisible = rootReturnVisible,
                         keepStatusBarVisible = overlayBlocking,
                         onInkOverlayVisibilityChange = { readerInkOverlayVisible = it },
+                        onVoiceAction = ::fulfillAssistantAction,
                     )
                 }
 

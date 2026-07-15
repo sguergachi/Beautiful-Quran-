@@ -9,7 +9,7 @@ class AssistantActionTest {
     @Test
     fun `deep link continue`() {
         assertEquals(
-            AssistantAction.ContinueReading,
+            AssistantAction.ContinueReading(),
             AssistantIntents.parseDeepLink("beautifulquran://continue"),
         )
     }
@@ -109,7 +109,7 @@ class AssistantActionTest {
             AssistantIntents.parseSpokenCommand("bookmark this verse"),
         )
         assertEquals(
-            AssistantAction.ContinueReading,
+            AssistantAction.ContinueReading(),
             AssistantIntents.parseSpokenCommand("Continue reading"),
         )
         assertEquals(
@@ -129,6 +129,57 @@ class AssistantActionTest {
             AssistantIntents.parseSpokenCommand("18"),
         )
         assertNull(AssistantIntents.parseSpokenCommand("not a command"))
+    }
+
+    @Test
+    fun `play prefix covers colon refs and listen to`() {
+        assertEquals(
+            AssistantAction.OpenVerse(2, 255, play = true),
+            AssistantIntents.parseSpokenCommand("play 2:255"),
+        )
+        assertEquals(
+            AssistantAction.OpenVerse(2, 1, play = true),
+            AssistantIntents.parseSpokenCommand("listen to chapter 2"),
+        )
+        assertEquals(
+            AssistantAction.OpenVerse(2, 1, play = true),
+            AssistantIntents.parseSpokenCommand("play chapter 2 on the Beautiful Quran app"),
+        )
+    }
+
+    @Test
+    fun `media play-from-search always answers with audio`() {
+        assertEquals(
+            AssistantAction.OpenVerse(2, 1, play = true),
+            AssistantIntents.parsePlaySearch("chapter 2"),
+        )
+        assertEquals(
+            AssistantAction.OpenVerse(36, 12, play = true),
+            AssistantIntents.parsePlaySearch("surah 36 ayah 12"),
+        )
+        // "Play Beautiful Quran" reaches us with an empty / unusable query —
+        // resume the last-read verse instead of silently doing nothing.
+        assertEquals(
+            AssistantAction.ContinueReading(play = true),
+            AssistantIntents.parsePlaySearch(null),
+        )
+        assertEquals(
+            AssistantAction.ContinueReading(play = true),
+            AssistantIntents.parsePlaySearch("  "),
+        )
+        assertEquals(
+            AssistantAction.ContinueReading(play = true),
+            AssistantIntents.parsePlaySearch("something unrecognizable"),
+        )
+        assertEquals(
+            AssistantAction.ContinueReading(play = true),
+            AssistantIntents.parsePlaySearch("continue reading"),
+        )
+        // Non-verse commands still pass through untouched.
+        assertEquals(
+            AssistantAction.SaveBookmark,
+            AssistantIntents.parsePlaySearch("bookmark this"),
+        )
     }
 
     @Test
