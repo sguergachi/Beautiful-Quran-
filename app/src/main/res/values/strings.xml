@@ -15,8 +15,5 @@
     <string name="shortcut_save_bookmark_long">Bookmark the current verse</string>
     <string name="shortcut_verse_short">Verse</string>
     <string name="shortcut_verse_long">Open a verse</string>
-    <string name="search_hint">Chapter, verse, or bookmark this</string>
-    <string name="voice_listen">Listen</string>
-    <string name="voice_listen_hint">Say “play chapter 2” or “bookmark this” here — Gemini can’t see GitHub installs</string>
+    <string name="search_hint">Chapter or verse</string>
 </resources>
-

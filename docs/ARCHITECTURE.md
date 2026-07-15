@@ -211,42 +211,63 @@ streaming. Audio flows through a `CacheDataSource` backed by a 1 GB LRU
 
 ## Google Assistant / App Actions
 
-`assistant/AssistantAction.kt` is a pure parser for deep links and App Actions
-intents. `res/xml/shortcuts.xml` declares:
+Assistant support is entirely Android OS-facing. The app has no microphone,
+speech recognizer, or Assistant UI. `assistant/AssistantAction.kt` translates
+incoming Android intents/deep links into the same reader and bookmark commands
+used by touch navigation.
+
+There are two platform entry points:
+
+- `android.media.action.MEDIA_PLAY_FROM_SEARCH` in the manifest handles media
+  voice search such as “Hey Google, play chapter 2 on Beautiful Quran.” The
+  search query opens the requested chapter/ayah and starts recitation; an empty
+  query resumes the last-read verse with audio.
+- `res/xml/shortcuts.xml` declares App Actions capabilities. Assistant turns
+  these into normal Android deep links handled by `MainActivity`.
 
 | Capability | What it does |
 |---|---|
 | `OPEN_APP_FEATURE` | Named features: **continue**, **bookmarks**, **save bookmark** (inline inventory synonyms in `arrays.xml`) |
 | `GET_THING` | Free-form verse lookup via `thing.name` → query (`2:255`, `surah 2 ayah 255`, bare surah number) |
+| `custom.actions.intent.OPEN_CHAPTER` | Open a chapter or ayah without starting audio |
+| `custom.actions.intent.PLAY_CHAPTER` | Open a chapter or ayah and start recitation |
+| `custom.actions.intent.BOOKMARK_VERSE` | Bookmark the verse currently focused in the reader (or the last-read verse) |
 
-### How to use (what actually works)
+### Invocation and distribution
 
-Google **App Actions need Play Console review** before “Hey Google, … on
-Beautiful Quran” works for end users. Until then (and for no-app-name voice):
+App Actions are registered by Google when a release containing
+`shortcuts.xml` is uploaded through Play Console; during development they need
+an Android Studio App Actions test preview. They are not registered merely by
+sideloading a GitHub APK. The media-search intent is an Android media-app hook
+and does not depend on App Actions registration.
 
 | Path | Works today? | How |
 |---|---|---|
-| **Home → Listen** (primary) | Yes | “play chapter 2”, “open chapter 2”, “bookmark this”, … |
-| **Settings → Voice → Listen** | Yes | Same engine; also pin Continue/Bookmarks |
+| **“Hey Google, play chapter 2 on Beautiful Quran”** | Yes* | Android `MEDIA_PLAY_FROM_SEARCH`; `MainActivity` parses the search query and starts audio (*Assistant routing still depends on the device recognizing the named media app) |
+| **“Hey Google, open chapter 2 on Beautiful Quran”** | Play/App Actions release | `OPEN_CHAPTER` custom App Action |
+| **“Hey Google, bookmark this” while the reader is foreground** | Play/App Actions release | Foreground `BOOKMARK_VERSE` custom App Action; saves the focused ayah |
+| **“Hey Google, bookmark this on Beautiful Quran”** | Play/App Actions release | Cold-start `BOOKMARK_VERSE` fulfillment |
 | **Pin / long-press shortcuts** | Yes | Continue & Bookmarks on the home screen / app long-press |
 | **Deep links / SEARCH** | Yes | `beautifulquran://…` and system `ACTION_SEARCH` queries |
-| Gemini / Hey Google (GitHub APK) | **No** | App Actions only register for Play Store apps |
 
-Sideloaded GitHub builds are invisible to Gemini; freeform “play chapter 2”
-goes to YouTube Music. Use **Listen** in the app. “play chapter …” opens the
-reader and starts recitation. Queries strip trailing “on Beautiful Quran”.
+From a cold start, a phrase with no app name is ambiguous among installed apps;
+Android/Assistant does not provide an API that lets one app globally claim
+“play chapter 2” or “bookmark this.” The reliable cold-start form names
+Beautiful Quran. Foreground App Actions can omit the app name when Assistant
+uses the currently visible `MainActivity` as context.
 
 Deep-link scheme `beautifulquran://` (VIEW intent-filter on `MainActivity`):
 
 - `beautifulquran://continue` — last-read verse (`settings.lastSurah` / `lastAyah`)
+- `beautifulquran://continue?play=true` — last-read verse and start recitation
 - `beautifulquran://bookmarks` — bookmarks index (falls back to Chapters if empty)
 - `beautifulquran://bookmark/save` — ensure-bookmark on the current/last verse, then open it
 - `beautifulquran://verse/2/255` or `…/verse?surah=2&ayah=255` — open that verse
+- `beautifulquran://verse/2/255?play=true` — open that verse and start recitation
 
 Launcher long-press exposes **Continue** and **Bookmarks**. Cold-start deep
 links skip the entrance cover. Fulfillment lives in `PaperStackApp` (no
-navigation library). App Actions still need Play Console review for end-user
-Assistant invocation; `adb` deep links work regardless.
+navigation library); `adb` deep links work regardless of App Actions status.
 
 ## UI structure
 

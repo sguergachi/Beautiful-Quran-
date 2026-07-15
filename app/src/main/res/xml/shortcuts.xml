@@ -41,25 +41,13 @@
         </intent>
     </capability>
 
-    <!-- "Open chapter 2" / "go to surah 18 ayah 1" without relying on inventory. -->
+    <!-- App Actions turn Assistant requests into ordinary Android deep links. -->
     <capability
         android:name="custom.actions.intent.OPEN_CHAPTER"
         app:queryPatterns="@array/assistant_open_chapter_queries">
-        <intent
-            android:action="android.intent.action.VIEW"
-            android:targetPackage="com.beautifulquran"
-            android:targetClass="com.beautifulquran.MainActivity">
-            <url-template android:value="beautifulquran://verse/{surah}" />
-            <parameter
-                android:name="surah"
-                android:key="surah"
-                android:mimeType="https://schema.org/Number"
-                android:required="true" />
-        </intent>
-        <intent
-            android:action="android.intent.action.VIEW"
-            android:targetPackage="com.beautifulquran"
-            android:targetClass="com.beautifulquran.MainActivity">
+        <!-- Put the most-specific fulfillment first; Assistant uses the first
+             intent whose required parameters are present. -->
+        <intent>
             <url-template android:value="beautifulquran://verse/{surah}/{ayah}" />
             <parameter
                 android:name="surah"
@@ -72,16 +60,56 @@
                 android:mimeType="https://schema.org/Number"
                 android:required="true" />
         </intent>
+        <intent>
+            <url-template android:value="beautifulquran://verse/{surah}" />
+            <parameter
+                android:name="surah"
+                android:key="surah"
+                android:mimeType="https://schema.org/Number"
+                android:required="true" />
+        </intent>
+        <intent android:data="beautifulquran://continue" />
+    </capability>
+
+    <capability
+        android:name="custom.actions.intent.PLAY_CHAPTER"
+        app:queryPatterns="@array/assistant_play_chapter_queries">
+        <intent>
+            <url-template android:value="beautifulquran://verse/{surah}/{ayah}?play=true" />
+            <parameter
+                android:name="surah"
+                android:key="surah"
+                android:mimeType="https://schema.org/Number"
+                android:required="true" />
+            <parameter
+                android:name="ayah"
+                android:key="ayah"
+                android:mimeType="https://schema.org/Number"
+                android:required="true" />
+        </intent>
+        <intent>
+            <url-template android:value="beautifulquran://verse/{surah}?play=true" />
+            <parameter
+                android:name="surah"
+                android:key="surah"
+                android:mimeType="https://schema.org/Number"
+                android:required="true" />
+        </intent>
+        <intent android:data="beautifulquran://continue?play=true" />
     </capability>
 
     <capability
         android:name="custom.actions.intent.BOOKMARK_VERSE"
         app:queryPatterns="@array/assistant_bookmark_queries">
         <intent
-            android:action="android.intent.action.VIEW"
-            android:targetPackage="com.beautifulquran"
-            android:targetClass="com.beautifulquran.MainActivity"
-            android:data="beautifulquran://bookmark/save" />
+            android:data="beautifulquran://bookmark/save">
+            <!-- Lets "bookmark this" resolve against Beautiful Quran while
+                 its reader is the activity already in the foreground. -->
+            <extra
+                android:key="requiredForegroundActivity"
+                android:value="com.beautifulquran/com.beautifulquran.MainActivity" />
+        </intent>
+        <intent android:data="beautifulquran://bookmark/save" />
     </capability>
 
     <shortcut

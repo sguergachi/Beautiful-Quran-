@@ -80,13 +80,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beautifulquran.BuildConfig
 import com.beautifulquran.R
-import com.beautifulquran.assistant.AssistantAction
-import com.beautifulquran.assistant.AssistantIntents
-import com.beautifulquran.assistant.VoiceRoutines
-import com.beautifulquran.assistant.VoiceShortcut
-import com.beautifulquran.assistant.VoiceShortcuts
 import com.beautifulquran.data.AyahSelectorSide
-import com.beautifulquran.ui.voice.rememberVoiceListen
 import com.beautifulquran.data.BrushCircleStyle
 import com.beautifulquran.data.HomeBookmarkStyle
 import com.beautifulquran.data.ReadingMode
@@ -145,7 +139,6 @@ fun SettingsScreen(
     onOpenTimingsLab: () -> Unit = {},
     onOpenOrnamentsLab: () -> Unit = {},
     onRecordSystemTrace: () -> Unit = {},
-    onVoiceAction: (AssistantAction) -> Unit = {},
 ) {
     val settings by viewModel.settings.settings.collectAsStateWithLifecycle()
     val reciters by viewModel.reciters.collectAsStateWithLifecycle()
@@ -161,8 +154,6 @@ fun SettingsScreen(
     var paintToken by remember { mutableIntStateOf(0) }
     var checkPaintToken by remember { mutableIntStateOf(0) }
     var copyNote by remember { mutableStateOf<String?>(null) }
-    var pinNote by remember { mutableStateOf<String?>(null) }
-    val voice = rememberVoiceListen(onAction = onVoiceAction)
     // Only reseed when the preset or shipped BASE revision actually changes —
     // never wipe a live paste / slider edit on unrelated recomposition.
     // Ship bumps always load baseline (not Hairline's bodyAmp 0.12, etc.).
@@ -309,31 +300,6 @@ fun SettingsScreen(
                     trailing = { ThemeColorPreview(mode = mode) },
                 )
             }
-
-            Section("Voice")
-            VoiceSection(
-                note = voice.note ?: pinNote,
-                onListen = voice.start,
-                onPin = { shortcut ->
-                    val ok = VoiceShortcuts.pin(context, shortcut)
-                    pinNote = if (ok) {
-                        "Pin “${shortcut.label}” on your home screen"
-                    } else {
-                        "This launcher can't pin shortcuts"
-                    }
-                },
-                onRun = { shortcut ->
-                    val action = AssistantIntents.parseDeepLink(shortcut.deepLink)
-                        ?: AssistantIntents.parseAction(shortcut.intentAction)
-                    if (action != null) {
-                        pinNote = null
-                        onVoiceAction(action)
-                    } else if (shortcut.id == "verse_example") {
-                        pinNote = null
-                        onVoiceAction(AssistantAction.OpenVerse(2, 255))
-                    }
-                },
-            )
 
             if (settings.developerModeEnabled) {
                 Spacer(Modifier.height(44.dp))
@@ -1871,73 +1837,6 @@ private val ThemeMode.label: String
         ThemeMode.DARK -> "Nightfall"
         ThemeMode.ROYAL_GREEN -> "Royal green"
     }
-
-// ── Voice (in-app listen + home-screen pins) ───────────────────────────────
-
-/**
- * Works without Google App Actions Play review: speak short phrases in-app,
- * pin Continue/Bookmarks to the home screen, or long-press the app icon.
- */
-@Composable
-private fun VoiceSection(
-    note: String?,
-    onListen: () -> Unit,
-    onPin: (VoiceShortcut) -> Unit,
-    onRun: (VoiceShortcut) -> Unit,
-) {
-    Caption(
-        "Tap Listen on the home page or here. Say open chapter 2, " +
-            "bookmark this, continue, or bookmarks — no app name needed.",
-    )
-    Spacer(Modifier.height(10.dp))
-    Text(
-        text = stringResource(R.string.voice_listen),
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier
-            .quietClickable(onClick = onListen)
-            .padding(vertical = 8.dp),
-    )
-    Spacer(Modifier.height(12.dp))
-    Caption("Or open / pin a shortcut (works offline):")
-    Spacer(Modifier.height(6.dp))
-    VoiceRoutines.all.forEach { shortcut ->
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .quietClickable { onRun(shortcut) },
-            ) {
-                Text(
-                    text = shortcut.label,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.height(2.dp))
-                Caption(shortcut.does)
-            }
-            if (shortcut.pinable) {
-                Text(
-                    text = "Pin",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .quietClickable { onPin(shortcut) }
-                        .padding(start = 12.dp, top = 8.dp, bottom = 8.dp),
-                )
-            }
-        }
-    }
-    if (note != null) {
-        Spacer(Modifier.height(4.dp))
-        Caption(note)
-    }
-}
 
 // ── Quiet typographic helpers ──────────────────────────────────────────────
 

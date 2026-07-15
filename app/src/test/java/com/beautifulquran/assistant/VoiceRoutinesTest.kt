@@ -26,7 +26,7 @@ class VoiceRoutinesTest {
     @Test
     fun `continue and bookmarks deep links match explicit actions`() {
         assertEquals(
-            AssistantAction.ContinueReading,
+            AssistantAction.ContinueReading(),
             AssistantIntents.parseDeepLink(
                 VoiceRoutines.all.first { it.id == "continue" }.deepLink,
             ),
