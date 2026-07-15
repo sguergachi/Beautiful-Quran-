@@ -226,14 +226,15 @@ Beautiful Quran” works for end users. Until then (and for no-app-name voice):
 
 | Path | Works today? | How |
 |---|---|---|
-| **Home → Listen** (primary) | Yes | In-app speech under the title: “open chapter 2”, “bookmark this”, … |
+| **Home → Listen** (primary) | Yes | “play chapter 2”, “open chapter 2”, “bookmark this”, … |
 | **Settings → Voice → Listen** | Yes | Same engine; also pin Continue/Bookmarks |
 | **Pin / long-press shortcuts** | Yes | Continue & Bookmarks on the home screen / app long-press |
 | **Deep links / SEARCH** | Yes | `beautifulquran://…` and system `ACTION_SEARCH` queries |
-| Hey Google App Actions | After Play review | Custom intents + BIIs in `shortcuts.xml` |
+| Gemini / Hey Google (GitHub APK) | **No** | App Actions only register for Play Store apps |
 
-Queries strip trailing “on Beautiful Quran”. Scroll updates last-read so
-“bookmark this” marks the verse under the reading line.
+Sideloaded GitHub builds are invisible to Gemini; freeform “play chapter 2”
+goes to YouTube Music. Use **Listen** in the app. “play chapter …” opens the
+reader and starts recitation. Queries strip trailing “on Beautiful Quran”.
 
 Deep-link scheme `beautifulquran://` (VIEW intent-filter on `MainActivity`):
 

@@ -9,7 +9,15 @@ import android.net.Uri
  * voice, system search, or Google App Actions / custom intents.
  */
 sealed class AssistantAction {
-    data class OpenVerse(val surahId: Int, val ayah: Int) : AssistantAction()
+    /**
+     * Open the reader at [surahId]:[ayah]. When [play] is true, start recitation
+     * there (in-app Listen "play chapter 2" — Gemini cannot target sideloaded apps).
+     */
+    data class OpenVerse(
+        val surahId: Int,
+        val ayah: Int,
+        val play: Boolean = false,
+    ) : AssistantAction()
     data object OpenBookmarks : AssistantAction()
     data object ContinueReading : AssistantAction()
     data object SaveBookmark : AssistantAction()
@@ -52,6 +60,15 @@ object AssistantIntents {
      */
     private val openChapter = Regex(
         """^(?:(?:please\s+)?(?:open|go to|show|read|jump to)\s+)?(?:chapter|surah|sura|ch\.?)\s+(\d{1,3})(?:\s+(?:ayah|aya|verse)\s+(\d{1,3}))?$""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /**
+     * Play / recite — must win over open-only so Gemini-style "play chapter 2"
+     * is handled in-app (Listen) instead of leaving the user stuck on YouTube.
+     */
+    private val playChapter = Regex(
+        """^(?:please\s+)?(?:play|recite|listen to)\s+(?:(?:chapter|surah|sura|ch\.?)\s+)?(\d{1,3})(?:\s+(?:ayah|aya|verse)\s+(\d{1,3}))?$""",
         RegexOption.IGNORE_CASE,
     )
 
@@ -186,6 +203,12 @@ object AssistantIntents {
         val q = normalizeSpoken(raw)
         if (q.isEmpty()) return null
 
+        playChapter.matchEntire(q)?.let { m ->
+            val surah = m.groupValues[1].toIntOrNull() ?: return null
+            val ayah = m.groupValues.getOrNull(2)?.takeIf { it.isNotEmpty() }?.toIntOrNull() ?: 1
+            return openVerseOrNull(surah, ayah, play = true)
+        }
+
         openChapter.matchEntire(q)?.let { m ->
             val surah = m.groupValues[1].toIntOrNull() ?: return null
             val ayah = m.groupValues.getOrNull(2)?.takeIf { it.isNotEmpty() }?.toIntOrNull() ?: 1
@@ -246,8 +269,12 @@ object AssistantIntents {
         }.toMap()
     }
 
-    private fun openVerseOrNull(surah: Int, ayah: Int): AssistantAction.OpenVerse? {
+    private fun openVerseOrNull(
+        surah: Int,
+        ayah: Int,
+        play: Boolean = false,
+    ): AssistantAction.OpenVerse? {
         if (surah !in 1..114 || ayah < 1) return null
-        return AssistantAction.OpenVerse(surah, ayah)
+        return AssistantAction.OpenVerse(surah, ayah, play = play)
     }
 }

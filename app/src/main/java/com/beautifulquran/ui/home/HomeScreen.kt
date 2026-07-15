@@ -466,12 +466,18 @@ private fun HomeHeader(
                     .semantics { contentDescription = "Listen for a voice command" }
                     .padding(vertical = 4.dp),
             )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.voice_listen_hint),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+            )
             if (voice.note != null) {
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = voice.note,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 )
             }
             Spacer(Modifier.height(14.dp))
