@@ -59,6 +59,33 @@
                 android:key="ayah"
                 android:mimeType="https://schema.org/Number"
                 android:required="true" />
+            <extra
+                android:key="requiredForegroundActivity"
+                android:value="com.beautifulquran/com.beautifulquran.MainActivity" />
+        </intent>
+        <intent>
+            <url-template android:value="beautifulquran://verse/{surah}" />
+            <parameter
+                android:name="surah"
+                android:key="surah"
+                android:mimeType="https://schema.org/Number"
+                android:required="true" />
+            <extra
+                android:key="requiredForegroundActivity"
+                android:value="com.beautifulquran/com.beautifulquran.MainActivity" />
+        </intent>
+        <intent>
+            <url-template android:value="beautifulquran://verse/{surah}/{ayah}" />
+            <parameter
+                android:name="surah"
+                android:key="surah"
+                android:mimeType="https://schema.org/Number"
+                android:required="true" />
+            <parameter
+                android:name="ayah"
+                android:key="ayah"
+                android:mimeType="https://schema.org/Number"
+                android:required="true" />
         </intent>
         <intent>
             <url-template android:value="beautifulquran://verse/{surah}" />
@@ -74,6 +101,33 @@
     <capability
         android:name="custom.actions.intent.PLAY_CHAPTER"
         app:queryPatterns="@array/assistant_play_chapter_queries">
+        <intent>
+            <url-template android:value="beautifulquran://verse/{surah}/{ayah}?play=true" />
+            <parameter
+                android:name="surah"
+                android:key="surah"
+                android:mimeType="https://schema.org/Number"
+                android:required="true" />
+            <parameter
+                android:name="ayah"
+                android:key="ayah"
+                android:mimeType="https://schema.org/Number"
+                android:required="true" />
+            <extra
+                android:key="requiredForegroundActivity"
+                android:value="com.beautifulquran/com.beautifulquran.MainActivity" />
+        </intent>
+        <intent>
+            <url-template android:value="beautifulquran://verse/{surah}?play=true" />
+            <parameter
+                android:name="surah"
+                android:key="surah"
+                android:mimeType="https://schema.org/Number"
+                android:required="true" />
+            <extra
+                android:key="requiredForegroundActivity"
+                android:value="com.beautifulquran/com.beautifulquran.MainActivity" />
+        </intent>
         <intent>
             <url-template android:value="beautifulquran://verse/{surah}/{ayah}?play=true" />
             <parameter
