@@ -1,10 +1,6 @@
 package com.beautifulquran.assistant
 
-/**
- * Home-screen / voice entry points that work **without** Google App Actions
- * Play review. Pinning uses [androidx.core.content.pm.ShortcutManagerCompat];
- * deep links work via adb, launcher long-press, and automation apps.
- */
+/** Launcher shortcuts backed by the same deep links as Android App Actions. */
 data class VoiceShortcut(
     val id: String,
     /** Short label on the home-screen pin and launcher long-press. */
@@ -51,8 +47,4 @@ object VoiceRoutines {
             pinable = false,
         ),
     )
-
-    /** Phrases the in-app listener understands (shown as a quiet hint). */
-    const val LISTEN_HINT =
-        "Say play chapter 2, open chapter 2, bookmark this, or continue"
 }

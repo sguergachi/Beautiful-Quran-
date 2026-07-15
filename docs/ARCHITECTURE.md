@@ -209,50 +209,96 @@ notification controls, audio focus, becoming-noisy handling, wake mode for
 streaming. Audio flows through a `CacheDataSource` backed by a 1 GB LRU
 `SimpleCache`, so an ayah streams once and replays from disk afterwards.
 
-## Google Assistant / App Actions
+## Gemini / Google Assistant
 
-`assistant/AssistantAction.kt` is a pure parser for deep links and App Actions
-intents. `res/xml/shortcuts.xml` declares:
+Assistant support is entirely Android OS-facing. The app has no microphone,
+speech recognizer, or Assistant UI.
+
+Android 17's primary integration is **AppFunctions**, the on-device Android MCP
+tool API used by authorized agents such as Gemini:
+
+- `QuranAppFunctions.kt` exposes global domain actions for every chapter and
+  verse: play / pause / resume / stop, next / previous verse, speed, verse or
+  range repeat, reciter selection, explicit bookmark add / remove, and reader
+  preferences. These operate directly on repositories, settings, and Media3;
+  there is no in-app listening surface.
+- `ForegroundAppFunctions.kt` exposes activity-scoped navigation: open any
+  chapter / verse, continue reading, search, open chapters, bookmarks, or
+  settings, and bookmark the currently focused verse. `MainActivity` registers
+  the batch in `onStart` and unregisters it in `onStop`, so “this verse” maps to
+  the exact visible reader context.
+- The alpha10 KSP compiler generates both indexed XML assets and the concrete
+  global `AppFunctionService`; the manifest points the OS registry at them.
+  App-level metadata describes cross-function behavior and validation rules.
+  Developer-only labs are intentionally not agent-controlled; the complete
+  user-facing reading and recitation surface is.
+
+AppFunctions is still an experimental API. As of May 2026, Google's end-to-end
+Gemini integration is a private preview, so implementation and ADB testing are
+available but a normal production Gemini install may not discover third-party
+functions until Google enables the app or makes the pipeline generally
+available.
+
+The public compatibility paths remain:
+
+- `android.media.action.MEDIA_PLAY_FROM_SEARCH` in the manifest handles media
+  voice search such as “Hey Google, play chapter 2 on Beautiful Quran.” The
+  search query opens the requested chapter/ayah and starts recitation; an empty
+  query resumes the last-read verse with audio.
+- `res/xml/shortcuts.xml` declares App Actions capabilities. Assistant turns
+  these into normal Android deep links handled by `MainActivity`.
 
 | Capability | What it does |
 |---|---|
 | `OPEN_APP_FEATURE` | Named features: **continue**, **bookmarks**, **save bookmark** (inline inventory synonyms in `arrays.xml`) |
 | `GET_THING` | Free-form verse lookup via `thing.name` → query (`2:255`, `surah 2 ayah 255`, bare surah number) |
+| `custom.actions.intent.OPEN_CHAPTER` | Open a chapter or ayah without starting audio |
+| `custom.actions.intent.PLAY_CHAPTER` | Open a chapter or ayah and start recitation |
+| `custom.actions.intent.BOOKMARK_VERSE` | Bookmark the verse currently focused in the reader (or the last-read verse) |
 
-### How to use (what actually works)
+### Invocation and distribution
 
-Google **App Actions need Play Console review** before “Hey Google, … on
-Beautiful Quran” works for end users. Until then (and for no-app-name voice):
+App Actions are registered by Google when a release containing
+`shortcuts.xml` is uploaded through Play Console; during development they need
+an Android Studio App Actions test preview. They are not registered merely by
+sideloading a GitHub APK. The media-search intent is an Android media-app hook
+and does not depend on App Actions registration.
 
-| Path | Works today? | How |
+| Path | Availability | How |
 |---|---|---|
-| **Reader → mic (top bar)** | Yes | “play chapter 2”, “bookmark this” while looking at the verse |
-| **Home → Listen** (primary) | Yes | “play chapter 2”, “open chapter 2”, “bookmark this”, … |
-| **Settings → Voice → Listen** | Yes | Same engine; also pin Continue/Bookmarks |
-| **“Hey Google, play chapter 2 on Beautiful Quran”** | Yes* | `MEDIA_PLAY_FROM_SEARCH` intent-filter — plain intent resolution, no Play review. (*subject to Assistant/Gemini routing the phrase to the named app) |
+| **“Hey Google, play chapter 36”** | Android 17 AppFunctions | Global `playChapter(36)` starts the selected reciter at verse 1 |
+| **“Hey Google, play chapter 2 verse 255”** | Android 17 AppFunctions | Global `playChapter(2, 255)` targets any valid verse |
+| **“Hey Google, next verse / pause / resume / stop”** | Android 17 AppFunctions | Global transport functions control Media3 directly |
+| **“Hey Google, repeat chapter 18 verses 1 through 10”** | Android 17 AppFunctions | `repeatVerses` validates and loops any inclusive range |
+| **“Hey Google, use Mishary / read at 1.25 speed”** | Android 17 AppFunctions | Reciter and speed functions update playback |
+| **“Hey Google, bookmark chapter 2 verse 255”** | Android 17 AppFunctions | Global bookmark mutation works without opening the UI |
+| **“Hey Google, bookmark this” while the reader is foreground** | Android 17 AppFunctions | Activity-scoped `bookmarkCurrentVerse` saves the exact focused ayah |
+| **“Hey Google, search for mercy / open settings” while foreground** | Android 17 AppFunctions | Activity-scoped functions move the visible paper stack |
+| **“Hey Google, play chapter 2 on Beautiful Quran”** | Public media fallback | Android `MEDIA_PLAY_FROM_SEARCH`; `MainActivity` parses the search query and starts audio (routing still depends on the device recognizing the named media app) |
+| **“Hey Google, open chapter 2 on Beautiful Quran”** | Play/App Actions release | `OPEN_CHAPTER` custom App Action |
+| **“Hey Google, bookmark this on Beautiful Quran”** | Play/App Actions release | Cold-start `BOOKMARK_VERSE` fulfillment |
 | **Pin / long-press shortcuts** | Yes | Continue & Bookmarks on the home screen / app long-press |
 | **Deep links / SEARCH** | Yes | `beautifulquran://…` and system `ACTION_SEARCH` queries |
-| Gemini / Hey Google App Actions (GitHub APK) | **No** | App Actions only register for Play Store apps |
 
-Sideloaded GitHub builds are invisible to Gemini App Actions; freeform
-“play chapter 2” (no app name) goes to YouTube Music, and “bookmark this”
-cannot reach the app through the phone assistant at all — use the in-app
-mic/Listen. “play chapter …” opens the reader and starts recitation. Queries
-strip trailing “on (the) Beautiful Quran (app)”. A `MEDIA_PLAY_FROM_SEARCH`
-whose query doesn’t parse resumes the last-read verse with recitation — a
-voice “play …” should always answer with audio, never a silent no-op.
+From a cold start, a phrase with no app name remains ambiguous among installed
+apps. AppFunctions lets a privileged agent discover a capability; it does not
+let an app globally claim an arbitrary phrase. Until Gemini's AppFunctions
+pipeline is generally available, the reliable public cold-start form names
+Beautiful Quran. Android 17's activity-scoped function supplies the missing
+foreground context for “bookmark this.”
 
 Deep-link scheme `beautifulquran://` (VIEW intent-filter on `MainActivity`):
 
 - `beautifulquran://continue` — last-read verse (`settings.lastSurah` / `lastAyah`)
+- `beautifulquran://continue?play=true` — last-read verse and start recitation
 - `beautifulquran://bookmarks` — bookmarks index (falls back to Chapters if empty)
 - `beautifulquran://bookmark/save` — ensure-bookmark on the current/last verse, then open it
 - `beautifulquran://verse/2/255` or `…/verse?surah=2&ayah=255` — open that verse
+- `beautifulquran://verse/2/255?play=true` — open that verse and start recitation
 
 Launcher long-press exposes **Continue** and **Bookmarks**. Cold-start deep
 links skip the entrance cover. Fulfillment lives in `PaperStackApp` (no
-navigation library). App Actions still need Play Console review for end-user
-Assistant invocation; `adb` deep links work regardless.
+navigation library); `adb` deep links work regardless of App Actions status.
 
 ## UI structure
 

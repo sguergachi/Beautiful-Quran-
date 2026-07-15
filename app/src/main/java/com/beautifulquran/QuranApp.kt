@@ -1,6 +1,7 @@
 package com.beautifulquran
 
 import android.app.Application
+import com.beautifulquran.assistant.AssistantAction
 import com.beautifulquran.assistant.VoiceShortcuts
 import com.beautifulquran.data.BookmarkRepository
 import com.beautifulquran.data.QuranDatabase
@@ -9,8 +10,12 @@ import com.beautifulquran.data.SettingsRepository
 import com.beautifulquran.ornamentslab.OrnamentSeedStore
 import com.beautifulquran.playback.PlayerController
 import com.beautifulquran.timingslab.TimingOverrides
+import kotlinx.coroutines.flow.MutableSharedFlow
 
 class QuranApp : Application() {
+
+    /** One-shot OS actions that should also move an already-open reader. */
+    val assistantActions = MutableSharedFlow<AssistantAction>(extraBufferCapacity = 1)
 
     lateinit var repository: QuranRepository
         private set

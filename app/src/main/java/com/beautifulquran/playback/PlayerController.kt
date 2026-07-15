@@ -331,6 +331,9 @@ class PlayerController(private val context: Context) {
         if (c.isPlaying) c.pause()
     }
 
+    /** Resume the loaded queue without changing its current position. */
+    fun resume() = withController { it.play() }
+
     /**
      * Seeks to [ayah] at [positionMs] within it (when the ayah is in the
      * loaded playlist) and optionally starts playback. The four public

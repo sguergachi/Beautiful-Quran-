@@ -81,6 +81,15 @@ class BookmarkRepository(context: Context) {
         return true
     }
 
+    /** Removes one bookmark if present. Returns whether anything changed. */
+    fun remove(surahId: Int, ayah: Int): Boolean {
+        val next = _bookmarks.value.filterNot { it.surahId == surahId && it.ayah == ayah }
+        if (next.size == _bookmarks.value.size) return false
+        _bookmarks.value = next
+        prefs.edit { putStringSet(KEY, next.map(::encode).toSet()) }
+        return true
+    }
+
     companion object {
         private const val KEY = "bookmarks"
 
