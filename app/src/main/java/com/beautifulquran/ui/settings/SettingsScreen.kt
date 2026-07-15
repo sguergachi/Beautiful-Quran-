@@ -159,6 +159,7 @@ fun SettingsScreen(
     // Ship bumps always load baseline (not Hairline's bodyAmp 0.12, etc.).
     var lastBrushStyle by remember { mutableStateOf(settings.brushCircleStyle) }
     var lastShipRev by remember { mutableIntStateOf(SHIPPED_BRUSH_REVISION) }
+    var lastCheckShipRev by remember { mutableIntStateOf(SHIPPED_CHECK_REVISION) }
 
     LaunchedEffect(settings.brushCircleStyle, SHIPPED_BRUSH_REVISION) {
         val styleChanged = lastBrushStyle != settings.brushCircleStyle
@@ -176,6 +177,13 @@ fun SettingsScreen(
             brushParams = brushCircleParams(settings.brushCircleStyle)
             paintToken++
         }
+    }
+
+    LaunchedEffect(SHIPPED_CHECK_REVISION) {
+        if (lastCheckShipRev == SHIPPED_CHECK_REVISION) return@LaunchedEffect
+        lastCheckShipRev = SHIPPED_CHECK_REVISION
+        checkParams = shippedCheckParams()
+        checkPaintToken++
     }
 
     if (developerTapCount > 0) {
@@ -1514,22 +1522,25 @@ private const val SHIPPED_BRUSH_REVISION = 9
 /** Dimensionless (dp-valued) knobs for one ink-brush circle style. */
 /** Lab-tunable ink check. Keep in lockstep with web brushCheck.ts. */
 private data class BrushCheckParams(
-    val p0x: Float = 0.16f,
-    val p0y: Float = 0.5f,
-    val p1x: Float = 0.4f,
-    val p1y: Float = 0.76f,
-    val p2x: Float = 0.86f,
-    val p2y: Float = 0.22f,
-    val sizeDp: Float = 22f,
-    val peakHalfDp: Float = 2.2f,
-    val nibBias: Float = 0.58f,
-    val attack: Float = 0.195f,
-    val releaseStart: Float = 0.6f,
-    val bodyAmp: Float = 0.34f,
-    val bodyFreq: Float = 5f,
-    val paintMs: Int = 620,
-    val alpha: Float = 0.9f,
+    val p0x: Float = 0.1f,
+    val p0y: Float = 0.49f,
+    val p1x: Float = 0.39f,
+    val p1y: Float = 0.8f,
+    val p2x: Float = 0.73f,
+    val p2y: Float = 0.11f,
+    val sizeDp: Float = 24f,
+    val peakHalfDp: Float = 1.68f,
+    val nibBias: Float = 0.56f,
+    val attack: Float = 0.184f,
+    val releaseStart: Float = 0.74f,
+    val bodyAmp: Float = 0.1f,
+    val bodyFreq: Float = 2.2f,
+    val paintMs: Int = 833,
+    val alpha: Float = 0.75f,
 )
+
+/** Bump when [BrushCheckParams] defaults change so the lab reseeds. */
+private const val SHIPPED_CHECK_REVISION = 2
 
 private fun shippedCheckParams() = BrushCheckParams()
 

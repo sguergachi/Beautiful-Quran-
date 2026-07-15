@@ -49,24 +49,24 @@ export const BRUSH_CHECK_KNOB_KEYS = [
 ] as const satisfies readonly BrushCheckKnobKey[]
 
 /** Shipped check — bump [SHIPPED_CHECK_REVISION] when this changes. */
-export const SHIPPED_CHECK_REVISION = 1
+export const SHIPPED_CHECK_REVISION = 2
 
 export const SHIPPED_CHECK_PARAMS: BrushCheckParams = {
-  p0x: 0.16,
-  p0y: 0.5,
-  p1x: 0.4,
-  p1y: 0.76,
-  p2x: 0.86,
-  p2y: 0.22,
-  size: 22,
-  peakHalf: 2.2,
-  nibBias: 0.58,
-  attack: 0.195,
-  releaseStart: 0.6,
-  bodyAmp: 0.34,
-  bodyFreq: 5,
-  paintMs: 620,
-  alpha: 0.9,
+  p0x: 0.1,
+  p0y: 0.49,
+  p1x: 0.39,
+  p1y: 0.8,
+  p2x: 0.73,
+  p2y: 0.11,
+  size: 24,
+  peakHalf: 1.68,
+  nibBias: 0.56,
+  attack: 0.184,
+  releaseStart: 0.74,
+  bodyAmp: 0.1,
+  bodyFreq: 2.2,
+  paintMs: 833,
+  alpha: 0.75,
 }
 
 /** @deprecated use SHIPPED_CHECK_PARAMS — kept for older imports. */
