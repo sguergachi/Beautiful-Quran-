@@ -309,9 +309,46 @@ private fun rememberStartRevealed(state: InkEngine.State): Boolean {
 }
 
 /** Comfortable reading band the active word is kept inside while follow mode
- * scrolls the sheet (see [wordUnitBehavior]). */
+ * scrolls the sheet (see [wordUnitBehavior] / [shapedActiveWordInView]). */
 private val ActiveWordTopMargin = 144.dp
 private val ActiveWordBottomMargin = 132.dp
+
+/**
+ * Word-level lyric follow for a single shaped paragraph (Hafs / English): when
+ * [keepInView] is on, expand the active word's glyph box by the reading-band
+ * margins and ask the LazyColumn to bring that rect on-screen. Per-word units
+ * use [wordUnitBehavior] instead; this is the multi-word `Text` path.
+ */
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+private fun Modifier.shapedActiveWordInView(
+    keepInView: Boolean,
+    activeIndex: Int,
+    wordRanges: List<IntRange>,
+    layoutResult: TextLayoutResult?,
+): Modifier {
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val density = LocalDensity.current
+    val topMarginPx = with(density) { ActiveWordTopMargin.toPx() }
+    val bottomMarginPx = with(density) { ActiveWordBottomMargin.toPx() }
+    LaunchedEffect(keepInView, activeIndex, layoutResult, wordRanges) {
+        if (!keepInView || activeIndex < 0) return@LaunchedEffect
+        val layout = layoutResult ?: return@LaunchedEffect
+        val range = wordRanges.getOrNull(activeIndex) ?: return@LaunchedEffect
+        if (range.isEmpty()) return@LaunchedEffect
+        val first = layout.getBoundingBox(range.first)
+        val last = layout.getBoundingBox(range.last)
+        bringIntoViewRequester.bringIntoView(
+            Rect(
+                left = minOf(first.left, last.left),
+                top = minOf(first.top, last.top) - topMarginPx,
+                right = maxOf(first.right, last.right),
+                bottom = maxOf(first.bottom, last.bottom) + bottomMarginPx,
+            ),
+        )
+    }
+    return this.bringIntoViewRequester(bringIntoViewRequester)
+}
 
 /**
  * Bundles the three animations every word unit runs: the lyric ink fade
@@ -651,7 +688,6 @@ private fun ResponsiveEnglishAyah(
     )
     var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     val hitSlopPx = with(LocalDensity.current) { 8.dp.toPx() }
-    val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val punctuatedGlosses = remember(ayah) {
         EnglishTypography.punctuate(ayah.words.map { it.translation })
     }
@@ -698,30 +734,18 @@ private fun ResponsiveEnglishAyah(
         RenderedLineText(text = text, wordRanges = ranges, markRange = markRange)
     }
 
-    LaunchedEffect(keepActiveWordInView, activeIndex, layoutResult) {
-        if (!keepActiveWordInView || activeIndex < 0) return@LaunchedEffect
-        val layout = layoutResult ?: return@LaunchedEffect
-        val range = rendered.wordRanges.getOrNull(activeIndex) ?: return@LaunchedEffect
-        if (range.isEmpty()) return@LaunchedEffect
-        val first = layout.getBoundingBox(range.first)
-        val last = layout.getBoundingBox(range.last)
-        bringIntoViewRequester.bringIntoView(
-            Rect(
-                left = minOf(first.left, last.left),
-                top = minOf(first.top, last.top),
-                right = maxOf(first.right, last.right),
-                bottom = maxOf(first.bottom, last.bottom),
-            ),
-        )
-    }
-
     Text(
         text = rendered.text,
         style = style,
         modifier = Modifier
             .fillMaxWidth()
             .widthIn(max = 560.dp)
-            .bringIntoViewRequester(bringIntoViewRequester)
+            .shapedActiveWordInView(
+                keepInView = keepActiveWordInView,
+                activeIndex = activeIndex,
+                wordRanges = rendered.wordRanges,
+                layoutResult = layoutResult,
+            )
             .shapedWordBloom(
                 blooms = {
                     val blooms = ArrayList<ShapedWordBloom>(inks.size + 2)
@@ -835,6 +859,9 @@ private fun ResponsiveHafsAyah(
     fontSize: TextUnit,
     activeSweepMs: Int?,
     flashWordPosition: Int? = null,
+    /** When the verse is taller than the viewport, keep the active word in the
+     * reading band so large type does not disappear under the player bar. */
+    keepActiveWordInView: Boolean = false,
     onAyahClick: () -> Unit,
     onWordClick: ((Word) -> Unit)?,
     onWordLongClick: ((Word) -> Unit)? = null,
@@ -905,6 +932,12 @@ private fun ResponsiveHafsAyah(
         modifier = Modifier
             .fillMaxWidth()
             .widthIn(max = 560.dp)
+            .shapedActiveWordInView(
+                keepInView = keepActiveWordInView,
+                activeIndex = activeIndex,
+                wordRanges = rendered.wordRanges,
+                layoutResult = layoutResult,
+            )
             .shapedWordBloom(
                 blooms = {
                     val recess = recessCover.value
@@ -1226,6 +1259,7 @@ fun AyahBlock(
                         fontSize = ArabicWordStyle.fontSize * fontScale * ARABIC_ONLY_HAFS_FONT_MULTIPLIER,
                         activeSweepMs = sweepMs,
                         flashWordPosition = flashWordPosition,
+                        keepActiveWordInView = keepActiveWordInView,
                         onAyahClick = onAyahClick,
                         onWordClick = onWordClick?.let { handler -> { word -> handler(word) } },
                         onWordLongClick = onWordLongClick?.let { handler -> { word -> handler(word) } },
