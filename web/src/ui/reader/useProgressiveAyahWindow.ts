@@ -113,7 +113,7 @@ export function useProgressiveAyahWindow(
       if (idleId && typeof cic === 'function') cic(idleId)
       if (timeoutId) window.clearTimeout(timeoutId)
     }
-    // Re-window only when the surah identity changes — not on every lastAyah tick.
+    // Re-window only when the surah identity changes — not on every openAyah tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [surahKey, ayahCount])
 
