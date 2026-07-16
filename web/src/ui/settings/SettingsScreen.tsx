@@ -1,16 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
+import { assetUrl } from '../../assetUrl'
 import { appStore, useAppState } from '../../store/appStore'
 import {
-  FONT_SCALE_MAX,
-  FONT_SCALE_MIN,
-  FONT_SCALE_STEP,
   type AyahSelectorSide,
   type HomeBookmarkStyle,
   type BrushCircleStyle,
   type ReadingMode,
   type ThemeMode,
 } from '../../data/settings'
-import type { PlayerState } from '../../playback/player'
 import { settingsLayerFor, type StackLayer } from '../paper/stack'
 import {
   BRUSH_CHECK_KNOB_SLIDERS,
@@ -34,10 +31,10 @@ import {
   type BrushCircleParams,
   type BrushKnobKey,
 } from '../kit/brushMark'
+import { FontSizeControl } from '../kit/FontSizeControl'
 import { InkCheckMark } from '../kit/InkCheckMark'
 import { PaperChoiceList } from '../kit/PaperChoiceList'
 import { PaperSegmented } from '../kit/PaperSegmented'
-import { PaperSelect } from '../kit/PaperSelect'
 import { PaperSlider } from '../kit/PaperSlider'
 import { PaperSwitch } from '../kit/PaperSwitch'
 import { ThemeSwatches } from './themeSwatches'
@@ -56,6 +53,8 @@ Arabic typeface: KFGQPC HAFS Uthmanic Script © King Fahd Glorious Quran Printin
 
 This app is free, ad-free, and collects no data.`
 
+const APP_VERSION = '0.1.0'
+
 const READING_OPTIONS = [
   { value: 'arabic_english' as const, label: 'Arabic & English' },
   { value: 'english_only' as const, label: 'English' },
@@ -63,8 +62,8 @@ const READING_OPTIONS = [
 ]
 
 const SELECTOR_OPTIONS = [
-  { value: 'left' as const, label: 'Left' },
-  { value: 'right' as const, label: 'Right' },
+  { value: 'left' as const, label: 'Left side' },
+  { value: 'right' as const, label: 'Right side' },
 ]
 
 const THEME_OPTIONS: {
@@ -82,18 +81,8 @@ const HOME_BOOKMARK_OPTIONS: { value: HomeBookmarkStyle; label: string }[] = [
   { value: 'saved_passages', label: 'Saved passages line' },
 ]
 
-const SPEED_OPTIONS = [
-  { value: '0.75', label: '0.75×' },
-  { value: '1', label: '1×' },
-  { value: '1.25', label: '1.25×' },
-  { value: '1.5', label: '1.5×' },
-]
-
-const REPEAT_OPTIONS = [
-  { value: 'off' as const, label: 'Off' },
-  { value: 'ayah' as const, label: 'Ayah' },
-  { value: 'surah' as const, label: 'Surah' },
-]
+/** Triple-tap window for developer unlock — matches Android SettingsScreen. */
+const DEVELOPER_TAP_RESET_MS = 1500
 
 export function SettingsScreen({
   stackLayer,
@@ -126,6 +115,7 @@ export function SettingsScreen({
   const [presetsOpen, setPresetsOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [checkPasteText, setCheckPasteText] = useState('')
+  const [developerTapCount, setDeveloperTapCount] = useState(0)
   const pasteRef = useRef<HTMLTextAreaElement>(null)
   const checkPasteRef = useRef<HTMLTextAreaElement>(null)
   const lastStyleRef = useRef(s.brushCircleStyle)
@@ -133,8 +123,6 @@ export function SettingsScreen({
   const lastCheckShipRef = useRef(SHIPPED_CHECK_REVISION)
 
   // Reseed when the saved preset changes, or when shipped BASE revision bumps.
-  // Ship bumps always load *baseline* (bodyAmp 0.34, alpha 0.9, …) — never the
-  // active A/B variant (e.g. Hairline forces bodyAmp 0.12 and looked "wrong").
   useEffect(() => {
     const styleChanged = lastStyleRef.current !== s.brushCircleStyle
     const shipChanged = lastShipRef.current !== SHIPPED_BRUSH_REVISION
@@ -152,7 +140,7 @@ export function SettingsScreen({
       setPaintToken((n) => n + 1)
       setSliderEpoch((n) => n + 1)
     }
-  }, [s.brushCircleStyle, SHIPPED_BRUSH_REVISION])
+  }, [s.brushCircleStyle])
 
   // Reseed check lab when shipped check design changes.
   useEffect(() => {
@@ -161,7 +149,21 @@ export function SettingsScreen({
     setCheckParams({ ...SHIPPED_CHECK_PARAMS })
     setCheckPaintToken((n) => n + 1)
     setCheckSliderEpoch((n) => n + 1)
-  }, [SHIPPED_CHECK_REVISION])
+  }, [])
+
+  // Reset developer tap counter after a quiet window.
+  useEffect(() => {
+    if (developerTapCount <= 0) return
+    const t = window.setTimeout(() => setDeveloperTapCount(0), DEVELOPER_TAP_RESET_MS)
+    return () => window.clearTimeout(t)
+  }, [developerTapCount])
+
+  // Clear copy flash after a beat.
+  useEffect(() => {
+    if (!copyNote) return
+    const t = window.setTimeout(() => setCopyNote(null), 2200)
+    return () => window.clearTimeout(t)
+  }, [copyNote])
 
   const setKnob = (key: BrushKnobKey, value: number) => {
     setBrushParams((prev) => ({ ...prev, label: 'Custom', [key]: value }))
@@ -180,14 +182,20 @@ export function SettingsScreen({
     setSliderEpoch((n) => n + 1)
   }
 
-  const flashNote = (msg: string) => {
-    setCopyNote(msg)
-    window.setTimeout(() => setCopyNote(null), 2200)
+  const flashNote = (msg: string) => setCopyNote(msg)
+
+  const onLogoClick = () => {
+    const next = developerTapCount + 1
+    if (next >= 3) {
+      appStore.updateSettings({ developerMode: !s.developerMode })
+      setDeveloperTapCount(0)
+    } else {
+      setDeveloperTapCount(next)
+    }
   }
 
   /** Clipboard API often fails in preview iframes — fall back to execCommand + field. */
   const copyTextRobust = (text: string): boolean => {
-    // 1) Hidden textarea + execCommand (works without clipboard permission).
     try {
       const el = document.createElement('textarea')
       el.value = text
@@ -218,7 +226,6 @@ export function SettingsScreen({
 
   const copyParams = async () => {
     const text = formatBrushParamsCopy(brushParams)
-    // Prefer async clipboard when available (secure context + permission).
     if (navigator.clipboard?.writeText) {
       try {
         await navigator.clipboard.writeText(text)
@@ -232,14 +239,10 @@ export function SettingsScreen({
       flashNote('Copied TS + Kotlin params')
       return
     }
-    // Last resort: put text in the paste field and select it for manual copy.
     setPasteText(text)
     window.requestAnimationFrame(() => {
-      const field = pasteRef.current
-      if (field) {
-        field.focus()
-        field.select()
-      }
+      pasteRef.current?.focus()
+      pasteRef.current?.select()
     })
     flashNote('Selected in field — press ⌘/Ctrl+C')
   }
@@ -250,18 +253,14 @@ export function SettingsScreen({
       flashNote('No brush knobs found in paste')
       return
     }
-    // Stay on baseline so "Reset to preset" / reseed cannot restore Hairline's
-    // bodyAmp 0.12 after a design paste.
     if (s.brushCircleStyle !== 'baseline') {
       lastStyleRef.current = 'baseline'
       appStore.updateSettings({ brushCircleStyle: 'baseline' })
     }
-    // Fresh object + remount so no slider keeps a stale internal value.
     setBrushParams({ ...parsed, label: 'Custom' })
     setPaintToken((n) => n + 1)
     setSliderEpoch((n) => n + 1)
-    setPasteText(raw.trim()) // keep what was applied visible for verification
-    // List every knob so a single wrong value is obvious (bodyAmp, alpha, …).
+    setPasteText(raw.trim())
     flashNote(`Applied: ${formatBrushKnobsExact(parsed)}`)
   }
 
@@ -342,21 +341,25 @@ export function SettingsScreen({
       data-active={isTop}
     >
       <div className="settings">
-        <button type="button" className="back" onClick={() => appStore.goBack()}>
-          ← Back
+        <button
+          type="button"
+          className="back settings-back"
+          aria-label="Back"
+          onClick={() => appStore.goBack()}
+        >
+          <BackChevron />
         </button>
         <h1>Settings</h1>
 
         <section className="settings-section">
           <h2>Reciter</h2>
-          <PaperSelect
-            id="setting-reciter"
-            label="Voice"
-            wide
+          <PaperChoiceList
+            aria-label="Reciter"
             value={String(s.reciterId)}
             options={state.reciters.map((r) => ({
               value: String(r.id),
-              label: r.hasTimings ? r.name : `${r.name} (no word highlighting)`,
+              label: r.name,
+              description: r.hasTimings ? undefined : 'No word highlighting',
             }))}
             onChange={(v) => appStore.updateSettings({ reciterId: Number(v) })}
           />
@@ -378,20 +381,14 @@ export function SettingsScreen({
 
         <section className="settings-section">
           <h2>Text size</h2>
-          <PaperSlider
-            id="setting-font"
-            label="Text size"
-            labelVisuallyHidden
-            value={s.fontScale}
-            min={FONT_SCALE_MIN}
-            max={FONT_SCALE_MAX}
-            step={FONT_SCALE_STEP}
+          <FontSizeControl
+            scale={s.fontScale}
             onChange={(fontScale) => appStore.updateSettings({ fontScale })}
           />
         </section>
 
         {showReadingToggles ? (
-          <section className="settings-section">
+          <section className="settings-section settings-section-toggles">
             <PaperSwitch
               id="setting-gloss"
               label="Word-by-word translation"
@@ -454,289 +451,290 @@ export function SettingsScreen({
           />
         </section>
 
-        <section className="settings-section">
-          <h2>Playback</h2>
-          <div className="settings-subfield">
-            <p className="settings-sublabel">Speed</p>
-            <PaperSegmented
-              aria-label="Playback speed"
-              value={String(s.playbackSpeed)}
-              brushParams={brushParams}
-              paintToken={paintToken}
-              options={SPEED_OPTIONS}
-              onChange={(v) =>
-                appStore.updateSettings({ playbackSpeed: Number(v) })
-              }
-            />
-          </div>
-          <div className="settings-subfield">
-            <p className="settings-sublabel">Repeat</p>
-            <PaperSegmented
-              aria-label="Repeat mode"
-              value={state.player.repeatMode}
-              brushParams={brushParams}
-              paintToken={paintToken}
-              options={REPEAT_OPTIONS}
-              onChange={(v) =>
-                appStore.setRepeat(v as PlayerState['repeatMode'])
-              }
-            />
-          </div>
-        </section>
+        {s.developerMode ? (
+          <section className="settings-section settings-section-developer">
+            <h2>Developer</h2>
+            <p className="settings-caption">Tools for testing work in progress.</p>
 
-        <section className="settings-section">
-          <h2>Developer</h2>
-          <PaperSwitch
-            id="setting-developer"
-            label="Developer mode"
-            checked={s.developerMode}
-            checkParams={checkParams}
-            paintToken={checkPaintToken}
-            onChange={(checked) => appStore.updateSettings({ developerMode: checked })}
-          />
-          {s.developerMode ? (
-            <>
+            <button
+              type="button"
+              className="settings-dev-link settings-dev-primary"
+              onClick={() => {
+                location.hash = '#lab'
+              }}
+            >
+              Ornaments Lab
+            </button>
+            <p className="settings-caption">
+              Explore, design, and save seeds for the procedural star-and-cross ornament
+              generator.
+            </p>
+
+            <div className="settings-dev-block">
+              <p className="settings-body-label">Home bookmark</p>
+              <p className="settings-caption">
+                Changes the Chapters shortcut; bookmark ribbons inside verses are unchanged.
+              </p>
+              <PaperChoiceList
+                aria-label="Home bookmark"
+                value={s.homeBookmarkStyle}
+                options={HOME_BOOKMARK_OPTIONS}
+                onChange={(homeBookmarkStyle) =>
+                  appStore.updateSettings({ homeBookmarkStyle })
+                }
+              />
+            </div>
+
+            <div className="settings-dev-block">
+              <p className="settings-body-label">Selector brush circle</p>
               <button
                 type="button"
-                className="settings-dev-button"
-                onClick={() => {
-                  location.hash = '#lab'
-                }}
+                className="settings-dev-link brush-lab-presets-toggle"
+                aria-expanded={presetsOpen}
+                onClick={() => setPresetsOpen((o) => !o)}
               >
-                Open Ornaments Lab
+                {presetsOpen ? 'Presets ▾' : 'Presets ▸'}
+                <span className="brush-lab-presets-current">
+                  {brushCircleParams(s.brushCircleStyle).label}
+                </span>
               </button>
-              <div className="settings-dev-bookmark">
-                <p className="settings-sublabel">Home bookmark</p>
-                <p className="settings-dev-caption">
-                  Changes the Chapters shortcut; verse ribbons are unchanged.
-                </p>
+              {presetsOpen ? (
                 <PaperChoiceList
-                  aria-label="Home bookmark"
-                  value={s.homeBookmarkStyle}
-                  options={HOME_BOOKMARK_OPTIONS}
-                  onChange={(homeBookmarkStyle) =>
-                    appStore.updateSettings({ homeBookmarkStyle })
-                  }
+                  aria-label="Selector brush circle preset"
+                  value={s.brushCircleStyle}
+                  options={BRUSH_CIRCLE_STYLE_IDS.map((id) => ({
+                    value: id,
+                    label: brushCircleParams(id).label,
+                  }))}
+                  onChange={(v) => loadPreset(v as BrushCircleStyle)}
                 />
+              ) : null}
+              <div className="brush-lab-sliders">
+                {BRUSH_KNOB_SLIDERS.map((spec) => (
+                  <PaperSlider
+                    key={`${spec.key}-${sliderEpoch}`}
+                    id={`brush-${spec.key}`}
+                    label={spec.label}
+                    value={brushParams[spec.key]}
+                    min={spec.min}
+                    max={spec.max}
+                    step={spec.step}
+                    format={spec.format}
+                    onChange={(v) => setKnob(spec.key, v)}
+                  />
+                ))}
               </div>
-              <div className="settings-subfield">
-                <p className="settings-sublabel">Selector brush circle</p>
+              <pre className="brush-lab-verify" aria-live="polite">
+                {formatBrushKnobsVerifyLines(brushParams)}
+              </pre>
+              <div className="brush-lab-actions">
                 <button
                   type="button"
-                  className="settings-dev-link brush-lab-presets-toggle"
-                  aria-expanded={presetsOpen}
-                  onClick={() => setPresetsOpen((o) => !o)}
+                  className="settings-dev-link"
+                  onClick={() => {
+                    setBrushParams(brushCircleParams(s.brushCircleStyle))
+                    setPaintToken((n) => n + 1)
+                    setSliderEpoch((n) => n + 1)
+                  }}
                 >
-                  {presetsOpen ? 'Presets ▾' : 'Presets ▸'}
-                  <span className="brush-lab-presets-current">
-                    {brushCircleParams(s.brushCircleStyle).label}
-                  </span>
+                  Reset to preset
                 </button>
-                {presetsOpen ? (
-                  <PaperChoiceList
-                    aria-label="Selector brush circle preset"
-                    value={s.brushCircleStyle}
-                    options={BRUSH_CIRCLE_STYLE_IDS.map((id) => ({
-                      value: id,
-                      label: brushCircleParams(id).label,
-                    }))}
-                    onChange={(v) => loadPreset(v as BrushCircleStyle)}
-                  />
-                ) : null}
-                <div className="brush-lab-sliders">
-                  {BRUSH_KNOB_SLIDERS.map((spec) => (
-                    <PaperSlider
-                      key={`${spec.key}-${sliderEpoch}`}
-                      id={`brush-${spec.key}`}
-                      label={spec.label}
-                      value={brushParams[spec.key]}
-                      min={spec.min}
-                      max={spec.max}
-                      step={spec.step}
-                      format={spec.format}
-                      onChange={(v) => setKnob(spec.key, v)}
-                    />
-                  ))}
-                </div>
-                {/* Lab label + code key + raw number (e.g. Join ° (startDeg): 254). */}
-                <pre className="brush-lab-verify" aria-live="polite">
-                  {formatBrushKnobsVerifyLines(brushParams)}
-                </pre>
-                <div className="brush-lab-actions">
-                  <button
-                    type="button"
-                    className="settings-dev-link"
-                    onClick={() => {
-                      setBrushParams(brushCircleParams(s.brushCircleStyle))
-                      setPaintToken((n) => n + 1)
-                      setSliderEpoch((n) => n + 1)
-                    }}
-                  >
-                    Reset to preset
-                  </button>
-                  <button
-                    type="button"
-                    className="settings-dev-link"
-                    onClick={() => setPaintToken((n) => n + 1)}
-                  >
-                    Replay paint
-                  </button>
-                  <button
-                    type="button"
-                    className="settings-dev-link"
-                    onClick={() => void copyParams()}
-                  >
-                    Copy values
-                  </button>
-                  <button
-                    type="button"
-                    className="settings-dev-link"
-                    onClick={() => void pasteFromClipboard()}
-                  >
-                    Paste values
-                  </button>
-                </div>
-                <textarea
-                  ref={pasteRef}
-                  className="brush-lab-paste"
-                  rows={4}
-                  spellCheck={false}
-                  placeholder="Paste saved brush params here (TS or Kotlin), then Apply…"
-                  value={pasteText}
-                  onChange={(e) => setPasteText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-                      e.preventDefault()
-                      applyPaste(pasteText)
-                    }
-                  }}
-                />
-                <div className="brush-lab-actions">
-                  <button
-                    type="button"
-                    className="settings-dev-link"
-                    disabled={!pasteText.trim()}
-                    onClick={() => applyPaste(pasteText)}
-                  >
-                    Apply paste
-                  </button>
-                </div>
-                {copyNote ? (
-                  <p className="settings-dev-caption" role="status">
-                    {copyNote}
-                  </p>
-                ) : null}
+                <button
+                  type="button"
+                  className="settings-dev-link"
+                  onClick={() => setPaintToken((n) => n + 1)}
+                >
+                  Replay paint
+                </button>
+                <button
+                  type="button"
+                  className="settings-dev-link"
+                  onClick={() => void copyParams()}
+                >
+                  Copy values
+                </button>
+                <button
+                  type="button"
+                  className="settings-dev-link"
+                  onClick={() => void pasteFromClipboard()}
+                >
+                  Paste values
+                </button>
               </div>
-
-              <div className="settings-subfield">
-                <p className="settings-sublabel">Ink check mark</p>
-                <div className="check-lab-preview">
-                  <button
-                    type="button"
-                    className="settings-dev-link"
-                    onClick={() => {
-                      setCheckPreviewOn((v) => !v)
-                      setCheckPaintToken((n) => n + 1)
-                    }}
-                  >
-                    {checkPreviewOn ? 'Preview on' : 'Preview off'} — tap to toggle
-                  </button>
-                  <InkCheckMark
-                    checked={checkPreviewOn}
-                    params={checkParams}
-                    paintToken={checkPaintToken}
-                  />
-                </div>
-                <div className="brush-lab-sliders">
-                  {BRUSH_CHECK_KNOB_SLIDERS.map((spec) => (
-                    <PaperSlider
-                      key={`${spec.key}-${checkSliderEpoch}`}
-                      id={`check-${spec.key}`}
-                      label={spec.label}
-                      value={checkParams[spec.key]}
-                      min={spec.min}
-                      max={spec.max}
-                      step={spec.step}
-                      format={spec.format}
-                      onChange={(v) => setCheckKnob(spec.key, v)}
-                    />
-                  ))}
-                </div>
-                <pre className="brush-lab-verify" aria-live="polite">
-                  {formatBrushCheckVerifyLines(checkParams)}
-                </pre>
-                <div className="brush-lab-actions">
-                  <button
-                    type="button"
-                    className="settings-dev-link"
-                    onClick={() => {
-                      setCheckParams({ ...SHIPPED_CHECK_PARAMS })
-                      setCheckPaintToken((n) => n + 1)
-                      setCheckSliderEpoch((n) => n + 1)
-                    }}
-                  >
-                    Reset check
-                  </button>
-                  <button
-                    type="button"
-                    className="settings-dev-link"
-                    onClick={() => {
-                      setCheckPreviewOn(true)
-                      setCheckPaintToken((n) => n + 1)
-                    }}
-                  >
-                    Replay paint
-                  </button>
-                  <button
-                    type="button"
-                    className="settings-dev-link"
-                    onClick={() => void copyCheckParams()}
-                  >
-                    Copy values
-                  </button>
-                  <button
-                    type="button"
-                    className="settings-dev-link"
-                    onClick={() => void pasteCheckFromClipboard()}
-                  >
-                    Paste values
-                  </button>
-                </div>
-                <textarea
-                  ref={checkPasteRef}
-                  className="brush-lab-paste"
-                  rows={4}
-                  spellCheck={false}
-                  placeholder="Paste check params here (TS or Kotlin), then Apply…"
-                  value={checkPasteText}
-                  onChange={(e) => setCheckPasteText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-                      e.preventDefault()
-                      applyCheckPaste(checkPasteText)
-                    }
-                  }}
-                />
-                <div className="brush-lab-actions">
-                  <button
-                    type="button"
-                    className="settings-dev-link"
-                    disabled={!checkPasteText.trim()}
-                    onClick={() => applyCheckPaste(checkPasteText)}
-                  >
-                    Apply paste
-                  </button>
-                </div>
+              <textarea
+                ref={pasteRef}
+                className="brush-lab-paste"
+                rows={4}
+                spellCheck={false}
+                placeholder="Paste saved brush params here (TS or Kotlin), then Apply…"
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                    e.preventDefault()
+                    applyPaste(pasteText)
+                  }
+                }}
+              />
+              <div className="brush-lab-actions">
+                <button
+                  type="button"
+                  className="settings-dev-link"
+                  disabled={!pasteText.trim()}
+                  onClick={() => applyPaste(pasteText)}
+                >
+                  Apply paste
+                </button>
               </div>
-            </>
-          ) : null}
-        </section>
+            </div>
 
-        <section className="settings-section">
-          <h2>About & attributions</h2>
-          <p className="settings-attributions">{ATTRIBUTIONS}</p>
-        </section>
+            <div className="settings-dev-block">
+              <p className="settings-body-label">Ink check mark</p>
+              <div className="check-lab-preview">
+                <button
+                  type="button"
+                  className="settings-dev-link"
+                  onClick={() => {
+                    setCheckPreviewOn((v) => !v)
+                    setCheckPaintToken((n) => n + 1)
+                  }}
+                >
+                  Preview — see toggles above
+                </button>
+                <InkCheckMark
+                  checked={checkPreviewOn}
+                  params={checkParams}
+                  paintToken={checkPaintToken}
+                />
+              </div>
+              <div className="brush-lab-sliders">
+                {BRUSH_CHECK_KNOB_SLIDERS.map((spec) => (
+                  <PaperSlider
+                    key={`${spec.key}-${checkSliderEpoch}`}
+                    id={`check-${spec.key}`}
+                    label={spec.label}
+                    value={checkParams[spec.key]}
+                    min={spec.min}
+                    max={spec.max}
+                    step={spec.step}
+                    format={spec.format}
+                    onChange={(v) => setCheckKnob(spec.key, v)}
+                  />
+                ))}
+              </div>
+              <pre className="brush-lab-verify" aria-live="polite">
+                {formatBrushCheckVerifyLines(checkParams)}
+              </pre>
+              <div className="brush-lab-actions">
+                <button
+                  type="button"
+                  className="settings-dev-link"
+                  onClick={() => {
+                    setCheckParams({ ...SHIPPED_CHECK_PARAMS })
+                    setCheckPaintToken((n) => n + 1)
+                    setCheckSliderEpoch((n) => n + 1)
+                  }}
+                >
+                  Reset check
+                </button>
+                <button
+                  type="button"
+                  className="settings-dev-link"
+                  onClick={() => {
+                    setCheckPreviewOn(true)
+                    setCheckPaintToken((n) => n + 1)
+                  }}
+                >
+                  Replay paint
+                </button>
+                <button
+                  type="button"
+                  className="settings-dev-link"
+                  onClick={() => void copyCheckParams()}
+                >
+                  Copy check
+                </button>
+                <button
+                  type="button"
+                  className="settings-dev-link"
+                  onClick={() => void pasteCheckFromClipboard()}
+                >
+                  Paste check
+                </button>
+              </div>
+              <textarea
+                ref={checkPasteRef}
+                className="brush-lab-paste"
+                rows={4}
+                spellCheck={false}
+                placeholder="Paste check params here (TS or Kotlin), then Apply…"
+                value={checkPasteText}
+                onChange={(e) => setCheckPasteText(e.target.value)}
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                    e.preventDefault()
+                    applyCheckPaste(checkPasteText)
+                  }
+                }}
+              />
+              <div className="brush-lab-actions">
+                <button
+                  type="button"
+                  className="settings-dev-link"
+                  disabled={!checkPasteText.trim()}
+                  onClick={() => applyCheckPaste(checkPasteText)}
+                >
+                  Apply paste
+                </button>
+              </div>
+              {copyNote ? (
+                <p className="settings-caption" role="status">
+                  {copyNote}
+                </p>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        <footer className="settings-colophon">
+          <button
+            type="button"
+            className="settings-colophon-mark"
+            aria-label="Beautiful Quran"
+            onClick={onLogoClick}
+          >
+            <img src={assetUrl('icon-192.png')} alt="" width={48} height={48} />
+          </button>
+          <p className="settings-colophon-name">Beautiful Quran</p>
+          <p className="settings-colophon-version">
+            Version {APP_VERSION}
+            {s.developerMode ? ' · developer mode' : ''}
+          </p>
+        </footer>
+
+        <p className="settings-attributions">{ATTRIBUTIONS}</p>
       </div>
     </div>
+  )
+}
+
+function BackChevron() {
+  return (
+    <svg
+      className="settings-back-icon"
+      viewBox="0 0 24 24"
+      width="24"
+      height="24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M15.5 5.5 L9 12 l6.5 6.5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   )
 }

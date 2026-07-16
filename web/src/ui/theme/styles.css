@@ -2311,12 +2311,15 @@ select {
 }
 
 
-/* —— Settings —— */
+/* —— Settings ——
+ * Android SettingsScreen parity: full sheet of paper, uppercase section
+ * labels, ink-disc selects, A—track—A text size, colophon at the foot.
+ */
 .settings {
-  padding: 1.25rem var(--sheet-pad) 4rem;
-  padding-top: max(1.25rem, env(safe-area-inset-top));
-  padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
-  max-width: 34rem;
+  padding: 0.5rem var(--sheet-pad) 3rem;
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+  padding-bottom: calc(3rem + env(safe-area-inset-bottom, 0px));
+  max-width: 40rem; /* 640dp Android measure */
   width: 100%;
   margin: 0 auto;
   overflow: auto;
@@ -2325,19 +2328,30 @@ select {
   overscroll-behavior: contain;
 }
 
-.settings .back {
-  color: var(--ink-muted);
-  font-size: 0.9rem;
-  letter-spacing: 0.03em;
-  margin-bottom: 1rem;
-  padding: 0.55rem 0;
-  min-height: 44px;
+.settings .back,
+.settings-back {
+  color: color-mix(in srgb, var(--ink) 75%, transparent);
+  margin: 0 0 0.35rem;
+  padding: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  min-height: 2.5rem;
   display: inline-flex;
   align-items: center;
+  justify-content: flex-start;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+}
+
+.settings-back-icon {
+  display: block;
 }
 
 @media (hover: hover) {
-  .settings .back:hover {
+  .settings .back:hover,
+  .settings-back:hover {
     color: var(--accent);
   }
 }
@@ -2345,21 +2359,57 @@ select {
 .settings h1 {
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: clamp(1.75rem, 5vw, 2rem);
-  margin: 0 0 1.35rem;
+  font-size: clamp(1.65rem, 4.5vw, 1.85rem);
+  margin: 0 0 2.25rem;
+  color: var(--ink);
 }
 
 .settings-section {
-  margin-bottom: 1.6rem;
+  margin-bottom: 2rem;
 }
 
+.settings-section-toggles {
+  margin-top: -0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.settings-section-developer {
+  margin-top: 2.75rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Letterspaced, low-ink label — never competes with the reading. */
 .settings-section h2 {
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--ink-muted);
+  color: color-mix(in srgb, var(--ink) 45%, transparent);
   font-weight: 500;
-  margin: 0 0 0.55rem;
+  margin: 0 0 0.65rem;
+  font-family: var(--font-body);
+}
+
+.settings-caption {
+  margin: 0.15rem 0 0.75rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--ink-muted) 90%, transparent);
+}
+
+.settings-body-label {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+.settings-dev-block {
+  margin-top: 1.35rem;
+}
+
+.settings-dev-primary {
+  margin-top: 0.35rem;
+  font-size: 1rem;
 }
 
 .setting-row {
@@ -2629,47 +2679,60 @@ select {
   }
 }
 
-/* Vertical choice list — theme / long visible enums. */
+/* Vertical choice list — Android SelectRow + InkDisc.
+ * Green filled disc when chosen; hollow ring at rest. Selection is carried by
+ * label ink strength (alpha), never accent-on-label. */
 .paper-choice-list {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 0;
 }
 
 .paper-choice-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  min-height: 48px;
-  padding: 0.45rem 0;
+  gap: 1rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0;
   cursor: pointer;
 }
 
-.paper-choice-radio {
+/* 18dp ink disc */
+.paper-choice-radio,
+.ink-disc {
   position: relative;
   flex-shrink: 0;
-  width: 1.05rem;
-  height: 1.05rem;
+  width: 1.125rem;
+  height: 1.125rem;
   border-radius: 50%;
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 28%, transparent);
+  box-shadow: inset 0 0 0 1.4px color-mix(in srgb, var(--ink) 28%, transparent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: box-shadow 200ms ease;
 }
 
-.paper-choice-radio[data-checked] {
-  box-shadow: inset 0 0 0 1.5px var(--accent);
+.paper-choice-radio[data-checked],
+.ink-disc[data-checked] {
+  box-shadow: inset 0 0 0 1.4px transparent;
 }
 
-.paper-choice-indicator {
-  width: 0.45rem;
-  height: 0.45rem;
+.paper-choice-indicator,
+.ink-disc-fill {
+  width: 0;
+  height: 0;
   border-radius: 50%;
-  background: transparent;
+  background: var(--accent);
+  transition:
+    width 200ms ease,
+    height 200ms ease;
 }
 
-.paper-choice-radio[data-checked] .paper-choice-indicator {
-  background: var(--accent);
+.paper-choice-radio[data-checked] .paper-choice-indicator,
+.ink-disc[data-checked] .ink-disc-fill {
+  /* Fill almost to the rim (Android: (r − 2dp) * fill). */
+  width: 0.85rem;
+  height: 0.85rem;
 }
 
 .paper-choice-radio:focus-visible {
@@ -2680,30 +2743,106 @@ select {
 .paper-choice-copy {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 0.08rem;
   flex: 1;
   min-width: 0;
 }
 
 .paper-choice-label {
-  color: var(--ink);
-  font-size: 1rem;
+  color: color-mix(in srgb, var(--ink) 55%, transparent);
+  font-size: 1.05rem;
   line-height: 1.35;
+  transition: color 180ms ease;
 }
 
+.paper-choice-row.is-selected .paper-choice-label,
 .paper-choice-row:has(.paper-choice-radio[data-checked]) .paper-choice-label {
-  color: var(--accent);
+  color: var(--ink);
 }
 
 .paper-choice-desc {
   color: color-mix(in srgb, var(--ink-muted) 85%, transparent);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   line-height: 1.3;
 }
 
 .paper-choice-trailing {
   flex-shrink: 0;
   margin-inline-start: auto;
+}
+
+/* Text size — A  ·····●····  A  (Android FontSizeControl). */
+.font-size-control {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 0;
+  padding: 0.15rem 0 0.35rem;
+  outline: none;
+}
+
+.font-size-control:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.font-size-glyph {
+  flex-shrink: 0;
+  font-family: var(--font-body);
+  color: color-mix(in srgb, var(--ink) 50%, transparent);
+  line-height: 1;
+  user-select: none;
+}
+
+.font-size-glyph-sm {
+  font-size: 0.94rem; /* ~15sp */
+}
+
+.font-size-glyph-lg {
+  font-size: 1.625rem; /* ~26sp */
+}
+
+.font-size-track {
+  position: relative;
+  flex: 1;
+  height: 2.75rem; /* 44dp hit target */
+  margin: 0 0.9rem;
+  touch-action: none;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.font-size-rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1.5px;
+  transform: translateY(-50%);
+  background: color-mix(in srgb, var(--ink) 28%, transparent);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.font-size-dot {
+  position: absolute;
+  top: 50%;
+  width: 0.875rem; /* 14dp */
+  height: 0.875rem;
+  margin-left: -0.4375rem;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: var(--accent);
+  pointer-events: none;
+  transition: left 140ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .font-size-dot {
+    transition: none;
+  }
 }
 
 /* Theme preview: main paper fill in a round rect with gilt rim. */
@@ -2813,12 +2952,62 @@ select {
   cursor: grabbing;
 }
 
-.settings-attributions {
+/* Colophon — app mark at the foot of the sheet; triple-tap unlocks developer. */
+.settings-colophon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 3.5rem 0 1.1rem;
+  text-align: center;
+}
+
+.settings-colophon-mark {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0.25rem;
+  margin: 0 0 0.25rem;
+  cursor: pointer;
+  border-radius: 50%;
+  line-height: 0;
+}
+
+.settings-colophon-mark img {
+  display: block;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 22%;
+  object-fit: cover;
+}
+
+.settings-colophon-mark:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.settings-colophon-name {
   margin: 0;
-  color: color-mix(in srgb, var(--ink-muted) 88%, transparent);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.2rem;
+  color: color-mix(in srgb, var(--ink) 85%, transparent);
+}
+
+.settings-colophon-version {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--ink-muted) 90%, transparent);
+}
+
+.settings-attributions {
+  margin: 0 auto 1.5rem;
+  max-width: 32rem;
+  color: color-mix(in srgb, var(--ink) 38%, transparent);
   line-height: 1.55;
   white-space: pre-line;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
+  text-align: center;
 }
 
 .paper-input {
@@ -4318,21 +4507,6 @@ html[data-entrance='true'] body {
 
 .lab-del {
   padding: 0.15rem 0.4rem;
-}
-
-.settings-dev-button {
-  margin-top: 0.75rem;
-  padding: 0.5rem 0.9rem;
-  font-family: var(--font-body);
-  color: var(--ink);
-  background: var(--paper-surface);
-  border: 1px solid var(--gold-deep);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.settings-dev-bookmark {
-  margin-top: 1.5rem;
 }
 
 .settings-dev-caption {

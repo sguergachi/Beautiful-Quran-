@@ -20,8 +20,9 @@ type Props<T extends string> = {
 }
 
 /**
- * Vertical ink choice list — full options visible on the page. Selected row
- * uses accent ink; no floating popup, no Material radio chrome.
+ * Vertical ink choice list — Android `SelectRow` parity. A green ink disc leads
+ * each row; selection is carried by ink strength (alpha), not accent color on
+ * the label. No floating popup, no Material radio chrome.
  */
 export function PaperChoiceList<T extends string>({
   'aria-label': ariaLabel,
@@ -40,22 +41,28 @@ export function PaperChoiceList<T extends string>({
         onChange(next as T)
       }}
     >
-      {options.map((opt) => (
-        <label key={opt.value} className="paper-choice-row">
-          <Radio.Root value={opt.value} className="paper-choice-radio">
-            <Radio.Indicator className="paper-choice-indicator" />
-          </Radio.Root>
-          <span className="paper-choice-copy">
-            <span className="paper-choice-label">{opt.label}</span>
-            {opt.description ? (
-              <span className="paper-choice-desc">{opt.description}</span>
+      {options.map((opt) => {
+        const selected = opt.value === value
+        return (
+          <label
+            key={opt.value}
+            className={`paper-choice-row${selected ? ' is-selected' : ''}`}
+          >
+            <Radio.Root value={opt.value} className="paper-choice-radio ink-disc">
+              <Radio.Indicator className="paper-choice-indicator ink-disc-fill" />
+            </Radio.Root>
+            <span className="paper-choice-copy">
+              <span className="paper-choice-label">{opt.label}</span>
+              {opt.description ? (
+                <span className="paper-choice-desc">{opt.description}</span>
+              ) : null}
+            </span>
+            {opt.trailing ? (
+              <span className="paper-choice-trailing">{opt.trailing}</span>
             ) : null}
-          </span>
-          {opt.trailing ? (
-            <span className="paper-choice-trailing">{opt.trailing}</span>
-          ) : null}
-        </label>
-      ))}
+          </label>
+        )
+      })}
     </RadioGroup>
   )
 }
