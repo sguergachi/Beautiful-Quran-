@@ -38,6 +38,32 @@ Hard rules:
 - **Taps have no ripple.** Touch feedback is the content's own motion
   (a word lighting, a page turning), never Material ink splash.
 
+### Turning the sheet
+
+Sheets turn with a horizontal swipe, handled by one stack-level detector
+(`paperStackDrag` in `MainActivity.kt`). A finger stroke is never perfectly
+flat, so the detector and the sheets' own vertical scrolling share the
+gesture by these rules:
+
+- **The dominant axis wins, decided early.** The moment total travel crosses
+  the system touch slop — the same distance at which a scrolling list locks —
+  the gesture commits to one axis: horizontal (with a slight vertical bias,
+  `|dx| > |dy| × 1.1`, since reading is the primary activity) turns the
+  page; otherwise the sheet's content scrolls. Deciding any later means
+  vertical scroll claims nearly every swipe and page turns feel dead.
+- **Children claim first.** The detector watches the Main pointer pass and
+  backs off the instant a child control consumes the gesture, so sliders and
+  scrolling lists keep working inside a sheet. A gesture that opened
+  vertical over a static area can still become a page turn on a clear,
+  sustained horizontal pull.
+- **A short pull resistance** (~14 dp, capped at 4% of the sheet width)
+  is subtracted from the drag so the sheet leans before it travels — paper
+  has weight — but the sheet starts following the finger almost immediately.
+- **One turn per gesture.** Releasing past 15% of the width, or flinging at
+  0.30 screen-widths/s, commits the turn; a gesture never advances more than
+  one sheet. The thresholds live beside the layer constants in
+  `MainActivity.kt` and are the tuning knobs for swipe eagerness.
+
 ## The ink bleed
 
 When the app must present something the system would normally raise as a
