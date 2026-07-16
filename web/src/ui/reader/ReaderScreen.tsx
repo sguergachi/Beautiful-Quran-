@@ -740,16 +740,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
             else appStore.revealLayer(COVER_LAYER)
           }}
         >
-          {searchActive ? (
-            <IconClose />
-          ) : (
-            <>
-              <span className="back-label-full">← Chapters</span>
-              <span className="back-label-short" aria-hidden="true">
-                ←
-              </span>
-            </>
-          )}
+          {searchActive ? <IconClose /> : <span aria-hidden="true">←</span>}
         </button>
 
         {!searchActive && content ? (

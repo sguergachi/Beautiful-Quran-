@@ -1,9 +1,10 @@
 # Complexity map and simplification guide
 
-*Audited 2026-07-12 against the Android app, web app, data builder, scripts,
-workflows, and tests. This document describes the current code rather than a
-future architecture. Revisit the measurements and recommendations when a large
-feature lands.*
+*Re-audited 2026-07-16 against the Android app, web app, data builder, scripts,
+workflows, and tests. The first audit was 2026-07-12; this pass remeasured the
+repository after the bookmark, Assistant/AppFunctions, profiling, settings,
+ornament-lab, and search work that followed. This document describes the
+current code rather than a future architecture.*
 
 ## Why this document exists
 
@@ -21,6 +22,26 @@ Beautiful Quran has two kinds of complexity:
 The goal is not the fewest lines. It is the smallest number of places a person
 must understand before making a safe change.
 
+## Review evidence
+
+This review combines physical line counts with responsibility and lifecycle
+inspection. Line count is only a discovery signal: a long pure algorithm can
+be safer than a short coordinator with six mutable resources.
+
+- Compared with the original audit commit (`c88a505`), the current tree has 96
+  subsequent commits. Application, test, web, tool, and script sources changed
+  by roughly +13,863/-2,070 lines after excluding the large timing-override
+  JSON patches and database binary.
+- The largest current source files were inspected by responsibility, not just
+  sorted by size. New Android OS integrations and developer visual tooling were
+  included explicitly in this pass.
+- `./gradlew testDebugUnitTest` passes: 195 JVM tests.
+- `npm test` passes: 42 files and 265 tests. `npm run build` also passes and is
+  part of the verification baseline because Vitest alone does not type-check
+  the complete web application.
+- Generated assets, timing JSON, fonts, and SQLite bytes are assessed through
+  their owning pipelines and validation contracts, not treated as source LOC.
+
 ## Executive summary
 
 The architecture is sound: build-time cleanup feeds a read-only database;
@@ -31,19 +52,39 @@ framework.
 
 | Rank | Area | Current signal | Why it is difficult | Best simplification |
 |---:|---|---:|---|---|
-| 1 | Web playback | `player.ts`, 1,091 lines | Audio elements, joins, iOS recovery, cache, fades, repeat, and ticker share one mutable class | Keep one public facade; move element lifecycle, join policy, and playlist/repeat behind narrow collaborators |
-| 2 | Android reader | `ReaderScreen.kt` 1,109 lines + `ReaderComponents.kt` 1,510 | Search, focus, follow, permission, layout, playback, and multiple renderers meet in one screen | Extract remembered session controllers and renderer-specific files; leave the list assembly visible |
-| 3 | Web reader/store | `ReaderScreen.tsx` 1,001 + `appStore.ts` 731 | React effects coordinate DOM focus, playback, navigation, search flash, root viewer, and persistence | Split commands into small coordinators while retaining one external-store snapshot |
-| 4 | Web styling | `styles.css`, 3,278 lines | Every surface, animation, theme, responsive rule, and state selector shares one global file | Split by tokens/shell/home/reader/playback/settings/overlays; keep a single ordered entry stylesheet |
-| 5 | Data generation | `build_db.py`, 972 lines | Fetching, alignment, timing heuristics, morphology, schema, validation, and writing are interleaved | Turn it into a small `tools/quran_db/` package with an orchestration-only entry point and fixture tests |
-| 6 | Timing lab | screen 839 + view model 669 | Playback, recording, editing, undo/reset, override persistence, and patch export form one feature | Put edit transitions in a pure `TimingEditor`; make playback and export adapters explicit |
-| 7 | Android app shell | `MainActivity.kt`, 784 lines | Paper stack, overlays, back behavior, gestures, page sounds, and cross-sheet return state coexist | Extract `PaperStackState` and overlay/return coordinators; retain hand-rolled navigation |
-| 8 | Rendering parity | Android and web implement the same Highlight/Ink/Focus/search policy separately | Behavior can drift even when each implementation is locally tested | Add shared language-neutral fixture files and parity tests; do not create a cross-platform runtime dependency |
+| 1 | Web playback | `player.ts`, 927 lines | The facade still coordinates play intent, playlist/repeat, recovery, boundary timers, and publication, but element and join mechanisms are now isolated | Keep the facade stable; use the new event harness before extracting another state owner |
+| 2 | Android app shell + OS actions | `MainActivity.kt`, 1,047 lines; `assistant/`, 1,008 | Four sheets, five overlays, return state, deep links, media search, shortcuts, and two AppFunctions scopes cross several lifecycles | Extract paper/overlay state and protocol-free policy tests; add a shared executor only when it removes proven duplication |
+| 3 | Android settings + visual labs | `SettingsScreen.kt`, 1,903 lines; ornament lab, 736 | Production settings, brush/check geometry, live tuning, clipboard interchange, audio audition, profiling, and lab launchers share one file/path | Delete tuning transport after values ship or move the developer lab wholesale; keep production settings declarative |
+| 4 | Android reader | `ReaderScreen.kt`, 1,128 lines + `ReaderComponents.kt`, 1,564 | Search, focus, follow, permission, layout, playback, and multiple renderers meet in one screen | Extract remembered session controllers and renderer-specific files; leave list assembly visible |
+| 5 | Web reader/store | `ReaderScreen.tsx`, 1,074 + `appStore.ts`, 757 | React effects coordinate DOM focus, playback, navigation, search flash, root viewer, and persistence | Split commands into small coordinators while retaining one external-store snapshot |
+| 6 | Web styling | `styles.css`, 4,616 lines | Every surface, lab, animation, theme, responsive rule, and state selector shares one global cascade | Split by tokens/shell/features/labs in unchanged order; retain one ordered entry stylesheet |
+| 7 | Data generation | `build_db.py`, 972 lines | Fetching, alignment, timing heuristics, morphology, schema, validation, and writing are interleaved | Turn it into a small `tools/quran_db/` package with an orchestration-only entry point and fixture tests |
+| 8 | Timing lab | screen 839 + view model 669 | Playback, recording, editing, undo/reset, override persistence, and patch export form one feature | Put edit transitions in a pure `TimingEditor`; make playback and export adapters explicit |
+| 9 | Rendering parity | Android and web implement the same Highlight/Ink/Focus/search/brush policy separately | Behavior can drift even when each implementation is locally tested | Add shared language-neutral fixtures; do not create a cross-platform runtime dependency |
 
 Large but well-contained code is not automatically a hotspot. `FocusEngine`,
 `HighlightEngine`, `OrnamentGenerator`, fade math, and audio-boundary detection
 are coherent algorithms. Prefer stronger fixtures and smaller helper functions
 there over moving logic into more layers.
+
+### Quality verdict
+
+The codebase remains healthy in its foundations. Pure correctness policy is
+prominent, both clients use the same canonical database, test suites are fast
+and green, platform dependencies remain narrow, and performance invariants are
+documented unusually well.
+
+The quality trend since the first audit is mixed. Product capability and test
+count grew, and playlist/catalog helpers were extracted. At the same time,
+high-churn experiments accumulated inside already-large production files. The
+most important next move is therefore not a framework or broad rewrite. It is
+to finish experiments: delete tuning machinery that no longer earns its
+shipping cost, move still-useful labs behind clean feature boundaries, and add
+contract/event tests at the new OS and audio seams.
+
+No evidence from this pass justifies replacing Compose, raw SQLite, the
+external web store, or the paper stack. The risks are local ownership and
+protocol coverage, not the architectural choices themselves.
 
 ### Simplification progress
 
@@ -51,6 +92,9 @@ there over moving logic into more layers.
 |---|---|---|
 | 2026-07-12 | Web word renderers | Extracted shared `useWordInteraction` for tap, keyboard, hold, movement cancellation, and click suppression; extracted the shared paper-cover reset. `WordUnit` fell from 487 to 427 lines and `HafsWord` from 280 to 221. |
 | 2026-07-12 | Web playback | Extracted pure/tested playlist construction and a tested `MediaSessionBridge`. OS action handlers are bound once instead of being rebound on every metadata update. The `PlayerController` public API is unchanged. |
+| 2026-07-15 | Android playback/catalog | Extracted `RecitationMedia.kt` so the service and controller share queue construction. The new MediaLibrary catalog remains inside `PlaybackService`, preserving a single player owner. |
+| 2026-07-16 | Web playback | Extracted `MediaElementTransport` for active/standby identity, source loading, promotion, and stale-event rejection. Extracted `JoinCoordinator` for standby preparation, audible bounds, and cancellable fades. Added controller event-sequence tests; the public `PlayerController` API is unchanged. |
+| 2026-07-16 | Verification | Re-ran both unit suites after rapid feature growth: 195 Android and 265 web tests pass. The new review priorities below replace stale file measurements from the first audit. |
 
 ## Complexity rules for this repository
 
@@ -92,17 +136,20 @@ both content reflow and playback changes.
 
 ### Build, application container, and dependency wiring
 
-**Files:** `app/build.gradle.kts`, `QuranApp.kt`, `ui/AppViewModel.kt`, manifest
-and resources.
+**Files:** `app/build.gradle.kts`, `baselineprofile/`, `QuranApp.kt`,
+`ui/AppViewModel.kt`, manifest and resources.
 
 **Current responsibility.** Gradle copies the committed database into generated
 assets, configures release shrinking/signing, and pins Java/Kotlin 21. `QuranApp`
 constructs application-scoped repositories and `PlayerController`.
-`AppViewModelFactory` maps five view-model classes to those singletons.
+`AppViewModelFactory` maps seven view-model classes to those singletons. The
+small `baselineprofile` test module generates startup profiles and macrobenchmarks
+the app on a connected device; generated startup rules ship from `app`.
 
 **Complexity.** Low. The explicit wiring is easy to audit and supports the
 minimal-dependency invariant. The factory's `when` is repetitive but also a
-complete composition root.
+complete composition root. The profiling module is an intentional exception to
+the former literal "single Gradle module" description, not a new runtime layer.
 
 **Simplify safely.** Keep this structure. If constructor lists grow, introduce
 one `AppGraph` data holder and let both `QuranApp` and the factory refer to it.
@@ -112,7 +159,8 @@ Android DB-copy path.
 
 **Preserve.** Database content changes require a `quran-vN.db` filename bump;
 release builds must still work with the documented signing fallback; DB and
-font assets remain uncompressed.
+font assets remain uncompressed; baseline generation must stay outside normal
+unit-test/build requirements because it needs a device.
 
 ### Data models and database extraction
 
@@ -136,7 +184,7 @@ read-only open mode, and no runtime migrations.
 
 ### Quran repository
 
-**File:** `data/QuranRepository.kt` (298 lines).
+**File:** `data/QuranRepository.kt` (366 lines).
 
 **Current responsibility.** Typed SQL queries, small immutable caches, segment
 parsing, timing-override merge, root concordance, and a lazily built whole-Quran
@@ -230,13 +278,19 @@ and 1 GB LRU cache.
 
 **Files:** `MainActivity.kt`, `ui/PageTurnSounds.kt`.
 
-**Current responsibility.** Three-sheet navigation, drag/fling geometry, system
-back, entrance ownership, timing/root overlays, return-to-origin state, and
-page-turn audio synchronized to fractional stack position.
+**Current responsibility.** Four-sheet navigation (bookmarks, home, reader,
+settings), drag/fling geometry, system back, entrance ownership, timing/root/
+ink/ornament overlays, return-to-origin state, Assistant action fulfillment,
+foreground AppFunction registration, and page-turn audio synchronized to
+fractional stack position.
 
-**Complexity.** High coordination complexity. The paper stack itself is a
-coherent custom navigation model, but overlay visibility and cross-sheet return
-flows lengthen the same composable and create several coupled booleans.
+**Complexity.** Very high coordination complexity. `MainActivity.kt` grew from
+784 to 1,047 lines after the first audit. The paper stack itself remains a
+coherent custom navigation model, but `PaperStackApp` now coordinates seven
+view models, four stack layers, five independently animated overlay families,
+cross-sheet return flows, and incoming OS actions. Visibility plus
+"still-rendered during exit" booleans are necessary locally, but repeating the
+pair for every overlay makes the host expensive to reason about.
 
 **Simplify safely.** Introduce a saveable `PaperStackState` owning position,
 maximum layer, settle, back, and gesture blocking. Put root-return behavior in a
@@ -247,6 +301,45 @@ layer and settle decisions, including settings-without-reader.
 
 **Do not simplify by.** Replacing the stack with Navigation Compose. The custom
 continuous position drives visuals and sounds that a route stack does not model.
+
+### Assistant, AppFunctions, shortcuts, and media catalog
+
+**Files:** `assistant/*`, `playback/PlaybackService.kt`,
+`playback/RecitationMedia.kt`, manifest and `res/xml/*` metadata.
+
+**Current responsibility.** Several Android protocols expose the same Quran
+operations: deep links and App Actions reach `MainActivity`; launcher shortcuts
+publish those links; global AppFunctions call repositories/settings/playback;
+foreground AppFunctions emit navigation actions; and Media3's library callback
+serves/searches chapters and expands requests into full recitation queues.
+
+**Complexity.** High at the protocol boundary, though each adapter is locally
+readable. The deterministic string-parsing core in `AssistantAction` is well
+tested, while its outer intent/URI adapter remains Android-bound. The main
+quality gap is that global/foreground AppFunction execution, registration lifetime,
+MediaLibrary paging/search/queue expansion, and shortcut publication have no
+focused tests. Validation and verse resolution are also repeated across the
+intent parser, activity fulfillment, AppFunctions service, and media library.
+KDoc is part of the executable agent contract, so wording changes carry more
+behavioral risk than ordinary comments.
+
+**Simplify safely.** Keep protocol adapters separate. First extract and test
+pure catalog search/paging/request resolution from the MediaLibrary callback.
+If another duplicated operation lands, introduce one small command boundary
+that validates chapter/verse/reciter and returns commands/results without
+depending on `Activity`, AppFunctions documents, or Media3 callbacks; inject
+small repository/settings/bookmark/player ports so global commands can then be
+tested directly. Keep foreground registration as a thin lifecycle adapter and
+extract its parameter decoding for ordinary JVM tests.
+
+**Do not simplify by.** Combining the global service and activity registration
+APIs, or hiding KDoc/metadata behind reflection. They have genuinely different
+lifetimes and Android contracts.
+
+**Preserve.** One playback owner, the shared `recitationQueue` builder,
+basmalah queue rules, full-surah queues for media clients, clamped verse
+validation, cancellation propagation, and graceful behavior on devices below
+API 37.
 
 ### Home and search UI
 
@@ -273,7 +366,7 @@ transport.
 
 ### Reader view model
 
-**File:** `ui/reader/ReaderViewModel.kt` (519 lines).
+**File:** `ui/reader/ReaderViewModel.kt` (560 lines).
 
 **Current responsibility.** Loads content/timings, adapts player state,
 publishes boundary-only active word/ayah state, applies settings changes,
@@ -384,19 +477,41 @@ segments, and closing the viewer does not resume a one-shot clip.
 
 ### Settings UI
 
-**Files:** `ui/settings/*`.
+**Files:** `ui/settings/*`, `ornamentslab/*`, `ui/reader/InkLabPanel.kt`.
 
 **Current responsibility.** Reciter, reader appearance, theme, selector side,
-developer unlock, timing/ink lab entry, and page-sound audition.
+developer unlock, timing/ink/ornament lab entry, page-sound audition, brush
+circle and check-mark geometry, live tuning sliders, clipboard import/export,
+and profiling controls.
 
-**Complexity.** Medium. Most repetition is already contained by generic choice
-rows. Developer mode makes one screen host production and diagnostic controls.
+**Complexity.** Very high and newly urgent. `SettingsScreen.kt` is now 1,903
+lines, the largest Kotlin source file. Production controls themselves are
+straightforward; most growth comes from the developer brush/check labs and
+their private geometry, parameter codecs, slider metadata, paint replay state,
+and clipboard plumbing. Because normal segmented controls and switches consume
+the same live parameters, the experimental state is initialized and coordinated
+by the production screen even when developer mode is hidden. The separate
+ornament lab adds another 736 lines and another app-shell overlay lifetime.
 
-**Simplify safely.** Split `SettingsScreen` into reader, appearance, and
-developer section files if sections grow. Keep the view model thin. Lazy-create
-diagnostic audio/resources, as it currently does. Define settings metadata only
-where labels/options are genuinely identical; avoid a universal dynamic form
-system that hides Compose behavior.
+**Simplify safely.** First decide whether each tuning surface is still needed.
+If a brush/check design has shipped and the knobs are no longer used regularly,
+delete its sliders, clipboard parser/formatter, replay tokens, and presets; keep
+only the named immutable shipped geometry and the small drawing composable.
+Deletion is preferable to moving a finished experiment into more files. For
+labs that remain useful, move the complete developer section and its state into
+`ui/brushlab/`, and put reusable shipped ink controls in the theme/component
+kit. `SettingsScreen` should receive stable callbacks and render declarative
+choices, not own lab sessions. Keep `SettingsViewModel` thin and continue to
+lazy-create page-sound resources.
+
+Add tests for parameter parsing only if that interchange remains a supported
+lab workflow. Do not write tests merely to preserve disposable tuning code.
+Avoid a universal dynamic form system that hides Compose behavior.
+
+**Quality note.** Developer mode is a hidden runtime preference, not a debug
+source set, so all lab code ships in release builds. That is acceptable for
+Timings Lab by product choice, but every new lab must justify its binary,
+maintenance, and app-shell lifecycle cost explicitly.
 
 ### Theme, entrance, and ornament generation
 
@@ -507,7 +622,7 @@ large generic `domain` package that loses feature ownership.
 
 ### Web external store
 
-**File:** `store/appStore.ts` (731 lines).
+**File:** `store/appStore.ts` (757 lines).
 
 **Current responsibility.** One external-store snapshot owns boot, paper
 navigation, content/timing session, settings, player adaptation, highlighting,
@@ -539,37 +654,44 @@ the resulting interfaces demonstrate a missing capability.
 
 ### Web player
 
-**Files:** `playback/player.ts`, `audioPrefetch.ts`, `audioBounds.ts`,
-`audioFade.ts`, `iosMedia.ts`, `playbackStallWatchdog.ts`, `playlistNext.ts`.
+**Files:** `playback/player.ts`, `mediaElementTransport.ts`,
+`joinCoordinator.ts`, `audioPrefetch.ts`, `audioBounds.ts`, `audioFade.ts`,
+`iosMedia.ts`, `playbackStallWatchdog.ts`, `playlistNext.ts`.
 
 **Current responsibility.** Playlist construction, desktop dual-element joins,
 iOS single-element swaps, Cache API/blob prefetch, audible-bound analysis,
 equal-power edge fades, stall recovery, repeat, Media Session, and rAF position
 publication.
 
-**Complexity.** Highest in the repository. `player.ts` owns many event handlers
-whose correctness depends on flags that suppress or reinterpret later media
-events. Comments document races, but fields form an implicit state machine.
+**Complexity.** Still the highest correctness risk, but ownership is improved.
+`MediaElementTransport` now owns the active/standby elements and rejects events
+from a retired element. `JoinCoordinator` owns standby preparation generations,
+audible-bound storage, promotion, and cancellable fades. `player.ts` fell from
+1,097 to 927 lines and retains public commands, playlist/repeat policy, play
+intent, watchdog recovery, boundary scheduling, and state publication. Its
+remaining flags still form an implicit high-level state machine.
 
 **Simplify safely.** Keep `PlayerController` as the stable public API and split
 mechanisms in this order:
 
 1. `PlaylistSession`: playlist construction and next-index policy are now pure;
-   continue by moving mutable index/ayah mapping and repeat/range state behind it;
-2. `MediaElementTransport`: attach/detach handlers, load/play/pause/seek, and
-   active element identity;
-3. `JoinCoordinator`: standby preparation, audible bounds, fades, promotion;
+   move mutable index/ayah mapping only if another playlist mode lands;
+2. `MediaElementTransport`: completed for event binding, source loading,
+   readiness, active identity, standby promotion, and stale-event rejection;
+3. `JoinCoordinator`: completed for standby preparation, audible bounds, fades,
+   and promotion; high-level boundary timing intentionally stays in the facade;
 4. `PlaybackWatchdog`: already mostly separate, expanded to return recovery
    actions rather than mutate controller flags;
 5. `MediaSessionBridge`: completed; metadata and OS action handlers now live
    outside the controller;
 6. controller: serialize commands, combine state, publish snapshots.
 
-Make transport state explicit (`Idle`, `Loading`, `Ready`, `Playing`,
-`Joining`, `Paused`, `Failed`) and document which media events are legal in
-each state. Inject clock, timers, audio elements, prefetcher, analyzer, and
-platform detection so integration tests can drive event sequences without a
-browser. Keep the existing pure helpers and unit tests.
+The audio-element factory is injected for Node event-sequence tests. Add an
+explicit high-level state enum only if the next playback behavior would add
+another lifecycle flag; the current extraction made element legality structural
+without duplicating `PlayerState`. Inject clock/timers only when testing the
+watchdog or fade scheduler requires them. Keep the existing pure helpers and
+unit tests.
 
 **Preserve.** iOS single persistent element, desktop blob-backed standby,
 pinned cache window, play-intent buffering state, rAF ticker only while active,
@@ -635,25 +757,35 @@ and independent repeat/search overlay layers.
 accessible Base UI-backed paper controls.
 
 **Complexity.** Medium. Most components are feature-local. Entrance ornament
-generation is algorithmically large but pure and tested. Root and settings are
-smaller than Android because playback/editor diagnostics are not duplicated.
+generation is algorithmically large but pure and tested. Root is reasonably
+bounded, but settings is now 740 lines and mirrors much of Android's developer
+brush/check lab state. Web brush helpers add another 959 lines across
+`brushMark.ts` and `brushCheck.ts`; unlike Android, those helpers are at least
+separate and have focused tests. `OrnamentsLab.tsx` adds a hash-selected
+developer-only application surface outside the paper stack.
 
 **Simplify safely.** Keep Base UI wrappers as the only place library APIs and
 paper styling meet. Move repeated section/choice markup into the kit only after
 two consumers have identical accessibility semantics. Keep generated ornament
-geometry separate from React drawing and parity-test seeds with Android.
+geometry separate from React drawing and parity-test seeds with Android. Apply
+the same finish-or-delete rule as Android to brush tuning transport; do not let
+temporary clipboard/slider sessions remain permanent settings responsibilities.
 
 ### Web CSS and themes
 
-**File:** `ui/theme/styles.css` (3,278 lines).
+**File:** `ui/theme/styles.css` (4,616 lines).
 
 **Current responsibility.** Tokens, all three themes, paper stack, every
 screen, responsive layout, render-state selectors, animations, reduced motion,
 and browser fixes.
 
-**Complexity.** Very high discoverability cost. Selector ordering is an
-implicit dependency graph, and component ownership is not visible from the
-filesystem.
+**Complexity.** Very high discoverability cost. The file grew by more than
+1,300 lines since the first audit as bookmarks, root prose, settings parity,
+brush tooling, and ornament labs landed. Selector ordering is an implicit
+dependency graph, component ownership is not visible from the filesystem, and
+short visual changes repeatedly touch the same global file. This is now a
+maintenance problem even though the resulting production CSS still builds to
+only about 70 kB before gzip.
 
 **Simplify safely.** Split without changing cascade order:
 
@@ -667,6 +799,7 @@ ui/reader/reader.css
 ui/reader/ink.css
 ui/playback/playback.css
 ui/settings/settings.css
+ui/lab/labs.css
 ui/root/root-viewer.css
 ui/entrance/entrance.css
 ```
@@ -790,23 +923,36 @@ jobs rather than rebuilding differently.
 
 ### Tests
 
-**Current shape.** 25 Android JVM test files and 34 web test files cover pure
-engines, search, focus math, timing parsing, persistence helpers, database
-loading, prefetch/fades/watchdog, reader policy, ornaments, and stack math.
-There are few automated tests for the large mutable coordinators and no visual
-shaping/performance gate.
+**Current shape.** 29 Android JVM test files (195 passing tests) and 42 web test
+files (265 passing tests) cover pure engines, search, focus math, timing parsing,
+persistence helpers, database loading, prefetch/fades/watchdog, reader policy,
+ornaments, brush geometry, and stack math. The web production type-check/build
+also passes. A connected-device baseline-profile suite exists separately and
+cannot run in the ordinary JVM gate.
+
+Coverage quality is uneven by design but the gap is widening: pure policies
+are well protected, while the largest mutable coordinators remain mostly
+verified indirectly. The global and foreground AppFunctions, MediaLibrary
+callback, shortcut publication, `PaperStackApp`, settings lab sessions, and
+watchdog/failed-join `PlayerController` sequences still have little or no
+focused coverage. Pause-during-load, retired-element events, readiness, and
+superseded standby preparation now have an initial event harness. There is
+still no visual Arabic-shaping gate. These are higher-value gaps than raising
+raw test count around already-pure helpers.
 
 **Simplify safely.** Tests should make future decomposition safer, not freeze
 implementation details. Prioritize:
 
-1. shared cross-platform policy fixtures;
-2. web player event-sequence tests with injected media elements/timers;
-3. Android reader jump/follow tests with fake player/focus ports;
-4. Timings Lab reducer tests;
-5. canonical DB query/schema contract tests for both clients;
-6. a small manual or automated screenshot matrix for Arabic shaping and paper
+1. Android OS-action contract tests: AppFunctions commands, MediaLibrary
+   search/paging/queue resolution, and foreground parameter decoding;
+2. extend web player event-sequence tests to watchdog recovery and failed joins;
+3. shared cross-platform policy fixtures;
+4. Android reader jump/follow tests with fake player/focus ports;
+5. Timings Lab reducer tests;
+6. canonical DB query/schema contract tests for both clients;
+7. a small manual or automated screenshot matrix for Arabic shaping and paper
    states;
-7. performance traces for boundary-only renders and scroll-frame behavior.
+8. performance traces for boundary-only renders and scroll-frame behavior.
 
 Avoid broad snapshot tests of entire screens. They create churn while missing
 timing, shaping, and event-order failures.
@@ -834,26 +980,35 @@ These are intentionally small, independently reviewable changes.
 
 ### Phase 0: establish safety rails
 
-1. Add shared JSON fixtures for Highlight, Clock, Ink, Focus, basmalah, search,
-   and ornament seeds; run them from Android and web tests.
-2. Add canonical DB contract checks and an automated DB-version assertion.
-3. Add fake ports/event harnesses for web audio and reader focus/playback.
+1. Add pure contract tests around the new Android OS-action surface: chapter
+   search/paging/request resolution, command validation, and foreground
+   parameter decoding.
+2. Add fake ports/event harnesses for web audio and reader focus/playback.
+3. Add canonical DB contract checks and an automated DB-version assertion.
+4. Add shared JSON fixtures for Highlight, Clock, Ink, Focus, basmalah, search,
+   brush constants, and ornament seeds; run them from Android and web tests.
 
-### Phase 1: move-only decompositions
+### Phase 1: finish experiments and make ownership visible
 
-1. Split web CSS while preserving import/cascade order.
-2. Split Android reader renderers/decorations by responsibility.
-3. Split timing-lab screen sections.
-4. Split `build_db.py` into package modules without changing output; compare
+1. Audit the brush/check tuning and ornament-lab surfaces. Delete shipped-out
+   experiments; move any retained lab wholesale out of production settings.
+2. Split web CSS while preserving import/cascade order.
+3. Extract Android `PaperStackState` and a single overlay host/state model
+   without changing the hand-rolled navigation behavior.
+4. Split Android reader renderers/decorations by responsibility.
+5. Split timing-lab screen sections.
+6. Split `build_db.py` into package modules without changing output; compare
    database schema, counts, hashes or a deterministic SQL dump as appropriate.
 
 ### Phase 2: make state machines explicit
 
-1. Extract web `PlaylistSession` and `MediaElementTransport`, then joins and OS
-   integration, keeping the player facade unchanged.
-2. Extract Android/web reader search, jump, and follow sessions.
-3. Extract pure `TimingEditorState` and commands.
-4. Extract `PaperStackState`/coordinator on each platform.
+1. Extend the extracted web transport/join event harness to watchdog and
+   failed-join sequences; extract `PlaylistSession` only if playlist policy grows.
+2. Introduce a shared Android command gateway only if OS action tests reveal
+   real validation/execution duplication; keep every protocol adapter thin.
+3. Extract Android/web reader search, jump, and follow sessions.
+4. Extract pure `TimingEditorState` and commands.
+5. Extract the web paper coordinator if its store commands continue to grow.
 
 ### Phase 3: reduce cross-platform drift
 
@@ -883,15 +1038,17 @@ This audit covers every repository area listed in `AGENTS.md`:
 - Android application/build/composition root;
 - data models, SQLite extraction, repositories, settings, bookmarks;
 - pure domain engines and search;
-- Media3 service/controller/prefetch;
+- Media3 service/controller/prefetch/catalog, deep links, shortcuts, Assistant,
+  and global/foreground AppFunctions;
 - paper stack, entrance, home, reader, focus, renderers, root viewer, settings,
-  theme/ornaments, and Timings Lab;
+  theme/ornaments, Ornaments Lab, and Timings Lab;
 - web bootstrap, database, repository, domain policy, store, player, renderers,
   all UI sheets, CSS/theme, PWA/service worker, and assets;
 - canonical database builder, timing overrides, artwork/font tools;
 - Android environment/run/release scripts;
 - Android and web CI/release workflows;
-- Android JVM and web Vitest suites;
+- Android JVM, connected-device baseline-profile/macrobenchmark, and web
+  Vitest/type-check/build suites;
 - repository documentation.
 
 Binary assets, fonts, audio samples, icons, and the SQLite bytes are understood
