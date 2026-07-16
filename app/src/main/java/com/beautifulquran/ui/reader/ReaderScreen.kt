@@ -768,15 +768,18 @@ fun ReaderScreen(
                 AyahSelectorSide.RIGHT
             }
             val bookmarkChromeAlpha: () -> Float = { topBarAlpha.value }
-            // Soft dissolve heights — list padding matches so surah title /
-            // last ayah sit clear of the edge at rest; scrolling draws under it.
+            // Soft dissolve heights — list padding matches so content sits
+            // clear of the edge at rest; scrolling draws under it.
+            // Bottom pad is the active-word reading band (≥ fade) so word-follow
+            // can lift the last lines clear of the dissolve above the player bar.
             val listFadeTop = 32.dp
             val listFadeBottom = 64.dp
+            val listBottomPad = 132.dp // matches ActiveWordBottomMargin in ReaderComponents
             LazyColumn(
                 state = listState,
                 contentPadding = PaddingValues(
                     top = padding.calculateTopPadding() + listFadeTop,
-                    bottom = listFadeBottom,
+                    bottom = listBottomPad,
                 ),
                 modifier = Modifier
                     .align(Alignment.TopCenter)
