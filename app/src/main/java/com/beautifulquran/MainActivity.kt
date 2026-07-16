@@ -195,9 +195,9 @@ private const val COVER_LAYER = 0
 private const val AYAH_LAYER = 1
 private const val SETTINGS_LAYER = 2
 private const val STACK_PAGE_DURATION_MS = 460
-private const val STACK_PAGE_TURN_THRESHOLD = 0.18f
-private const val STACK_PAGE_FLING_THRESHOLD = 0.35f
-private const val STACK_PAGE_PULL_RESISTANCE_DP = 34
+private const val STACK_PAGE_TURN_THRESHOLD = 0.15f
+private const val STACK_PAGE_FLING_THRESHOLD = 0.30f
+private const val STACK_PAGE_PULL_RESISTANCE_DP = 14
 private const val STACK_OFFSCREEN_OVERSCAN_DP = 36f
 private val StackMotionEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
 
@@ -955,10 +955,11 @@ private fun Modifier.paperStackDrag(
         val touchSlop = viewConfiguration.touchSlop
         val width = size.width.toFloat().coerceAtLeast(1f)
         val pullResistance = maxOf(
-            touchSlop * 2.5f,
-            minOf(STACK_PAGE_PULL_RESISTANCE_DP.dp.toPx(), width * 0.08f),
+            touchSlop,
+            minOf(STACK_PAGE_PULL_RESISTANCE_DP.dp.toPx(), width * 0.04f),
         )
         var horizontalDrag = false
+        var axisDecided = false
         var startLayer = position().roundToInt()
         var startPosition = position()
         var totalDx = 0f
@@ -979,12 +980,30 @@ private fun Modifier.paperStackDrag(
             velocityTracker.addPosition(change.uptimeMillis, change.position)
 
             if (!horizontalDrag) {
-                val mostlyHorizontal = abs(totalDx) > abs(totalDy) * 1.35f
-                if (abs(totalDx) > pullResistance && mostlyHorizontal) {
-                    horizontalDrag = true
-                    startPosition = position()
-                    startLayer = startPosition.roundToInt()
-                    onDragStart()
+                if (!axisDecided) {
+                    // Decide the axis at touch-slop scale — the same distance
+                    // at which child scrollables lock — so the dominant
+                    // direction wins a diagonal. Waiting longer means the
+                    // reader's vertical scroll claims nearly every swipe.
+                    if (maxOf(abs(totalDx), abs(totalDy)) > touchSlop) {
+                        axisDecided = true
+                        if (abs(totalDx) > abs(totalDy) * 1.1f) {
+                            horizontalDrag = true
+                            startPosition = position()
+                            startLayer = startPosition.roundToInt()
+                            onDragStart()
+                        }
+                    }
+                } else {
+                    // A gesture that opened vertical over a static area can
+                    // still become a page turn on a clear horizontal pull.
+                    val mostlyHorizontal = abs(totalDx) > abs(totalDy) * 1.35f
+                    if (abs(totalDx) > pullResistance && mostlyHorizontal) {
+                        horizontalDrag = true
+                        startPosition = position()
+                        startLayer = startPosition.roundToInt()
+                        onDragStart()
+                    }
                 }
             }
 
