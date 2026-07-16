@@ -35,6 +35,67 @@ class FocusEngineTest {
     }
 
     @Test
+    fun `word band delta is zero when the word is already inside the band`() {
+        assertEquals(
+            0f,
+            FocusEngine.wordBandDeltaPx(
+                wordTopPx = 160f,
+                wordBottomPx = 190f,
+                viewportHeightPx = 800f,
+                topGuardPx = 0f,
+                bandTopMarginPx = 144f,
+                bandBottomMarginPx = 132f,
+            ),
+        )
+    }
+
+    @Test
+    fun `word band delta scrolls up when the word sits under the bottom fold`() {
+        // Word bottom at 720, band bottom at 800 - 132 = 668 → scroll by 52.
+        assertEquals(
+            720f - (800f - 132f),
+            FocusEngine.wordBandDeltaPx(
+                wordTopPx = 690f,
+                wordBottomPx = 720f,
+                viewportHeightPx = 800f,
+                topGuardPx = 0f,
+                bandTopMarginPx = 144f,
+                bandBottomMarginPx = 132f,
+            ),
+        )
+    }
+
+    @Test
+    fun `word band delta scrolls down when the word sits above the band`() {
+        assertEquals(
+            40f - 144f,
+            FocusEngine.wordBandDeltaPx(
+                wordTopPx = 40f,
+                wordBottomPx = 70f,
+                viewportHeightPx = 800f,
+                topGuardPx = 0f,
+                bandTopMarginPx = 144f,
+                bandBottomMarginPx = 132f,
+            ),
+        )
+    }
+
+    @Test
+    fun `word band delta respects the top guard`() {
+        assertEquals(
+            100f - (50f + 144f),
+            FocusEngine.wordBandDeltaPx(
+                wordTopPx = 100f,
+                wordBottomPx = 130f,
+                viewportHeightPx = 800f,
+                topGuardPx = 50f,
+                bandTopMarginPx = 144f,
+                bandBottomMarginPx = 132f,
+            ),
+        )
+    }
+
+    @Test
     fun `basmalah list item uses the same adaptive anchor as a short verse`() {
         // The basmalah is its own short LazyColumn item — not the tall header —
         // so it rests on the verse-style reading line (fitsFullyVisible path).

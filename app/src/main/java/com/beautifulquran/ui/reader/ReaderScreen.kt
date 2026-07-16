@@ -62,6 +62,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -76,6 +77,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
@@ -295,15 +299,40 @@ fun ReaderScreen(
     val lastAyahNumber = remember(readerItems) {
         readerItems.count { it is LazyItem.AyahItem }.coerceAtLeast(1)
     }
+    // Reading-band margins match ActiveWordTop/BottomMargin so tall-verse
+    // detection and word-follow share the same usable page above the player bar.
+    val density = LocalDensity.current
+    val wordBandTopMarginPx = with(density) { ActiveWordTopMargin.toPx() }
+    val wordBandBottomMarginPx = with(density) { ActiveWordBottomMargin.toPx() }
+    val wordBandBottomGuardPx = with(density) { ActiveWordBottomMargin.roundToPx() }
     // The one authority over where verses sit and how the reader scrolls to
-    // them: jumps from the selector, recitation-follow, the initial settle, and
-    // return-to-verse all route through this, so nothing fights the list state.
+    // them: jumps from the selector, recitation-follow, word-band follow, the
+    // initial settle, and return-to-verse all route through this, so nothing
+    // fights the list state.
     val focusController = rememberReaderFocusController(
         listState = listState,
         itemIndexOfAyah = itemIndexOfAyah,
         ayahNumberByItemIndex = ayahNumberByItemIndex,
         lastAyahNumber = lastAyahNumber,
+        bottomGuardPx = wordBandBottomGuardPx,
     )
+    var listCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val scope = rememberCoroutineScope()
+    val onKeepWordInView: (() -> Pair<Float, Float>?) -> Unit = remember(
+        focusController,
+        wordBandTopMarginPx,
+        wordBandBottomMarginPx,
+    ) {
+        { measure ->
+            scope.launch {
+                focusController.keepWordInView(
+                    bandTopMarginPx = wordBandTopMarginPx,
+                    bandBottomMarginPx = wordBandBottomMarginPx,
+                    measureInViewport = measure,
+                )
+            }
+        }
+    }
     // The verse at the reading line, and the continuous position through the
     // surah — the single read-out the rail, the return control, and the play
     // target all share.
@@ -786,6 +815,7 @@ fun ReaderScreen(
                     .fillMaxHeight()
                     .widthIn(max = 680.dp)
                     .fillMaxWidth()
+                    .onGloballyPositioned { listCoordinates = it }
                     .pointerInput(Unit) {
                         val touchSlop = viewConfiguration.touchSlop
                         awaitEachGesture {
@@ -891,16 +921,19 @@ fun ReaderScreen(
                                     ?.takeIf { searchFlashAyah == ayah.number },
                                 // Word-level following is the focus engine's
                                 // secondary constraint: it only takes over inside
-                                // a verse taller than the screen (where the
-                                // active word must lead the eye down). A verse
-                                // that fits is owned by the verse-level anchor,
-                                // so word-follow stays off and the two never
-                                // fight. `isActive` short-circuits the state read
-                                // so only the reciting block subscribes.
+                                // a verse taller than the usable page (viewport
+                                // minus the bottom reading band above the player
+                                // bar). The focus controller then scrolls each
+                                // active word into that band. A verse that fits
+                                // is owned by the verse-level anchor. `isActive`
+                                // short-circuits so only the reciting block
+                                // subscribes.
                                 keepActiveWordInView = followEnabled &&
                                     recitingActive &&
                                     isActive &&
                                     activeVerseExceedsViewport.value,
+                                listCoordinates = { listCoordinates },
+                                onKeepWordInView = onKeepWordInView,
                                 bookmarkSide = bookmarkSide,
                                 bookmarked = ayah.number in bookmarkedAyahs,
                                 bookmarkFocused = bookmarkFocused,
