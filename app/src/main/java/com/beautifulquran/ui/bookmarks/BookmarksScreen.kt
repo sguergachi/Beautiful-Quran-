@@ -86,8 +86,12 @@ fun BookmarksScreen(
                     .fillMaxHeight()
                     .widthIn(max = 560.dp)
                     .fillMaxWidth()
-                    .verticalFadingEdges(MaterialTheme.colorScheme.background, top = 24.dp),
-                contentPadding = PaddingValues(bottom = 48.dp),
+                    .verticalFadingEdges(
+                        color = MaterialTheme.colorScheme.background,
+                        top = 24.dp,
+                        bottom = 48.dp,
+                    ),
+                contentPadding = PaddingValues(top = 24.dp, bottom = 48.dp),
             ) {
                 item(key = "title") {
                     BookmarksHeader(onClose)
@@ -149,7 +153,8 @@ fun BookmarksScreen(
 private fun BookmarksHeader(onClose: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 28.dp),
+        // Top air comes from LazyColumn contentPadding (matches the soft edge).
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp),
     ) {
         Column(Modifier.weight(1f)) {
             Text(

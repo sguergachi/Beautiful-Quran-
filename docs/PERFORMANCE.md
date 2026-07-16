@@ -117,8 +117,8 @@ ever subscribes to it.
   position and item identity survive data refreshes.
 - All item parameters are stable (immutable data classes, enums, primitives,
   remembered lambdas), so unaffected items skip recomposition entirely.
-- Bottom `contentPadding` ≥ the fade height on every sheet, so content can
-  always scroll clear of the edge fades.
+- Top and bottom `contentPadding` ≥ the fade height on every sheet, so
+  content sits clear of the soft edges at rest and can scroll under them.
 
 ### 6. R8 release builds are what ships
 

@@ -339,6 +339,9 @@ select {
 }
 
 .edge-fade {
+  /* Soft dissolve height — scroll padding matches so first/last ink sits
+     clear of the edge at rest; scrolling draws content under it. */
+  --edge-fade: clamp(1.75rem, 4vh, 2.75rem);
   position: relative;
   flex: 1;
   min-height: 0;
@@ -355,7 +358,7 @@ select {
   position: absolute;
   left: 0;
   right: 0;
-  height: clamp(1.75rem, 4vh, 2.75rem);
+  height: var(--edge-fade);
   z-index: 2;
   pointer-events: none;
 }
@@ -377,7 +380,7 @@ select {
   overflow: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  padding: 0.5rem var(--sheet-pad) 8rem;
+  padding: var(--edge-fade, 0.5rem) var(--sheet-pad) 8rem;
   padding-bottom: calc(8rem + env(safe-area-inset-bottom, 0px));
   scrollbar-width: none;
   touch-action: pan-y;
@@ -2104,7 +2107,8 @@ select {
 }
 
 .bookmarks-scroll {
-  padding: 0 var(--bookmark-pad) 3rem;
+  /* Top pad matches the soft edge; bottom keeps foot clearance past the fade. */
+  padding: var(--edge-fade, 1.75rem) var(--bookmark-pad) 3rem;
 }
 
 .bookmarks-empty {

@@ -128,8 +128,9 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
     val floatingPlayback = uiState.floatingPlayback
-    // Soft dissolve height at the list edge — stays a short ink fade, never
-    // stretched across the player clearance.
+    // Soft dissolve heights — contentPadding matches so the first/last
+    // ink sits clear of the edge at rest; scrolling draws content under it.
+    val listFadeTop = 24.dp
     val listFadeBottom = 48.dp
     // Measured height of the floating transport; falls back to the clearance
     // estimate until the first layout pass. Used as bottomInset so the soft
@@ -264,13 +265,14 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .verticalFadingEdges(
                         color = MaterialTheme.colorScheme.background,
-                        top = 24.dp,
+                        top = listFadeTop,
                         bottom = listFadeBottom,
                         // Opaque band over the float's footprint so the soft
                         // edge dissolves just above the player, not through it.
                         bottomInset = listBottomInset,
                     ),
                     contentPadding = PaddingValues(
+                        top = listFadeTop,
                         bottom = listBottomPadding,
                     ),
                 ) {
