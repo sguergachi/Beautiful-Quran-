@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from 'react'
+import type { FocusEvent, KeyboardEvent } from 'react'
 import { Input } from '@base-ui/react/input'
 
 type Props = {
@@ -12,6 +12,8 @@ type Props = {
   className?: string
   autoFocus?: boolean
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void
+  onFocus?: (e: FocusEvent<HTMLInputElement>) => void
+  onBlur?: (e: FocusEvent<HTMLInputElement>) => void
 }
 
 /** Paper-styled Base UI Input — underline field, no box chrome. */
@@ -25,6 +27,8 @@ export function PaperInput({
   className,
   autoFocus,
   onKeyDown,
+  onFocus,
+  onBlur,
   'aria-label': ariaLabel,
 }: Props) {
   return (
@@ -39,6 +43,8 @@ export function PaperInput({
       className={['paper-input', className].filter(Boolean).join(' ')}
       onValueChange={(next) => onValueChange(next)}
       onKeyDown={onKeyDown}
+      onFocus={onFocus}
+      onBlur={onBlur}
     />
   )
 }

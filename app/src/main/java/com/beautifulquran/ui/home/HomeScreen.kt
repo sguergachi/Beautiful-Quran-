@@ -1,5 +1,11 @@
 package com.beautifulquran.ui.home
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -122,10 +128,6 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
     val floatingPlayback = uiState.floatingPlayback
-    val showFloatingPlayback = shouldShowFloatingPlayback(
-        nowPlayingPresent = floatingPlayback != null,
-        coverSheetVisible = coverSheetVisible,
-    )
     // Soft dissolve height at the list edge — stays a short ink fade, never
     // stretched across the player clearance.
     val listFadeBottom = 48.dp
@@ -133,8 +135,6 @@ fun HomeScreen(
     // estimate until the first layout pass. Used as bottomInset so the soft
     // fade sits on the paper just above the bar, matching the reader.
     var floatingPlaybackHeight by remember { mutableStateOf(FloatingPlaybackListClearance) }
-    val listBottomInset = if (floatingPlayback != null) floatingPlaybackHeight else 0.dp
-    val listBottomPadding = listFadeBottom + listBottomInset
 
     // Focus + geometry that anchor the fading dials pane just under the search
     // field, floating over the surah list.
@@ -158,6 +158,16 @@ fun HomeScreen(
         (paneBottom - paneTop).coerceAtLeast(0f).toDp()
     }
     val searching = uiState.query.isNotBlank()
+    // Search mode: field focused or a query still on the sheet (results stay
+    // after the keyboard dismisses). Float stays gone for the whole stretch.
+    val searchActive = searchFocused || searching
+    val showFloatingPlayback = shouldShowFloatingPlayback(
+        nowPlayingPresent = floatingPlayback != null,
+        coverSheetVisible = coverSheetVisible,
+        searchActive = searchActive,
+    )
+    val listBottomInset = if (showFloatingPlayback) floatingPlaybackHeight else 0.dp
+    val listBottomPadding = listFadeBottom + listBottomInset
     val showSurahMatches = searching && uiState.surahs.isNotEmpty()
     val showWordSections = searching &&
         (uiState.wordSections.isNotEmpty() || uiState.wordSearchLoading)
@@ -238,7 +248,15 @@ fun HomeScreen(
                     .widthIn(max = 640.dp)
                     .fillMaxWidth(),
             ) {
-                HomeHeader(onOpenSettings = onOpenSettings)
+                // Focused search claims the top of the sheet: the masthead
+                // recedes so the field sits higher above the keyboard.
+                AnimatedVisibility(
+                    visible = !searchFocused,
+                    enter = fadeIn(tween(180)) + expandVertically(tween(220)),
+                    exit = fadeOut(tween(140)) + shrinkVertically(tween(200)),
+                ) {
+                    HomeHeader(onOpenSettings = onOpenSettings)
+                }
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
@@ -259,6 +277,11 @@ fun HomeScreen(
             item(key = "chapter-page") {
                 Box(Modifier.fillMaxWidth()) {
                     Column(Modifier.fillMaxWidth()) {
+                        // Small top breath when the masthead is gone so the
+                        // field is not hard against the status-bar padding.
+                        if (searchFocused) {
+                            Spacer(Modifier.height(8.dp))
+                        }
                         HomeSearchField(
                             value = uiState.query,
                             onValueChange = viewModel::onQueryChange,
@@ -394,7 +417,7 @@ fun HomeScreen(
             // Back-to / return-to-ayah controls so the paper stack keeps one
             // vertical rhythm. Embedded PlayerBar takes over on the reader.
             FloatingPlaybackControl(
-                visible = showFloatingPlayback && !searchFocused,
+                visible = showFloatingPlayback,
                 state = uiState.playerState,
                 chapterLabel = floatingPlayback?.surah?.nameTransliteration.orEmpty(),
                 ayahLabel = floatingPlayback?.let { "${it.surah.id}:${it.ayah}" }.orEmpty(),

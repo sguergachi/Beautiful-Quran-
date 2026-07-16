@@ -37,6 +37,17 @@ class FloatingPlaybackVisibilityTest {
     }
 
     @Test
+    fun hiddenWhileSearchIsActive() {
+        assertFalse(
+            shouldShowFloatingPlayback(
+                nowPlayingPresent = true,
+                coverSheetVisible = true,
+                searchActive = true,
+            ),
+        )
+    }
+
+    @Test
     fun coverVisibleThresholdKeepsFloatOnNearCover() {
         assertTrue(0f <= FloatingPlaybackCoverVisibleMaxPage)
         assertTrue(FloatingPlaybackCoverVisibleMaxPage < 1f)

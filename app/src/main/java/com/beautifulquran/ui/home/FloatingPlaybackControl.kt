@@ -239,8 +239,11 @@ fun FloatingPlaybackControl(
  * Cover-sheet float is shown only while a verse is loaded **and** the paper
  * stack is still on (or returning to) chapter selection. [coverSheetVisible]
  * is driven from the stack page so enter/exit play across open/close.
+ * [searchActive] (field focused or a query on the sheet) keeps the transport
+ * off the paper until search mode is dismissed.
  */
 internal fun shouldShowFloatingPlayback(
     nowPlayingPresent: Boolean,
     coverSheetVisible: Boolean,
-): Boolean = nowPlayingPresent && coverSheetVisible
+    searchActive: Boolean = false,
+): Boolean = nowPlayingPresent && coverSheetVisible && !searchActive
