@@ -79,6 +79,12 @@ class ReaderViewModel(
     private val _uiState = MutableStateFlow(ReaderUiState())
     val uiState: StateFlow<ReaderUiState> = _uiState
 
+    /**
+     * Verse under the reading line (scroll / rail / follow). Used for Assistant
+     * "bookmark this" — not for Continue Listening (that only tracks audio).
+     */
+    private var focusedAyah: Int = 1
+
     val playerState: StateFlow<PlayerUiState> = player.state
 
     private var surahId: Int = 0
@@ -287,6 +293,7 @@ class ReaderViewModel(
         }
         this.surahId = surahId
         loadedSurah.value = surahId
+        focusedAyah = startPlaybackAtAyah?.coerceAtLeast(1) ?: 1
         pendingPlayAyah = startPlaybackAtAyah
         installTimings(emptyMap())
         _uiState.value = ReaderUiState(
@@ -432,7 +439,7 @@ class ReaderViewModel(
         // Playing a specific ayah abandons any active repeat range.
         // Chapter openings (ayah 1) include the basmalah lead-in.
         if (startSurah(ayah, preserveRepeatRange = false, startWithBasmalah = ayah == 1)) {
-            rememberPosition(ayah)
+            rememberListened(ayah)
         }
     }
 
@@ -445,36 +452,51 @@ class ReaderViewModel(
         if (np != null && np.surahId == surahId && np.reciterId == reciter.id) {
             if (!keepRepeat) player.clearRepeatRange()
             player.seekToWordAndPlay(ayah, positionMs)
-            rememberPosition(ayah)
+            rememberListened(ayah)
         } else if (startSurah(ayah, startPositionMs = positionMs, preserveRepeatRange = keepRepeat)) {
-            rememberPosition(ayah)
+            rememberListened(ayah)
         }
     }
 
-    fun onAyahBecameActive(ayah: Int) {
-        rememberPosition(ayah)
+    /** Resume a loaded playlist from [ayah] and mark it as listened. */
+    fun playLoadedFromAyah(ayah: Int) {
+        player.playLoadedFromAyah(ayah)
+        rememberListened(ayah)
     }
 
-    private fun rememberPosition(ayah: Int) {
+    /**
+     * Focus / scroll / rail target changed.
+     * Bookmark "this verse" uses the focused ayah; does not touch Continue
+     * Listening (that only tracks verses actually recited).
+     */
+    fun onAyahBecameActive(ayah: Int) {
+        if (ayah < 1) return
+        focusedAyah = ayah
+    }
+
+    /**
+     * The verse currently being recited advanced (or play started on it).
+     * Updates Continue Listening — never call this for bare scroll/jump.
+     */
+    fun onListenedAyah(ayah: Int) {
+        rememberListened(ayah)
+    }
+
+    /** Persist Continue Listening — only for verses the user actually heard. */
+    private fun rememberListened(ayah: Int) {
         if (surahId in 1..114 && ayah >= 1) {
+            focusedAyah = ayah
             settings.update { it.copy(lastSurah = surahId, lastAyah = ayah) }
         }
     }
 
     /**
      * Best-effort verse for Assistant "bookmark this": the loaded chapter and
-     * the last ayah that became active in it (scroll / playback), not the
-     * jump-in start ayah.
+     * the verse under the reading line (scroll / jump / playback focus).
      */
     fun currentVerseForBookmark(): Pair<Int, Int>? {
         val surah = surahId.takeIf { it in 1..114 } ?: return null
-        val last = settings.settings.value
-        val ayah = if (last.lastSurah == surah) {
-            last.lastAyah.coerceAtLeast(1)
-        } else {
-            1
-        }
-        return surah to ayah
+        return surah to focusedAyah.coerceAtLeast(1)
     }
 
     /** Pauses a live reading session and returns enough state to restore it. */
@@ -535,7 +557,7 @@ class ReaderViewModel(
         val end = to.coerceIn(start, content.surah.ayahCount)
         if (!startSurah(start, preserveRepeatRange = false)) return
         player.setRepeatRange(start, end, repeatEndPositionFor(end))
-        rememberPosition(start)
+        rememberListened(start)
     }
 
     private fun repeatEndPositionFor(ayah: Int): Long? =
