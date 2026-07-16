@@ -215,7 +215,11 @@ mid-tier phones — measure first.
   a standby `<audio>` loaded from a **blob**. iOS instead keeps one persistent
   media element and changes its original HTTPS source at verse joins; this
   follows WebKit's single-stream constraint and avoids its fragile blob-media
-  promotion path. `PlayerController` exposes `isBuffering` so the play button
+  promotion path. `MediaElementTransport` owns those element identities and
+  drops stale events from a retired desktop element; `JoinCoordinator` owns
+  standby preparation, audible bounds, promotion, and cancellable fades.
+  `PlayerController` remains the public policy/state facade and exposes
+  `isBuffering` so the play button
   can show the join. A playback-clock watchdog remains as a last-resort guard
   for iOS Safari's silent freeze mode (no `waiting` / `stalled` event).
   EveryAyah MP3s include reciter-dependent encoded quiet at both edges (often

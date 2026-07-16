@@ -35,6 +35,67 @@ class FocusEngineTest {
     }
 
     @Test
+    fun `word band delta is zero when the word is already inside the band`() {
+        assertEquals(
+            0f,
+            FocusEngine.wordBandDeltaPx(
+                wordTopPx = 160f,
+                wordBottomPx = 190f,
+                viewportHeightPx = 800f,
+                topGuardPx = 0f,
+                bandTopMarginPx = 144f,
+                bandBottomMarginPx = 132f,
+            ),
+        )
+    }
+
+    @Test
+    fun `word band delta scrolls up when the word sits under the bottom fold`() {
+        // Word bottom at 720, band bottom at 800 - 132 = 668 → scroll by 52.
+        assertEquals(
+            720f - (800f - 132f),
+            FocusEngine.wordBandDeltaPx(
+                wordTopPx = 690f,
+                wordBottomPx = 720f,
+                viewportHeightPx = 800f,
+                topGuardPx = 0f,
+                bandTopMarginPx = 144f,
+                bandBottomMarginPx = 132f,
+            ),
+        )
+    }
+
+    @Test
+    fun `word band delta scrolls down when the word sits above the band`() {
+        assertEquals(
+            40f - 144f,
+            FocusEngine.wordBandDeltaPx(
+                wordTopPx = 40f,
+                wordBottomPx = 70f,
+                viewportHeightPx = 800f,
+                topGuardPx = 0f,
+                bandTopMarginPx = 144f,
+                bandBottomMarginPx = 132f,
+            ),
+        )
+    }
+
+    @Test
+    fun `word band delta respects the top guard`() {
+        assertEquals(
+            100f - (50f + 144f),
+            FocusEngine.wordBandDeltaPx(
+                wordTopPx = 100f,
+                wordBottomPx = 130f,
+                viewportHeightPx = 800f,
+                topGuardPx = 50f,
+                bandTopMarginPx = 144f,
+                bandBottomMarginPx = 132f,
+            ),
+        )
+    }
+
+    @Test
     fun `basmalah list item uses the same adaptive anchor as a short verse`() {
         // The basmalah is its own short LazyColumn item — not the tall header —
         // so it rests on the verse-style reading line (fitsFullyVisible path).
@@ -72,6 +133,45 @@ class FocusEngineTest {
         assertEquals(200, anchor)
         // Whole verse is inside the viewport.
         assertTrue(anchor + shortVerse <= viewport)
+    }
+
+    @Test
+    fun `bottom guard keeps a fitting verse clear of the player-bar band`() {
+        val bottomGuard = 132
+        val verse = 1600
+        val anchor = FocusEngine.anchorOffsetPx(viewport, guard, verse, bottomGuard)
+        // Bottom of verse must stay at or above the fold above the bottom guard.
+        assertTrue(anchor + verse <= viewport - bottomGuard)
+        // And still fully below the top.
+        assertTrue(anchor >= guard)
+    }
+
+    @Test
+    fun `bottom-only word band lifts a word under the fold without a top margin`() {
+        // Word bottom at 720, band bottom at 800 - 132 = 668 → scroll by 52.
+        // bandTopMargin 0: no top pull for short-verse anchors.
+        assertEquals(
+            720f - (800f - 132f),
+            FocusEngine.wordBandDeltaPx(
+                wordTopPx = 690f,
+                wordBottomPx = 720f,
+                viewportHeightPx = 800f,
+                topGuardPx = 0f,
+                bandTopMarginPx = 0f,
+                bandBottomMarginPx = 132f,
+            ),
+        )
+        assertEquals(
+            0f,
+            FocusEngine.wordBandDeltaPx(
+                wordTopPx = 80f,
+                wordBottomPx = 110f,
+                viewportHeightPx = 800f,
+                topGuardPx = 0f,
+                bandTopMarginPx = 0f,
+                bandBottomMarginPx = 132f,
+            ),
+        )
     }
 
     @Test
