@@ -150,11 +150,13 @@ keep the active target anchored without clearing `followEnabled`.
 matching Android `onWordClick` → `playFromWord`.
 
 **Rail jump → Play starts there:** committing an ayah on the selector rail
-(Android `requestedJumpAyah`) persists `lastAyah`, seeks the loaded playlist
-to that ayah when the surah is already parked, and keeps a pending-jump latch
-until focus + seek settle. The reader Play button uses `selectedPlaybackAyah`
-+ `playLoadedFromAyah` when that latch is set so playback does not resume the
-chapter-opening clip left by `openSurah` / `loadSurah`.
+(Android `requestedJumpAyah`) updates the session `openAyah` anchor, seeks the
+loaded playlist to that ayah when the surah is already parked, and keeps a
+pending-jump latch until focus + seek settle. The reader Play button uses
+`selectedPlaybackAyah` + `playLoadedFromAyah` when that latch is set so
+playback does not resume the chapter-opening clip left by `openSurah` /
+`loadSurah`. Continue Listening (`settings.lastSurah` / `lastAyah`) only
+updates when a verse is actually recited — not on open, scroll, or rail jump.
 
 ### 5.3 `InkEngine` (pure policy)
 

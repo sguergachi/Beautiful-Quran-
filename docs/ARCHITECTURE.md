@@ -292,8 +292,8 @@ foreground context for “bookmark this.”
 
 Deep-link scheme `beautifulquran://` (VIEW intent-filter on `MainActivity`):
 
-- `beautifulquran://continue` — last-read verse (`settings.lastSurah` / `lastAyah`)
-- `beautifulquran://continue?play=true` — last-read verse and start recitation
+- `beautifulquran://continue` — last listened verse (`settings.lastSurah` / `lastAyah`; updated only when audio plays, not on open/scroll)
+- `beautifulquran://continue?play=true` — last listened verse and start recitation
 - `beautifulquran://bookmarks` — bookmarks index (falls back to Chapters if empty)
 - `beautifulquran://bookmark/save` — ensure-bookmark on the current/last verse, then open it
 - `beautifulquran://verse/2/255` or `…/verse?surah=2&ayah=255` — open that verse
