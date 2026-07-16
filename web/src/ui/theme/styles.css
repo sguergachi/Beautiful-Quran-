@@ -492,6 +492,28 @@ select {
   max-width: var(--home-max);
   width: 100%;
   margin: 0 auto;
+  /* Collapse the masthead when search is focused so the field sits higher. */
+  max-height: 8rem;
+  opacity: 1;
+  overflow: hidden;
+  transition:
+    max-height 220ms ease,
+    opacity 180ms ease,
+    padding 220ms ease,
+    margin 220ms ease;
+}
+
+.home-header[data-search-focused='true'] {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+.home-scroll-page[data-search-focused='true'] > .search-row {
+  padding-top: 0.5rem;
 }
 
 .home-header h1 {

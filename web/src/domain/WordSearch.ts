@@ -137,16 +137,66 @@ export function matchWordSearch(
   const lower = trimmed.toLowerCase()
   const wantArabic = arabicNorm.length >= WORD_SEARCH_MIN_QUERY_LENGTH
   const out: WordSearchHit[] = []
-  for (const entry of index) {
+  for (let i = 0; i < index.length; i++) {
+    const entry = index[i]!
     const hit =
       (wantArabic && entry.arabicNorm.includes(arabicNorm)) ||
       entry.translationLower.includes(lower) ||
       entry.transliterationLower.includes(lower)
     if (!hit) continue
-    out.push(toHit(entry))
+    out.push(toHitWithDisplayTranslation(entry, index, i, trimmed))
     if (out.length >= maxHits) break
   }
   return out
+}
+
+/**
+ * SI ayah text when it can show the match; otherwise the same-ayah word-gloss
+ * line when that can. Falls back to SI when neither hosts a highlight.
+ */
+function toHitWithDisplayTranslation(
+  entry: WordSearchIndexEntry,
+  index: WordSearchIndexEntry[],
+  at: number,
+  query: string,
+): WordSearchHit {
+  const base = toHit(entry)
+  if (highlightNeedle(entry.ayahTranslation, query, entry.translation) != null) {
+    return base
+  }
+  const glossLine = sameAyahGlossLine(index, at)
+  if (highlightNeedle(glossLine, query, entry.translation) != null) {
+    return { ...base, ayahTranslation: glossLine }
+  }
+  return base
+}
+
+/** Space-joined English glosses for every word of the same ayah as [at]. */
+export function sameAyahGlossLine(
+  index: WordSearchIndexEntry[],
+  at: number,
+): string {
+  if (at < 0 || at >= index.length) return ''
+  const anchor = index[at]!
+  let lo = at
+  while (
+    lo > 0 &&
+    index[lo - 1]!.surahId === anchor.surahId &&
+    index[lo - 1]!.ayahNumber === anchor.ayahNumber
+  ) {
+    lo--
+  }
+  let hi = at
+  while (
+    hi + 1 < index.length &&
+    index[hi + 1]!.surahId === anchor.surahId &&
+    index[hi + 1]!.ayahNumber === anchor.ayahNumber
+  ) {
+    hi++
+  }
+  const parts: string[] = []
+  for (let i = lo; i <= hi; i++) parts.push(index[i]!.translation)
+  return parts.join(' ')
 }
 
 /** How many index rows to scan before yielding to the event loop. */
@@ -181,7 +231,7 @@ export async function matchWordSearchAsync(
       entry.translationLower.includes(lower) ||
       entry.transliterationLower.includes(lower)
     if (!hit) continue
-    out.push(toHit(entry))
+    out.push(toHitWithDisplayTranslation(entry, index, i, trimmed))
     if (out.length >= maxHits) break
   }
   return out
@@ -269,9 +319,13 @@ export function ayahHighlightSpans(
   return spans
 }
 
+/** How many whole words of context to keep on each side of a search hit. */
+export const SNIPPET_WORDS_BEFORE = 8
+export const SNIPPET_WORDS_AFTER = 14
+
 /**
- * Builds spans for an English ayah translation, highlighting the search
- * term (or the matched word gloss) so home search results read in English.
+ * Builds spans for an English search snippet: a short window centered on the
+ * match (query or word gloss) with the match highlighted.
  */
 export function englishTranslationHighlightSpans(
   ayahTranslation: string,
@@ -284,8 +338,51 @@ export function englishTranslationHighlightSpans(
     query.trim(),
     wordGloss.trim(),
   )
-  if (!needle) return [{ text: ayahTranslation, highlighted: false }]
-  return highlightAllOccurrences(ayahTranslation, needle)
+  const snippet = windowAroundMatch(
+    ayahTranslation,
+    needle,
+    SNIPPET_WORDS_BEFORE,
+    SNIPPET_WORDS_AFTER,
+  )
+  if (!needle) return [{ text: snippet, highlighted: false }]
+  return highlightAllOccurrences(snippet, needle)
+}
+
+/**
+ * Trims [text] to roughly [wordsBefore]…[wordsAfter] words around the first
+ * occurrence of [needle], adding an ellipsis when the ends were cut.
+ */
+export function windowAroundMatch(
+  text: string,
+  needle: string | null,
+  wordsBefore = SNIPPET_WORDS_BEFORE,
+  wordsAfter = SNIPPET_WORDS_AFTER,
+): string {
+  if (!needle || !text) return text
+  const matchStart = text.toLowerCase().indexOf(needle.toLowerCase())
+  if (matchStart < 0) return text
+  const matchEnd = matchStart + needle.length
+  const words = [...text.matchAll(/\S+/g)]
+  if (words.length === 0) return text
+  let matchWord = 0
+  for (let i = 0; i < words.length; i++) {
+    const m = words[i]!
+    const start = m.index ?? 0
+    const end = start + m[0]!.length
+    if (matchStart < end && matchEnd > start) {
+      matchWord = i
+      break
+    }
+  }
+  const from = Math.max(0, matchWord - wordsBefore)
+  const to = Math.min(words.length - 1, matchWord + wordsAfter)
+  const startChar = words[from]!.index ?? 0
+  const endWord = words[to]!
+  const endChar = (endWord.index ?? 0) + endWord[0]!.length
+  const core = text.slice(startChar, endChar).trim()
+  const prefix = from > 0 ? '…' : ''
+  const suffix = to < words.length - 1 ? '…' : ''
+  return prefix + core + suffix
 }
 
 /** Prefers the typed query when present; otherwise the word gloss / a token. */

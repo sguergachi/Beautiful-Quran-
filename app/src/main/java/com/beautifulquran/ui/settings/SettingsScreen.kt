@@ -512,7 +512,11 @@ private fun DeveloperSection(
     Caption("Live sliders over the reader's highlight tuning. This session only.")
 
     Spacer(Modifier.height(20.dp))
-    Text("Selector brush circle", style = MaterialTheme.typography.bodyLarge)
+    Text(
+        "Selector brush circle",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
     Spacer(Modifier.height(4.dp))
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -549,7 +553,11 @@ private fun DeveloperSection(
     BrushLabSliders(params = brushParams, onChange = onBrushParams)
 
     Spacer(Modifier.height(22.dp))
-    Text("Ink check mark", style = MaterialTheme.typography.bodyLarge)
+    Text(
+        "Ink check mark",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
     Spacer(Modifier.height(6.dp))
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -686,7 +694,11 @@ private fun DeveloperSection(
     }
 
     Spacer(Modifier.height(20.dp))
-    Text("Home bookmark", style = MaterialTheme.typography.bodyLarge)
+    Text(
+        "Home bookmark",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
     Caption("Changes the Chapters shortcut; bookmark ribbons inside verses are unchanged.")
     Spacer(Modifier.height(4.dp))
     HomeBookmarkStyle.entries.forEach { style ->
@@ -703,7 +715,11 @@ private fun DeveloperSection(
     }
 
     Spacer(Modifier.height(18.dp))
-    Text("Page turn sounds", style = MaterialTheme.typography.bodyLarge)
+    Text(
+        "Page turn sounds",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
     Caption("Tap to hear the whole flip (lift → sweep → drop).")
     Spacer(Modifier.height(4.dp))
     PageTurnSounds.FLIPS.forEachIndexed { index, flip ->
@@ -724,7 +740,11 @@ private fun DeveloperSection(
                 modifier = Modifier.size(20.dp),
             )
             Spacer(Modifier.size(14.dp))
-            Text(flip.name, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                flip.name,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 }
@@ -857,6 +877,7 @@ private fun ToggleRow(
         Text(
             text = label,
             style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
         InkCheck(checked = checked, params = checkParams, paintToken = checkPaintToken)

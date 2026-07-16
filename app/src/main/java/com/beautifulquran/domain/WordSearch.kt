@@ -59,6 +59,10 @@ fun isWordSearchQuery(query: String): Boolean {
 /**
  * Scans [index] for Arabic (diacritic-insensitive), English gloss, or
  * transliteration substring matches. Results stay in Quranic order.
+ *
+ * When the SI ayah translation cannot show the matched English, the hit's
+ * [WordSearchHit.ayahTranslation] is the same-ayah word-gloss line instead,
+ * so the cover snippet always has the matched term in context.
  */
 fun matchWordSearch(
     index: List<WordSearchIndexEntry>,
@@ -70,7 +74,8 @@ fun matchWordSearch(
     val arabicNorm = normalizeArabicForSearch(trimmed)
     val lower = trimmed.lowercase()
     val out = ArrayList<WordSearchHit>(minOf(64, maxHits))
-    for (entry in index) {
+    for (i in index.indices) {
+        val entry = index[i]
         val hit = when {
             arabicNorm.length >= WORD_SEARCH_MIN_QUERY_LENGTH &&
                 entry.arabicNorm.contains(arabicNorm) -> true
@@ -79,10 +84,55 @@ fun matchWordSearch(
             else -> false
         }
         if (!hit) continue
-        out.add(entry.toHit())
+        val base = entry.toHit()
+        // Word glosses and SI ayah lines often disagree ("a resting place" vs
+        // "a bed"). Prefer the gloss line only when it can host the highlight.
+        val display = snippetDisplayText(entry, index, i, trimmed)
+        out.add(if (display == entry.ayahTranslation) base else base.copy(ayahTranslation = display))
         if (out.size >= maxHits) break
     }
     return out
+}
+
+/**
+ * SI ayah text when it can show the match; otherwise the same-ayah word-gloss
+ * line when that can. Falls back to SI when neither hosts a highlight.
+ */
+internal fun snippetDisplayText(
+    entry: WordSearchIndexEntry,
+    index: List<WordSearchIndexEntry>,
+    at: Int,
+    query: String,
+): String {
+    if (highlightNeedle(entry.ayahTranslation, query, entry.translation) != null) {
+        return entry.ayahTranslation
+    }
+    val glossLine = sameAyahGlossLine(index, at)
+    if (highlightNeedle(glossLine, query, entry.translation) != null) return glossLine
+    return entry.ayahTranslation
+}
+
+/** Space-joined English glosses for every word of the same ayah as [at]. */
+internal fun sameAyahGlossLine(index: List<WordSearchIndexEntry>, at: Int): String {
+    if (at !in index.indices) return ""
+    val anchor = index[at]
+    var lo = at
+    while (
+        lo > 0 &&
+        index[lo - 1].surahId == anchor.surahId &&
+        index[lo - 1].ayahNumber == anchor.ayahNumber
+    ) {
+        lo--
+    }
+    var hi = at
+    while (
+        hi + 1 < index.size &&
+        index[hi + 1].surahId == anchor.surahId &&
+        index[hi + 1].ayahNumber == anchor.ayahNumber
+    ) {
+        hi++
+    }
+    return (lo..hi).joinToString(" ") { index[it].translation }
 }
 
 /**
@@ -157,9 +207,14 @@ fun ayahHighlightSpans(
     return spans
 }
 
+/** How many whole words of context to keep on each side of a search hit. */
+const val SNIPPET_WORDS_BEFORE = 8
+const val SNIPPET_WORDS_AFTER = 14
+
 /**
- * Builds spans for an English ayah translation, highlighting the search
- * term (or the matched word gloss) so home search results read in English.
+ * Builds spans for an English search snippet: a short window of text centered
+ * on the match (query or word gloss), with the match highlighted. Used by the
+ * cover-sheet word results so the gold term is always on-screen.
  */
 fun englishTranslationHighlightSpans(
     ayahTranslation: String,
@@ -168,8 +223,44 @@ fun englishTranslationHighlightSpans(
 ): List<AyahTextSpan> {
     if (ayahTranslation.isEmpty()) return emptyList()
     val needle = highlightNeedle(ayahTranslation, query.trim(), wordGloss.trim())
-        ?: return listOf(AyahTextSpan(ayahTranslation, highlighted = false))
-    return highlightAllOccurrences(ayahTranslation, needle)
+    val snippet = windowAroundMatch(
+        text = ayahTranslation,
+        needle = needle,
+        wordsBefore = SNIPPET_WORDS_BEFORE,
+        wordsAfter = SNIPPET_WORDS_AFTER,
+    )
+    if (needle == null) return listOf(AyahTextSpan(snippet, highlighted = false))
+    return highlightAllOccurrences(snippet, needle)
+}
+
+/**
+ * Trims [text] to roughly [wordsBefore]…[wordsAfter] words around the first
+ * occurrence of [needle], adding an ellipsis when the ends were cut.
+ * When [needle] is null or missing, returns [text] unchanged.
+ */
+internal fun windowAroundMatch(
+    text: String,
+    needle: String?,
+    wordsBefore: Int = SNIPPET_WORDS_BEFORE,
+    wordsAfter: Int = SNIPPET_WORDS_AFTER,
+): String {
+    if (needle.isNullOrEmpty() || text.isEmpty()) return text
+    val matchStart = text.indexOf(needle, ignoreCase = true)
+    if (matchStart < 0) return text
+    val matchEnd = matchStart + needle.length
+    val words = Regex("\\S+").findAll(text).toList()
+    if (words.isEmpty()) return text
+    val matchWord = words.indexOfFirst { mr ->
+        matchStart < mr.range.last + 1 && matchEnd > mr.range.first
+    }.let { if (it < 0) 0 else it }
+    val from = (matchWord - wordsBefore).coerceAtLeast(0)
+    val to = (matchWord + wordsAfter).coerceAtMost(words.lastIndex)
+    val startChar = words[from].range.first
+    val endChar = words[to].range.last + 1
+    val core = text.substring(startChar, endChar).trim()
+    val prefix = if (from > 0) "…" else ""
+    val suffix = if (to < words.lastIndex) "…" else ""
+    return prefix + core + suffix
 }
 
 /**

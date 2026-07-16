@@ -16,6 +16,7 @@ class WordSearchTest {
         translation: String,
         transliteration: String = "",
         ayahText: String = arabic,
+        ayahTranslation: String = "",
     ): WordSearchIndexEntry {
         val norm = normalizeArabicForSearch(arabic)
         return WordSearchIndexEntry(
@@ -29,7 +30,7 @@ class WordSearchTest {
             transliteration = transliteration,
             transliterationLower = transliteration.lowercase(),
             ayahText = ayahText,
-            ayahTranslation = "",
+            ayahTranslation = ayahTranslation,
             surahNameTransliteration = "Surah$surahId",
             surahNameArabic = "س$surahId",
         )
@@ -139,5 +140,63 @@ class WordSearchTest {
             "(is) the Oft-returning (to mercy)",
         )
         assertTrue(spans.any { it.highlighted && it.text.equals("Oft-Returning", ignoreCase = true) })
+    }
+
+    @Test
+    fun `english snippet windows around a mid-ayah match`() {
+        val words = (1..40).joinToString(" ") { "w$it" }
+        val ayah = "$words resting place more words after that keep going"
+        val spans = englishTranslationHighlightSpans(ayah, "rest", "a resting place")
+        val text = spans.joinToString("") { it.text }
+        assertTrue(text.contains("resting", ignoreCase = true))
+        assertTrue(spans.any { it.highlighted && it.text.startsWith("rest", ignoreCase = true) })
+        assertTrue(text.startsWith("…") || text.length < ayah.length)
+        // Lead-in words far from the match should be clipped.
+        assertFalse(text.contains("w1 "))
+    }
+
+    @Test
+    fun `match uses gloss line when SI ayah lacks the query`() {
+        val entries = listOf(
+            entry(
+                surahId = 2,
+                ayah = 22,
+                position = 4,
+                arabic = "ٱلۡأَرۡضَ",
+                translation = "the earth",
+            ).copy(ayahTranslation = "[He] who made for you the earth a bed [spread out]"),
+            entry(
+                surahId = 2,
+                ayah = 22,
+                position = 5,
+                arabic = "فِرَٰشٗا",
+                translation = "a resting place",
+            ).copy(ayahTranslation = "[He] who made for you the earth a bed [spread out]"),
+            entry(
+                surahId = 2,
+                ayah = 22,
+                position = 6,
+                arabic = "وَٱلسَّمَآءَ",
+                translation = "and the sky",
+            ).copy(ayahTranslation = "[He] who made for you the earth a bed [spread out]"),
+        )
+        val hits = matchWordSearch(entries, "rest")
+        assertEquals(1, hits.size)
+        assertTrue(hits[0].ayahTranslation.contains("resting", ignoreCase = true))
+        assertTrue(hits[0].ayahTranslation.contains("the earth"))
+        assertTrue(hits[0].ayahTranslation.contains("and the sky"))
+        val spans = englishTranslationHighlightSpans(
+            hits[0].ayahTranslation,
+            "rest",
+            hits[0].translation,
+        )
+        assertTrue(spans.any { it.highlighted && it.text.startsWith("rest", ignoreCase = true) })
+    }
+
+    @Test
+    fun `windowAroundMatch keeps neighbors and ellipsis`() {
+        val text = "one two three four five six seven eight nine ten eleven twelve"
+        val windowed = windowAroundMatch(text, "seven", wordsBefore = 2, wordsAfter = 2)
+        assertEquals("…five six seven eight nine…", windowed)
     }
 }

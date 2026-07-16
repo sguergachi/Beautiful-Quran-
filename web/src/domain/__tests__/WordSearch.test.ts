@@ -10,6 +10,7 @@ import {
   parseAyahReference,
   sectionWordSearchHits,
   shouldRunWordSearch,
+  windowAroundMatch,
   type WordSearchIndexEntry,
   type WordSearchHit,
 } from '../WordSearch'
@@ -167,6 +168,51 @@ describe('englishTranslationHighlightSpans', () => {
         (s) => s.highlighted && s.text.toLowerCase() === 'oft-returning',
       ),
     ).toBe(true)
+  })
+
+  it('windows the snippet around a mid-ayah match', () => {
+    const lead = Array.from({ length: 40 }, (_, i) => `w${i + 1}`).join(' ')
+    const ayah = `${lead} resting place more words after that keep going`
+    const spans = englishTranslationHighlightSpans(ayah, 'rest', 'a resting place')
+    const text = spans.map((s) => s.text).join('')
+    expect(text.toLowerCase()).toContain('resting')
+    expect(
+      spans.some((s) => s.highlighted && s.text.toLowerCase().startsWith('rest')),
+    ).toBe(true)
+    expect(text.includes('w1 ')).toBe(false)
+  })
+})
+
+describe('matchWordSearch gloss-line fallback', () => {
+  it('uses same-ayah glosses when SI translation lacks the query', () => {
+    const si = '[He] who made for you the earth a bed [spread out]'
+    const entries = [
+      entry(2, 22, 4, 'ٱلۡأَرۡضَ', 'the earth', '', 'ٱلۡأَرۡضَ'),
+      entry(2, 22, 5, 'فِرَٰشٗا', 'a resting place', '', 'فِرَٰشٗا'),
+      entry(2, 22, 6, 'وَٱلسَّمَآءَ', 'and the sky', '', 'وَٱلسَّمَآءَ'),
+    ].map((e) => ({ ...e, ayahTranslation: si }))
+    const hits = matchWordSearch(entries, 'rest')
+    expect(hits).toHaveLength(1)
+    expect(hits[0]!.ayahTranslation.toLowerCase()).toContain('resting')
+    expect(hits[0]!.ayahTranslation).toContain('the earth')
+    expect(hits[0]!.ayahTranslation).toContain('and the sky')
+    const spans = englishTranslationHighlightSpans(
+      hits[0]!.ayahTranslation,
+      'rest',
+      hits[0]!.translation,
+    )
+    expect(
+      spans.some((s) => s.highlighted && s.text.toLowerCase().startsWith('rest')),
+    ).toBe(true)
+  })
+})
+
+describe('windowAroundMatch', () => {
+  it('keeps neighbors and adds ellipsis', () => {
+    const text = 'one two three four five six seven eight nine ten eleven twelve'
+    expect(windowAroundMatch(text, 'seven', 2, 2)).toBe(
+      '…five six seven eight nine…',
+    )
   })
 })
 

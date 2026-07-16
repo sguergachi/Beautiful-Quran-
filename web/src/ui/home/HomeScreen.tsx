@@ -35,6 +35,7 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
   // Local query — typing must not emit through appStore (that re-renders the
   // whole paper stack, including the mounted reader under the cover).
   const [search, setSearch] = useState('')
+  const [searchFocused, setSearchFocused] = useState(false)
   const searching = search.trim().length > 0
   const { surahs: filtered, ayahTarget } = useMemo(
     () => filterSurahs(state.surahs, search),
@@ -98,7 +99,8 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const depth = Math.max(0, stackLayer - COVER_LAYER)
   const isTop = stackLayer === COVER_LAYER
   const nowPlaying = state.player.nowPlaying
-  const showFloat = nowPlaying != null && isTop
+  // Hide the float for the whole search session (focused field or query).
+  const showFloat = nowPlaying != null && isTop && !searchFocused && !searching
   const floatAyah = nowPlaying != null ? Math.max(1, nowPlaying.ayah) : 1
   const floatSurah =
     nowPlaying != null
@@ -155,7 +157,10 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
         />
       ) : null}
 
-      <div className="sheet-frame">
+      <div
+        className="sheet-frame"
+        data-search-focused={searchFocused || undefined}
+      >
         {hasBookmarks && bookmarkStyle !== 'saved_passages' ? (
           <div className={`home-bookmark-ribbon home-bookmark-${bookmarkStyle}`}>
             <VerseBookmarkRibbon
@@ -179,12 +184,18 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
             />
           </div>
         ) : null}
-        <header className="home-header" data-has-bookmarks={hasBookmarks || undefined}>
+        <header
+          className="home-header"
+          data-has-bookmarks={hasBookmarks || undefined}
+          data-search-focused={searchFocused || undefined}
+          aria-hidden={searchFocused || undefined}
+        >
           <h1>Beautiful Quran</h1>
           <button
             type="button"
             className="home-settings"
             aria-label="Open settings"
+            tabIndex={searchFocused ? -1 : undefined}
             onClick={() => appStore.setSheet('settings')}
           >
             <HomeRosette />
@@ -196,6 +207,7 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
             <div
               className="home-scroll-page"
               data-has-bookmarks={hasBookmarks || undefined}
+              data-search-focused={searchFocused || undefined}
             >
               <div className="search-row">
                 <div className="home-search">
@@ -207,6 +219,8 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     placeholder="Search surah, word, or 2:255"
                     value={search}
                     onValueChange={setSearch}
+                    onFocus={() => setSearchFocused(true)}
+                    onBlur={() => setSearchFocused(false)}
                     aria-label="Search surah, word, or ayah reference"
                   />
                   {search ? (
@@ -214,6 +228,8 @@ export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
                       type="button"
                       className="home-search-clear"
                       aria-label="Clear search"
+                      // Keep the field focused so the masthead stays receded.
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => setSearch('')}
                     >
                       <ClearIcon />
