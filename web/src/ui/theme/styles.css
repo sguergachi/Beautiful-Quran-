@@ -644,7 +644,7 @@ select {
   max-width: var(--home-max);
   width: 100%;
   margin: 18px auto 16px;
-  padding: 0;
+  padding: 0 calc(var(--home-start-inset) + 4px);
 }
 
 .continue {
@@ -654,12 +654,13 @@ select {
   gap: 1rem;
   width: 100%;
   margin: 0;
-  padding: 18px calc(var(--home-end-inset) + 4px) 18px
-    calc(var(--home-start-inset) + var(--home-number-column) + var(--home-column-gap));
-  background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+  padding: 18px 20px 18px
+    calc(var(--home-number-column) + var(--home-column-gap));
+  background-color: color-mix(in srgb, var(--accent) 8%, transparent);
   color: var(--ink);
   text-align: start;
   min-height: 44px;
+  border-radius: 14px;
 }
 
 .continue-copy {
@@ -746,7 +747,7 @@ select {
 
 @media (hover: hover) {
   .continue:hover {
-    background-color: color-mix(in srgb, var(--accent) 13%, transparent);
+    background-color: color-mix(in srgb, var(--accent) 12%, transparent);
   }
 }
 
