@@ -27,6 +27,7 @@ export interface Settings {
   showTranslation: boolean
   themeMode: ThemeMode
   ayahSelectorSide: AyahSelectorSide
+  /** Continue Listening — last verse actually recited (not mere open/scroll). */
   lastSurah: number
   lastAyah: number
   playbackSpeed: number

@@ -122,7 +122,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   }
   // Lazily created once — definite after the null check above.
   const focus = focusRef.current
-  const initialAyah = Math.max(1, state.settings.lastAyah || 1)
+  const initialAyah = Math.max(1, state.openAyah || 1)
   const [focusedAyah, setFocusedAyah] = useState(initialAyah)
   /**
    * Continuous readout for the rail marker (Android `focusedPosition`).
@@ -217,7 +217,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   })
   const receded = recitingActive && !searchActive
 
-  const mountAnchor = state.settings.lastAyah || 1
+  const mountAnchor = state.openAyah || 1
   const mountRange = useProgressiveAyahWindow(
     content?.surah.ayahCount ?? 0,
     mountAnchor,
@@ -324,7 +324,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   // the peel keeps its first paint. Same-surah reopen (isTop only) keeps scroll.
   useEffect(() => {
     if (!content || !isTop) return
-    const ayah = state.settings.lastAyah || 1
+    const ayah = state.openAyah || 1
     let cancelled = false
     const raf = requestAnimationFrame(() => {
       if (cancelled) return
@@ -589,8 +589,9 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
    * full path and far verses teleport to a doorstep then home-scroll.
    * The rail must not call this while dragging; only on commit.
    *
-   * Also parks playback on the jumped ayah (seek while loaded) and persists
-   * lastAyah so Play starts here — not at the chapter opening left by loadSurah.
+   * Also parks playback on the jumped ayah (seek while loaded) and updates the
+   * session open anchor so Play starts here — not at the chapter opening left
+   * by loadSurah. Continue Listening is unchanged until audio actually plays.
    * pendingJump stays set until focus *and* seek settle so an early Play still
    * routes through playLoadedFromAyah (web audio fetch can outlast the glide).
    */

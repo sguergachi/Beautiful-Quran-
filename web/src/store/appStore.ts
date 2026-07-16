@@ -94,6 +94,12 @@ export interface AppState {
   rootViewerClosing: boolean
   followEnabled: boolean
   /**
+   * Session-only verse the reader should settle on when a chapter opens.
+   * Not Continue Listening — that only tracks verses actually recited
+   * ([settings.lastSurah] / [settings.lastAyah]).
+   */
+  openAyah: number
+  /**
    * Pending home word-search flash — set by [openSurah] with a word position,
    * consumed by the reader after focus settles.
    */
@@ -137,6 +143,7 @@ class AppStore {
     rootViewer: null,
     rootViewerClosing: false,
     followEnabled: true,
+    openAyah: 1,
     pendingSearchFlash: null,
   }
 
@@ -145,6 +152,19 @@ class AppStore {
       const prev = this.state.player
       this.state = { ...this.state, player: ps }
       this.recomputeActive(ps)
+
+      // Continue Listening tracks verses actually recited, not open/scroll.
+      const np = ps.nowPlaying
+      if (
+        ps.isPlaying &&
+        np != null &&
+        np.ayah >= 1 &&
+        (prev.nowPlaying?.surahId !== np.surahId ||
+          prev.nowPlaying?.ayah !== np.ayah ||
+          !prev.isPlaying)
+      ) {
+        this.rememberListened(np.surahId, np.ayah)
+      }
 
       // Emit only on UI-visible changes — not every 33 ms position tick.
       // Chrome recess is derived in ReaderScreen from debounced recitingActive
@@ -336,17 +356,14 @@ class AppStore {
       this.state.reciters[0]
     if (!reciter) return
 
-    const settings = {
-      ...this.state.settings,
-      lastSurah: surahId,
-      lastAyah: ayah,
-    }
+    // openAyah is session navigation only — Continue Listening stays put until
+    // the user actually plays a verse (see [rememberListened]).
+    const openAyah = Math.max(1, ayah)
     const flashWord =
       wordPosition != null && wordPosition > 0 ? wordPosition : null
     const flash =
-      flashWord != null ? { ayah, wordPosition: flashWord } : null
+      flashWord != null ? { ayah: openAyah, wordPosition: flashWord } : null
     const rootViewerClosing = this.state.rootViewer != null ? true : false
-    queueMicrotask(() => saveSettings(settings))
 
     // Same chapter already loaded — peel only (no remount). The CSS sheet
     // glide is the whole point of this path.
@@ -354,7 +371,7 @@ class AppStore {
       this.set({
         stackLayer: READER_LAYER,
         sheet: 'reader',
-        settings,
+        openAyah,
         followEnabled: true,
         rootViewer: this.state.rootViewer,
         rootViewerClosing,
@@ -381,7 +398,7 @@ class AppStore {
       stackLayer: READER_LAYER,
       sheet: 'reader',
       content,
-      settings,
+      openAyah,
       hasTimings: false,
       activeWord: null,
       activeAyah: null,
@@ -430,13 +447,30 @@ class AppStore {
   }
 
   /**
-   * Persist the reading / jump position — Android `onAyahBecameActive`.
-   * Rail jumps and follow advances call this so Play / Continue resume here.
+   * Session open/jump anchor — Android reader focus without Continue update.
+   * Rail jumps call this so Play starts here; Continue Listening only updates
+   * when audio actually plays ([rememberListened]).
    */
   onAyahBecameActive(ayah: number) {
     if (!this.state.content || ayah < 1) return
-    const surahId = this.state.content.surah.id
-    const clamped = Math.min(this.state.content.surah.ayahCount, Math.max(1, ayah))
+    const clamped = Math.min(
+      this.state.content.surah.ayahCount,
+      Math.max(1, ayah),
+    )
+    if (this.state.openAyah === clamped) return
+    this.set({ openAyah: clamped })
+  }
+
+  /**
+   * Persist Continue Listening for a verse the user actually heard.
+   * [surahId] may come from the player when content is briefly out of sync.
+   */
+  private rememberListened(surahId: number, ayah: number) {
+    if (surahId < 1 || surahId > 114 || ayah < 1) return
+    const count = this.state.content?.surah.id === surahId
+      ? this.state.content.surah.ayahCount
+      : null
+    const clamped = count != null ? Math.min(count, ayah) : ayah
     if (
       this.state.settings.lastSurah === surahId &&
       this.state.settings.lastAyah === clamped
@@ -449,7 +483,7 @@ class AppStore {
       lastAyah: clamped,
     }
     saveSettings(settings)
-    this.set({ settings })
+    this.set({ settings, openAyah: clamped })
   }
 
   /**
@@ -489,7 +523,8 @@ class AppStore {
       // the chapter-opening clip parked by loadSurah.
       if (opts?.pendingJump) {
         await player.playLoadedFromAyah(selected)
-        this.onAyahBecameActive(selected)
+        const surahId = this.state.content.surah.id
+        this.rememberListened(surahId, selected)
         return
       }
       await player.toggle()
@@ -506,14 +541,9 @@ class AppStore {
 
   async playAyah(ayah: number, includeBasmalah = ayah === 1) {
     await player.playFrom(ayah, includeBasmalah && ayah === 1)
-    this.set({
-      settings: {
-        ...this.state.settings,
-        lastAyah: ayah,
-      },
-      followEnabled: true,
-    })
-    saveSettings(this.state.settings)
+    const surahId = this.state.content?.surah.id
+    if (surahId != null) this.rememberListened(surahId, ayah)
+    this.set({ followEnabled: true })
   }
 
   /**
@@ -528,14 +558,9 @@ class AppStore {
     } else {
       await player.playFrom(ayah, false)
     }
-    this.set({
-      settings: {
-        ...this.state.settings,
-        lastAyah: ayah,
-      },
-      followEnabled: true,
-    })
-    saveSettings(this.state.settings)
+    const surahId = this.state.content?.surah.id
+    if (surahId != null) this.rememberListened(surahId, ayah)
+    this.set({ followEnabled: true })
   }
 
   /** First timing segment start for [ayah]/[wordPosition], if timings are loaded. */

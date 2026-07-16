@@ -45,6 +45,7 @@ data class Settings(
     val showTranslation: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val ayahSelectorSide: AyahSelectorSide = AyahSelectorSide.LEFT,
+    /** Continue Listening — last verse actually recited (not mere open/scroll). */
     val lastSurah: Int = 0,
     val lastAyah: Int = 1,
     /** Unlocks the Timings Lab and the word-hold chooser. Toggled by
