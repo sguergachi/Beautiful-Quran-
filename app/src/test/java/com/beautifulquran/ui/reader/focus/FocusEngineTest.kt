@@ -136,6 +136,45 @@ class FocusEngineTest {
     }
 
     @Test
+    fun `bottom guard keeps a fitting verse clear of the player-bar band`() {
+        val bottomGuard = 132
+        val verse = 1600
+        val anchor = FocusEngine.anchorOffsetPx(viewport, guard, verse, bottomGuard)
+        // Bottom of verse must stay at or above the fold above the bottom guard.
+        assertTrue(anchor + verse <= viewport - bottomGuard)
+        // And still fully below the top.
+        assertTrue(anchor >= guard)
+    }
+
+    @Test
+    fun `bottom-only word band lifts a word under the fold without a top margin`() {
+        // Word bottom at 720, band bottom at 800 - 132 = 668 → scroll by 52.
+        // bandTopMargin 0: no top pull for short-verse anchors.
+        assertEquals(
+            720f - (800f - 132f),
+            FocusEngine.wordBandDeltaPx(
+                wordTopPx = 690f,
+                wordBottomPx = 720f,
+                viewportHeightPx = 800f,
+                topGuardPx = 0f,
+                bandTopMarginPx = 0f,
+                bandBottomMarginPx = 132f,
+            ),
+        )
+        assertEquals(
+            0f,
+            FocusEngine.wordBandDeltaPx(
+                wordTopPx = 80f,
+                wordBottomPx = 110f,
+                viewportHeightPx = 800f,
+                topGuardPx = 0f,
+                bandTopMarginPx = 0f,
+                bandBottomMarginPx = 132f,
+            ),
+        )
+    }
+
+    @Test
     fun `a verse taller than the viewport is pinned near the top`() {
         val tallVerse = 3200
         val anchor = FocusEngine.anchorOffsetPx(viewport, guard, tallVerse)

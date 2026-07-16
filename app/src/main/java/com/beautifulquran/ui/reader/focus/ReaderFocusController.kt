@@ -113,14 +113,13 @@ class ReaderFocusController internal constructor(
                 isAboveWhenOffscreen = itemIndex < listState.firstVisibleItemIndex,
             )
         }
-        return FocusEngine.placement(geometry, viewportHeight, topGuardPx)
+        return FocusEngine.placement(geometry, viewportHeight, topGuardPx, bottomGuardPx)
     }
 
     /** True when [ayahNumber] is currently laid out taller than the *usable*
-     *  viewport (full height minus top/bottom guards), so word-level following
-     *  (not verse-level pinning) should drive its scroll. The bottom guard is
-     *  the reading band above the player bar — without it, a nearly-full-height
-     *  verse would keep word-follow off while its last lines sit under the fade. */
+     *  viewport (full height minus top/bottom guards). Used by the return-to-
+     *  verse path and diagnostics; word follow itself always runs and no-ops
+     *  when the active word is already in band. */
     fun exceedsViewport(ayahNumber: Int?): Boolean {
         val itemIndex = ayahNumber?.let { itemIndexOfAyah[it] } ?: return false
         val info = listState.layoutInfo
@@ -136,10 +135,13 @@ class ReaderFocusController internal constructor(
      * comfortable reading band. Serialized with [focus] so verse glides and
      * word follow never fight.
      *
-     * [measureInViewport] is invoked **inside** the lock (and may run again
-     * after a competing scroll finishes) so bounds stay live: top/bottom are
-     * distances from the LazyColumn content-start edge (0 = top of the list
-     * viewport). Return null when the word is not currently laid out.
+     * [measureInViewport] is invoked **inside** the lock (and again after each
+     * glide) so bounds stay live: top/bottom are distances from the LazyColumn
+     * content-start edge (0 = top of the list viewport). Return null when the
+     * word is not currently laid out.
+     *
+     * Pass [bandTopMarginPx] = 0 for bottom-only correction — lifts words clear
+     * of the player-bar fold without fighting the verse-level top anchor.
      */
     suspend fun keepWordInView(
         bandTopMarginPx: Float,
@@ -147,25 +149,29 @@ class ReaderFocusController internal constructor(
         measureInViewport: () -> Pair<Float, Float>?,
     ) {
         focusMutex.withLock {
-            val viewportHeight = listState.layoutInfo.viewportSize.height
-            if (viewportHeight <= 0) return
-            val bounds = measureInViewport() ?: return
-            val delta = FocusEngine.wordBandDeltaPx(
-                wordTopPx = bounds.first,
-                wordBottomPx = bounds.second,
-                viewportHeightPx = viewportHeight.toFloat(),
-                topGuardPx = topGuardPx.toFloat(),
-                bandTopMarginPx = bandTopMarginPx,
-                bandBottomMarginPx = bandBottomMarginPx,
-            )
-            if (abs(delta) < 0.5f) return
-            listState.animateScrollBy(
-                delta,
-                animationSpec = tween(
-                    durationMillis = WORD_GLIDE_MS,
-                    easing = FastOutSlowInEasing,
-                ),
-            )
+            // Two passes: the second re-measures after the first glide so a
+            // near-miss (or layout settling mid-scroll) still clears the fold.
+            repeat(2) { pass ->
+                val viewportHeight = listState.layoutInfo.viewportSize.height
+                if (viewportHeight <= 0) return
+                val bounds = measureInViewport() ?: return
+                val delta = FocusEngine.wordBandDeltaPx(
+                    wordTopPx = bounds.first,
+                    wordBottomPx = bounds.second,
+                    viewportHeightPx = viewportHeight.toFloat(),
+                    topGuardPx = topGuardPx.toFloat(),
+                    bandTopMarginPx = bandTopMarginPx,
+                    bandBottomMarginPx = bandBottomMarginPx,
+                )
+                if (abs(delta) < 0.5f) return
+                listState.animateScrollBy(
+                    delta,
+                    animationSpec = tween(
+                        durationMillis = if (pass == 0) WORD_GLIDE_MS else WORD_GLIDE_MS / 2,
+                        easing = FastOutSlowInEasing,
+                    ),
+                )
+            }
         }
     }
 
@@ -311,7 +317,9 @@ class ReaderFocusController internal constructor(
         val visible = listState.layoutInfo.visibleItemsInfo
             .firstOrNull { it.index == itemIndex }
         if (visible != null) {
-            val anchor = FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, visible.size)
+            val anchor = FocusEngine.anchorOffsetPx(
+                viewportHeight, topGuardPx, visible.size, bottomGuardPx,
+            )
             return FocusEngine.glideDeltaPx(
                 TargetGeometry(
                     visible.offset,
@@ -327,7 +335,9 @@ class ReaderFocusController internal constructor(
         // Approximate the target's top as if every intervening item were `avg`
         // tall, accounting for the partial scroll of the first visible item.
         val approxTop = indexDelta * avg - listState.firstVisibleItemScrollOffset
-        val approxAnchor = FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, avg)
+        val approxAnchor = FocusEngine.anchorOffsetPx(
+            viewportHeight, topGuardPx, avg, bottomGuardPx,
+        )
         return (approxTop - approxAnchor).toFloat()
     }
 
@@ -354,7 +364,9 @@ class ReaderFocusController internal constructor(
         val geometry = target?.let {
             TargetGeometry(it.offset, it.size, isLaidOut = true, isAboveWhenOffscreen = false)
         } ?: return null
-        val anchor = FocusEngine.anchorOffsetPx(viewportHeight, topGuardPx, geometry.heightPx)
+        val anchor = FocusEngine.anchorOffsetPx(
+            viewportHeight, topGuardPx, geometry.heightPx, bottomGuardPx,
+        )
         return FocusEngine.glideDeltaPx(geometry, anchor)
     }
 
@@ -364,7 +376,7 @@ class ReaderFocusController internal constructor(
         val last = lastAyahNumber.coerceAtLeast(1)
         if (viewportHeight <= 0 || info.visibleItemsInfo.isEmpty()) return 1f
 
-        val readingLine = FocusEngine.readingLinePx(viewportHeight, topGuardPx)
+        val readingLine = FocusEngine.readingLinePx(viewportHeight, topGuardPx, bottomGuardPx)
         val ayahItems = info.visibleItemsInfo.filter { ayahNumberByItemIndex.containsKey(it.index) }
         if (ayahItems.isEmpty()) return 1f
         // The verse crossing the reading line — not merely the first one peeking

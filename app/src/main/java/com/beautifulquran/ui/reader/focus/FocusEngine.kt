@@ -219,27 +219,39 @@ object FocusEngine {
     fun shouldTeleport(targetIndexDelta: Int, visibleItemCount: Int): Boolean =
         abs(targetIndexDelta) > visibleItemCount + NEAR_EXTRA_ITEMS
 
-    /** Usable vertical space for reading: the viewport minus any top guard. */
-    private fun usable(viewportHeightPx: Int, topGuardPx: Int): Int =
-        (viewportHeightPx - topGuardPx).coerceAtLeast(1)
+    /**
+     * Usable vertical space for reading: the viewport minus top/bottom guards.
+     * The bottom guard is the reading band above the player bar / edge fade —
+     * content that only "fits" into the raw viewport still parks its last lines
+     * under that chrome if we ignore it.
+     */
+    private fun usable(viewportHeightPx: Int, topGuardPx: Int, bottomGuardPx: Int = 0): Int =
+        (viewportHeightPx - topGuardPx - bottomGuardPx).coerceAtLeast(1)
 
     /**
      * The reading line: the fixed vertical position, measured from content start,
      * that answers "which verse is the reader looking at". Used for the scroll
      * read-out (rail marker) and as the resting anchor for a verse that fits.
      */
-    fun readingLinePx(viewportHeightPx: Int, topGuardPx: Int = 0): Int =
-        topGuardPx + (usable(viewportHeightPx, topGuardPx) * FIT_TOP_MARGIN_FRACTION).roundToInt()
+    fun readingLinePx(
+        viewportHeightPx: Int,
+        topGuardPx: Int = 0,
+        bottomGuardPx: Int = 0,
+    ): Int =
+        topGuardPx +
+            (usable(viewportHeightPx, topGuardPx, bottomGuardPx) * FIT_TOP_MARGIN_FRACTION)
+                .roundToInt()
 
     /**
      * The desired top offset for a verse we are focusing — the heart of the
      * "adaptive" behaviour:
      *
      * - **Fits on screen** → rest it fully in view with [FIT_TOP_MARGIN_FRACTION]
-     *   breathing room, but never so high that its bottom would clear the fold
-     *   (so a short final verse still lands with its whole body visible).
-     * - **Taller than the screen** → pin its top near the content start so the
-     *   reader starts at line one; word-level following then scrolls through it.
+     *   breathing room, but never so high that its bottom would enter the
+     *   bottom guard (player-bar reading band) — so the whole verse stays clear
+     *   of the fold/fade.
+     * - **Taller than the usable page** → pin its top near the content start so
+     *   the reader starts at line one; word-level following then scrolls through it.
      *
      * The chapter-opening basmalah uses this same path: it is a short list item
      * that fits, so it rests on the verse-style reading line.
@@ -247,12 +259,19 @@ object FocusEngine {
      * A [targetHeightPx] of 0 (height not yet measured) is treated as "tall" and
      * pinned to the top — the safe default that always shows the opening line.
      */
-    fun anchorOffsetPx(viewportHeightPx: Int, topGuardPx: Int, targetHeightPx: Int): Int {
-        val usable = usable(viewportHeightPx, topGuardPx)
+    fun anchorOffsetPx(
+        viewportHeightPx: Int,
+        topGuardPx: Int,
+        targetHeightPx: Int,
+        bottomGuardPx: Int = 0,
+    ): Int {
+        val usable = usable(viewportHeightPx, topGuardPx, bottomGuardPx)
         val fits = targetHeightPx in 1..usable
         return if (fits) {
             val restingTop = topGuardPx + usable * FIT_TOP_MARGIN_FRACTION
-            val highestFullyVisibleTop = (viewportHeightPx - targetHeightPx).coerceAtLeast(topGuardPx)
+            // Keep the verse's bottom at or above the bottom guard.
+            val highestFullyVisibleTop =
+                (viewportHeightPx - bottomGuardPx - targetHeightPx).coerceAtLeast(topGuardPx)
             restingTop.roundToInt().coerceIn(topGuardPx, highestFullyVisibleTop)
         } else {
             (topGuardPx + usable * TALL_TOP_MARGIN_FRACTION).roundToInt()
@@ -273,9 +292,9 @@ object FocusEngine {
      * top/bottom band margins). Positive scrolls content up — same sign as
      * [glideDeltaPx] / `LazyListState.scrollBy`.
      *
-     * Used when a verse is taller than the usable viewport so word-level
-     * follow can lift the active line clear of the bottom fold (player bar /
-     * edge fade) without fighting the verse-level anchor for short verses.
+     * Prefer a **bottom-only** band ([bandTopMarginPx] = 0) while follow is on
+     * for every active word: that lifts lines clear of the player-bar fold
+     * without fighting the verse-level top anchor on short verses.
      */
     fun wordBandDeltaPx(
         wordTopPx: Float,
@@ -297,24 +316,30 @@ object FocusEngine {
      * return-to-verse control and the rail need. When the verse is not currently
      * laid out, [TargetGeometry.isAboveWhenOffscreen] decides the direction.
      */
-    fun placement(target: TargetGeometry, viewportHeightPx: Int, topGuardPx: Int): FocusPlacement {
+    fun placement(
+        target: TargetGeometry,
+        viewportHeightPx: Int,
+        topGuardPx: Int,
+        bottomGuardPx: Int = 0,
+    ): FocusPlacement {
         if (!target.isLaidOut) {
             val zone = if (target.isAboveWhenOffscreen) FocusZone.ABOVE else FocusZone.BELOW
             return FocusPlacement(zone, distancePx = 0)
         }
-        val anchor = anchorOffsetPx(viewportHeightPx, topGuardPx, target.heightPx)
+        val anchor = anchorOffsetPx(viewportHeightPx, topGuardPx, target.heightPx, bottomGuardPx)
         val distance = target.topPx - anchor
         val bottom = target.topPx + target.heightPx
-        val usable = usable(viewportHeightPx, topGuardPx)
+        val usable = usable(viewportHeightPx, topGuardPx, bottomGuardPx)
         val tolerance = (usable * IN_FOCUS_TOLERANCE_FRACTION).roundToInt()
+        val fold = viewportHeightPx - bottomGuardPx
 
         val fitsFullyVisible = target.heightPx in 1..usable &&
             target.topPx >= topGuardPx &&
-            bottom <= viewportHeightPx
+            bottom <= fold
 
         val zone = when {
             bottom <= topGuardPx -> FocusZone.ABOVE
-            target.topPx >= viewportHeightPx -> FocusZone.BELOW
+            target.topPx >= fold -> FocusZone.BELOW
             fitsFullyVisible -> FocusZone.IN_FOCUS
             distance in -tolerance..tolerance -> FocusZone.IN_FOCUS
             distance < 0 -> FocusZone.ABOVE
