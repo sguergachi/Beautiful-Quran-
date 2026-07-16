@@ -402,6 +402,10 @@ fun inkWashAlpha(pos: Float, progress: Float, restingAlpha: Float): Float {
  * Softly dissolves the content at its top and bottom edges, so scrolling
  * feels like ink fading off a single sheet of paper.
  *
+ * Pair with scroll `contentPadding` (or leading/trailing spacers) of at
+ * least [top] / [bottom] so the first and last ink sit clear of the dissolve
+ * at rest; only as the user scrolls does content pass under the soft edge.
+ *
  * [topInset] / [bottomInset] paint opaque paper bands outside the soft
  * gradients — used to lift a fade above chrome that sits on the same sheet
  * (status bar on the reader, floating playback on the cover).

@@ -215,7 +215,8 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 28.dp),
         ) {
-            Spacer(Modifier.height(8.dp))
+            // Match the top dissolve so the chevron/title sit clear at rest.
+            Spacer(Modifier.height(20.dp))
             BackChevron(onBack)
             Spacer(Modifier.height(6.dp))
             Text(
