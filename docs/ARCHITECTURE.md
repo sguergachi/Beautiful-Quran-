@@ -240,6 +240,9 @@ definition of full support live in
 [`docs/ASSISTANT.md`](ASSISTANT.md). Keep that document current whenever an
 Assistant, media-catalog, deep-link, or AppFunctions contract changes.
 
+Continue Listening (`settings.lastSurah` / `lastAyah`) updates only when a
+verse is actually recited — not on open, scroll, or rail jump.
+
 ## UI structure
 
 Four full-screen "sheets", one visible at a time. Navigation is a

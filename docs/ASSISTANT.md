@@ -133,6 +133,8 @@ adb shell am start \
 Deep links also support:
 
 - `beautifulquran://continue` and `beautifulquran://continue?play=true`
+  (last *listened* verse — `settings.lastSurah` / `lastAyah` update only when
+  audio plays, not on open/scroll)
 - `beautifulquran://bookmarks`
 - `beautifulquran://verse/2/255` or
   `beautifulquran://verse?surah=2&ayah=255`

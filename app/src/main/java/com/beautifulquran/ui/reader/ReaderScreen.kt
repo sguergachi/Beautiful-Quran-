@@ -341,9 +341,9 @@ fun ReaderScreen(
     val scrolledAyah = focusController.focusedAyah
     val scrolledAyahPosition = focusController.focusedPosition
 
-    // Keep last-read (and Assistant "bookmark this") on the verse under the
-    // reading line — not only jumps / playback, which previously left scroll
-    // position out of settings and bookmarked the wrong ayah.
+    // Track the verse under the reading line for Assistant "bookmark this".
+    // Continue Listening only advances when audio is actually playing
+    // (see [ReaderViewModel.onAyahBecameActive] / play paths).
     LaunchedEffect(scrolledAyah.value, surahId) {
         val ayah = scrolledAyah.value
         if (ayah >= 1) viewModel.onAyahBecameActive(ayah)
@@ -413,6 +413,7 @@ fun ReaderScreen(
         // jump reads as a pop. Clear in finally once the approach has landed (or
         // a newer jump has superseded this one).
         followEnabled = isThisSurahPlaying
+        // Focus only — Continue Listening updates when audio plays this verse.
         viewModel.onAyahBecameActive(target)
         if (isThisSurahPlaying) viewModel.player.seekToAyah(target)
         try {
@@ -439,9 +440,12 @@ fun ReaderScreen(
     // gets the pre-roll slide; boundary-to-boundary tracking after that stays
     // smooth.
     var followWasEnabled by remember { mutableStateOf(followEnabled) }
-    LaunchedEffect(playbackFocusTarget, followEnabled) {
+    LaunchedEffect(playbackFocusTarget, followEnabled, playerState.isPlaying) {
         val target = playbackFocusTarget ?: return@LaunchedEffect
-        if (target >= 1) viewModel.onAyahBecameActive(target)
+        // Continue Listening advances with the recited verse, not scroll focus.
+        if (target >= 1 && playerState.isPlaying) {
+            viewModel.onListenedAyah(target)
+        }
         if (!followEnabled) {
             followWasEnabled = false
             return@LaunchedEffect
@@ -731,7 +735,7 @@ fun ReaderScreen(
                                     followEnabled = true
                                     if (requestedJumpAyah > 0) {
                                         val selectedAyah = selectedPlaybackAyah()
-                                        viewModel.player.playLoadedFromAyah(selectedAyah)
+                                        viewModel.playLoadedFromAyah(selectedAyah)
                                     } else {
                                         viewModel.player.togglePlayPause()
                                     }
