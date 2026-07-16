@@ -299,10 +299,11 @@ fun ReaderScreen(
     val lastAyahNumber = remember(readerItems) {
         readerItems.count { it is LazyItem.AyahItem }.coerceAtLeast(1)
     }
-    // Reading-band margins match ActiveWordTop/BottomMargin so tall-verse
-    // detection and word-follow share the same usable page above the player bar.
+    // Bottom reading band above the player bar / edge fade. Used as the focus
+    // engine's bottom guard (verse anchors never park lines there) and as the
+    // word-follow band (active words are lifted clear of it). Top band margin
+    // stays 0 so short-verse top anchors are never fought.
     val density = LocalDensity.current
-    val wordBandTopMarginPx = with(density) { ActiveWordTopMargin.toPx() }
     val wordBandBottomMarginPx = with(density) { ActiveWordBottomMargin.toPx() }
     val wordBandBottomGuardPx = with(density) { ActiveWordBottomMargin.roundToPx() }
     // The one authority over where verses sit and how the reader scrolls to
@@ -320,13 +321,14 @@ fun ReaderScreen(
     val scope = rememberCoroutineScope()
     val onKeepWordInView: (() -> Pair<Float, Float>?) -> Unit = remember(
         focusController,
-        wordBandTopMarginPx,
         wordBandBottomMarginPx,
     ) {
         { measure ->
             scope.launch {
                 focusController.keepWordInView(
-                    bandTopMarginPx = wordBandTopMarginPx,
+                    // Bottom-only: lift words clear of the play-bar fold; do not
+                    // pull short verses down from their reading-line anchor.
+                    bandTopMarginPx = 0f,
                     bandBottomMarginPx = wordBandBottomMarginPx,
                     measureInViewport = measure,
                 )
@@ -389,9 +391,6 @@ fun ReaderScreen(
     )
     val activeAyahPlacement = remember(playbackFocusTarget) {
         derivedStateOf { focusController.placementOf(playbackFocusTarget) }
-    }
-    val activeVerseExceedsViewport = remember(playbackFocusTarget) {
-        derivedStateOf { focusController.exceedsViewport(playbackFocusTarget) }
     }
 
     // A fresh query restarts from its first match…
@@ -919,19 +918,16 @@ fun ReaderScreen(
                                 searchQuery = activeQuery,
                                 flashWordPosition = searchFlashWord
                                     ?.takeIf { searchFlashAyah == ayah.number },
-                                // Word-level following is the focus engine's
-                                // secondary constraint: it only takes over inside
-                                // a verse taller than the usable page (viewport
-                                // minus the bottom reading band above the player
-                                // bar). The focus controller then scrolls each
-                                // active word into that band. A verse that fits
-                                // is owned by the verse-level anchor. `isActive`
-                                // short-circuits so only the reciting block
-                                // subscribes.
+                                // Word-level following is always on while this
+                                // verse is the lyric line: bottom-only band
+                                // correction lifts any active word clear of the
+                                // player-bar fold, and no-ops when already in
+                                // band (so short verses keep their top anchor).
+                                // `isActive` short-circuits so only the reciting
+                                // block subscribes.
                                 keepActiveWordInView = followEnabled &&
                                     recitingActive &&
-                                    isActive &&
-                                    activeVerseExceedsViewport.value,
+                                    isActive,
                                 listCoordinates = { listCoordinates },
                                 onKeepWordInView = onKeepWordInView,
                                 bookmarkSide = bookmarkSide,
