@@ -523,8 +523,7 @@ class AppStore {
       // the chapter-opening clip parked by loadSurah.
       if (opts?.pendingJump) {
         await player.playLoadedFromAyah(selected)
-        const surahId = this.state.content.surah.id
-        this.rememberListened(surahId, selected)
+        this.rememberListened(content.surah.id, selected)
         return
       }
       await player.toggle()
