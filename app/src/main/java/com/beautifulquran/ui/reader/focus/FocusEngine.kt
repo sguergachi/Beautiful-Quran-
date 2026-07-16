@@ -268,6 +268,31 @@ object FocusEngine {
         target.topPx - anchorOffsetPx
 
     /**
+     * Secondary lyric constraint: how far to scroll so the active word sits
+     * inside the comfortable reading band (viewport minus [topGuardPx] and the
+     * top/bottom band margins). Positive scrolls content up — same sign as
+     * [glideDeltaPx] / `LazyListState.scrollBy`.
+     *
+     * Used when a verse is taller than the usable viewport so word-level
+     * follow can lift the active line clear of the bottom fold (player bar /
+     * edge fade) without fighting the verse-level anchor for short verses.
+     */
+    fun wordBandDeltaPx(
+        wordTopPx: Float,
+        wordBottomPx: Float,
+        viewportHeightPx: Float,
+        topGuardPx: Float,
+        bandTopMarginPx: Float,
+        bandBottomMarginPx: Float,
+    ): Float {
+        val bandTop = topGuardPx + bandTopMarginPx
+        val bandBottom = viewportHeightPx - bandBottomMarginPx
+        if (wordTopPx < bandTop) return wordTopPx - bandTop
+        if (wordBottomPx > bandBottom) return wordBottomPx - bandBottom
+        return 0f
+    }
+
+    /**
      * Where [target] sits relative to where it *should* sit — the answer the
      * return-to-verse control and the rail need. When the verse is not currently
      * laid out, [TargetGeometry.isAboveWhenOffscreen] decides the direction.

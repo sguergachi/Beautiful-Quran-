@@ -198,9 +198,12 @@ ReaderFocusController ── holds the LazyListState; the sole writer to it
   the pinned verse after the LazyColumn remasures, so the reading line
   stays on the ayah the reader was looking at instead of drifting with the
   resize.
-- Word-level `bringIntoView` (in `AyahBlock`) is the engine's *secondary*
-  constraint: it only engages inside a verse taller than the viewport, so it
-  carries the eye through a long verse without fighting the verse-level anchor.
+- Word-level follow is the engine's *secondary* constraint: when a verse is
+  taller than the usable page (viewport minus the bottom reading band above
+  the player bar), each active word reports its list-viewport bounds and
+  `ReaderFocusController.keepWordInView` scrolls it into that band (same
+  pure `wordBandDeltaPx` math as the web port). This replaces BringIntoView,
+  which does not reliably scroll inside a tall LazyColumn item.
 
 ## Playback
 

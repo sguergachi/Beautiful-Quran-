@@ -3,6 +3,7 @@ package com.beautifulquran.ui.reader.focus
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
@@ -58,6 +59,13 @@ class ReaderFocusController internal constructor(
     internal var topGuardPx: Int = 0
 
     /**
+     * Pixels reserved at the bottom of the list viewport for the soft edge
+     * fade / reading band above the player bar. Tall-verse detection and
+     * word-band follow both treat this strip as outside the usable page.
+     */
+    internal var bottomGuardPx: Int = 0
+
+    /**
      * Serializes every programmatic scroll. Selector jumps and recitation-follow
      * can fire from sibling `LaunchedEffect`s in the same frame; without this,
      * the second `focus()` cancels the first mid-slide via `MutatorMutex` and
@@ -108,15 +116,57 @@ class ReaderFocusController internal constructor(
         return FocusEngine.placement(geometry, viewportHeight, topGuardPx)
     }
 
-    /** True when [ayahNumber] is currently laid out taller than the viewport, so
-     *  word-level following (not verse-level pinning) should drive its scroll. */
+    /** True when [ayahNumber] is currently laid out taller than the *usable*
+     *  viewport (full height minus top/bottom guards), so word-level following
+     *  (not verse-level pinning) should drive its scroll. The bottom guard is
+     *  the reading band above the player bar — without it, a nearly-full-height
+     *  verse would keep word-follow off while its last lines sit under the fade. */
     fun exceedsViewport(ayahNumber: Int?): Boolean {
         val itemIndex = ayahNumber?.let { itemIndexOfAyah[it] } ?: return false
         val info = listState.layoutInfo
         val viewportHeight = info.viewportSize.height
         if (viewportHeight <= 0) return false
         val visible = info.visibleItemsInfo.firstOrNull { it.index == itemIndex } ?: return false
-        return visible.size > viewportHeight - topGuardPx
+        val usable = (viewportHeight - topGuardPx - bottomGuardPx).coerceAtLeast(1)
+        return visible.size > usable
+    }
+
+    /**
+     * Secondary lyric constraint: scroll so the active word sits inside the
+     * comfortable reading band. Serialized with [focus] so verse glides and
+     * word follow never fight.
+     *
+     * [measureInViewport] is invoked **inside** the lock (and may run again
+     * after a competing scroll finishes) so bounds stay live: top/bottom are
+     * distances from the LazyColumn content-start edge (0 = top of the list
+     * viewport). Return null when the word is not currently laid out.
+     */
+    suspend fun keepWordInView(
+        bandTopMarginPx: Float,
+        bandBottomMarginPx: Float,
+        measureInViewport: () -> Pair<Float, Float>?,
+    ) {
+        focusMutex.withLock {
+            val viewportHeight = listState.layoutInfo.viewportSize.height
+            if (viewportHeight <= 0) return
+            val bounds = measureInViewport() ?: return
+            val delta = FocusEngine.wordBandDeltaPx(
+                wordTopPx = bounds.first,
+                wordBottomPx = bounds.second,
+                viewportHeightPx = viewportHeight.toFloat(),
+                topGuardPx = topGuardPx.toFloat(),
+                bandTopMarginPx = bandTopMarginPx,
+                bandBottomMarginPx = bandBottomMarginPx,
+            )
+            if (abs(delta) < 0.5f) return
+            listState.animateScrollBy(
+                delta,
+                animationSpec = tween(
+                    durationMillis = WORD_GLIDE_MS,
+                    easing = FastOutSlowInEasing,
+                ),
+            )
+        }
     }
 
     /**
@@ -345,6 +395,10 @@ class ReaderFocusController internal constructor(
         /** Soft recitation-follow / layout-reflow glide duration. Hand-initiated
          *  jumps use [FocusEngine.planJump]'s duration instead. */
         const val GLIDE_MS: Int = 700
+
+        /** Word-band follow duration — short so line changes feel instant but
+         *  still ease (matches the web port's WORD_GLIDE_MS). */
+        const val WORD_GLIDE_MS: Int = 300
     }
 }
 
@@ -361,11 +415,13 @@ fun rememberReaderFocusController(
     ayahNumberByItemIndex: Map<Int, Int>,
     lastAyahNumber: Int,
     topGuardPx: Int = 0,
+    bottomGuardPx: Int = 0,
 ): ReaderFocusController {
     val controller = remember(listState) { ReaderFocusController(listState) }
     controller.itemIndexOfAyah = itemIndexOfAyah
     controller.ayahNumberByItemIndex = ayahNumberByItemIndex
     controller.lastAyahNumber = lastAyahNumber
     controller.topGuardPx = topGuardPx
+    controller.bottomGuardPx = bottomGuardPx
     return controller
 }
