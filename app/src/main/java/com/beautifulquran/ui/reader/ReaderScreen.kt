@@ -768,9 +768,16 @@ fun ReaderScreen(
                 AyahSelectorSide.RIGHT
             }
             val bookmarkChromeAlpha: () -> Float = { topBarAlpha.value }
+            // Soft dissolve heights — list padding matches so surah title /
+            // last ayah sit clear of the edge at rest; scrolling draws under it.
+            val listFadeTop = 32.dp
+            val listFadeBottom = 64.dp
             LazyColumn(
                 state = listState,
-                contentPadding = PaddingValues(top = padding.calculateTopPadding()),
+                contentPadding = PaddingValues(
+                    top = padding.calculateTopPadding() + listFadeTop,
+                    bottom = listFadeBottom,
+                ),
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxHeight()
@@ -805,8 +812,8 @@ fun ReaderScreen(
                     }
                     .verticalFadingEdges(
                         color = MaterialTheme.colorScheme.background,
-                        top = 32.dp,
-                        bottom = 64.dp,
+                        top = listFadeTop,
+                        bottom = listFadeBottom,
                         topInset = statusBarTop,
                     ),
             ) {

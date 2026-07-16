@@ -176,7 +176,12 @@ fun RootViewerScreen(
                             top = 16.dp,
                             bottom = 32.dp,
                         ),
-                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(
+                        start = 24.dp,
+                        end = 24.dp,
+                        top = 16.dp,
+                        bottom = 32.dp,
+                    ),
                 ) {
                     item(key = "word-header") {
                         ui.word?.let { word ->
