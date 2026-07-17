@@ -293,7 +293,9 @@ export function runRepeatFadeOut(
 }
 
 /**
- * Search-hit flash: wash in then fade out, [pulses] times.
+ * Search-hit flash: [runRepeatWashIn] then [runRepeatFadeOut], [pulses] times.
+ * Callers pass a dedicated orange overlay (same classes as the karaoke repeat
+ * layer) so the peel sizes to the glyphs — never a stretched inset box.
  * Overlay may be unmounted after [onDone].
  */
 export function runSearchHitDoubleWash(

@@ -4,13 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Beautiful Quran — a calm, paper-simple Quran reader for Android and the web. Word-by-word highlight synced to the reciter. Free, ad-free, open source.">
   <link rel="icon" href="app/favicon.ico" sizes="48x48" />
   <link rel="icon" href="app/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="app/apple-touch-icon.png" />
   <title>Beautiful Quran</title>
-  <!-- Marks JS as available before first paint, so the letterFadeIn wash
-       (ink-fade.js) can start from upcoming ink without a full-ink flash. -->
-  <script>document.documentElement.classList.add('js');</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Noto+Naskh+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18,141 +16,218 @@
 </head>
 <body>
   <div class="page">
-    <div class="sheet">
-      <header class="hero">
-        <div class="hero-text">
-          <div class="arabic-title">&#1575;&#1604;&#1602;&#1585;&#1570;&#1606; &#1575;&#1604;&#1603;&#1585;&#1610;&#1605;</div>
-          <h1 class="app-title">Beautiful Quran</h1>
-          <p class="subtitle">A calm, paper-simple Quran reader for Android &amp; the web</p>
-        </div>
-
-        <svg class="rosette" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <nav class="top-nav" aria-label="Primary">
+      <a class="nav-brand" href="index.html">
+        <svg class="nav-mark" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <defs>
-            <linearGradient id="gold" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+            <linearGradient id="nav-gold" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
               <stop offset="0" stop-color="var(--gold-deep)"/>
               <stop offset="0.5" stop-color="var(--gold-bright)"/>
               <stop offset="1" stop-color="var(--gold-deep)"/>
             </linearGradient>
           </defs>
-          <g stroke-width="1.6" stroke-linejoin="round" fill="none">
-            <g transform="translate(0.8,0.8)" stroke="var(--emboss-dark)">
-              <path d="M17.47 17.47 L82.53 17.47 L82.53 82.53 L17.47 82.53 Z M50 4 L96 50 L50 96 L4 50 Z"/>
-              <path d="M80.49 62.63 L19.51 62.63 L62.63 19.51 L62.63 80.49 L37.37 19.51 L80.49 37.37 L37.37 80.49 L19.51 37.37 Z"/>
-            </g>
-            <g transform="translate(-0.8,-0.8)" stroke="var(--emboss-light)">
-              <path d="M17.47 17.47 L82.53 17.47 L82.53 82.53 L17.47 82.53 Z M50 4 L96 50 L50 96 L4 50 Z"/>
-              <path d="M80.49 62.63 L19.51 62.63 L62.63 19.51 L62.63 80.49 L37.37 19.51 L80.49 37.37 L37.37 80.49 L19.51 37.37 Z"/>
-            </g>
-            <g stroke="url(#gold)">
-              <path d="M17.47 17.47 L82.53 17.47 L82.53 82.53 L17.47 82.53 Z M50 4 L96 50 L50 96 L4 50 Z"/>
-              <path d="M80.49 62.63 L19.51 62.63 L62.63 19.51 L62.63 80.49 L37.37 19.51 L80.49 37.37 L37.37 80.49 L19.51 37.37 Z"/>
-            </g>
+          <g stroke="url(#nav-gold)" stroke-width="2.2" stroke-linejoin="round" fill="none">
+            <path d="M17.47 17.47 L82.53 17.47 L82.53 82.53 L17.47 82.53 Z M50 4 L96 50 L50 96 L4 50 Z"/>
           </g>
-          <circle cx="50" cy="50" r="3.5" fill="url(#gold)"/>
-          <g fill="url(#gold)">
-            <circle cx="96" cy="50" r="1.8"/>
-            <circle cx="82.53" cy="82.53" r="1.8"/>
-            <circle cx="50" cy="96" r="1.8"/>
-            <circle cx="17.47" cy="82.53" r="1.8"/>
-            <circle cx="4" cy="50" r="1.8"/>
-            <circle cx="17.47" cy="17.47" r="1.8"/>
-            <circle cx="50" cy="4" r="1.8"/>
-            <circle cx="82.53" cy="17.47" r="1.8"/>
-          </g>
+          <circle cx="50" cy="50" r="4" fill="url(#nav-gold)"/>
         </svg>
-      </header>
+        <span>Beautiful Quran</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#screens">Screens</a>
+        <a href="privacy.html">Privacy</a>
+        <a href="https://github.com/sguergachi/Beautiful-Quran-">GitHub</a>
+      </div>
+    </nav>
 
-      <p class="tagline">One sheet of paper. Calm and pure. Butter smooth.</p>
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Android &amp; web</p>
+        <div class="arabic-title" lang="ar" dir="rtl">القرآن الكريم</div>
+        <h1 class="app-title">Beautiful Quran</h1>
+        <p class="hero-lead">
+          One sheet of paper. Every word lights up with the reciter&nbsp;&mdash;
+          like lyrics for the Quran.
+        </p>
+        <p class="hero-sub">
+          No ads, no accounts, no analytics. Just the book, recited, calm and pure.
+        </p>
+        <div class="actions">
+          <a href="app/" class="btn">Open web reader</a>
+          <a href="https://github.com/sguergachi/Beautiful-Quran-/releases/latest" class="btn-secondary">Get the APK</a>
+        </div>
+        <p class="hero-meta">Free · Open source · Offline-first</p>
+      </div>
 
-      <p>
-        Every word lights up in time with the reciter, its English meaning right beneath it &mdash;
-        like lyrics for the Quran. No ads, no accounts, no analytics. Just the book, recited, on one
-        clean sheet of paper.
-      </p>
+      <div class="hero-stage" aria-hidden="false">
+        <figure class="phone-frame phone-frame--hero">
+          <img src="ss4_playing.png" alt="Reader playing with word-by-word highlight" width="1080" height="2400">
+        </figure>
+      </div>
+    </header>
 
-      <ul class="feature-list">
-        <li>Full Quran, Uthmani script (KFGQPC Hafs typeface)</li>
-        <li>Word-by-word highlight synced to audio</li>
-        <li>7 reciters, streamed and cached</li>
-        <li>Word-by-word English gloss + Saheeh International translation</li>
-        <li>Repeat one ayah, a surah, or any range</li>
-        <li>Search English translation within a surah</li>
-        <li>Warm paper &amp; charcoal dark themes</li>
-        <li>All text &amp; timing data offline</li>
+    <section class="ink-demo-section" aria-labelledby="ink-demo-heading">
+      <div class="ink-demo-inner">
+        <p class="section-kicker">The signature feature</p>
+        <h2 id="ink-demo-heading">Words written as they are recited</h2>
+        <p class="section-lead">
+          As the reciter speaks, each Arabic word blooms from the page&nbsp;&mdash;
+          timed to the millisecond, with its English meaning beneath it.
+        </p>
+        <div class="ink-demo" dir="rtl" lang="ar" data-ink-demo>
+          <span class="ink-word">بِسْمِ</span>
+          <span class="ink-word">ٱللَّهِ</span>
+          <span class="ink-word">ٱلرَّحْمَٰنِ</span>
+          <span class="ink-word">ٱلرَّحِيمِ</span>
+        </div>
+        <p class="ink-demo-caption" dir="ltr">
+          In the name of Allah, the Entirely Merciful, the Especially Merciful
+        </p>
+      </div>
+    </section>
+
+    <section id="features" class="features" aria-labelledby="features-heading">
+      <p class="section-kicker">What you get</p>
+      <h2 id="features-heading">Everything you need to read, nothing you don’t</h2>
+      <ul class="feature-grid">
+        <li>
+          <span class="feature-num">01</span>
+          <h3>Word-sync highlight</h3>
+          <p>Karaoke-style Arabic, timed to seven reciters, streamed and cached.</p>
+        </li>
+        <li>
+          <span class="feature-num">02</span>
+          <h3>Uthmani script</h3>
+          <p>Full Quran in KFGQPC Hafs typeface, built for clarity and fidelity.</p>
+        </li>
+        <li>
+          <span class="feature-num">03</span>
+          <h3>Word gloss + translation</h3>
+          <p>English under each word, with Saheeh International beneath the ayah.</p>
+        </li>
+        <li>
+          <span class="feature-num">04</span>
+          <h3>Repeat any range</h3>
+          <p>One ayah, a surah, or a custom span — perfect for memorization.</p>
+        </li>
+        <li>
+          <span class="feature-num">05</span>
+          <h3>Search in translation</h3>
+          <p>Find meaning inside a surah without leaving the page.</p>
+        </li>
+        <li>
+          <span class="feature-num">06</span>
+          <h3>Paper themes</h3>
+          <p>Warm paper and charcoal dark. Offline text and timings always.</p>
+        </li>
       </ul>
+    </section>
 
+    <section id="screens" class="showcase" aria-labelledby="screens-heading">
+      <p class="section-kicker">On the page</p>
+      <h2 id="screens-heading">A quiet interface that stays out of the way</h2>
+      <p class="section-lead">
+        Four flat sheets — bookmarks, chapters, reader, settings.
+        Hierarchy from spacing and ink, never from cards or chrome.
+      </p>
+      <div class="screenshots">
+        <figure>
+          <div class="phone-frame">
+            <img src="ss1_home.png" alt="Home screen showing the surah list and search field" width="1080" height="2400">
+          </div>
+          <figcaption>Chapters</figcaption>
+        </figure>
+        <figure>
+          <div class="phone-frame">
+            <img src="ss2_reader.png" alt="Reader showing Arabic, word gloss, and translation" width="1080" height="2400">
+          </div>
+          <figcaption>Reader</figcaption>
+        </figure>
+        <figure>
+          <div class="phone-frame">
+            <img src="ss4_playing.png" alt="Playback with highlighted words" width="1080" height="2400">
+          </div>
+          <figcaption>Playing</figcaption>
+        </figure>
+        <figure>
+          <div class="phone-frame">
+            <img src="ss3_settings.png" alt="Settings sheet" width="1080" height="2400">
+          </div>
+          <figcaption>Settings</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="modes" aria-labelledby="modes-heading">
+      <p class="section-kicker">Reading modes</p>
+      <h2 id="modes-heading">Read the way that suits you</h2>
+      <div class="mode-grid">
+        <article class="mode">
+          <h3>Arabic &amp; English</h3>
+          <p>
+            Arabic flows right-to-left with the English gloss under each word
+            and the full translation below the ayah.
+          </p>
+        </article>
+        <article class="mode">
+          <h3>English focus</h3>
+          <p>
+            The gloss becomes the primary line and lights word-by-word
+            on the same timings as the recitation.
+          </p>
+        </article>
+        <article class="mode">
+          <h3>Optional extras</h3>
+          <p>
+            Transliteration when you want it. Ayah translation when you don’t.
+            All of it serif, all of it paper.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section class="cta-band" aria-labelledby="cta-heading">
+      <h2 id="cta-heading">Start reading</h2>
+      <p>
+        Open the web reader in your browser, or install the Android APK.
+        Same paper stack, same word-sync, no signup.
+      </p>
       <div class="actions">
         <a href="app/" class="btn">Open web reader</a>
         <a href="https://github.com/sguergachi/Beautiful-Quran-/releases/latest" class="btn-secondary">Get the APK</a>
       </div>
+    </section>
 
-      <p class="web-note">
-        The web reader is the same paper stack as the Android app &mdash; chapters,
-        follow-along highlighting, and settings &mdash; running in your browser.
-      </p>
-
-      <h2>How it works</h2>
-      <p>
-        Open a surah and tap play. As the reciter recites, each Arabic word fades in
-        from the ink of the page &mdash; timed to the millisecond. The English
-        gloss rises beneath it. Skip, repeat, or narrow playback to any ayah range.
-        The paper stays quiet; only the words move.
-      </p>
-
-      <div class="screenshots">
-        <figure>
-          <img src="ss1_home.png" alt="Home screen showing the surah list and search field">
-          <figcaption>Home</figcaption>
-        </figure>
-        <figure>
-          <img src="ss2_reader.png" alt="Reader showing Arabic, word gloss, and translation">
-          <figcaption>Reader</figcaption>
-        </figure>
-        <figure>
-          <img src="ss3_settings.png" alt="Settings sheet">
-          <figcaption>Settings</figcaption>
-        </figure>
-        <figure>
-          <img src="ss4_playing.png" alt="Playback with highlighted words">
-          <figcaption>Playing</figcaption>
-        </figure>
+    <section class="attribution" aria-labelledby="attribution-heading">
+      <h2 id="attribution-heading">Data &amp; attribution</h2>
+      <div class="attribution-list">
+        <p><strong>Quran text (Uthmani) + Saheeh International translation</strong> —
+        via the quran-json project, from Tanzil and Al Quran Cloud · free with attribution</p>
+        <p><strong>Word-by-word gloss + transliteration</strong> —
+        Quran.com dataset · free with attribution</p>
+        <p><strong>Word timing segments</strong> —
+        the quran-align project contributors · CC-BY 4.0</p>
+        <p><strong>Repeat-aware timing segments</strong> —
+        quran.com qdc audio API · free with attribution</p>
+        <p><strong>Recitation audio</strong> —
+        streamed from everyayah.com · rights remain with reciters</p>
+        <p><strong>Arabic typeface</strong> —
+        KFGQPC HAFS Uthmanic Script, King Fahd Complex · free redistribution</p>
       </div>
+    </section>
 
-      <h2>Reading modes</h2>
-      <p>
-        <strong>Arabic &amp; English</strong> &mdash; Arabic flows right-to-left with
-        the English gloss under each word; the flowing translation below.
-      </p>
-      <p>
-        <strong>English</strong> &mdash; the gloss becomes the primary line, lighting
-        word-by-word on the same timings.
-      </p>
-      <p>Optional transliteration. Optional ayah translation. All of it serif, all of it paper.</p>
-
-      <h2>Data &amp; attribution</h2>
-      <div class="attribution">
-        <p><strong>Quran text (Uthmani) + Saheeh International translation</strong> &mdash;
-        via the quran-json project, from Tanzil and Al Quran Cloud &middot; free with attribution</p>
-        <p><strong>Word-by-word gloss + transliteration</strong> &mdash;
-        Quran.com dataset &middot; free with attribution</p>
-        <p><strong>Word timing segments</strong> &mdash;
-        the quran-align project contributors &middot; CC-BY 4.0</p>
-        <p><strong>Repeat-aware timing segments</strong> &mdash;
-        quran.com qdc audio API &middot; free with attribution</p>
-        <p><strong>Recitation audio</strong> &mdash;
-        streamed from everyayah.com &middot; rights remain with reciters</p>
-        <p><strong>Arabic typeface</strong> &mdash;
-        KFGQPC HAFS Uthmanic Script, King Fahd Complex &middot; free redistribution</p>
-      </div>
-
+    <footer class="site-footer">
       <div class="footer-links">
         <a href="app/">Web reader</a>
         <a href="privacy.html">Privacy policy</a>
         <a href="https://github.com/sguergachi/Beautiful-Quran-">GitHub</a>
+        <a href="https://github.com/sguergachi/Beautiful-Quran-/releases/latest">APK</a>
       </div>
-    </div>
-    <div class="footer-note">Beautiful Quran &middot; free, ad-free, open source</div>
+      <p class="footer-note">Beautiful Quran · free, ad-free, open source</p>
+    </footer>
   </div>
+
   <script src="ink-fade.js"></script>
   <script src="reveal.js"></script>
 </body>

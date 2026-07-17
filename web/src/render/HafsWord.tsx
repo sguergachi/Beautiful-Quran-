@@ -53,6 +53,7 @@ export function HafsWord({
   const prevState = useRef(ink.state)
   const revealedOnEntry = useRef(false)
   const prevRepeat = useRef(false)
+  /** Orange/search overlays only while needed — not for every idle word. */
   const [repeatMounted, setRepeatMounted] = useState(ink.repeat)
   const [flashMounted, setFlashMounted] = useState(searchFlash)
   const tuning = getTuning()
@@ -62,6 +63,12 @@ export function HafsWord({
   if (ink.repeat && !repeatMounted) setRepeatMounted(true)
   if (searchFlash && !flashMounted) setFlashMounted(true)
 
+  /*
+   * Paper-cover bloom on Active entry (Android shapedWordBloom).
+   * useLayoutEffect so progress-0 lands before paint; peel uses transform
+   * scaleX (not per-frame mask-image). Snap-clear on leave to avoid a solid
+   * paper flash after handoff.
+   */
   useLayoutEffect(() => {
     const cover = coverRef.current
     if (!cover) return
@@ -142,6 +149,7 @@ export function HafsWord({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ink.repeat, repeatMounted])
 
+  // Search-hit pulse: mount overlay only while flashing.
   useLayoutEffect(() => {
     if (!flashMounted) return
     if (!searchFlash) {
