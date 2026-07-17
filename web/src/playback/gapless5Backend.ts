@@ -1,10 +1,18 @@
 /**
- * Developer-only transport: Gapless-5 (HTML5 Audio + WebAudio hybrid) for A/B
- * testing seamless verse joins. Position is per-track ms — the same contract
- * HighlightEngine already consumes from the default dual-element path.
+ * Developer-only transport: Gapless-5 for A/B testing seamless verse joins.
+ * Position is per-track ms — the same contract HighlightEngine already consumes
+ * from the default dual-element path.
  *
  * Loaded dynamically so unit tests / cold boot never touch `window` from the
  * UMD package until the flag is on in a real browser.
+ *
+ * Important Gapless-5 constraints we work around:
+ * - Its HTML5 blob path does `audio.srcObject = blob`, which modern browsers
+ *   reject (MediaStream/MediaSourceHandle only). We disable HTML5 Audio and
+ *   use WebAudio-only (`decodeAudioData`), which is also the gapless path.
+ * - Never pass `blob:` object URLs — only remote HTTPS. Prefetch still warms
+ *   the HTTP cache so XHR/decode is fast.
+ * - Never block play on full-surah fetch; loadLimit keeps a small window warm.
  */
 import type { AudioPrefetcher } from './audioPrefetch'
 import type { PlaylistItem } from './playlistPlan'
@@ -13,7 +21,7 @@ import type { PlaylistItem } from './playlistPlan'
 const JOIN_CROSSFADE_MS = 32
 
 /** Keep a small decoded window warm without holding a whole surah in PCM. */
-const LOAD_LIMIT = 4
+const LOAD_LIMIT = 5
 
 export interface Gapless5BackendHandlers {
   onTime(positionMs: number, durationMs: number, index: number): void
@@ -29,8 +37,9 @@ export interface Gapless5BackendHandlers {
 interface Gapless5Player {
   loop: boolean
   singleMode: boolean
+  context: { resume: () => Promise<void>; state: string } | null
   ontimeupdate: (ms: number, index: number) => void
-  onplay: (path: string) => void
+  onplay: (path: string, analyser?: object) => void
   onpause: (path: string) => void
   onstop: (path: string) => void
   onnext: (from: string, to: string) => void
@@ -52,6 +61,7 @@ interface Gapless5Player {
   currentLength(): number
   getIndex(): number
   isPlaying(): boolean
+  totalTracks(): number
 }
 
 export class Gapless5Backend {
@@ -60,8 +70,17 @@ export class Gapless5Backend {
   private lastSrcsKey = ''
   private disposed = false
   private ready: Promise<void> | null = null
+  /**
+   * While we are driving play/goto/sync ourselves, ignore library pause/stop
+   * callbacks so a track teardown cannot clear the controller's play intent.
+   */
+  private suppressPause = 0
 
   constructor(private readonly handlers: Gapless5BackendHandlers) {}
+
+  isReady(): boolean {
+    return this.g5 != null && !this.disposed
+  }
 
   /** Lazy-import and construct the player once per enable session. */
   ensureReady(): Promise<void> {
@@ -74,18 +93,29 @@ export class Gapless5Backend {
   private async boot(): Promise<void> {
     const mod = await import('@regosen/gapless-5')
     if (this.disposed) return
-    const Gapless5 = mod.Gapless5
+    // UMD interop: Vite may surface the class on .Gapless5 or .default.
+    const Gapless5Ctor = (mod.Gapless5 ??
+      (mod as unknown as { default?: unknown }).default) as
+      | (new (opts: Record<string, unknown>) => Gapless5Player)
+      | undefined
+    if (typeof Gapless5Ctor !== 'function') {
+      throw new Error('Gapless-5 module did not export Gapless5')
+    }
     const CrossfadeShape = mod.CrossfadeShape
-    const player = new Gapless5({
+    const player = new Gapless5Ctor({
+      // WebAudio-only: Gapless-5's HTML5 blob path sets srcObject to a Blob,
+      // which throws in Chromium/WebKit ("not of type MediaStream"). Remote
+      // HTTPS + decodeAudioData is the reliable gapless path (everyayah CORS
+      // allows the XHR). First ayah waits on decode; joins are sample-accurate.
       useWebAudio: true,
-      useHTML5Audio: true,
+      useHTML5Audio: false,
       loadLimit: LOAD_LIMIT,
       crossfade: JOIN_CROSSFADE_MS,
-      crossfadeShape: CrossfadeShape.EqualPower,
+      crossfadeShape: CrossfadeShape?.EqualPower ?? 3,
       shuffleButton: false,
       loop: false,
       singleMode: false,
-    }) as unknown as Gapless5Player
+    })
 
     player.ontimeupdate = (ms, index) => {
       this.handlers.onTime(
@@ -95,8 +125,14 @@ export class Gapless5Backend {
       )
     }
     player.onplay = () => this.handlers.onPlay()
-    player.onpause = () => this.handlers.onPause()
-    player.onstop = () => this.handlers.onPause()
+    player.onpause = () => {
+      if (this.suppressPause > 0) return
+      this.handlers.onPause()
+    }
+    player.onstop = () => {
+      if (this.suppressPause > 0) return
+      this.handlers.onPause()
+    }
     player.onnext = () => this.handlers.onIndex(player.getIndex())
     player.onprev = () => this.handlers.onIndex(player.getIndex())
     player.onfinishedall = () => this.handlers.onFinishedAll()
@@ -116,34 +152,47 @@ export class Gapless5Backend {
   }
 
   /**
-   * Replace the track list with resolved (preferably blob) URLs aligned to
-   * [items] order. No-ops when the resolved list is unchanged.
+   * Replace the track list with remote HTTPS URLs only.
+   * [prefetcher] is unused for src selection (blob: URLs break Gapless-5) but
+   * kept so the caller can still warm the HTTP cache in parallel.
    */
-  async syncPlaylist(
-    items: PlaylistItem[],
-    prefetcher: AudioPrefetcher,
-  ): Promise<void> {
-    await this.ensureReady()
+  syncPlaylist(items: PlaylistItem[], _prefetcher: AudioPrefetcher): void {
     const player = this.g5
     if (!player || this.disposed) return
 
-    const gen = ++this.loadGen
-    const srcs: string[] = []
-    for (const item of items) {
-      const src = (await prefetcher.ensure(item.url)) ?? item.url
-      if (gen !== this.loadGen || this.disposed) return
-      srcs.push(src)
-    }
+    // Never hand Gapless-5 blob: object URLs — its HTML5 path assigns them to
+    // srcObject and throws. WebAudio-only + HTTPS avoids that entirely.
+    const srcs = items.map((item) => item.url)
     const key = srcs.join('\0')
-    if (key === this.lastSrcsKey && player.getIndex() >= 0) return
+    if (key === this.lastSrcsKey && player.totalTracks() === srcs.length) return
 
-    this.lastSrcsKey = key
-    player.removeAllTracks(true)
-    for (const src of srcs) player.addTrack(src)
+    this.withSuppressedPause(() => {
+      this.lastSrcsKey = key
+      player.removeAllTracks(true)
+      for (const src of srcs) player.addTrack(src)
+    })
+  }
+
+  /** Unlock AudioContext on the user-gesture stack when possible. */
+  async resumeContext(): Promise<void> {
+    const ctx = this.g5?.context
+    if (!ctx || ctx.state === 'running') return
+    try {
+      await ctx.resume()
+    } catch {
+      // Autoplay policy — play() will try again after the next gesture.
+    }
   }
 
   goto(index: number, autoplay: boolean): void {
-    this.g5?.gotoTrack(index, autoplay)
+    const player = this.g5
+    if (!player) return
+    this.withSuppressedPause(() => {
+      player.gotoTrack(index, autoplay)
+      // gotoTrack only plays when forcePlay is set; re-assert play so a
+      // same-index re-entry still starts after a prior silent load.
+      if (autoplay) player.play()
+    })
   }
 
   play(): void {
@@ -158,12 +207,14 @@ export class Gapless5Backend {
   clear(): void {
     this.loadGen++
     this.lastSrcsKey = ''
-    try {
-      this.g5?.stop()
-      this.g5?.removeAllTracks(true)
-    } catch {
-      // dispose path — ignore mid-teardown errors
-    }
+    this.withSuppressedPause(() => {
+      try {
+        this.g5?.stop()
+        this.g5?.removeAllTracks(true)
+      } catch {
+        // dispose path — ignore mid-teardown errors
+      }
+    })
   }
 
   seekMs(ms: number): void {
@@ -211,5 +262,14 @@ export class Gapless5Backend {
     this.clear()
     this.g5 = null
     this.ready = null
+  }
+
+  private withSuppressedPause(fn: () => void): void {
+    this.suppressPause++
+    try {
+      fn()
+    } finally {
+      this.suppressPause--
+    }
   }
 }
