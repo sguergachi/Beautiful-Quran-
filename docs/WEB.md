@@ -323,6 +323,14 @@ remains a later polish if joining artifacts appear.
 Repeat orange wash: second overlay on the same wash curve; dissolve when
 the repeat chain releases (`InkEngine` + `REPEAT_HIGHLIGHTING.md`).
 
+Fresh-ink glint (Nightfall only): a third overlay twin in white gold
+(`--glint`, defined only on `[data-theme='dark']`) that washes in alongside a
+genuinely new word's first-pass ink — same duration, easing, and directional
+mask — then dissolves to plain recited ink over `glintFadeMs` (1 s) once the
+voice moves on. Gate: `InkEngine.glinting` (word half) × `glintEnabled()` in
+`render/inkWash.ts` (theme half). Repeats and startRevealed re-entries never
+glint. Same policy and color as Android (`QuranAccents.glintInk`).
+
 ## 9. UI surface (paper metaphor)
 
 Three sheets, hand-rolled paper stack (no router chrome):

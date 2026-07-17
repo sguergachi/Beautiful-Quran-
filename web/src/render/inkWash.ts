@@ -277,8 +277,19 @@ export function runOpacityReveal(
 }
 
 /**
- * Orange repeat wash-in: directional ink-engine mask (restingAlpha 0) over the
- * orange overlay, then clear the mask so full orange holds.
+ * Theme half of the fresh-ink glint gate (the word half is
+ * `InkEngine.glinting`): the white-gold first-gloss sheen is a Nightfall-only
+ * signature, keyed off the `--glint` accent that only `[data-theme='dark']`
+ * defines in styles.css.
+ */
+export function glintEnabled(): boolean {
+  return document.documentElement.getAttribute('data-theme') === 'dark'
+}
+
+/**
+ * Tinted overlay wash-in (orange repeat, white-gold glint): directional
+ * ink-engine mask (restingAlpha 0) over the overlay, then clear the mask so
+ * the full tint holds.
  */
 export function runRepeatWashIn(
   el: HTMLElement,
@@ -319,6 +330,31 @@ export function runRepeatFadeOut(
   applyMask(el, 'none')
   return runWash(
     t.repeatFadeOutMs,
+    sweepEase(),
+    cubicBezierEase,
+    (_p, eased) => {
+      el.style.opacity = String(1 - eased)
+    },
+    () => {
+      el.style.opacity = '0'
+      onDone?.()
+    },
+  )
+}
+
+/**
+ * Fresh-ink glint dissolve: clear the wash mask, then fade the white-gold
+ * overlay to 0 over [InkTuning.glintFadeMs] with the ink sweep easing — the
+ * sheen drying back to plain recited ink.
+ */
+export function runGlintFadeOut(
+  el: HTMLElement,
+  onDone?: () => void,
+): () => void {
+  const t = getTuning()
+  applyMask(el, 'none')
+  return runWash(
+    t.glintFadeMs,
     sweepEase(),
     cubicBezierEase,
     (_p, eased) => {

@@ -154,7 +154,11 @@ Two themes, both "paper":
   muted gold `#B8901C` reserved for Quranic ornament (ayah marks, surah
   numbers, the ۞).
 - **Nightfall**: near-black charcoal `#0A0B0C`, parchment ink `#E8E2D5`,
-  soft green `#7FB8A4`, warmer gold `#D9B44A`.
+  soft green `#7FB8A4`, warmer gold `#D9B44A`. Nightfall alone adds a
+  **fresh-ink glint** `#F8E9BE`: a newly read word's ink lands white-gold —
+  riding the same letter sweep, never a separate motion — and dries back to
+  parchment over 1 s. It is ink catching light, not a glow effect: no blur,
+  no shadow, just a warmer tint that cools.
 - **Royal green**: deep green `#062C24`, parchment ink `#E8E2D5`,
   soft green `#7FB8A4`, warmer gold `#D9B44A`.
 
