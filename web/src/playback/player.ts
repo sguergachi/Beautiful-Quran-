@@ -17,10 +17,7 @@ import {
 } from '../data/models'
 import { BASMALAH_PLAYLIST_AYAH, surahOpensWithBasmalahPreface } from '../domain/Basmalah'
 import { AudioPrefetcher } from './audioPrefetch'
-import {
-  VERSE_FADE_IN_MS,
-  verseFadeOutMs,
-} from './audioFade'
+import { VERSE_FADE_IN_MS } from './audioFade'
 import { isIOSMediaEnvironment } from './iosMedia'
 import { JoinCoordinator } from './joinCoordinator'
 import {
@@ -350,8 +347,10 @@ export class PlayerController {
 
   /**
    * EveryAyah files carry encoded quiet on both sides. At the measured audible
-   * end, taper the outgoing padded tail before starting the next prepared clip
-   * at its own padded audible start. The normal ended path remains the fallback.
+   * end of the current clip, start the next verse immediately — skip the padded
+   * silence and do not fade-out-then-fade-in (that sequence was the audible gap
+   * between ayahs). Prefer a warm standby promote; otherwise load next early
+   * rather than sitting in silence until natural `ended`.
    */
   private maybeAdvanceAtAudibleEnd() {
     if (this.gaplessAdvancing || !this.state.isPlaying) return
@@ -361,35 +360,33 @@ export class PlayerController {
     const next = this.peekNextIndex({ forStandby: false })
     if (next == null) return
     const nextItem = this.playlist[next]
-    if (!nextItem || !this.joins.boundsFor(nextItem)) return
-    if (this.standby != null && !this.joins.isStandbyReady(next)) return
+    if (!nextItem) return
 
-    const outgoing = this.active
-    const transitionToken = this.playToken
+    // Dual-element: wait only if standby is still loading the wrong index.
+    // Do not require next-clip bounds — seek-to-audible-start is best-effort.
+    if (
+      this.standby != null &&
+      !this.joins.isStandbyReady(next) &&
+      this.prefetcher.isWarm(nextItem.url)
+    ) {
+      // Blob is warm but element not ready — kick prepare and try again next tick.
+      void this.prepareStandby()
+      return
+    }
+
     const fromIndex = this.index
-    const fadeOutMs = verseFadeOutMs(
-      Math.max(0, (outgoing.duration - outgoing.currentTime) * 1_000),
-      this.state.speed,
-    )
     this.gaplessAdvancing = true
     this.prefetcher.pauseWarm()
     void (async () => {
       let advanced = false
       try {
-        outgoing.volume = 1
-        const faded = await this.joins.fade(outgoing, 'out', fadeOutMs)
-        if (!faded || transitionToken !== this.playToken || !this.state.isPlaying) {
-          outgoing.volume = 1
-          return
-        }
-        await this.playIndex(next, true, { fadeIn: true })
-        // playIndex bumps playToken on entry; success is landing on [next] still playing.
+        // Full volume handoff — no sequential fadeOut + fadeIn silence.
+        await this.playIndex(next, true, { fadeIn: false })
         advanced = this.index === next && this.state.isPlaying
       } finally {
-        if (outgoing !== this.active) outgoing.volume = 1
         this.gaplessAdvancing = false
-        // If gapless exited without a successful advance, fall through to the
-        // ordinary ended path so a dropped natural `ended` cannot leave us silent.
+        // If advance failed, fall through so a dropped natural `ended` cannot
+        // leave us silent on the padded tail.
         if (!advanced && this.state.isPlaying && this.index === fromIndex) {
           const ended =
             this.active.ended ||
@@ -958,7 +955,8 @@ export class PlayerController {
     if (nextUrl && !this.prefetcher.isWarm(nextUrl)) {
       this.setBuffering(true)
     }
-    await this.playIndex(next, true)
+    // Full volume — sequential join fades created an audible hole between ayahs.
+    await this.playIndex(next, true, { fadeIn: false })
   }
 
   private updateMediaSession() {
