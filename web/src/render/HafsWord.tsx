@@ -17,6 +17,8 @@ import { InkState, getTuning, startRevealed, type InkWord } from '../ui/reader/I
 import {
   applyMask,
   clearPaperCover,
+  glintEnabled,
+  runGlintFadeOut,
   runPaperCoverWash,
   runRepeatFadeOut,
   runRepeatWashIn,
@@ -50,12 +52,15 @@ export function HafsWord({
   const localRootRef = useRef<HTMLSpanElement>(null)
   const coverRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
+  const glintRef = useRef<HTMLSpanElement>(null)
   const flashRef = useRef<HTMLSpanElement>(null)
   const prevState = useRef(ink.state)
   const revealedOnEntry = useRef(false)
   const prevRepeat = useRef(false)
-  /** Orange/search overlays only while needed — not for every idle word. */
+  const prevGlint = useRef(false)
+  /** Orange/glint/search overlays only while needed — not for every idle word. */
   const [repeatMounted, setRepeatMounted] = useState(ink.repeat)
+  const [glintMounted, setGlintMounted] = useState(false)
   const [flashMounted, setFlashMounted] = useState(searchFlash)
   const tuning = getTuning()
   const upcomingCover = 1 - tuning.upcomingAlpha
@@ -115,10 +120,45 @@ export function HafsWord({
 
     if (!enteredActive) return
 
+    // The same branch that starts the first-pass wash mounts the glint twin
+    // (Nightfall): the white-gold sheen rides this wash, then dries after it.
+    if (glintEnabled()) setGlintMounted(true)
+
     const duration = activeSweepMs ?? t.repeatSweepMs
     return runPaperCoverWash(cover, true, duration, ease, resting)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ink.state, ink.repeat])
+
+  // Fresh-ink glint (Nightfall only, InkEngine.glinting): washes in alongside
+  // the base ink — same duration, same easing, same directional mask — holds
+  // while the word is lit, then dissolves to plain recited ink over
+  // glintFadeMs. Declared after the cover effect so revealedOnEntry is fresh.
+  useLayoutEffect(() => {
+    if (!glintMounted) {
+      prevGlint.current = false
+      return
+    }
+    const overlay = glintRef.current
+    if (!overlay) return
+    const glinting =
+      ink.state === InkState.Active && !ink.repeat && !revealedOnEntry.current
+    const was = prevGlint.current
+    prevGlint.current = glinting
+
+    if (glinting && !was) {
+      const duration = activeSweepMs ?? getTuning().repeatSweepMs
+      return runRepeatWashIn(overlay, true, duration)
+    }
+    if (!glinting && was) {
+      return runGlintFadeOut(overlay, () => setGlintMounted(false))
+    }
+    if (!glinting) {
+      overlay.style.opacity = '0'
+      applyMask(overlay, 'none')
+      setGlintMounted(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ink.state, ink.repeat, glintMounted])
 
   useLayoutEffect(() => {
     if (!repeatMounted) {
@@ -183,6 +223,16 @@ export function HafsWord({
       <span className="hafs-shell">
         <span className="word-ink-slot">
           <span className="hafs-glyph">{word.arabic}</span>
+          {glintMounted ? (
+            <span
+              ref={glintRef}
+              className="hafs-glint-overlay hafs-glyph"
+              aria-hidden="true"
+              style={{ opacity: 0 }}
+            >
+              {word.arabic}
+            </span>
+          ) : null}
           {repeatMounted ? (
             <span
               ref={overlayRef}

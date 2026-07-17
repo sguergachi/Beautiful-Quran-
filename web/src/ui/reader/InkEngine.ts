@@ -25,6 +25,9 @@ export interface InkTuning {
   maxSweepMs: number
   repeatSweepMs: number
   repeatFadeOutMs: number
+  /** Dissolve of the white-gold first-gloss glint (see [glinting]) back to
+   * plain recited ink once the voice moves on to the next word. */
+  glintFadeMs: number
   washFeather: number
   sweepEaseX1: number
   sweepEaseY1: number
@@ -41,6 +44,7 @@ export const DEFAULT_TUNING: InkTuning = {
   maxSweepMs: 8_000,
   repeatSweepMs: 450,
   repeatFadeOutMs: 900,
+  glintFadeMs: 1_000,
   washFeather: 1.6,
   sweepEaseX1: 0.3,
   sweepEaseY1: 0.24,
@@ -120,6 +124,25 @@ export function startRevealed(previous: InkState, current: InkState): boolean {
   return current === InkState.Active && previous === InkState.Recited
 }
 
+/**
+ * Whether the word should wear the fresh-ink glint: the subtle white-gold
+ * sheen a genuinely new word carries while its ink is still wet, dissolving
+ * back to plain recited ink over [InkTuning.glintFadeMs] once the voice moves
+ * on. Themes opt in via the `--glint` accent (Nightfall only — see
+ * `glintEnabled` in render/inkWash); this predicate is the *word* half of the
+ * gate. Only a first-pass Active word glints: a repeat wears the orange wash
+ * instead, and a word re-lit already revealed ([startRevealed] — backward
+ * seek or repeat re-entry) is old ink, not fresh.
+ * Port of Android `InkEngine.glinting`.
+ */
+export function glinting(
+  state: InkState,
+  repeat: boolean,
+  wasStartRevealed: boolean,
+): boolean {
+  return state === InkState.Active && !repeat && !wasStartRevealed
+}
+
 export function prefaceState(isActive: boolean, dimmed: boolean): InkState {
   if (isActive) return InkState.Active
   if (dimmed) return InkState.Upcoming
@@ -168,6 +191,7 @@ export const InkEngine = {
   word,
   sweepMs,
   startRevealed,
+  glinting,
   prefaceState,
   prefaceWashProgress,
   advancePrefaceWashProgress,

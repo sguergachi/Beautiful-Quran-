@@ -8,6 +8,7 @@ import {
   word,
   sweepMs,
   startRevealed,
+  glinting,
   prefaceState,
   prefaceWashProgress,
   advancePrefaceWashProgress,
@@ -140,6 +141,18 @@ describe('InkEngine', () => {
     expect(startRevealed(InkState.Upcoming, InkState.Active)).toBe(false)
     expect(startRevealed(InkState.Recited, InkState.Recited)).toBe(false)
     expect(startRevealed(InkState.Active, InkState.Recited)).toBe(false)
+  })
+
+  it('only a first-pass active word wears the fresh-ink glint', () => {
+    expect(glinting(InkState.Active, false, false)).toBe(true)
+    // A repeat wears the orange wash, never the glint.
+    expect(glinting(InkState.Active, true, false)).toBe(false)
+    // Re-lit already revealed (seek / repeat re-entry): old ink, not fresh.
+    expect(glinting(InkState.Active, false, true)).toBe(false)
+    // Resting states never glint.
+    expect(glinting(InkState.Plain, false, false)).toBe(false)
+    expect(glinting(InkState.Upcoming, false, false)).toBe(false)
+    expect(glinting(InkState.Recited, false, false)).toBe(false)
   })
 
   it('only upcoming ink is faint', () => {

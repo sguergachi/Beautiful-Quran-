@@ -146,14 +146,17 @@ sealed class ShapedWordBloom {
         val feather: Float? = null,
     ) : ShapedWordBloom()
 
-    /** Repeat (orange): shaped glyphs tinted to [color], wash from
-     * [restingAlpha] → 1, then dissolve via [layerAlpha]. */
+    /** Tinted ink (orange repeat, white-gold glint): shaped glyphs tinted to
+     * [color], wash from [restingAlpha] → 1, then dissolve via [layerAlpha].
+     * [feather] overrides the modifier-level feather when set, same as
+     * [InkReveal] — a tinted wash riding a paced sweep must share its edge. */
     data class ColorReveal(
         override val range: IntRange,
         val progress: Float,
         val color: Color,
         val restingAlpha: Float = 0f,
         val layerAlpha: Float = 1f,
+        val feather: Float? = null,
     ) : ShapedWordBloom()
 }
 
@@ -292,7 +295,7 @@ fun Modifier.shapedWordBloom(
                     val p = bloom.progress.coerceIn(0f, 1f)
                     val bounds = path.getBounds()
                     val w = bounds.width
-                    val edge = (w * feather).coerceAtLeast(1f)
+                    val edge = (w * (bloom.feather ?: feather)).coerceAtLeast(1f)
                     val head = p * (w + edge)
                     val washColors = stops.map { t ->
                         val s = inkSmootherstep(t)

@@ -947,13 +947,15 @@ export class PlayerController {
       if (!backend.isReady()) await backend.ensureReady()
       if (token !== this.playToken) return
 
-      // Unlock Web Audio on the same turn as the user gesture when possible.
-      if (autoplay) void backend.resumeContext()
+      // WebAudio-only: unlock the context on the user-gesture stack so later
+      // source.start() after decode still works.
+      if (autoplay) await backend.resumeContext()
+      if (token !== this.playToken) return
 
       backend.syncPlaylist(this.playlist, this.prefetcher)
       backend.applyRepeat(this.state.repeatMode)
       backend.setSpeed(this.state.speed)
-      // Warm current (and let read-ahead fill the rest) without blocking play.
+      // Warm HTTP cache for the XHR decode path (never pass blob: to Gapless-5).
       void this.prefetcher.ensure(item.url)
       this.schedulePrefetch()
 
@@ -977,7 +979,7 @@ export class PlayerController {
         // the library's stop/unload callbacks; those used to abort every start.
         if (token !== this.playToken) return
         backend.goto(i, true)
-        this.setBuffering(false)
+        // Stay in buffering until onPlay — first ayah needs decodeAudioData.
         this.startTick()
         this.prefetcher.resumeWarm()
       } else {
@@ -1064,6 +1066,31 @@ export class PlayerController {
     // Start the rAF position loop immediately so ink stays live even while
     // the media element is still warming (optimistic play intent).
     this.startTick()
+    if (this.gapless5Enabled) {
+      try {
+        if (!this.gapless5) {
+          this.gapless5 = this.createGapless5Backend()
+          await this.gapless5.ensureReady()
+        }
+        if (token !== this.playToken || !this.state.isPlaying) return
+        await this.gapless5.syncPlaylist(this.playlist, this.prefetcher)
+        if (token !== this.playToken || !this.state.isPlaying) return
+        this.gapless5.applyRepeat(this.state.repeatMode)
+        this.gapless5.setSpeed(this.state.speed)
+        this.gapless5.goto(this.index, true)
+        this.setBuffering(false)
+        this.startTick()
+      } catch (e) {
+        if (token !== this.playToken) return
+        this.setBuffering(false)
+        this.stopTick()
+        this.patch({
+          isPlaying: false,
+          error: e instanceof Error ? e.message : 'Playback blocked',
+        })
+      }
+      return
+    }
     try {
       if (this.active.readyState < HAVE_FUTURE_DATA) {
         this.setBuffering(true)
