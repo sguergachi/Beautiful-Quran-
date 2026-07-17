@@ -101,6 +101,7 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
             // Letter-level tajweed pacing of the active sweep — experimental,
             // auditioned here before it ships on (docs/TAJWEED_PACING.md).
             TuningToggle("Tajweed pacing", t.tajweedPacing) {
+                Log.d("InkLabDbg", "toggle tap: tajweedPacing $it (was ${t.tajweedPacing})")
                 InkEngine.tuning = t.copy(tajweedPacing = it)
             }
             TuningSlider("Paced feather", t.pacedFeatherPerLetter, 0.5f..6f) {
@@ -129,7 +130,9 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
     }
 }
 
-/** On/off knob in the panel's quiet-ink idiom — a word, not a switch. */
+/** On/off knob in the panel's quiet-ink idiom — a word, not a switch. The
+ * whole row is the tap target: the value word alone is too small to hit
+ * reliably, and with no ripple a missed tap gives no feedback at all. */
 @Composable
 private fun TuningToggle(
     label: String,
@@ -138,7 +141,10 @@ private fun TuningToggle(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .quietClickable { onChange(!value) }
+            .padding(vertical = 6.dp),
     ) {
         Text(
             text = label,
@@ -154,9 +160,7 @@ private fun TuningToggle(
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             },
-            modifier = Modifier
-                .quietClickable { onChange(!value) }
-                .padding(horizontal = 2.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 2.dp),
         )
     }
 }

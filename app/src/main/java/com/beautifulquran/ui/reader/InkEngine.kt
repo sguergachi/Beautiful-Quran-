@@ -191,11 +191,24 @@ object InkEngine {
      * so letters never smear across the breath gap before the next word.
      */
     fun pacing(arabic: String, activeWord: ActiveWord): TajweedPacing.Curve? {
-        if (!tuning.tajweedPacing) return null
+        if (!tuning.tajweedPacing) {
+            debugLogPacing("gate=off word=$arabic")
+            return null
+        }
         val spokenFraction =
             if (activeWord.durationMs <= 0L) 1f
             else activeWord.spokenMs.toFloat() / activeWord.durationMs
-        return TajweedPacing.curve(arabic, spokenFraction)
+        return TajweedPacing.curve(arabic, spokenFraction).also {
+            debugLogPacing("gate=on word=$arabic curve=${it != null}")
+        }
+    }
+
+    // TEMP DEBUG: deduped gate log for the tajweed-pacing toggle repro.
+    private var lastPacingLog: String? = null
+    private fun debugLogPacing(message: String) {
+        if (message == lastPacingLog) return
+        lastPacingLog = message
+        android.util.Log.d("InkLabDbg", message)
     }
 
     /**
