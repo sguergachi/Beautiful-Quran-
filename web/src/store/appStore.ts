@@ -859,8 +859,7 @@ class AppStore {
 
   /** Restore the chapter playhead displaced by the root viewer's word clip. */
   private async resumeAfterRootViewer(snapshot: { ayah: number; positionMs: number }) {
-    await player.seekToAyah(snapshot.ayah, snapshot.positionMs)
-    await player.play()
+    await player.seekToWordAndPlay(snapshot.ayah, snapshot.positionMs)
   }
 
   private stopWordAudition(pauseIfPlaying: boolean) {
