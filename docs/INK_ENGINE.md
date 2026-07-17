@@ -372,12 +372,12 @@ InkEngine owns that too, as data rather than as animation code:
   `startRevealed(previous, current)` — the rule
   that only a Recited→Active transition skips the reveal sweep —
   `glinting(state, repeat, startRevealed)` — the first-gloss glint rule:
-  only a genuinely new word sweeping in on its first pass (never a repeat,
-  never a word re-lit already revealed) wears the white-gold fresh-ink sheen,
+  a genuinely new word or a new repeat event wears the white-gold sheen
+  (an ordinary already-revealed seek re-entry does not),
   which then dissolves back to plain recited ink over `Tuning.glintFadeMs`
   (1 s). The glint is theme-gated by `QuranAccents.glintInk` (null = off;
-  currently a Nightfall-only signature) and rides the word's existing letter
-  sweep — same progress, same feather — as a tinted overlay (`letterFadeIn`
+  currently a Nightfall-only signature) and rides the active letter or repeat
+  wash — same progress, same feather — as a tinted overlay (`letterFadeIn`
   in gloss modes, a `ShapedWordBloom.ColorReveal` in the shaped
   English/Arabic-only paths), so it adds no new motion, only a warm sheen
   that cools as the ink dries. And

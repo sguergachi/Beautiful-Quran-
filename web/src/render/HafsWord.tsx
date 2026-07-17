@@ -67,6 +67,7 @@ export function HafsWord({
   const interaction = useWordInteraction(onPlay, onHold)
 
   if (ink.repeat && !repeatMounted) setRepeatMounted(true)
+  if (ink.repeat && glintEnabled() && !glintMounted) setGlintMounted(true)
   if (searchFlash && !flashMounted) setFlashMounted(true)
 
   /*
@@ -141,7 +142,7 @@ export function HafsWord({
     const overlay = glintRef.current
     if (!overlay) return
     const glinting =
-      ink.state === InkState.Active && !ink.repeat && !revealedOnEntry.current
+      ink.state === InkState.Active && (ink.repeat || !revealedOnEntry.current)
     const was = prevGlint.current
     prevGlint.current = glinting
 
@@ -223,20 +224,20 @@ export function HafsWord({
       <span className="hafs-shell">
         <span className="word-ink-slot">
           <span className="hafs-glyph">{word.arabic}</span>
-          {glintMounted ? (
+          {repeatMounted ? (
             <span
-              ref={glintRef}
-              className="hafs-glint-overlay hafs-glyph"
+              ref={overlayRef}
+              className="hafs-repeat-overlay hafs-glyph"
               aria-hidden="true"
               style={{ opacity: 0 }}
             >
               {word.arabic}
             </span>
           ) : null}
-          {repeatMounted ? (
+          {glintMounted ? (
             <span
-              ref={overlayRef}
-              className="hafs-repeat-overlay hafs-glyph"
+              ref={glintRef}
+              className="hafs-glint-overlay hafs-glyph"
               aria-hidden="true"
               style={{ opacity: 0 }}
             >

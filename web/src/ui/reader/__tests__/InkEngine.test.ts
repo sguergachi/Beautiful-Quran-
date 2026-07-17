@@ -145,8 +145,9 @@ describe('InkEngine', () => {
 
   it('only a first-pass active word wears the fresh-ink glint', () => {
     expect(glinting(InkState.Active, false, false)).toBe(true)
-    // A repeat wears the orange wash, never the glint.
-    expect(glinting(InkState.Active, true, false)).toBe(false)
+    // Repeats carry the glint over their orange wash, including re-entry.
+    expect(glinting(InkState.Active, true, false)).toBe(true)
+    expect(glinting(InkState.Active, true, true)).toBe(true)
     // Re-lit already revealed (seek / repeat re-entry): old ink, not fresh.
     expect(glinting(InkState.Active, false, true)).toBe(false)
     // Resting states never glint.
