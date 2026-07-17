@@ -33,6 +33,11 @@ export interface Settings {
   playbackSpeed: number
   /** Reveals developer tools (e.g. the Ornaments Lab). Off by default. */
   developerMode: boolean
+  /**
+   * Developer-only: use Gapless-5 (Web Audio hybrid) for verse joins instead
+   * of the dual-`<audio>` transport. Off by default — experimental A/B.
+   */
+  gapless5Playback: boolean
   /** Developer-selectable Chapters bookmark treatment. */
   homeBookmarkStyle: HomeBookmarkStyle
   /** Developer-only: ink-brush circle style around selected enums. */
@@ -52,6 +57,7 @@ const DEFAULTS: Settings = {
   lastAyah: 1,
   playbackSpeed: 1,
   developerMode: false,
+  gapless5Playback: false,
   homeBookmarkStyle: 'top_bound',
   brushCircleStyle: 'baseline',
 }
@@ -75,6 +81,10 @@ export function normalizeSettings(partial: Partial<Settings> = {}): Settings {
     ...DEFAULTS,
     ...partial,
     fontScale: clampFontScale(partial.fontScale ?? DEFAULTS.fontScale),
+    developerMode: Boolean(partial.developerMode ?? DEFAULTS.developerMode),
+    gapless5Playback: Boolean(
+      partial.gapless5Playback ?? DEFAULTS.gapless5Playback,
+    ),
     homeBookmarkStyle: HOME_BOOKMARK_STYLES.includes(
       partial.homeBookmarkStyle as HomeBookmarkStyle,
     )

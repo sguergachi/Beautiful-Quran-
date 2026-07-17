@@ -13,7 +13,8 @@ export default defineConfig({
   optimizeDeps: {
     // sql.js publishes UMD browser files. Pre-bundling creates the ESM default
     // export Vite's dev server needs instead of serving that raw UMD file.
-    include: ['sql.js'],
+    // Gapless-5 is the same class of UMD package (developer-flag transport).
+    include: ['sql.js', '@regosen/gapless-5'],
   },
   test: {
     globals: true,

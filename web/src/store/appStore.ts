@@ -302,6 +302,9 @@ class AppStore {
         loadProgress: 1,
       })
       player.setSpeed(this.state.settings.playbackSpeed)
+      if (this.state.settings.gapless5Playback) {
+        void player.setGapless5Enabled(true)
+      }
       // sql.js is main-thread only: warm one chapter per idle slice instead of
       // freezing the opening ceremony with a single whole-Quran object scan.
       void QuranRepository.preloadAllSurahContent(this.state.settings.lastSurah)
@@ -329,6 +332,9 @@ class AppStore {
     saveSettings(settings)
     this.set({ settings })
     if (patch.playbackSpeed != null) player.setSpeed(patch.playbackSpeed)
+    if (patch.gapless5Playback != null) {
+      void player.setGapless5Enabled(settings.gapless5Playback)
+    }
     if (patch.reciterId != null && this.state.content) {
       const reciter = this.state.reciters.find((r) => r.id === patch.reciterId)
       if (reciter) this.reloadTimingsAndReciter(reciter)
