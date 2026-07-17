@@ -43,6 +43,10 @@ data class ActiveWord(
     val ayah: Int,
     val wordPosition: Int,
     val durationMs: Long,
+    /** Voiced span of the word (segment end − start), without the karaoke
+     * hold across the gap to the next word. Tajweed pacing distributes the
+     * letters over this share of [durationMs] and rests for the remainder. */
+    val spokenMs: Long = durationMs,
     val isRepeat: Boolean = false,
     val highWater: Int = wordPosition,
     /** First word of the active repeat chain: while repeating, words
@@ -183,6 +187,8 @@ class ReaderViewModel(
                     // Karaoke hold lifetime — sweep finishes as the next word
                     // lights, not merely when this segment's endMs elapses.
                     durationMs = (it.holdEndMs - it.startMs).coerceAtLeast(0L),
+                    spokenMs = (it.endMs - it.startMs)
+                        .coerceIn(0L, (it.holdEndMs - it.startMs).coerceAtLeast(0L)),
                     isRepeat = it.isRepeat,
                     highWater = it.highWater,
                     repeatStart = it.repeatStart,

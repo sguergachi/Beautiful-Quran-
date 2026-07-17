@@ -395,7 +395,9 @@ InkEngine owns that too, as data rather than as animation code:
 Settings → Developer (triple-tap the logo) → **Ink Lab overlay** floats a
 collapsible slider panel over the reader (`ui/reader/InkLabPanel.kt`), bound
 directly to `InkEngine.tuning`: upcoming ink, fade timings, sweep clamps,
-repeat timings, wash feather. Edits are session-only and never persisted —
+repeat timings, wash feather, and the experimental tajweed-pacing toggle with
+its paced-feather knob (see [TAJWEED_PACING.md](TAJWEED_PACING.md)). Edits are
+session-only and never persisted —
 shipped behavior cannot drift; **Log values** dumps the current `Tuning` to
 Logcat (tag `InkLab`) so a tuned feel can be transcribed into the defaults in
 InkEngine.kt.
