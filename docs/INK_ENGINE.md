@@ -378,9 +378,10 @@ InkEngine owns that too, as data rather than as animation code:
   (1 s). The glint is theme-gated by `QuranAccents.glintInk` (null = off;
   currently a Nightfall-only signature) and rides the active letter or repeat
   wash — same progress, same feather — as a tinted overlay (`letterFadeIn`
-  in gloss modes, a `ShapedWordBloom.ColorReveal` in the shaped
-  English/Arabic-only paths), so it adds no new motion, only a warm sheen
-  that cools as the ink dries. And
+  on word units, `ColorReveal` on shaped lines). Android adds a restrained
+  white-gold halo outside those glyph outlines so the sheen remains legible
+  against Nightfall without turning into a hard or whole-word glow, so it adds
+  no new motion—only a warm sheen that cools as the ink dries. And
   `prefaceState(isActive, dimmed)` / `prefaceWashProgress(positionMs, durationMs)`
   for the surah-header basmalah VectorDrawable (Active during the Al-Fatihah
   1:1 lead-in clip, with an RTL `letterFadeIn` wash paced by the clip clock and

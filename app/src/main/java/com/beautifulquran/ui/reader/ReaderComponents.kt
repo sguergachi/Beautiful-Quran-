@@ -56,6 +56,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -565,6 +566,19 @@ private fun HighlightLayeredText(
         if (glintInk != null && highlight.showGlintLayer) {
             Text(
                 text = text,
+                style = style.copy(
+                    shadow = Shadow(
+                        color = glintInk.copy(alpha = 0.82f),
+                        blurRadius = 12f,
+                    ),
+                ),
+                color = glintInk.copy(alpha = 0.46f),
+                modifier = Modifier
+                    .matchParentSize()
+                    .then(highlight.glintLayer(rtl)),
+            )
+            Text(
+                text = text,
                 style = style,
                 color = glintInk,
                 modifier = Modifier
@@ -924,6 +938,7 @@ private fun ResponsiveEnglishAyah(
                                 color = glintInk,
                                 restingAlpha = 0f,
                                 layerAlpha = glint.value,
+                                glowAlpha = 0.72f,
                             )
                         }
                     }
@@ -1176,6 +1191,7 @@ private fun ResponsiveHafsAyah(
                                 color = glintInk,
                                 restingAlpha = 0f,
                                 layerAlpha = glint.value,
+                                glowAlpha = 0.72f,
                                 feather = if (index == activeIndex) {
                                     pacing?.let { InkEngine.pacedFeather(it.letterCount) }
                                 } else {
