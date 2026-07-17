@@ -134,6 +134,7 @@ export function WordUnit({
   const interaction = useWordInteraction(onPlay, onHold)
 
   if (ink.repeat && !repeatMounted) setRepeatMounted(true)
+  if (ink.repeat && glintEnabled() && !glintMounted) setGlintMounted(true)
   if (searchFlash && !flashMounted) setFlashMounted(true)
 
   /*
@@ -285,7 +286,7 @@ export function WordUnit({
     const overlay = glintRef.current
     if (!overlay) return
     const glinting =
-      ink.state === InkState.Active && !ink.repeat && !revealedOnEntry.current
+      ink.state === InkState.Active && (ink.repeat || !revealedOnEntry.current)
     const was = prevGlint.current
     prevGlint.current = glinting
 
@@ -428,20 +429,20 @@ export function WordUnit({
           >
             {label}
           </span>
-          {glintMounted ? (
+          {repeatMounted ? (
             <span
-              ref={glintRef}
-              className={`word-glint-overlay ${baseClass}`}
+              ref={overlayRef}
+              className={`word-repeat-overlay ${baseClass}`}
               aria-hidden="true"
               style={{ opacity: 0 }}
             >
               {label}
             </span>
           ) : null}
-          {repeatMounted ? (
+          {glintMounted ? (
             <span
-              ref={overlayRef}
-              className={`word-repeat-overlay ${baseClass}`}
+              ref={glintRef}
+              className={`word-glint-overlay ${baseClass}`}
               aria-hidden="true"
               style={{ opacity: 0 }}
             >
