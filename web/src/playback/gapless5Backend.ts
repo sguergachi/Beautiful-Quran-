@@ -17,9 +17,6 @@
 import type { AudioPrefetcher } from './audioPrefetch'
 import type { PlaylistItem } from './playlistPlan'
 
-/** Short equal-power overlap to hide encoder-edge clicks between ayah MP3s. */
-const JOIN_CROSSFADE_MS = 32
-
 /** Keep a small decoded window warm without holding a whole surah in PCM. */
 const LOAD_LIMIT = 5
 
@@ -101,17 +98,16 @@ export class Gapless5Backend {
     if (typeof Gapless5Ctor !== 'function') {
       throw new Error('Gapless-5 module did not export Gapless5')
     }
-    const CrossfadeShape = mod.CrossfadeShape
     const player = new Gapless5Ctor({
       // WebAudio-only: Gapless-5's HTML5 blob path sets srcObject to a Blob,
       // which throws in Chromium/WebKit ("not of type MediaStream"). Remote
       // HTTPS + decodeAudioData is the reliable gapless path (everyayah CORS
       // allows the XHR). First ayah waits on decode; joins are sample-accurate.
+      // No crossfade — abut verses at full level (recitation should not blend).
       useWebAudio: true,
       useHTML5Audio: false,
       loadLimit: LOAD_LIMIT,
-      crossfade: JOIN_CROSSFADE_MS,
-      crossfadeShape: CrossfadeShape?.EqualPower ?? 3,
+      crossfade: 0,
       shuffleButton: false,
       loop: false,
       singleMode: false,
@@ -147,7 +143,7 @@ export class Gapless5Backend {
     }
     player.onloadstart = () => this.handlers.onBuffering(true)
     player.onload = () => this.handlers.onBuffering(false)
-    player.setCrossfade(JOIN_CROSSFADE_MS)
+    player.setCrossfade(0)
     this.g5 = player
   }
 
