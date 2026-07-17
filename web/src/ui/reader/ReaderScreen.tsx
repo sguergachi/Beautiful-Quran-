@@ -670,12 +670,19 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
       if (event.repeat && action.type !== 'jump') return
       event.preventDefault()
       if (action.type === 'jump') jumpToAyah(action.ayah)
-      else if (action.type === 'playPause') togglePlayback()
+      else if (action.type === 'playPause') {
+        // Words are focusable so Enter can audition one. Space belongs to the
+        // reader transport, even if the last Tab/click left a word focused.
+        if (event.target instanceof HTMLElement) event.target.blur()
+        event.stopPropagation()
+        togglePlayback()
+      }
       else if (action.type === 'search') setSearchActive(true)
       else appStore.toggleBookmark(focusedAyah)
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    // Capture before React's word-level key handler can audition the word.
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [content, focusedAyah, isTop, state.rootViewer, togglePlayback])
 
   const closeSearch = () => {
