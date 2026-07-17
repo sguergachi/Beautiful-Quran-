@@ -14,16 +14,13 @@ import {
   type InkWord,
 } from '../ui/reader/InkEngine'
 import { secondaryAlpha, TRANSLITERATION_COLOR_ALPHA } from '../ui/reader/WordHighlight'
-import { cubicBezierEase } from '../ui/theme/Fade'
 import {
-  applyMask,
-  cachedPaperCoverMask,
-  cachedWashMask,
   clearPaperCover,
+  runOpacityReveal,
+  runPaperCoverPeel,
   runRepeatFadeOut,
   runRepeatWashIn,
   runSearchHitDoubleWash,
-  runWash,
 } from './inkWash'
 import { SearchHitFlash } from '../ui/reader/SearchHitFlash'
 import { useWordInteraction } from './useWordInteraction'
@@ -81,7 +78,7 @@ function paintSecondary(
   }
 
   // Arabic path: parent is full opacity; secondary lines carry Upcoming themselves.
-  // Plain/Recited clear inline opacity so CSS global recess can dim inactive ayahs.
+  // Plain/Recited clear inline opacity so the ayah recess veil can sit on top.
   if (ink.state === InkState.Upcoming) {
     const floor = getTuning().upcomingAlpha
     if (gloss) gloss.style.opacity = String(floor)
@@ -134,24 +131,18 @@ export function WordUnit({
   if (searchFlash && !flashMounted) setFlashMounted(true)
 
   /*
-   * Active-entry wash.
+   * Active-entry wash (GPU-friendly).
    *
-   * Arabic: paper-cover bloom (Android shapedWordBloom / HafsWord). Glyphs stay
-   * opaque full ink; Upcoming/recess use a paper cover; Active pulls that cover
-   * back on the smootherstep curve. Never dims Arabic via glyph/element alpha —
-   * semi-transparent Hafs marks look dirty at stroke intersections.
+   * Arabic: paper-cover peel via transform scaleX (Android shapedWordBloom).
+   * Glyphs stay opaque full ink — never glyph alpha (Hafs mark intersections).
    *
-   * English: directional mask on the glyph (letterFadeIn). Latin has no
-   * overlapping mark problem, so opacity + mask stay fine.
+   * English: opacity reveal only (Latin has no overlapping marks). Avoids
+   * per-frame mask-image thrash that forced main-thread paint.
    *
    * useLayoutEffect so progress-0 lands before paint — otherwise the word
    * flashes full ink for a frame then snaps faint when the wash arrives.
    *
-   * While repeating, the base layer stays untouched — orange carries the motion
-   * (Android WordHighlight.baseLayer skips letterFadeIn when repeat).
-   *
-   * Secondary gloss/translit track the same sweep via secondaryAlpha — they
-   * never letter-reveal, but they must not jump to full when Active starts.
+   * While repeating, the base layer stays untouched — orange carries the motion.
    */
   useLayoutEffect(() => {
     const prev = prevState.current
@@ -163,7 +154,6 @@ export function WordUnit({
     }
     prevState.current = ink.state
 
-    const rtl = !englishMode
     const t = getTuning()
     const resting = t.upcomingAlpha
     const ease = {
@@ -173,13 +163,13 @@ export function WordUnit({
       y2: t.sweepEaseY2,
     }
 
-    // ── Arabic: paper cover (never glyph alpha) ──────────────────────────
+    // ── Arabic: paper cover peel (transform) ─────────────────────────────
     if (!englishMode) {
       const cover = coverRef.current
       if (!cover) return
 
       if (ink.state === InkState.Upcoming) {
-        applyMask(cover, 'none')
+        clearPaperCover(cover)
         cover.style.transition = `opacity ${t.recessMs}ms cubic-bezier(0.4, 0, 0.2, 1)`
         cover.style.opacity = String(1 - resting)
         paintSecondary(glossRef.current, translitRef.current, ink, null, false)
@@ -207,49 +197,39 @@ export function WordUnit({
       if (!enteredActive) return
 
       const duration = activeSweepMs ?? t.repeatSweepMs
-      cover.style.transition = 'none'
-      cover.style.opacity = '1'
-      applyMask(cover, cachedPaperCoverMask(0, resting, true, t.washFeather))
       paintSecondary(glossRef.current, translitRef.current, ink, 0, false)
-
-      return runWash(
+      return runPaperCoverPeel(
+        cover,
+        true,
         duration,
         ease,
-        cubicBezierEase,
-        (p, eased) => {
+        (_p, eased) => {
           paintSecondary(glossRef.current, translitRef.current, ink, eased, false)
-          if (p >= 1) {
-            clearPaperCover(cover)
-            paintSecondary(glossRef.current, translitRef.current, ink, 1, false)
-            return
-          }
-          applyMask(cover, cachedPaperCoverMask(eased, resting, true, t.washFeather))
         },
         () => {
-          clearPaperCover(cover)
           paintSecondary(glossRef.current, translitRef.current, ink, 1, false)
         },
       )
     }
 
-    // ── English: glyph mask + parent opacity ─────────────────────────────
+    // ── English: opacity reveal (no mask) ────────────────────────────────
     const el = baseRef.current
     if (!el) return
 
     if (ink.state !== InkState.Active) {
-      applyMask(el, 'none')
+      el.style.removeProperty('opacity')
       paintSecondary(glossRef.current, translitRef.current, ink, null, true)
       return
     }
 
     if (ink.repeat) {
-      applyMask(el, 'none')
+      el.style.removeProperty('opacity')
       paintSecondary(glossRef.current, translitRef.current, ink, null, true)
       return
     }
 
     if (revealedOnEntry.current) {
-      applyMask(el, 'none')
+      el.style.opacity = '1'
       paintSecondary(glossRef.current, translitRef.current, ink, 1, true)
       return
     }
@@ -257,19 +237,17 @@ export function WordUnit({
     if (!enteredActive) return
 
     const duration = activeSweepMs ?? t.repeatSweepMs
-    applyMask(el, cachedWashMask(0, resting, rtl, t.washFeather))
     paintSecondary(glossRef.current, translitRef.current, ink, 0, true)
-
-    return runWash(
+    return runOpacityReveal(
+      el,
+      resting,
+      1,
       duration,
       ease,
-      cubicBezierEase,
       (_p, eased) => {
-        applyMask(el, cachedWashMask(eased, resting, rtl, t.washFeather))
         paintSecondary(glossRef.current, translitRef.current, ink, eased, true)
       },
       () => {
-        applyMask(el, 'none')
         paintSecondary(glossRef.current, translitRef.current, ink, 1, true)
       },
     )
@@ -321,10 +299,10 @@ export function WordUnit({
     if (ink.repeat) {
       // Still in chain from a prior entry — hold full orange, do not restart.
       overlay.style.opacity = '1'
-      applyMask(overlay, 'none')
+      overlay.style.transform = 'none'
     } else {
       overlay.style.opacity = '0'
-      applyMask(overlay, 'none')
+      overlay.style.transform = 'none'
       setRepeatMounted(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

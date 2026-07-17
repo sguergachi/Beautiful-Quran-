@@ -2,9 +2,8 @@
  * Arabic-only word: full-ink glyph + paper-cover bloom.
  *
  * Mirrors Android `ResponsiveHafsAyah` / `shapedWordBloom`: glyphs stay opaque
- * full ink; Upcoming/recess use a paper cover; Active pulls that cover back on
- * the same smootherstep wash as gloss `letterFadeIn`. Never dims via glyph
- * alpha (semi-transparent Hafs marks look dirty).
+ * full ink; Upcoming/recess use a paper cover; Active peels that cover with
+ * compositor-friendly `transform: scaleX` (not per-frame mask-image).
  */
 import {
   useLayoutEffect,
@@ -15,15 +14,12 @@ import {
 } from 'react'
 import type { Word } from '../data/models'
 import { InkState, getTuning, startRevealed, type InkWord } from '../ui/reader/InkEngine'
-import { cubicBezierEase } from '../ui/theme/Fade'
 import {
-  applyMask,
-  cachedPaperCoverMask,
   clearPaperCover,
+  runPaperCoverPeel,
   runRepeatFadeOut,
   runRepeatWashIn,
   runSearchHitDoubleWash,
-  runWash,
 } from './inkWash'
 import { SearchHitFlash } from '../ui/reader/SearchHitFlash'
 import { useWordInteraction } from './useWordInteraction'
@@ -56,7 +52,6 @@ export function HafsWord({
   const flashRef = useRef<HTMLSpanElement>(null)
   const prevState = useRef(ink.state)
   const revealedOnEntry = useRef(false)
-  // false so a word that mounts already in the chain still washes orange in.
   const prevRepeat = useRef(false)
   /** Orange/search overlays only while needed — not for every idle word. */
   const [repeatMounted, setRepeatMounted] = useState(ink.repeat)
@@ -69,16 +64,10 @@ export function HafsWord({
   if (searchFlash && !flashMounted) setFlashMounted(true)
 
   /*
-   * Paper-cover bloom on Active entry (Android shapedWordBloom InkReveal).
-   * useLayoutEffect so progress-0 cover lands before paint — matches Upcoming
-   * cover strength, then peels directionally RTL.
-   *
-   * On Active → Recited/Plain: snap-clear the cover (transition:none). A CSS
-   * opacity fade with the mask already removed painted a solid paper rectangle
-   * over the completed word — the post-handoff flicker.
-   *
-   * Deps are state/position (not the ActiveWord object): mid-word identity
-   * churn must not cancel and restart the wash.
+   * Paper-cover bloom on Active entry (Android shapedWordBloom).
+   * useLayoutEffect so progress-0 lands before paint; peel uses transform
+   * scaleX (not per-frame mask-image). Snap-clear on leave to avoid a solid
+   * paper flash after handoff.
    */
   useLayoutEffect(() => {
     const cover = coverRef.current
@@ -102,8 +91,7 @@ export function HafsWord({
     }
 
     if (ink.state === InkState.Upcoming) {
-      applyMask(cover, 'none')
-      // Recess soft-dim: ease the cover on over recessMs (play-start / leave).
+      clearPaperCover(cover)
       cover.style.transition = `opacity ${t.recessMs}ms cubic-bezier(0.4, 0, 0.2, 1)`
       cover.style.opacity = String(1 - resting)
       return
@@ -114,7 +102,6 @@ export function HafsWord({
       return
     }
 
-    // Repeat chain: orange overlay carries the motion (Android skips InkReveal).
     if (ink.repeat) {
       clearPaperCover(cover)
       return
@@ -125,36 +112,13 @@ export function HafsWord({
       return
     }
 
-    // Still Active after a layout echo (same word) — do not restart.
     if (!enteredActive) return
 
     const duration = activeSweepMs ?? t.repeatSweepMs
-    cover.style.transition = 'none'
-    cover.style.opacity = '1'
-    applyMask(cover, cachedPaperCoverMask(0, resting, true, t.washFeather))
-
-    return runWash(
-      duration,
-      ease,
-      cubicBezierEase,
-      (p, eased) => {
-        if (p >= 1) {
-          clearPaperCover(cover)
-          return
-        }
-        applyMask(cover, cachedPaperCoverMask(eased, resting, true, t.washFeather))
-      },
-      () => {
-        clearPaperCover(cover)
-      },
-    )
-    // Duration/speed captured at Active entry only.
+    return runPaperCoverPeel(cover, true, duration, ease)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ink.state, ink.repeat])
 
-  // Orange repeat overlay: wash in on chain entry, dissolve on release.
-  // Key only on `ink.repeat` — advancing within the chain must not cancel
-  // a mid-wash on earlier members (Android LaunchedEffect(repeat)).
   useLayoutEffect(() => {
     if (!repeatMounted) {
       prevRepeat.current = ink.repeat
@@ -176,10 +140,10 @@ export function HafsWord({
     }
     if (ink.repeat) {
       overlay.style.opacity = '1'
-      applyMask(overlay, 'none')
+      overlay.style.transform = 'none'
     } else {
       overlay.style.opacity = '0'
-      applyMask(overlay, 'none')
+      overlay.style.transform = 'none'
       setRepeatMounted(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

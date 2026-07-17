@@ -66,8 +66,8 @@ function AyahBlockInner({
   const arabicOnly = readingMode === 'arabic_only'
   // English-only: Western digits (Android AyahNumberMark useArabicIndicDigits=false).
   const ayahMark = `﴿${formatReaderDigits(ayah.number, !englishOnly)}﴾`
-  // Ayah mark opacity is CSS-driven via `.scroll[data-reciting]` (paint-phase
-  // recess) — no inline style so play/pause does not thrash every verse.
+  // Inactive-ayah recess is one `.ayah-recess-veil` (paint-phase) — no per-word
+  // inline dim so play/pause does not thrash every verse.
   const words = useMemo(() => ayah.words, [ayah.words])
   const englishWords = useMemo(
     () => punctuateEnglishGlosses(words.map((word) => word.translation)),
@@ -104,6 +104,9 @@ function AyahBlockInner({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
+      {/* One paper veil per inactive ayah while reciting — not per-word covers.
+          Avoids hundreds of simultaneous opacity transitions on play. */}
+      <span className="ayah-recess-veil" aria-hidden="true" />
       <VerseBookmarkRibbon
         bookmarked={bookmarked}
         focused={focused}
