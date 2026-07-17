@@ -199,18 +199,17 @@ dominates GPU cost.
 
 ### Critical issues (fixed)
 
-#### 1. Per-frame `mask-image` karaoke (was critical)
+#### 1. Soft directional ink wash (fidelity — never compromise)
 
-**Symptom:** Active-word wash rewrote `mask-image` / `-webkit-mask-image` up to
-~48 times per word, with `will-change: mask-image`. Browsers treat mask changes
-as paint invalidation + often re-raster a mask texture — main-thread style +
-GPU thrash, not a free compositor animation.
+**Product law:** the active word must show a **visible faded leading edge**
+(smootherstep directional wash = Android `letterFadeIn` / `shapedWordBloom`).
+Whole-word opacity pops and hard `scaleX` cuts are forbidden — they look wrong
+even if cheaper.
 
-**Fix:** Active paper peels use **`transform: scaleX`** (`runPaperCoverPeel`)
-with a *static* soft-edge mask class (`.ink-cover-peel`). English uses
-**opacity-only** reveal (`runOpacityReveal`). Orange repeat wash-in also uses
-scaleX; fade-out uses opacity. Do **not** reintroduce per-frame `mask-image`
-writes on the hot path.
+**Implementation:** `runPaperCoverWash` / `runLetterWash` / `runRepeatWashIn`
+rewrite quantized `mask-image` (~48 steps) via cached strings. That is the
+correct paint path for one active word. Optimize *around* the wash (ayah-level
+recess veil, expand-only mount, emit filtering) — do not degrade the wash.
 
 #### 2. Play-start recess storm (was critical)
 
@@ -241,7 +240,8 @@ and runs karaoke ink.
 2. **Store selectors** — Home / Settings / Bookmarks skip karaoke word-tick
    re-renders (`useAppSelector`).
 3. **`memo(AyahBlock)`** + CSS recess veil — inactive verses do not React-dim.
-4. **Compositor ink** — `transform` / `opacity` peels; quantized Motion ticks.
+4. **Directional ink wash** — smootherstep mask on the active word (quantized
+   + cached); soft faded edge is required product fidelity.
 5. **Edge fade overlays** — solid paper gradients, not alpha-mask of the list.
 6. **Focus glide** — Motion `scrollTop` only after geometry cache warm (no
    per-frame `getBoundingClientRect`).

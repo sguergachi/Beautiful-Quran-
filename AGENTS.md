@@ -77,6 +77,16 @@ Requires **JDK 21**. No Android device/emulator is needed for tests.
 6. **Offline-first, no backend.** No accounts, no analytics, no API keys. Only
    recitation audio touches the network at runtime (streamed and cached,
    1 GB LRU).
+7. **Ink / karaoke fidelity is non-negotiable (Android + web).** The signature
+   product moment is the soft directional ink wash: each word reveals with a
+   **visible faded leading edge** (smootherstep `letterFadeIn` /
+   `shapedWordBloom` / web `washMaskImage` + `paperCoverMaskImage`). Never
+   replace that with whole-word opacity pops, hard `scaleX` cuts, or any
+   cheaper approximation that loses the soft fade — not for performance, not
+   for simplicity. Optimize *around* the wash (quantize masks, cache strings,
+   one active word, recess via ayah veil) but do not degrade the wash itself.
+   Arabic glyphs stay full opaque ink under a paper cover; never dim Hafs via
+   glyph alpha. Web and Android must feel like the same product.
 
 ## Code conventions
 

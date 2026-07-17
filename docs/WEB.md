@@ -30,7 +30,7 @@ and ink — offline-first, no accounts, no backend.
 | Highlight timing | `domain/HighlightEngine.kt` + `HighlightEngineTest` | `web/src/domain/HighlightEngine.ts` + shared cases |
 | Focus / scroll | `ui/reader/focus/FocusEngine.kt` + `ReaderFocusController` | Mirrored under `web/src/ui/reader/focus/`; DOM controller stays platform-specific |
 | Ink policy | `ui/reader/InkEngine.kt` + `InkEngineTest` | `web/src/ui/reader/InkEngine.ts`; render policy stays outside the engine |
-| Draw primitives | `ui/theme/Fade.kt` (`letterFadeIn`, `shapedWordBloom`, `inkSmootherstep`) | Port math; web paints peels with compositor `transform` / `opacity` (not per-frame `mask-image`) |
+| Draw primitives | `ui/theme/Fade.kt` (`letterFadeIn`, `shapedWordBloom`, `inkSmootherstep`) | Port math; web uses the same smootherstep mask wash (soft faded edge — never hard peels) |
 | Marketing ink demo | `docs/ink-fade.js`, `docs/reveal.js` | **Prototype only** — whole-word opacity, not product-grade directional wash |
 | Data | `data/quran.db` (27 MB, committed) | Same DB; load via WASM SQLite |
 | Design law | `docs/DESIGN.md` | Identical rules on web |
@@ -128,8 +128,8 @@ live (`isPlaying || isBuffering` on this surah) via `.scroll[data-reciting]`
 and one paper veil per inactive ayah — at rest every ayah is Plain. Play/pause
 must not React-reconcile the whole surah.
 JS-driven washes / ribbons / entrance use the `motion` package
-(`web/src/ui/motion/easing.ts` for shared Android curves). Active ink peels
-with compositor `transform` / `opacity` (not per-frame `mask-image`).
+(`web/src/ui/motion/easing.ts` for shared Android curves). Active ink is the
+smootherstep directional mask wash (soft faded edge — product fidelity).
 
 Progressive reader mounting must materialize a selector/search target before
 the DOM controller measures it. Far jumps re-window tightly around the target;
@@ -305,7 +305,7 @@ technique.
 | Mode | Approach | Hard constraint |
 |---|---|---|
 | Arabic + gloss | Per-word spans; Arabic glyphs stay full opaque ink with paper-cover bloom (`WordUnit` / `ink-paper-cover`); gloss/translit use `secondaryAlpha` | Timed word-by-word ink; **never** CSS opacity / glyph alpha on Arabic (overlapping marks look dirty) |
-| English lyric | Opacity reveal (`runOpacityReveal`) + whole-word Upcoming floor | Same timings as Arabic; Latin has no mark-overlap issue; no per-frame mask |
+| English lyric | Directional `letterFadeIn` via `runLetterWash` + Upcoming floor | Same timings as Arabic; soft faded edge required |
 | Gloss / translit under Arabic | Whole-word opacity via `secondaryAlpha` (tracks sweep; never letter-reveal) | Same as Android `WordHighlight.secondaryAlpha` |
 | Arabic-only (Hafs) | Per-word full-ink glyphs + paper-cover bloom (`HafsWord`) | No per-glyph style runs that break joining; no neighbour bleed; upcoming = opaque paper cover, not alpha |
 
@@ -418,7 +418,7 @@ sans.
 - Audio playlist, basmalah preface, speed, ayah/range repeat.
 - rAF ticker → `PreparedTimings` → `ActiveWord` (stopped on pause).
 - CSS `[data-reciting]` + per-ayah recess veil so play/pause stays ≥60 fps.
-- `InkEngine` → paper-cover `scaleX` peel (Arabic) / opacity reveal (English).
+- `InkEngine` → paper-cover directional wash (Arabic) / letterFadeIn mask (English).
 - Repeat orange wash for repeat-aware reciters.
 - Chrome recede while playing (top bar + ayah rail → fully hidden like
   Android `topBarAlpha`; player peripherals whisper at 0.08 like `chromeAlpha`).

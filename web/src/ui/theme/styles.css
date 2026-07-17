@@ -1611,8 +1611,9 @@ select {
 }
 
 /*
- * Legacy class if a path still sets mask-image once. Active ink no longer
- * rewrites mask-image every frame (see inkWash.runPaperCoverPeel).
+ * Active-word directional wash (Android letterFadeIn / shapedWordBloom).
+ * mask-image is set from inkWash (smootherstep profile) so the soft faded
+ * leading edge is always visible — fidelity over hard peels.
  */
 .word-wash {
   -webkit-mask-size: 100% 100%;
@@ -1620,30 +1621,6 @@ select {
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   contain: paint;
-}
-
-/*
- * Compositor-friendly paper peel / orange reveal: animate transform only.
- * Soft edge is a *static* mask (applied once), never rewritten per frame.
- */
-.ink-cover-peel {
-  will-change: transform;
-  -webkit-mask-size: 100% 100%;
-  mask-size: 100% 100%;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  contain: paint;
-}
-
-.ink-cover-peel[data-peel='rtl'] {
-  /* Soft leading edge on the right (uncover from script start). */
-  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 82%, transparent 100%);
-  mask-image: linear-gradient(to right, #000 0%, #000 82%, transparent 100%);
-}
-
-.ink-cover-peel[data-peel='ltr'] {
-  -webkit-mask-image: linear-gradient(to left, #000 0%, #000 82%, transparent 100%);
-  mask-image: linear-gradient(to left, #000 0%, #000 82%, transparent 100%);
 }
 
 /* Arabic-only: full-ink glyphs + paper cover (never glyph alpha). */
