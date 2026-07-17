@@ -13,7 +13,7 @@ import {
 } from '../ui/reader/InkEngine'
 import { BASMALAH_UTHMANI } from '../domain/Basmalah'
 import { player } from '../playback/player'
-import { clearPaperCover } from './inkWash'
+import { applyMask, cachedPaperCoverMask, clearPaperCover } from './inkWash'
 
 /**
  * Traditional Naskh manuscript calligraphy of the basmalah — same artwork
@@ -22,9 +22,8 @@ import { clearPaperCover } from './inkWash'
  *
  * Glyphs stay opaque full ink. Upcoming/recess use a paper cover; while the
  * lead-in clip plays (`active`), that cover peels back RTL on the clip clock
- * (`prefaceWashProgress`). Never dims the SVG via element opacity — overlapping
- * strokes would double-composite and look dirty (same rule as HafsWord /
- * WordUnit Arabic).
+ * with a directional smootherstep mask (one element — fine for GPU; the
+ * scaleX peel looked like a hard cut on this wide SVG).
  */
 export function BasmalahCalligraphy({
   className,
@@ -63,31 +62,38 @@ export function BasmalahCalligraphy({
     }
 
     if (!active) {
-      // Plain: clear so the ayah-level recess veil (not per-path alpha) can paint.
+      // Plain: clear so the ayah-level recess veil can paint when needed.
       clearPaperCover(cover)
       return
     }
 
-    // Active: peel the paper cover on the clip clock via transform scaleX
-    // (compositor-friendly — no per-frame mask-image thrash).
+    // Active: directional paper-cover mask on the clip clock. Single SVG —
+    // mask thrash here is cheap and preserves the soft wash edge.
     cover.style.transition = 'none'
     cover.style.opacity = '1'
-    cover.style.transformOrigin = 'left center'
-    cover.style.willChange = 'transform'
-    cover.dataset.peel = 'rtl'
-    cover.classList.add('ink-cover-peel')
+    cover.classList.remove('ink-cover-peel')
+    cover.removeAttribute('data-peel')
+    cover.style.removeProperty('transform')
+    cover.style.removeProperty('transform-origin')
+    cover.style.removeProperty('will-change')
+
     let raf = 0
     let cancelled = false
     const ps = player.getState()
     let progress = prefaceWashProgress(ps.positionMs, ps.durationMs)
+
     const paint = (p: number) => {
       if (p >= 1) {
         clearPaperCover(cover)
         return
       }
       cover.style.opacity = '1'
-      cover.style.transform = `scaleX(${Math.max(0, 1 - p)})`
+      applyMask(
+        cover,
+        cachedPaperCoverMask(p, resting, true, t.washFeather),
+      )
     }
+
     const tick = () => {
       if (cancelled) return
       const current = player.getState()
@@ -99,12 +105,16 @@ export function BasmalahCalligraphy({
       paint(progress)
       if (progress < 1) raf = requestAnimationFrame(tick)
     }
+
     paint(progress)
     if (progress < 1) raf = requestAnimationFrame(tick)
+
     return () => {
       cancelled = true
       cancelAnimationFrame(raf)
-      clearPaperCover(cover)
+      // Leave a clean cover — do not snap-clear mid-wash if React re-runs
+      // while still active (deps only change on active/state).
+      if (!active) clearPaperCover(cover)
     }
   }, [active, inkState])
 

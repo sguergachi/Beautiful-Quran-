@@ -218,7 +218,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const receded = recitingActive && !searchActive
 
   // Virtualization center: follow the reciting ayah, else the open/focus verse.
-  // Sliding window never expands to full long surahs (see useProgressiveAyahWindow).
+  // Window only expands during scroll (never unmounts under the viewport).
   const mountCenter =
     state.activeAyah != null && state.activeAyah > 0
       ? state.activeAyah

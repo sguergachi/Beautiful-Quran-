@@ -95,7 +95,7 @@ export function applyMask(el: HTMLElement | SVGElement, mask: string) {
 /** Snap-clear an opaque paper cover without exposing a transition frame. */
 export function clearPaperCover(cover: HTMLElement) {
   cover.style.transition = 'none'
-  cover.classList.remove('ink-cover-peel')
+  cover.classList.remove('ink-cover-peel', 'word-wash')
   cover.removeAttribute('data-peel')
   cover.style.removeProperty('transform')
   cover.style.removeProperty('transform-origin')
