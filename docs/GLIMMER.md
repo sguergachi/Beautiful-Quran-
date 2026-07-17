@@ -82,9 +82,12 @@ Each duplicate keeps its natural text measurement inside a match-parent wrapper.
 Do not force the duplicate `Text` itself to `matchParentSize`: exact constraints
 can reshape or place Arabic a pixel differently from the base and can clip
 overhanging marks while the wash mask is active. The wrapper is layout-neutral,
-so mounting or removing a glimmer cannot move the word or its neighbours.
+so mounting or removing a glimmer cannot move the word or its neighbours. Base
+and duplicate words use single-line `TextOverflow.Visible`, and glimmer alpha is
+applied in an expanded draw layer instead of a word-sized `graphicsLayer`; both
+are required for terminal strokes that extend past their advance width.
 
-The halo is drawn inside an offscreen layer expanded by 12 dp on every side.
+The halo is drawn inside an offscreen layer expanded by 14 dp on every side.
 That bleed is intentional: the shadow may paint outside the word's measured
 bounds, and restricting the layer to those bounds creates a visible box edge.
 

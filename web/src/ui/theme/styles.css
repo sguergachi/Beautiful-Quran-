@@ -1630,8 +1630,8 @@ select {
    the base word while the negative inset leaves room for marks and overhangs. */
 .word-glint-overlay.word-arabic,
 .hafs-glint-overlay.hafs-glyph {
-  inset: -0.28em -0.12em;
-  padding: 0.28em 0.12em;
+  inset: -0.28em;
+  padding: 0.28em;
 }
 
 /* Tight white-gold outline halo. It is a duplicate glyph with transparent fill,

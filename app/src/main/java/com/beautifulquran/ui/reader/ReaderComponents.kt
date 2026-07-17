@@ -67,6 +67,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -354,6 +355,7 @@ private fun rememberStartRevealed(state: InkEngine.State): Boolean {
  * Shared with [ReaderScreen] so the focus engine's bottom guard matches. */
 internal val ActiveWordTopMargin = 144.dp
 internal val ActiveWordBottomMargin = 132.dp
+private val GlintLayerBleed = 14.dp
 
 /** Measures the active word as (top, bottom) in LazyColumn viewport pixels. */
 private typealias WordViewportMeasure = () -> Pair<Float, Float>?
@@ -443,7 +445,19 @@ private class WordHighlight(
      * then dissolves via [glintAlpha] once the word settles to Recited. */
     fun glintLayer(rtl: Boolean): Modifier =
         Modifier
-            .graphicsLayer { alpha = glintAlpha.value }
+            .drawWithContent {
+                val alpha = glintAlpha.value
+                if (alpha <= 0f) return@drawWithContent
+                val bleed = GlintLayerBleed.toPx()
+                drawIntoCanvas { canvas ->
+                    canvas.saveLayer(
+                        Rect(-bleed, -bleed, size.width + bleed, size.height + bleed),
+                        Paint().apply { this.alpha = alpha },
+                    )
+                }
+                drawContent()
+                drawIntoCanvas { canvas -> canvas.restore() }
+            }
             .letterFadeIn(
                 progress = { if (repeat) repeatWash.progress.value else sweep.value },
                 rtl = rtl,
@@ -457,7 +471,7 @@ private class WordHighlight(
         val progress = if (repeat) repeatWash.progress.value else sweep.value
         val alpha = glintAlpha.value * inkSmootherstep(progress)
         if (alpha <= 0f) return@drawWithContent
-        val bleed = 12.dp.toPx()
+        val bleed = GlintLayerBleed.toPx()
         drawIntoCanvas { canvas ->
             canvas.saveLayer(
                 Rect(-bleed, -bleed, size.width + bleed, size.height + bleed),
@@ -556,7 +570,15 @@ private fun BoxScope.InkOverlayText(
         contentAlignment = AbsoluteAlignment.TopLeft,
         modifier = Modifier.matchParentSize(),
     ) {
-        Text(text = text, style = style, color = color, modifier = modifier)
+        Text(
+            text = text,
+            style = style,
+            color = color,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Visible,
+            modifier = modifier,
+        )
     }
 }
 
@@ -602,6 +624,9 @@ private fun HighlightLayeredText(
             text = text,
             style = style,
             color = color,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Visible,
             modifier = highlight.baseLayer(rtl),
         )
         if (orangeWash != null) {
