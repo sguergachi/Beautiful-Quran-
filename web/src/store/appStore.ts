@@ -303,6 +303,8 @@ class AppStore {
       })
       player.setSpeed(this.state.settings.playbackSpeed)
       if (this.state.settings.gapless5Playback) {
+        // Prefetch the Gapless-5 chunk at boot so the first Play can construct
+        // AudioContext synchronously under the click (Firefox autoplay policy).
         void player.setGapless5Enabled(true)
       }
       // sql.js is main-thread only: warm one chapter per idle slice instead of

@@ -21,6 +21,7 @@ describe('Gapless5Backend', () => {
     expect(backend.getPositionMs()).toBe(0)
     expect(backend.isPlaying()).toBe(false)
     expect(backend.isReady()).toBe(false)
+    expect(backend.bootSync()).toBe(false)
   })
 
   it('maps repeat modes onto loop flags once ready is stubbed', () => {

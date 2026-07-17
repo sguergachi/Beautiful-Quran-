@@ -8,11 +8,12 @@
  *
  * Important Gapless-5 constraints we work around:
  * - Its HTML5 blob path does `audio.srcObject = blob`, which modern browsers
- *   reject (MediaStream/MediaSourceHandle only). We disable HTML5 Audio and
- *   use WebAudio-only (`decodeAudioData`), which is also the gapless path.
- * - Never pass `blob:` object URLs — only remote HTTPS. Prefetch still warms
- *   the HTTP cache so XHR/decode is fast.
+ *   reject. We only pass remote HTTPS URLs (never `blob:`).
+ * - Firefox (and Safari) refuse AudioContext start outside a user gesture.
+ *   Constructing the player after `await import(...)` loses that gesture, so we
+ *   preload the module early and construct/resume synchronously on play.
  * - Never block play on full-surah fetch; loadLimit keeps a small window warm.
+ * - No crossfade — abut verses at full level.
  */
 import type { AudioPrefetcher } from './audioPrefetch'
 import type { PlaylistItem } from './playlistPlan'
@@ -61,12 +62,19 @@ interface Gapless5Player {
   totalTracks(): number
 }
 
+type Gapless5Module = {
+  Gapless5?: new (opts: Record<string, unknown>) => Gapless5Player
+  default?: new (opts: Record<string, unknown>) => Gapless5Player
+}
+
 export class Gapless5Backend {
   private g5: Gapless5Player | null = null
   private loadGen = 0
   private lastSrcsKey = ''
   private disposed = false
-  private ready: Promise<void> | null = null
+  /** Cached UMD module — import alone does not create AudioContext. */
+  private module: Gapless5Module | null = null
+  private modulePromise: Promise<Gapless5Module> | null = null
   /**
    * While we are driving play/goto/sync ourselves, ignore library pause/stop
    * callbacks so a track teardown cannot clear the controller's play intent.
@@ -79,33 +87,68 @@ export class Gapless5Backend {
     return this.g5 != null && !this.disposed
   }
 
-  /** Lazy-import and construct the player once per enable session. */
-  ensureReady(): Promise<void> {
-    if (this.disposed) return Promise.resolve()
-    if (this.g5) return Promise.resolve()
-    this.ready ??= this.boot()
-    return this.ready
+  /** True when the dynamic import finished (player may not exist yet). */
+  isModuleLoaded(): boolean {
+    return this.module != null
   }
 
-  private async boot(): Promise<void> {
-    const mod = await import('@regosen/gapless-5')
+  /**
+   * Prefetch the Gapless-5 chunk without constructing a player / AudioContext.
+   * Call when the developer flag turns on so the first Play is gesture-safe.
+   */
+  preloadModule(): Promise<void> {
+    if (this.disposed) return Promise.resolve()
+    if (this.module) return Promise.resolve()
+    this.modulePromise ??= import('@regosen/gapless-5')
+      .then((mod) => {
+        this.module = mod as unknown as Gapless5Module
+        return this.module
+      })
+      .catch((err) => {
+        this.modulePromise = null
+        throw err
+      })
+    return this.modulePromise.then(() => undefined)
+  }
+
+  /**
+   * Construct the player if the module is already loaded. Safe to call from a
+   * click handler with no `await` so Firefox treats AudioContext as user-started.
+   * Returns true when a player is available after the call.
+   */
+  bootSync(): boolean {
+    if (this.disposed) return false
+    if (this.g5) return true
+    if (!this.module) return false
+    this.constructFromModule(this.module)
+    return this.g5 != null
+  }
+
+  /**
+   * Ensure the player exists. Prefers a prior [preloadModule] + [bootSync] path;
+   * falls back to import + construct (may lose autoplay on strict browsers).
+   */
+  async ensureReady(): Promise<void> {
     if (this.disposed) return
-    // UMD interop: Vite may surface the class on .Gapless5 or .default.
-    const Gapless5Ctor = (mod.Gapless5 ??
-      (mod as unknown as { default?: unknown }).default) as
-      | (new (opts: Record<string, unknown>) => Gapless5Player)
-      | undefined
+    if (this.g5) return
+    await this.preloadModule()
+    if (this.disposed) return
+    if (!this.g5 && this.module) this.constructFromModule(this.module)
+  }
+
+  private constructFromModule(mod: Gapless5Module): void {
+    if (this.g5 || this.disposed) return
+    const Gapless5Ctor = mod.Gapless5 ?? mod.default
     if (typeof Gapless5Ctor !== 'function') {
       throw new Error('Gapless-5 module did not export Gapless5')
     }
+    // HTML5 + WebAudio: HTML5 starts on the play gesture (Firefox-friendly);
+    // WebAudio takes over once decoded for sample-accurate joins. HTTPS only
+    // — never blob: (HTML5 blob path uses illegal srcObject = Blob).
+    // No crossfade — abut verses at full level (recitation should not blend).
     const player = new Gapless5Ctor({
-      // WebAudio-only: Gapless-5's HTML5 blob path sets srcObject to a Blob,
-      // which throws in Chromium/WebKit ("not of type MediaStream"). Remote
-      // HTTPS + decodeAudioData is the reliable gapless path (everyayah CORS
-      // allows the XHR). First ayah waits on decode; joins are sample-accurate.
-      // No crossfade — abut verses at full level (recitation should not blend).
       useWebAudio: true,
-      useHTML5Audio: false,
+      useHTML5Audio: true,
       loadLimit: LOAD_LIMIT,
       crossfade: 0,
       shuffleButton: false,
@@ -156,8 +199,6 @@ export class Gapless5Backend {
     const player = this.g5
     if (!player || this.disposed) return
 
-    // Never hand Gapless-5 blob: object URLs — its HTML5 path assigns them to
-    // srcObject and throws. WebAudio-only + HTTPS avoids that entirely.
     const srcs = items.map((item) => item.url)
     const key = srcs.join('\0')
     if (key === this.lastSrcsKey && player.totalTracks() === srcs.length) return
@@ -169,14 +210,21 @@ export class Gapless5Backend {
     })
   }
 
-  /** Unlock AudioContext on the user-gesture stack when possible. */
-  async resumeContext(): Promise<void> {
+  /**
+   * Unlock AudioContext. Must be invoked from a user-gesture stack (play tap
+   * or flag toggle). Returns a promise for callers that want to await running.
+   */
+  resumeContext(): Promise<void> {
     const ctx = this.g5?.context
-    if (!ctx || ctx.state === 'running') return
+    if (!ctx) return Promise.resolve()
+    if (ctx.state === 'running') return Promise.resolve()
     try {
-      await ctx.resume()
+      return ctx.resume().then(
+        () => undefined,
+        () => undefined,
+      )
     } catch {
-      // Autoplay policy — play() will try again after the next gesture.
+      return Promise.resolve()
     }
   }
 
@@ -257,7 +305,8 @@ export class Gapless5Backend {
     this.disposed = true
     this.clear()
     this.g5 = null
-    this.ready = null
+    this.module = null
+    this.modulePromise = null
   }
 
   private withSuppressedPause(fn: () => void): void {
