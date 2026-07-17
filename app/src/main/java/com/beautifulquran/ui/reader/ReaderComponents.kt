@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -540,10 +541,29 @@ private fun Modifier.wordUnitBehavior(
         }
 }
 
+/** Paint-only text twin: the wrapper fills the base word without contributing
+ * to its measurement, while [Text] keeps the base word's natural constraints.
+ * Forcing the text itself to matchParentSize can reflow Arabic by a pixel and
+ * clip its overhanging marks while a wash mask is active. */
+@Composable
+private fun BoxScope.InkOverlayText(
+    text: String,
+    style: TextStyle,
+    color: Color,
+    modifier: Modifier,
+) {
+    Box(
+        contentAlignment = AbsoluteAlignment.TopLeft,
+        modifier = Modifier.matchParentSize(),
+    ) {
+        Text(text = text, style = style, color = color, modifier = modifier)
+    }
+}
+
 /** The two-layer karaoke text every word unit renders: the base ink, plus an
  * orange overlay that sweeps in while the word belongs to a repeat chain and
  * dissolves back out once the chain releases. An optional [searchHitWash]
- * reuses that same overlay (matchParentSize + [repeatInkLayer]) for the home
+ * reuses that same overlay ([InkOverlayText] + [repeatInkLayer]) for the home
  * search-hit flash — never a second measured Text that would shift layout. */
 @Composable
 private fun HighlightLayeredText(
@@ -566,7 +586,7 @@ private fun HighlightLayeredText(
     Box(modifier) {
         // A restrained glyph-shaped halo sits behind the ink—no radial field.
         if (glintInk != null && highlight.showGlintLayer) {
-            Text(
+            InkOverlayText(
                 text = text,
                 style = style.copy(
                     shadow = Shadow(
@@ -575,9 +595,7 @@ private fun HighlightLayeredText(
                     ),
                 ),
                 color = glintInk.copy(alpha = 0.01f),
-                modifier = Modifier
-                    .matchParentSize()
-                    .then(highlight.glintHaloLayer()),
+                modifier = highlight.glintHaloLayer(),
             )
         }
         Text(
@@ -587,26 +605,20 @@ private fun HighlightLayeredText(
             modifier = highlight.baseLayer(rtl),
         )
         if (orangeWash != null) {
-            Text(
+            InkOverlayText(
                 text = text,
                 style = style,
                 color = repeatInk,
-                // matchParentSize: overlay must not contribute to Box measure —
-                // composing a second Text was shifting FlowRow words.
-                modifier = Modifier
-                    .matchParentSize()
-                    .repeatInkLayer(orangeWash, rtl),
+                modifier = Modifier.repeatInkLayer(orangeWash, rtl),
             )
         }
         // Nightfall's white-gold sheen sits above both fresh and repeat ink.
         if (glintInk != null && highlight.showGlintLayer) {
-            Text(
+            InkOverlayText(
                 text = text,
                 style = style,
                 color = glintInk.copy(alpha = InkEngine.tuning.glintTintAlpha),
-                modifier = Modifier
-                    .matchParentSize()
-                    .then(highlight.glintLayer(rtl)),
+                modifier = highlight.glintLayer(rtl),
             )
         }
     }

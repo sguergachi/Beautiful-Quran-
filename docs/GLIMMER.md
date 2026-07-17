@@ -78,6 +78,12 @@ strength, and blur. `WordHighlight.glintHaloLayer` applies the glimmer lifecycle
 alpha at draw time. A second duplicate above the normal/repeat ink carries the
 directionally masked white-gold tint.
 
+Each duplicate keeps its natural text measurement inside a match-parent wrapper.
+Do not force the duplicate `Text` itself to `matchParentSize`: exact constraints
+can reshape or place Arabic a pixel differently from the base and can clip
+overhanging marks while the wash mask is active. The wrapper is layout-neutral,
+so mounting or removing a glimmer cannot move the word or its neighbours.
+
 The halo is drawn inside an offscreen layer expanded by 12 dp on every side.
 That bleed is intentional: the shadow may paint outside the word's measured
 bounds, and restricting the layer to those bounds creates a visible box edge.
@@ -112,6 +118,10 @@ cleanup unreliable.
 
 The halo element deliberately has no `background`, `box-shadow`, or `filter`.
 Its parent allows overflow so the soft edge is not clipped at the word box.
+The masked Arabic tint uses equal negative inset and padding to enlarge only its
+paint box while keeping its glyph origin and content width identical to the
+base word. This compensating bleed is required because a CSS mask otherwise
+clips overhanging Arabic marks at the element border box.
 The shipped CSS uses a 62% glint tint plus two shadows: 36% at `0.055em` and
 18% at `0.15em`. These values are fixed on web; the live controls below tune
 the Android renderer only.

@@ -1625,6 +1625,15 @@ select {
   color: color-mix(in srgb, var(--glint, transparent) 62%, transparent);
 }
 
+/* A CSS mask clips paint at its own border box. Give masked Arabic tint a
+   compensated box bleed: padding returns the glyph origin/content width to
+   the base word while the negative inset leaves room for marks and overhangs. */
+.word-glint-overlay.word-arabic,
+.hafs-glint-overlay.hafs-glyph {
+  inset: -0.28em -0.12em;
+  padding: 0.28em 0.12em;
+}
+
 /* Tight white-gold outline halo. It is a duplicate glyph with transparent fill,
    so there is no rectangular light layer to expose during the animation. */
 .word-glint-halo {
