@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { appStore, useAppSelector, type RootViewerState } from '../../store/appStore'
-import { IconClose } from '../icons/PlaybackIcons'
+import { IconClose, IconVolumeUp } from '../icons/PlaybackIcons'
 import { featureSummary, posLabel, spacedRoot } from './morphologyLabels'
 import {
   initialRootSections,
@@ -82,7 +82,18 @@ function RootViewerBleed({ closing, rv }: { closing: boolean; rv: RootViewerStat
         </div>
 
         <header className="root-opening root-prose-measure">
-          <p className="root-word-arabic" lang="ar" dir="rtl">{rv.arabic}</p>
+          <div className="root-word-title">
+            <p className="root-word-arabic" lang="ar" dir="rtl">{rv.arabic}</p>
+            <button
+              type="button"
+              className="root-word-speak"
+              aria-label="Play word"
+              data-playing={rv.isPlayingWord ? 'true' : undefined}
+              onClick={() => void appStore.playRootViewerWord()}
+            >
+              <IconVolumeUp width="1.375rem" height="1.375rem" />
+            </button>
+          </div>
           {rv.translation ? <p className="root-word-gloss">{rv.translation}</p> : null}
           {rv.transliteration ? <p className="root-word-transliteration">{rv.transliteration}</p> : null}
         </header>
