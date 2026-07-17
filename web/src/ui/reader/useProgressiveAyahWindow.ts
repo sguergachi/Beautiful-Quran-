@@ -1,40 +1,49 @@
 import { useEffect, useState } from 'react'
 
-/** First paint — just enough ayahs to fill a phone viewport. */
-const INITIAL_BEFORE = 1
-const INITIAL_AFTER = 5
-/** Small idle batches avoid a long React/layout task on word-heavy chapters. */
-const EXPAND_STEP = 12
-/** The paper peel is 360 ms; do not replace spacer geometry while it moves. */
-const FIRST_EXPAND_DELAY_MS = 500
+/**
+ * Sliding mount window around the reading / recitation center.
+ *
+ * Long chapters never fully mount — offscreen ayahs stay as pad spacers so
+ * React + DOM stay O(window) instead of O(surah). Short chapters that fit
+ * entirely inside the window report complete:true.
+ */
+export const WINDOW_BEFORE = 12
+export const WINDOW_AFTER = 18
 
 export interface AyahMountRange {
   lo: number
   hi: number
-  /** True once every ayah in the surah is a real block (no pad spacers). */
+  /** True when every ayah in the surah is a real block (no pad spacers). */
   complete: boolean
 }
 
 /** Estimated height per unmounted ayah for top/bottom scroll padding. */
 export const AYAH_SPACER_EST_PX = 104
 
-/** Pure initial window — unit-tested; used by the hook on surah open. */
+/** Pure window around [centerAyah] — unit-tested. */
+export function slidingAyahMountRange(
+  ayahCount: number,
+  centerAyah: number,
+): AyahMountRange {
+  if (ayahCount < 1) return { lo: 1, hi: 1, complete: true }
+  const center = Math.min(ayahCount, Math.max(1, Math.round(centerAyah)))
+  const lo = Math.max(1, center - WINDOW_BEFORE)
+  const hi = Math.min(ayahCount, center + WINDOW_AFTER)
+  return { lo, hi, complete: lo === 1 && hi === ayahCount }
+}
+
+/** @deprecated alias — same sliding window as open / jump. */
 export function initialAyahMountRange(
   ayahCount: number,
   anchorAyah: number,
 ): AyahMountRange {
-  if (ayahCount < 1) return { lo: 1, hi: 1, complete: true }
-  const anchor = Math.min(ayahCount, Math.max(1, anchorAyah))
-  const lo = Math.max(1, anchor - INITIAL_BEFORE)
-  const hi = Math.min(ayahCount, anchor + INITIAL_AFTER)
-  return { lo, hi, complete: lo === 1 && hi === ayahCount }
+  return slidingAyahMountRange(ayahCount, anchorAyah)
 }
 
 /**
  * Materialize a requested ayah before the focus controller measures it.
- * A far target gets a fresh tight window instead of mounting every intervening
- * verse; the padding preserves its approximate content-space position until
- * the real block height can be measured.
+ * A far target gets a fresh tight window; already-visible targets keep the
+ * current window until the center effect re-slides.
  */
 export function mountRangeForAyah(
   current: AyahMountRange,
@@ -44,82 +53,67 @@ export function mountRangeForAyah(
   if (ayahCount < 1) return { lo: 1, hi: 1, complete: true }
   const target = Math.min(ayahCount, Math.max(1, Math.round(requestedAyah)))
   if (target >= current.lo && target <= current.hi) return current
-  return initialAyahMountRange(ayahCount, target)
+  return slidingAyahMountRange(ayahCount, target)
+}
+
+/**
+ * Expand [current] just enough to include [center] with hysteresis so small
+ * scroll/playhead steps do not remount every frame. Only re-centers when the
+ * center approaches the window edge.
+ */
+export function slideWindowToward(
+  current: AyahMountRange,
+  ayahCount: number,
+  centerAyah: number,
+): AyahMountRange {
+  if (ayahCount < 1) return { lo: 1, hi: 1, complete: true }
+  const center = Math.min(ayahCount, Math.max(1, Math.round(centerAyah)))
+  // Comfort margin: re-slide when within 4 ayahs of either edge.
+  const edge = 4
+  if (center - current.lo >= edge && current.hi - center >= edge) {
+    return current
+  }
+  const next = slidingAyahMountRange(ayahCount, center)
+  if (next.lo === current.lo && next.hi === current.hi) return current
+  return next
 }
 
 /**
  * Progressive ayah mount window for the reader.
  *
- * Mount a tight window around [anchorAyah] first, then expand on idle
- * callbacks (not every animation frame) so the paper peel stays smooth.
+ * Mount a sliding window around [centerAyah] (open anchor, focus, or playhead).
+ * Never expands to the full surah on long chapters — that was the main source
+ * of ~50k DOM nodes on Al-Baqarah.
  */
 export function useProgressiveAyahWindow(
   ayahCount: number,
-  anchorAyah: number,
+  centerAyah: number,
   surahKey: number | undefined,
   requestedAyah: number | null = null,
 ): AyahMountRange {
   const [range, setRange] = useState<AyahMountRange>(() =>
-    initialAyahMountRange(ayahCount, anchorAyah),
+    slidingAyahMountRange(ayahCount, centerAyah),
   )
 
+  // Surah identity change — hard reset around the landing verse.
   useEffect(() => {
     if (!surahKey || ayahCount < 1) {
       setRange({ lo: 1, hi: 1, complete: true })
       return
     }
-    const first = initialAyahMountRange(ayahCount, anchorAyah)
-    setRange(first)
-    if (first.complete) return
-
-    let cancelled = false
-    let idleId = 0
-    let timeoutId = 0
-
-    const schedule = (cb: () => void) => {
-      const ric = (
-        globalThis as unknown as {
-          requestIdleCallback?: (fn: () => void, opts?: { timeout: number }) => number
-        }
-      ).requestIdleCallback
-      if (typeof ric === 'function') {
-        idleId = ric(() => cb(), { timeout: 750 })
-      } else {
-        timeoutId = window.setTimeout(cb, 32)
-      }
-    }
-
-    const expand = () => {
-      if (cancelled) return
-      setRange((prev) => {
-        if (prev.complete) return prev
-        const lo = Math.max(1, prev.lo - EXPAND_STEP)
-        const hi = Math.min(ayahCount, prev.hi + EXPAND_STEP)
-        const complete = lo === 1 && hi === ayahCount
-        if (!complete) schedule(expand)
-        return { lo, hi, complete }
-      })
-    }
-    // An idle callback with a short timeout was firing 120 ms into the peel,
-    // mounting dozens of ayahs and changing spacer geometry while the rail
-    // was painting. Give the content-bearing first frame and sheet transition
-    // exclusive use of the opening window.
-    timeoutId = window.setTimeout(() => schedule(expand), FIRST_EXPAND_DELAY_MS)
-    return () => {
-      cancelled = true
-      const cic = (
-        globalThis as unknown as { cancelIdleCallback?: (id: number) => void }
-      ).cancelIdleCallback
-      if (idleId && typeof cic === 'function') cic(idleId)
-      if (timeoutId) window.clearTimeout(timeoutId)
-    }
-    // Re-window only when the surah identity changes — not on every openAyah tick.
+    setRange(slidingAyahMountRange(ayahCount, centerAyah))
+    // Re-window only when the surah identity changes — not on every center tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [surahKey, ayahCount])
 
-  // Selector/search/playback jumps may arrive before idle expansion has
-  // mounted their target. Put that target in the DOM first so FocusEngine can
-  // use its actual text height and the live scrollport height.
+  // Follow playhead / focus with hysteresis so we do not thrash mounts.
+  useEffect(() => {
+    if (!surahKey || ayahCount < 1) return
+    setRange((prev) => slideWindowToward(prev, ayahCount, centerAyah))
+  }, [centerAyah, ayahCount, surahKey])
+
+  // Selector/search/playback jumps may arrive before the sliding window has
+  // the target. Put that target in the DOM first so FocusEngine can measure it.
   useEffect(() => {
     if (!surahKey || requestedAyah == null) return
     setRange((prev) => mountRangeForAyah(prev, ayahCount, requestedAyah))

@@ -205,14 +205,15 @@ export function runRepeatFadeOut(
 
 /**
  * Search-hit flash: [runRepeatWashIn] then [runRepeatFadeOut], [pulses] times.
- * Callers pass a dedicated always-mounted orange overlay (same classes as the
- * karaoke repeat layer) so the mask sizes to the glyphs — never a stretched
- * inset box that misaligns the wash edge.
+ * Callers pass a dedicated orange overlay (same classes as the karaoke repeat
+ * layer) so the mask sizes to the glyphs — never a stretched inset box that
+ * misaligns the wash edge. Overlay may be unmounted after [onDone].
  */
 export function runSearchHitDoubleWash(
   el: HTMLElement,
   rtl: boolean,
   pulses: number,
+  onDone?: () => void,
 ): () => void {
   const t = getTuning()
   let cancelled = false
@@ -226,6 +227,7 @@ export function runSearchHitDoubleWash(
   const runPulse = (remaining: number) => {
     if (cancelled || remaining <= 0) {
       finish()
+      if (!cancelled) onDone?.()
       return
     }
     cancelCurrent = runRepeatWashIn(el, rtl, t.repeatSweepMs, () => {

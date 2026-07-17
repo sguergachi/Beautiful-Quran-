@@ -69,6 +69,15 @@ const initial: PlayerState = {
 /** How soon before ayah end we insist the next clip has been fetched. */
 const JOIN_PREP_REMAINING_S = 4
 
+/** Silent-stall recoveries before we surface a hard stop. */
+const STALL_RECOVERY_ATTEMPTS = 3
+
+/**
+ * While an autoplay src swap is in flight, ignore this many pause events from
+ * the active element (load/pause races can fire more than once).
+ */
+const PAUSE_SUPPRESS_EVENTS = 3
+
 export class PlayerController {
   private state: PlayerState = { ...initial }
   private listeners = new Set<Listener>()
@@ -91,15 +100,12 @@ export class PlayerController {
   /** Prevents rAF + `ended` from advancing the same audible boundary twice. */
   private gaplessAdvancing = false
   /**
-   * When true, the next `pause` event on the active element must not clear
-   * isPlaying — set while swapping `src` during an in-flight playIndex
-   * (autoplay). `pause()` fires its event asynchronously, so this flag is
-   * consumed by the `pause` listener (and cleared when playback resumes)
-   * rather than reset synchronously: a stale isPlaying:false here drops
-   * `data-reciting` for a frame and flashes every verse to full ink on
-   * Firefox at the ayah join.
+   * Remaining pause events to ignore while swapping `src` during autoplay.
+   * Consumed by the `pause` listener (and cleared when playback resumes).
+   * A single-shot flag was not enough: load()/pause races can emit twice and
+   * the second would clear isPlaying mid-join.
    */
-  private suppressPauseSync = false
+  private pauseSuppressRemaining = 0
 
   constructor(
     prefetcher: AudioPrefetcher = new AudioPrefetcher(),
@@ -117,11 +123,11 @@ export class PlayerController {
         },
         ended: () => void this.onEnded(),
         play: () => {
-          this.suppressPauseSync = false
+          this.pauseSuppressRemaining = 0
           this.patch({ isPlaying: true, error: null })
         },
         playing: () => {
-          this.suppressPauseSync = false
+          this.pauseSuppressRemaining = 0
           this.setBuffering(false)
           this.patch({ isPlaying: true, error: null })
         },
@@ -161,8 +167,8 @@ export class PlayerController {
 
   private onMediaPause() {
     if (this.recoveringStall || this.gaplessAdvancing) return
-    if (this.suppressPauseSync) {
-      this.suppressPauseSync = false
+    if (this.pauseSuppressRemaining > 0) {
+      this.pauseSuppressRemaining--
       return
     }
     this.patch({ isPlaying: false })
@@ -182,6 +188,10 @@ export class PlayerController {
     this.patch({ isBuffering })
   }
 
+  private beginPauseSuppress() {
+    this.pauseSuppressRemaining = PAUSE_SUPPRESS_EVENTS
+  }
+
   /**
    * In the last few seconds of an ayah, insist the next clip has been fetched.
    * Desktop then has a warm blob; iOS has a cache-warmed HTTPS request.
@@ -191,6 +201,8 @@ export class PlayerController {
     if (!Number.isFinite(duration) || duration <= 0) return
     const remaining = duration - this.active.currentTime
     if (remaining > JOIN_PREP_REMAINING_S) return
+    // Prefer join readiness over whole-surah warm bandwidth/CPU.
+    this.prefetcher.pauseWarm()
     const nextIndex = this.peekNextIndex({ forStandby: true })
     if (nextIndex == null) return
     const url = this.playlist[nextIndex]?.url
@@ -275,19 +287,30 @@ export class PlayerController {
     const token = this.playToken
     this.recoveringStall = true
     this.setBuffering(true)
+    this.beginPauseSuppress()
     try {
-      this.active.pause()
-      await this.active.play()
-      if (token !== this.playToken || !this.state.isPlaying) return
-      this.setBuffering(false)
-      this.stallWatchdog.reset(this.active.currentTime, performance.now())
-    } catch (e) {
+      for (let attempt = 0; attempt < STALL_RECOVERY_ATTEMPTS; attempt++) {
+        if (token !== this.playToken || !this.state.isPlaying) return
+        try {
+          this.active.pause()
+          await this.active.play()
+          if (token !== this.playToken || !this.state.isPlaying) return
+          this.setBuffering(false)
+          this.stallWatchdog.reset(this.active.currentTime, performance.now())
+          return
+        } catch {
+          // Retry after a brief settle — one failed play() is common after
+          // backgrounding; only hard-stop after the budget is spent.
+          if (attempt + 1 >= STALL_RECOVERY_ATTEMPTS) break
+          await new Promise<void>((r) => globalThis.setTimeout(r, 120 * (attempt + 1)))
+        }
+      }
       if (token !== this.playToken) return
       this.stopTick()
       this.setBuffering(false)
       this.patch({
         isPlaying: false,
-        error: e instanceof Error ? e.message : 'Playback stalled',
+        error: 'Playback stalled',
       })
     } finally {
       this.recoveringStall = false
@@ -296,7 +319,7 @@ export class PlayerController {
 
   private stopTick() {
     if (this.tickTimer != null) {
-      cancelAnimationFrame(this.tickTimer)
+      window.cancelAnimationFrame(this.tickTimer)
       this.tickTimer = null
     }
     if (this.gaplessTimer != null) {
@@ -343,24 +366,45 @@ export class PlayerController {
 
     const outgoing = this.active
     const transitionToken = this.playToken
+    const fromIndex = this.index
     const fadeOutMs = verseFadeOutMs(
       Math.max(0, (outgoing.duration - outgoing.currentTime) * 1_000),
       this.state.speed,
     )
     this.gaplessAdvancing = true
+    this.prefetcher.pauseWarm()
     void (async () => {
-      outgoing.volume = 1
-      const faded = await this.joins.fade(outgoing, 'out', fadeOutMs)
-      if (!faded || transitionToken !== this.playToken || !this.state.isPlaying) {
+      let advanced = false
+      try {
         outgoing.volume = 1
-        return
+        const faded = await this.joins.fade(outgoing, 'out', fadeOutMs)
+        if (!faded || transitionToken !== this.playToken || !this.state.isPlaying) {
+          outgoing.volume = 1
+          return
+        }
+        await this.playIndex(next, true, { fadeIn: true })
+        // playIndex bumps playToken on entry; success is landing on [next] still playing.
+        advanced = this.index === next && this.state.isPlaying
+      } finally {
+        if (outgoing !== this.active) outgoing.volume = 1
+        this.gaplessAdvancing = false
+        // If gapless exited without a successful advance, fall through to the
+        // ordinary ended path so a dropped natural `ended` cannot leave us silent.
+        if (!advanced && this.state.isPlaying && this.index === fromIndex) {
+          const ended =
+            this.active.ended ||
+            (Number.isFinite(this.active.duration) &&
+              this.active.duration > 0 &&
+              this.active.currentTime >= this.active.duration - 0.05)
+          if (ended || this.joins.crossedAudibleEnd(this.playlist[this.index])) {
+            void this.advanceAfterClip()
+            return
+          }
+        }
+        this.scheduleGaplessBoundary()
+        this.prefetcher.resumeWarm()
       }
-      await this.playIndex(next, true, { fadeIn: true })
-    })().finally(() => {
-      if (outgoing !== this.active) outgoing.volume = 1
-      this.gaplessAdvancing = false
-      this.scheduleGaplessBoundary()
-    })
+    })()
   }
 
   /** Timer-backed boundary so a short trim window cannot fall between rAFs. */
@@ -445,6 +489,7 @@ export class PlayerController {
     this.playlist = buildPlaylist(content, reciter, startAyah)
     this.index = 0
     this.joins.clearStandby()
+    this.prefetcher.resumeWarm()
     const urls = this.playlistUrls()
     // Always read-ahead the opening window; whole-surah warm is optional.
     if (opts.warm !== false) this.prefetcher.warmSurah(urls)
@@ -572,6 +617,7 @@ export class PlayerController {
         }
         this.startTick()
         this.schedulePrefetch()
+        this.prefetcher.resumeWarm()
       } catch (e) {
         if (token !== this.playToken) return
         this.active.volume = 1
@@ -626,9 +672,7 @@ export class PlayerController {
 
     // Only suppress the pause→isPlaying:false sync when we intend to keep
     // playing after the src swap. Quiet loads (openSurah) must still clear it.
-    // The flag is consumed by the async `pause` event / a resumed `play`, not
-    // reset here — a synchronous reset lands before `pause()` fires its event.
-    if (autoplay) this.suppressPauseSync = true
+    if (autoplay) this.beginPauseSuppress()
     this.transport.loadActive({
       src,
       loop: this.state.repeatMode === 'ayah',
@@ -682,6 +726,7 @@ export class PlayerController {
         }
         this.setBuffering(false)
         this.startTick()
+        this.prefetcher.resumeWarm()
       } catch (e) {
         if (token !== this.playToken) return
         this.active.volume = 1
@@ -739,9 +784,10 @@ export class PlayerController {
     // restarting audio after the user already paused.
     this.playToken++
     // User intent to stop wins — never let a pending swap suppress this pause.
-    this.suppressPauseSync = false
+    this.pauseSuppressRemaining = 0
     this.recoveringStall = false
     this.joins.cancelFades()
+    this.prefetcher.resumeWarm()
     this.active.pause()
     this.setBuffering(false)
     this.stopTick()
@@ -875,10 +921,11 @@ export class PlayerController {
 
   stop() {
     this.playToken++
-    this.suppressPauseSync = false
+    this.pauseSuppressRemaining = 0
     this.recoveringStall = false
     this.joins.cancelFades()
     this.joins.stop()
+    this.prefetcher.resumeWarm()
     this.playlist = []
     this.index = 0
     this.stopTick()
@@ -887,6 +934,11 @@ export class PlayerController {
 
   private async onEnded() {
     if (this.gaplessAdvancing) return
+    await this.advanceAfterClip()
+  }
+
+  /** Shared advance used by natural `ended` and the gapless safety net. */
+  private async advanceAfterClip() {
     if (this.state.repeatMode === 'ayah') {
       // Prefer native loop; this is a fallback if loop was unset.
       this.active.currentTime = 0

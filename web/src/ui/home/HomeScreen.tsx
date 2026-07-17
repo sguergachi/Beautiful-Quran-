@@ -14,7 +14,12 @@ import {
   IconPlay,
 } from '../icons/PlaybackIcons'
 import { PaperInput } from '../kit/PaperInput'
-import { appStore, useAppState, COVER_LAYER, READER_LAYER } from '../../store/appStore'
+import {
+  appStore,
+  useAppSelector,
+  COVER_LAYER,
+  READER_LAYER,
+} from '../../store/appStore'
 import { QuranRepository } from '../../data/repository'
 import { VerseBookmarkRibbon } from '../../render/VerseBookmarkRibbon'
 import {
@@ -29,7 +34,28 @@ import {
 import { BOOKMARKS_LAYER, type StackLayer } from '../paper/stack'
 
 export function HomeScreen({ stackLayer }: { stackLayer: StackLayer }) {
-  const state = useAppState()
+  // Chapters sheet: skip word-tick / active-ink emits from the reader.
+  const state = useAppSelector(
+    (s) => ({
+      bookmarks: s.bookmarks,
+      settings: s.settings,
+      surahs: s.surahs,
+      player: s.player,
+      content: s.content,
+      ready: s.ready,
+    }),
+    (a, b) =>
+      a.bookmarks === b.bookmarks &&
+      a.settings === b.settings &&
+      a.surahs === b.surahs &&
+      a.ready === b.ready &&
+      a.content?.surah.id === b.content?.surah.id &&
+      a.player.isPlaying === b.player.isPlaying &&
+      a.player.isBuffering === b.player.isBuffering &&
+      a.player.nowPlaying?.surahId === b.player.nowPlaying?.surahId &&
+      a.player.nowPlaying?.ayah === b.player.nowPlaying?.ayah &&
+      a.player.error === b.player.error,
+  )
   const hasBookmarks = state.bookmarks.length > 0
   const bookmarkStyle = state.settings.homeBookmarkStyle
   // Local query — typing must not emit through appStore (that re-renders the

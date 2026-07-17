@@ -3,8 +3,11 @@
  *
  * Paper stack: -1=Bookmarks, 0=Chapters, 1=Reader, 2=Settings.
  * When no surah is open, Settings occupies layer 1.
+ *
+ * Prefer [useAppSelector] in screens that do not need word-tick ink state so
+ * Home / Bookmarks / Settings do not re-render on every karaoke boundary.
  */
-import { useSyncExternalStore } from 'react'
+import { useCallback, useRef, useSyncExternalStore } from 'react'
 import type { ActiveWord, Reciter, Surah, SurahContent, Segment, Word } from '../data/models'
 import { QuranRepository } from '../data/repository'
 import {
@@ -776,6 +779,76 @@ export const appStore = new AppStore()
 
 export function useAppState(): AppState {
   return useSyncExternalStore(appStore.subscribe, appStore.getSnapshot, appStore.getSnapshot)
+}
+
+/** Shallow-compare plain object/array snapshots from [useAppSelector]. */
+export function shallowEqual<T>(a: T, b: T): boolean {
+  if (Object.is(a, b)) return true
+  if (typeof a !== 'object' || a == null || typeof b !== 'object' || b == null) {
+    return false
+  }
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      if (!Object.is(a[i], b[i])) return false
+    }
+    return true
+  }
+  const aKeys = Object.keys(a as object)
+  const bKeys = Object.keys(b as object)
+  if (aKeys.length !== bKeys.length) return false
+  for (const key of aKeys) {
+    if (
+      !Object.is(
+        (a as Record<string, unknown>)[key],
+        (b as Record<string, unknown>)[key],
+      )
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
+/**
+ * Subscribe to a derived slice of app state. Re-renders only when the selected
+ * value changes under [isEqual] (default Object.is; use [shallowEqual] for
+ * small object snapshots).
+ */
+export function useAppSelector<T>(
+  selector: (state: AppState) => T,
+  isEqual: (a: T, b: T) => boolean = Object.is,
+): T {
+  const selectorRef = useRef(selector)
+  selectorRef.current = selector
+  const equalRef = useRef(isEqual)
+  equalRef.current = isEqual
+  const selectedRef = useRef<T | undefined>(undefined)
+  const hasValueRef = useRef(false)
+
+  const subscribe = useCallback((onStoreChange: () => void) => {
+    return appStore.subscribe(() => {
+      const next = selectorRef.current(appStore.getSnapshot())
+      if (hasValueRef.current && equalRef.current(selectedRef.current as T, next)) {
+        return
+      }
+      selectedRef.current = next
+      hasValueRef.current = true
+      onStoreChange()
+    })
+  }, [])
+
+  const getSnapshot = useCallback(() => {
+    const next = selectorRef.current(appStore.getSnapshot())
+    if (hasValueRef.current && equalRef.current(selectedRef.current as T, next)) {
+      return selectedRef.current as T
+    }
+    selectedRef.current = next
+    hasValueRef.current = true
+    return next
+  }, [])
+
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
 export { COVER_LAYER, READER_LAYER, SETTINGS_LAYER, settingsLayerFor }

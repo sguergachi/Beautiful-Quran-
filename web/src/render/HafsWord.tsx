@@ -9,6 +9,7 @@
 import {
   useLayoutEffect,
   useRef,
+  useState,
   type MouseEvent,
   type MutableRefObject,
 } from 'react'
@@ -57,9 +58,15 @@ export function HafsWord({
   const revealedOnEntry = useRef(false)
   // false so a word that mounts already in the chain still washes orange in.
   const prevRepeat = useRef(false)
+  /** Orange/search overlays only while needed — not for every idle word. */
+  const [repeatMounted, setRepeatMounted] = useState(ink.repeat)
+  const [flashMounted, setFlashMounted] = useState(searchFlash)
   const tuning = getTuning()
   const upcomingCover = 1 - tuning.upcomingAlpha
   const interaction = useWordInteraction(onPlay, onHold)
+
+  if (ink.repeat && !repeatMounted) setRepeatMounted(true)
+  if (searchFlash && !flashMounted) setFlashMounted(true)
 
   /*
    * Paper-cover bloom on Active entry (Android shapedWordBloom InkReveal).
@@ -149,6 +156,10 @@ export function HafsWord({
   // Key only on `ink.repeat` — advancing within the chain must not cancel
   // a mid-wash on earlier members (Android LaunchedEffect(repeat)).
   useLayoutEffect(() => {
+    if (!repeatMounted) {
+      prevRepeat.current = ink.repeat
+      return
+    }
     const overlay = overlayRef.current
     if (!overlay) return
     const was = prevRepeat.current
@@ -161,7 +172,7 @@ export function HafsWord({
       return runRepeatWashIn(overlay, true, duration)
     }
     if (leftRepeat) {
-      return runRepeatFadeOut(overlay)
+      return runRepeatFadeOut(overlay, () => setRepeatMounted(false))
     }
     if (ink.repeat) {
       overlay.style.opacity = '1'
@@ -169,15 +180,26 @@ export function HafsWord({
     } else {
       overlay.style.opacity = '0'
       applyMask(overlay, 'none')
+      setRepeatMounted(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.repeat])
+  }, [ink.repeat, repeatMounted])
 
-  // Search-hit pulse: same ink-engine wash helpers on a dedicated twin overlay.
+  // Search-hit pulse: mount overlay only while flashing.
   useLayoutEffect(() => {
-    if (!searchFlash || !flashRef.current) return
-    return runSearchHitDoubleWash(flashRef.current, true, SearchHitFlash.PULSES)
-  }, [searchFlash])
+    if (!flashMounted) return
+    if (!searchFlash) {
+      setFlashMounted(false)
+      return
+    }
+    if (!flashRef.current) return
+    return runSearchHitDoubleWash(
+      flashRef.current,
+      true,
+      SearchHitFlash.PULSES,
+      () => setFlashMounted(false),
+    )
+  }, [searchFlash, flashMounted])
 
   return (
     <span
@@ -196,22 +218,26 @@ export function HafsWord({
       <span className="hafs-shell">
         <span className="word-ink-slot">
           <span className="hafs-glyph">{word.arabic}</span>
-          <span
-            ref={overlayRef}
-            className="hafs-repeat-overlay hafs-glyph"
-            aria-hidden="true"
-            style={{ opacity: 0 }}
-          >
-            {word.arabic}
-          </span>
-          <span
-            ref={flashRef}
-            className="hafs-repeat-overlay hafs-glyph"
-            aria-hidden="true"
-            style={{ opacity: 0 }}
-          >
-            {word.arabic}
-          </span>
+          {repeatMounted ? (
+            <span
+              ref={overlayRef}
+              className="hafs-repeat-overlay hafs-glyph"
+              aria-hidden="true"
+              style={{ opacity: 0 }}
+            >
+              {word.arabic}
+            </span>
+          ) : null}
+          {flashMounted ? (
+            <span
+              ref={flashRef}
+              className="hafs-repeat-overlay hafs-glyph"
+              aria-hidden="true"
+              style={{ opacity: 0 }}
+            >
+              {word.arabic}
+            </span>
+          ) : null}
         </span>
         <span ref={coverRef} className="ink-paper-cover" aria-hidden="true" />
       </span>
