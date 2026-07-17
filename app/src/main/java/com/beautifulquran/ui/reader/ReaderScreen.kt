@@ -231,7 +231,7 @@ fun ReaderScreen(
     var readerRootY by remember { mutableFloatStateOf(0f) }
     /**
      * 0 = verse body parked below the header after a next-chapter handoff;
-     * 1 = settled in place. Rises 100ms after the header lands.
+     * 1 = settled in place. Rises as soon as the header lands.
      */
     val verseReveal = remember { Animatable(1f) }
     /** Surah the delayed verse rise belongs to; 0 = none. */
@@ -1017,8 +1017,8 @@ fun ReaderScreen(
                 // Top-nav pin has finished fading (or was never set).
                 pinnedTopNavTitle = null
 
-                // Header rests; 100ms later the verses fade and rise in.
-                delay(100)
+                // Verses fade and rise in as soon as the header has landed.
+
                 if (verseRevealForSurah != nextId) return@launch
                 verseReveal.animateTo(
                     targetValue = 1f,

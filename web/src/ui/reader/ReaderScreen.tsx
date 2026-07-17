@@ -164,7 +164,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const [headerMorph, setHeaderMorph] = useState(0)
   /**
    * 0 = verse body parked below the header after next-chapter handoff;
-   * 1 = settled. Rises 100ms after the header lands (Android parity).
+   * 1 = settled. Rises as soon as the header lands (Android parity).
    */
   const [verseReveal, setVerseReveal] = useState(1)
   const followWasEnabled = useRef(true)
@@ -423,8 +423,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     // Top-nav pin has finished fading with data-advancing.
     setPinnedTopNavTitle(null)
 
-    // Header rests; 100ms later the verses fade and rise in.
-    await new Promise<void>((r) => window.setTimeout(r, 100))
+    // Verses fade and rise in as soon as the header has landed.
     if (
       !verseRevealPendingRef.current ||
       verseRevealForSurahRef.current !== nextId
