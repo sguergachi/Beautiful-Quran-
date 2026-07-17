@@ -13,7 +13,7 @@ import {
 } from '../ui/reader/InkEngine'
 import { BASMALAH_UTHMANI } from '../domain/Basmalah'
 import { player } from '../playback/player'
-import { applyMask, cachedPaperCoverMask } from './inkWash'
+import { clearPaperCover } from './inkWash'
 
 /**
  * Traditional Naskh manuscript calligraphy of the basmalah — same artwork
@@ -56,29 +56,38 @@ export function BasmalahCalligraphy({
     const resting = t.upcomingAlpha
 
     if (inkState === InkState.Upcoming) {
-      applyMask(cover, 'none')
+      clearPaperCover(cover)
       cover.style.transition = `opacity ${t.recessMs}ms cubic-bezier(0.4, 0, 0.2, 1)`
       cover.style.opacity = String(1 - resting)
       return
     }
 
     if (!active) {
-      // Plain: clear inline opacity so CSS `[data-reciting]` recess can paint.
-      cover.style.transition = 'none'
-      applyMask(cover, 'none')
-      cover.style.removeProperty('opacity')
+      // Plain: clear so the ayah-level recess veil (not per-path alpha) can paint.
+      clearPaperCover(cover)
       return
     }
 
-    // Active: peel the paper cover on the clip clock (Android letterFadeIn on
-    // the tinted VectorDrawable — web uses paper cover so SVG path overlaps
-    // never go semi-transparent).
+    // Active: peel the paper cover on the clip clock via transform scaleX
+    // (compositor-friendly — no per-frame mask-image thrash).
     cover.style.transition = 'none'
     cover.style.opacity = '1'
+    cover.style.transformOrigin = 'left center'
+    cover.style.willChange = 'transform'
+    cover.dataset.peel = 'rtl'
+    cover.classList.add('ink-cover-peel')
     let raf = 0
     let cancelled = false
     const ps = player.getState()
     let progress = prefaceWashProgress(ps.positionMs, ps.durationMs)
+    const paint = (p: number) => {
+      if (p >= 1) {
+        clearPaperCover(cover)
+        return
+      }
+      cover.style.opacity = '1'
+      cover.style.transform = `scaleX(${Math.max(0, 1 - p)})`
+    }
     const tick = () => {
       if (cancelled) return
       const current = player.getState()
@@ -87,36 +96,15 @@ export function BasmalahCalligraphy({
         current.positionMs,
         current.durationMs,
       )
-      if (progress >= 1) {
-        applyMask(cover, 'none')
-        cover.style.removeProperty('opacity')
-        // Completion is terminal for this lead-in. The shared player clock
-        // resets as ayah 1 takes over, before React necessarily clears active.
-        return
-      } else {
-        applyMask(
-          cover,
-          cachedPaperCoverMask(progress, resting, true, t.washFeather),
-        )
-        cover.style.opacity = '1'
-      }
-      raf = requestAnimationFrame(tick)
+      paint(progress)
+      if (progress < 1) raf = requestAnimationFrame(tick)
     }
-    if (progress >= 1) {
-      applyMask(cover, 'none')
-      cover.style.removeProperty('opacity')
-    } else {
-      applyMask(
-        cover,
-        cachedPaperCoverMask(progress, resting, true, t.washFeather),
-      )
-      raf = requestAnimationFrame(tick)
-    }
+    paint(progress)
+    if (progress < 1) raf = requestAnimationFrame(tick)
     return () => {
       cancelled = true
       cancelAnimationFrame(raf)
-      applyMask(cover, 'none')
-      cover.style.removeProperty('opacity')
+      clearPaperCover(cover)
     }
   }, [active, inkState])
 

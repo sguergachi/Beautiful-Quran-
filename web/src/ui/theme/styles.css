@@ -1225,6 +1225,7 @@ select {
 }
 
 .basmalah-block {
+  position: relative;
   display: flex;
   justify-content: center;
   padding: 1.25rem 1.5rem 1.75rem;
@@ -1606,14 +1607,40 @@ select {
   position: static;
 }
 
+/*
+ * Legacy class if a path still sets mask-image once. Active ink no longer
+ * rewrites mask-image every frame (see inkWash.runPaperCoverPeel).
+ */
 .word-wash {
-  /* mask-image set inline from washMaskImage() — smootherstep profile */
   -webkit-mask-size: 100% 100%;
   mask-size: 100% 100%;
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
-  will-change: mask-image;
   contain: paint;
+}
+
+/*
+ * Compositor-friendly paper peel / orange reveal: animate transform only.
+ * Soft edge is a *static* mask (applied once), never rewritten per frame.
+ */
+.ink-cover-peel {
+  will-change: transform;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  contain: paint;
+}
+
+.ink-cover-peel[data-peel='rtl'] {
+  /* Soft leading edge on the right (uncover from script start). */
+  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 82%, transparent 100%);
+  mask-image: linear-gradient(to right, #000 0%, #000 82%, transparent 100%);
+}
+
+.ink-cover-peel[data-peel='ltr'] {
+  -webkit-mask-image: linear-gradient(to left, #000 0%, #000 82%, transparent 100%);
+  mask-image: linear-gradient(to left, #000 0%, #000 82%, transparent 100%);
 }
 
 /* Arabic-only: full-ink glyphs + paper cover (never glyph alpha). */
@@ -1698,37 +1725,37 @@ select {
 }
 
 /*
- * Global play/pause recess — paint-phase only (Android draw-phase dimming).
+ * Global play/pause recess — one paper veil per inactive ayah (not per word).
  *
- * Toggling [data-reciting] on .scroll dims every inactive ayah via CSS without
- * React re-rendering WordUnit/HafsWord across the surah. Only the active ayah
- * ([data-ayah-active]) wakes for karaoke ink. Covers must not carry an inline
- * opacity:0 from clearCover, or this rule cannot paint.
+ * Critical GPU fix: the old path transitioned opacity on every word cover,
+ * gloss, translit, mark, and translation at once (~hundreds of layers on
+ * play). A single veil per verse is O(ayahs) and preserves full-ink Arabic
+ * underneath (no glyph alpha on Hafs marks).
  */
-.scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .ink-paper-cover,
-.scroll[data-reciting='true'] .basmalah-block:not([data-ayah-active='true']) .ink-paper-cover {
-  opacity: var(--upcoming-cover, 0.78);
+.ayah-recess-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: var(--paper);
+  opacity: 0;
   transition: opacity var(--recess-ms) var(--recede-ease);
 }
 
-.scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .word-ink {
-  opacity: var(--upcoming-alpha, 0.22);
+.basmalah-block::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: var(--paper);
+  opacity: 0;
+  transition: opacity var(--recess-ms) var(--recede-ease);
 }
 
-.scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .word-arabic-ink > .word-gloss-flash > .word-gloss {
-  opacity: var(--upcoming-alpha, 0.22);
-}
-
-.scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .word-arabic-ink > .word-translit {
-  opacity: calc(var(--upcoming-alpha, 0.22) * var(--translit-alpha, 0.55));
-}
-
-.scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .ayah-mark {
-  opacity: var(--upcoming-alpha, 0.22);
-}
-
-.scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .ayah-translation {
-  opacity: var(--upcoming-alpha, 0.22);
+.scroll[data-reciting='true'] .ayah-block:not([data-ayah-active='true']) .ayah-recess-veil,
+.scroll[data-reciting='true'] .basmalah-block:not([data-ayah-active='true'])::after {
+  opacity: var(--upcoming-cover, 0.78);
 }
 
 /* Bookmark ribbons recede with chrome — CSS only, no per-ayah React update. */

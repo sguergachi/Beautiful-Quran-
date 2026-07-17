@@ -675,9 +675,10 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     )
   }
 
-  // Recess is paint-phase CSS on `.scroll[data-reciting]` — inactive ayahs keep
-  // dimmed=false so memo(AyahBlock) skips them on play/pause (Android: one ayah
-  // wakes). Karaoke ink still flows through isActiveAyah + activeWord.
+  // Recess is one paper veil per inactive ayah (`.ayah-recess-veil` under
+  // `.scroll[data-reciting]`) — not per-word opacity. Inactive ayahs keep
+  // dimmed=false so memo(AyahBlock) skips them on play/pause. Karaoke ink
+  // still flows through isActiveAyah + activeWord.
   const preface = prefaceState(state.activeBasmalah, false)
   const showBasmalah = surahOpensWithBasmalahPreface(content.surah.id)
   const ayahCount = content.surah.ayahCount

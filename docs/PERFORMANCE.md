@@ -8,6 +8,9 @@ use and the reasoning, so future changes don't regress them.
 The latest whole-pipeline review and its profiling constraints are recorded in
 [Android rendering performance audit — 2026-07-12](PERFORMANCE_AUDIT_2026-07-12.md).
 
+Web-specific GPU / paint findings (2026-07-16) live in
+[§ Web rendering and GPU](#web-rendering-and-gpu) below.
+
 ## The frame budget mindset
 
 At 120 Hz a frame is **8.3 ms**. The app's rule of thumb: recomposition is
@@ -175,3 +178,89 @@ user journeys on stable hardware. See [Profiling](PROFILING.md).
   mushaf mode).
 - Gapless surah-file playback (single MediaItem + absolute-offset segments)
   to remove inter-ayah stream startup entirely.
+
+---
+
+## Web rendering and GPU
+
+The web reader mirrors Android’s engines (Focus / Highlight / Ink) but paints
+with DOM + CSS. Frame budget thinking still applies: **animate compositor
+properties** (`transform`, `opacity`), not layout or paint-heavy style thrash.
+
+Audited 2026-07-16 (static profile + architecture; confirm with Chrome
+Performance / Layers on a long surah).
+
+### Cost model (after sliding virtualization)
+
+Mounted window ≈ 31 ayahs (12 before / 18 after). On Al-Baqarah (~21 words/ayah)
+that is still ~4–5k word DOM nodes and ~650 paper covers — far better than a
+full-surah mount (~50k nodes), but enough that **how** ink and recess animate
+dominates GPU cost.
+
+### Critical issues (fixed)
+
+#### 1. Per-frame `mask-image` karaoke (was critical)
+
+**Symptom:** Active-word wash rewrote `mask-image` / `-webkit-mask-image` up to
+~48 times per word, with `will-change: mask-image`. Browsers treat mask changes
+as paint invalidation + often re-raster a mask texture — main-thread style +
+GPU thrash, not a free compositor animation.
+
+**Fix:** Active paper peels use **`transform: scaleX`** (`runPaperCoverPeel`)
+with a *static* soft-edge mask class (`.ink-cover-peel`). English uses
+**opacity-only** reveal (`runOpacityReveal`). Orange repeat wash-in also uses
+scaleX; fade-out uses opacity. Do **not** reintroduce per-frame `mask-image`
+writes on the hot path.
+
+#### 2. Play-start recess storm (was critical)
+
+**Symptom:** Toggling `[data-reciting]` transitioned opacity on every inactive
+word cover, gloss, translit, mark, and translation at once (hundreds of
+simultaneous transitions) while focus glide also started.
+
+**Fix:** One **`.ayah-recess-veil`** (paper rect) per ayah + `basmalah-block::after`.
+Recess is O(ayahs in the window), not O(words). Full-ink Arabic stays opaque
+under the veil (no Hafs mark alpha dirt). Only the active ayah omits the veil
+and runs karaoke ink.
+
+### High / medium issues (tracked; not all fixed)
+
+| Issue | Severity | Status / mitigation |
+|---|---|---|
+| Permanent per-word `.ink-paper-cover` overdraw | High | Still present for Upcoming/Active peel; recess no longer animates all of them |
+| Focus `ensureCache` mass `getBoundingClientRect` | Medium | Scroll-only glide after warm; rebuild on window slide / resize |
+| Sheet `will-change: transform, opacity` while stack open | Low–med | Still on during reader stack; peel-only promotion is future work |
+| Unmemoized `WordUnit` on active ayah | Low–med | Only active ayah reconciles; memo is future headroom |
+| Rail full canvas redraw + `getComputedStyle` | Low | Skip when receded is future headroom |
+| Hafs shaping on window slide | Structural | Virtualization + hysteresis; pre-warm next ayah is future |
+
+### Techniques in use (web)
+
+1. **Sliding ayah window** — never expand long surahs to full mount
+   (`useProgressiveAyahWindow`: ~12 before / 18 after, edge hysteresis).
+2. **Store selectors** — Home / Settings / Bookmarks skip karaoke word-tick
+   re-renders (`useAppSelector`).
+3. **`memo(AyahBlock)`** + CSS recess veil — inactive verses do not React-dim.
+4. **Compositor ink** — `transform` / `opacity` peels; quantized Motion ticks.
+5. **Edge fade overlays** — solid paper gradients, not alpha-mask of the list.
+6. **Focus glide** — Motion `scrollTop` only after geometry cache warm (no
+   per-frame `getBoundingClientRect`).
+7. **Lazy orange/search overlays** — mounted only while repeating / flashing.
+8. **`content-visibility: auto`** on ayah blocks — paint skip for offscreen
+   verses (measure target forced visible for focus).
+
+### Profiling checklist (Chrome)
+
+1. Long surah → wait for window settle → Play.
+2. Performance: “Recalculate style” / “Paint” on play and each word.
+3. Rendering → Paint flashing during wash (should be small peel region).
+4. Layers: no permanent mask layer thrash on every word.
+5. Compare play-start cost: veil transition count ≈ inactive mounted ayahs.
+
+### Web future headroom
+
+- Paper cover only for Upcoming / Active words in view (fewer permanent rects).
+- `will-change` on sheets only during the 360 ms peel.
+- `memo(WordUnit)` with ink state equality.
+- Rail: skip paint when receded; cache CSS colors.
+- Focus: ResizeObserver per block or spacer estimates instead of full scan.
