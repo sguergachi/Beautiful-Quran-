@@ -342,15 +342,15 @@ export function runRepeatFadeOut(
   )
 }
 
-/** White-gold glyph wash plus its subtle outline halo. */
+/** White-gold glyph sheen plus its subtle outline halo. */
 export function runGlintWashIn(
-  ink: HTMLElement,
+  ink: HTMLElement | null,
   halo: HTMLElement,
   rtl: boolean,
   durationMs: number,
 ): () => void {
   halo.style.opacity = '0'
-  const cancelInk = runRepeatWashIn(ink, rtl, durationMs)
+  const cancelInk = ink ? runRepeatWashIn(ink, rtl, durationMs) : null
   const cancelHalo = runWash(
     durationMs,
     sweepEase(),
@@ -358,17 +358,17 @@ export function runGlintWashIn(
     (_p, eased) => { halo.style.opacity = String(eased) },
     () => { halo.style.opacity = '1' },
   )
-  return () => { cancelInk(); cancelHalo() }
+  return () => { cancelInk?.(); cancelHalo() }
 }
 
 /** Glimmer dry-down: glyph sheen and its halo recede together. */
 export function runGlintFadeOut(
-  ink: HTMLElement,
+  ink: HTMLElement | null,
   halo: HTMLElement,
   onDone?: () => void,
 ): () => void {
   const t = getTuning()
-  applyMask(ink, 'none')
+  if (ink) applyMask(ink, 'none')
   const fade = (el: HTMLElement, done?: () => void) => runWash(
     t.glintFadeMs,
     sweepEase(),
@@ -381,9 +381,9 @@ export function runGlintFadeOut(
       done?.()
     },
   )
-  const cancelInk = fade(ink, onDone)
-  const cancelHalo = fade(halo)
-  return () => { cancelInk(); cancelHalo() }
+  const cancelInk = ink ? fade(ink, onDone) : null
+  const cancelHalo = fade(halo, ink ? undefined : onDone)
+  return () => { cancelInk?.(); cancelHalo() }
 }
 
 /**

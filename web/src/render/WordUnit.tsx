@@ -276,18 +276,17 @@ export function WordUnit({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ink.state, ink.repeat, englishMode])
 
-  // Fresh-ink glint (Nightfall only, InkEngine.glinting): washes in alongside
-  // the base ink — same duration, same easing, same directional mask — holds
-  // while the word is lit, then dissolves to plain recited ink over
-  // glintFadeMs. Declared after the wash effect so revealedOnEntry is fresh.
+  // Fresh-ink glint (Nightfall only, InkEngine.glinting): the halo rises with
+  // the base wash; English also gets a masked tint twin. Arabic keeps one
+  // authoritative filled glyph so Hafs overhang cannot rasterize differently.
   useLayoutEffect(() => {
     if (!glintMounted) {
       prevGlint.current = false
       return
     }
-    const overlay = glintRef.current
+    const overlay = englishMode ? glintRef.current : null
     const halo = glintHaloRef.current
-    if (!overlay || !halo) return
+    if (!halo || (englishMode && !overlay)) return
     const glinting =
       ink.state === InkState.Active && (ink.repeat || !revealedOnEntry.current)
     const was = prevGlint.current
@@ -301,9 +300,9 @@ export function WordUnit({
       return runGlintFadeOut(overlay, halo, () => setGlintMounted(false))
     }
     if (!glinting) {
-      overlay.style.opacity = '0'
+      if (overlay) overlay.style.opacity = '0'
       halo.style.opacity = '0'
-      applyMask(overlay, 'none')
+      if (overlay) applyMask(overlay, 'none')
       setGlintMounted(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -436,11 +435,11 @@ export function WordUnit({
           {glintMounted ? (
             <span
               ref={glintHaloRef}
-              className={`word-glint-halo ${baseClass}`}
+              className={`word-glint-halo${englishMode ? '' : ' arabic-glint-surface'}`}
               aria-hidden="true"
               style={{ opacity: 0 }}
             >
-              {label}
+              <span className={baseClass}>{label}</span>
             </span>
           ) : null}
           {repeatMounted ? (
@@ -453,14 +452,14 @@ export function WordUnit({
               {label}
             </span>
           ) : null}
-          {glintMounted ? (
+          {glintMounted && englishMode ? (
             <span
               ref={glintRef}
-              className={`word-glint-overlay ${baseClass}`}
+              className="word-glint-overlay"
               aria-hidden="true"
               style={{ opacity: 0 }}
             >
-              {label}
+              <span className={baseClass}>{label}</span>
             </span>
           ) : null}
           {flashMounted ? (

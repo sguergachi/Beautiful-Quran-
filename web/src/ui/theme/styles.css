@@ -1490,8 +1490,8 @@ select {
 }
 
 @media (hover: hover) {
-  .word-unit:hover .word-arabic:not(.word-repeat-overlay):not(.word-glint-overlay),
-  .word-unit:hover .word-gloss:not(.word-repeat-overlay):not(.word-glint-overlay) {
+  .word-unit:hover .word-ink-slot > .word-arabic:not(.word-repeat-overlay),
+  .word-unit:hover .word-ink-slot > .word-gloss:not(.word-repeat-overlay) {
     color: var(--accent);
   }
 }
@@ -1615,50 +1615,53 @@ select {
   margin: 0;
 }
 
-.word-glint-overlay.word-arabic,
-.word-glint-overlay.word-gloss {
-  color: color-mix(in srgb, var(--glint, transparent) 62%, transparent);
-  position: absolute;
-}
-
-.words[data-lyric='english'] .word-glint-overlay.word-gloss {
+.word-glint-overlay > .word-arabic,
+.word-glint-overlay > .word-gloss {
+  display: block;
+  position: static;
   color: color-mix(in srgb, var(--glint, transparent) 62%, transparent);
 }
 
-/* CSS masks and animated opacity composite inside an element-sized surface.
-   Give both Arabic glimmer twins a compensated bleed: equal padding keeps the
-   glyph origin/content width fixed while the negative inset leaves room for
-   left-terminal ن/ب strokes, marks, and the halo blur. */
-.word-glint-overlay.word-arabic,
-.hafs-glint-overlay.hafs-glyph,
-.word-glint-halo.word-arabic,
-.word-glint-halo.hafs-glyph {
+.words[data-lyric='english'] .word-glint-overlay > .word-gloss {
+  color: color-mix(in srgb, var(--glint, transparent) 62%, transparent);
+}
+
+/* Composite the roomy wrapper, never the Arabic glyph itself. Hafs letters
+   paint outside their layout advance; an unmasked child lets
+   left-terminal ن/ب ink land in this compensated bleed instead of being
+   trimmed at the glyph's own compositing boundary. Equal padding preserves
+   the child's original origin and content width. */
+.word-glint-halo.arabic-glint-surface {
   inset: -0.28em;
   padding: 0.28em;
-  /* The Arabic paper cover is z-index:1. Glimmer owns its own directional
-     mask, so keep it above that cover or the final left terminal is re-covered. */
-  z-index: 2;
+  /* Stay beneath the Arabic paper cover (z-index:1). The proven ink reveal is
+     the only directional boundary; a second filled glyph can make Hafs
+     terminals look trimmed until the temporary glimmer fades away. */
+  z-index: 0;
 }
 
-/* Tight white-gold outline halo. It is a duplicate glyph with transparent fill,
-   so there is no rectangular light layer to expose during the animation. */
+/* Tight white-gold outline halo. The wrapper owns animated opacity; only its
+   glyph child casts light, so there is no rectangular light layer. */
 .word-glint-halo {
   position: absolute;
   inset: 0;
   pointer-events: none;
   white-space: nowrap;
   margin: 0;
+}
+
+.word-glint-halo > .word-arabic,
+.word-glint-halo > .word-gloss,
+.word-glint-halo > .hafs-glyph {
+  display: block;
+  position: static;
   color: transparent;
   text-shadow:
     0 0 0.055em color-mix(in srgb, var(--glint, transparent) 36%, transparent),
     0 0 0.15em color-mix(in srgb, var(--glint, transparent) 18%, transparent);
 }
 
-.word-glint-halo.word-arabic,
-.word-glint-halo.word-gloss,
-.word-glint-halo.hafs-glyph,
-.words[data-lyric='english'] .word-glint-halo.word-gloss {
-  position: absolute;
+.words[data-lyric='english'] .word-glint-halo > .word-gloss {
   color: transparent;
 }
 
@@ -1751,20 +1754,6 @@ select {
 /* Beat .hafs-glyph ink (and hover accent) on the shared overlay node. */
 .hafs-repeat-overlay.hafs-glyph {
   color: var(--repeat);
-  position: absolute;
-}
-
-/* White-gold first-gloss glint twin (Nightfall) — see .word-glint-overlay. */
-.hafs-glint-overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  white-space: nowrap;
-  margin: 0;
-}
-
-.hafs-glint-overlay.hafs-glyph {
-  color: color-mix(in srgb, var(--glint, transparent) 62%, transparent);
   position: absolute;
 }
 
@@ -1866,7 +1855,7 @@ select {
 }
 
 @media (hover: hover) {
-  .hafs-word:hover .hafs-glyph:not(.hafs-repeat-overlay):not(.hafs-glint-overlay) {
+  .hafs-word:hover .word-ink-slot > .hafs-glyph:not(.hafs-repeat-overlay) {
     color: var(--accent);
   }
 }

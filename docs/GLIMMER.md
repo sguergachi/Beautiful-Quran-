@@ -105,33 +105,31 @@ responsible for reveal fidelity.
 
 ## Web rendering
 
-`WordUnit` and `HafsWord` mount two temporary duplicates while a glimmer is
-active:
+English `WordUnit` mounts two temporary duplicates while a glimmer is active:
 
-- the crisp `.word-glint-overlay` / `.hafs-glint-overlay`, revealed by the same
-  directional mask as the ink wash;
+- the crisp `.word-glint-overlay`, revealed by the same directional mask as
+  the ink wash;
 - `.word-glint-halo`, containing the same text with transparent fill and two
   small `text-shadow` radii that follow the glyph silhouette.
 
-`runGlintWashIn` grows the halo opacity with the wash while the crisp overlay
-uses the directional mask. `runGlintFadeOut` recedes both over `glintFadeMs` and
-the component unmounts them when finished. There must be exactly one ref and
-one mounted element for each overlay; duplicate refs make repeat re-entry and
-cleanup unreliable.
+Arabic `WordUnit` and `HafsWord` mount only the transparent-fill halo. Chromium
+can rasterize a second Hafs fill differently at an overhanging terminal, making
+the original ink look trimmed until that tint fades. The base Arabic glyph is
+therefore the only filled glyph on web. `runGlintWashIn` grows the halo opacity
+with the wash; English also masks in its crisp overlay. `runGlintFadeOut`
+recedes the mounted layers over `glintFadeMs` and the component unmounts them
+when finished.
 
 The halo element deliberately has no `background`, `box-shadow`, or `filter`.
-Its parent allows overflow so the soft edge is not clipped at the word box.
-The masked Arabic tint and opacity-animated halo use equal negative inset and
-padding to enlarge only their paint boxes while keeping their glyph origins and
-content widths identical to the base word. This compensating bleed is required
-because masks and opacity compositing otherwise clip overhanging Arabic marks
-and left-terminal strokes at the element border box. Both glimmer twins sit
-above the web Arabic paper cover (`z-index: 2` over the cover's `z-index: 1`):
-the glimmer already owns its directional mask, and leaving it below the cover
-re-covers the final left terminal while the word forms.
-The shipped CSS uses a 62% glint tint plus two shadows: 36% at `0.055em` and
-18% at `0.15em`. These values are fixed on web; the live controls below tune
-the Android renderer only.
+The Arabic halo is an enlarged wrapper containing an unmasked glyph child.
+Equal negative inset and padding keep the child aligned with the base word
+while giving Hafs marks and left-terminal strokes room to paint beyond their
+layout advance. It remains beneath the existing paper cover and fades up as
+that proven ink wash reveals it. English keeps the glimmer mask because its ink
+reveal masks the glyph directly rather than using an Arabic paper cover. The
+shipped web halo uses two shadows: 36% at `0.055em` and 18% at `0.15em`; English
+also uses a 62% glint tint. These values are fixed on web; the live controls
+below tune the Android renderer only.
 
 ## Ink Lab controls
 

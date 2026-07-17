@@ -53,7 +53,6 @@ export function HafsWord({
   const localRootRef = useRef<HTMLSpanElement>(null)
   const coverRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
-  const glintRef = useRef<HTMLSpanElement>(null)
   const glintHaloRef = useRef<HTMLSpanElement>(null)
   const flashRef = useRef<HTMLSpanElement>(null)
   const prevState = useRef(ink.state)
@@ -132,18 +131,16 @@ export function HafsWord({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ink.state, ink.repeat])
 
-  // Fresh-ink glint (Nightfall only, InkEngine.glinting): washes in alongside
-  // the base ink — same duration, same easing, same directional mask — holds
-  // while the word is lit, then dissolves to plain recited ink over
-  // glintFadeMs. Declared after the cover effect so revealedOnEntry is fresh.
+  // Fresh-ink glint (Nightfall only, InkEngine.glinting): a transparent-fill
+  // halo rises with the paper-cover wash. Never add a second filled Hafs glyph:
+  // Chromium can rasterize its overhanging terminal differently from the base.
   useLayoutEffect(() => {
     if (!glintMounted) {
       prevGlint.current = false
       return
     }
-    const overlay = glintRef.current
     const halo = glintHaloRef.current
-    if (!overlay || !halo) return
+    if (!halo) return
     const glinting =
       ink.state === InkState.Active && (ink.repeat || !revealedOnEntry.current)
     const was = prevGlint.current
@@ -151,15 +148,13 @@ export function HafsWord({
 
     if (glinting && !was) {
       const duration = activeSweepMs ?? getTuning().repeatSweepMs
-      return runGlintWashIn(overlay, halo, true, duration)
+      return runGlintWashIn(null, halo, true, duration)
     }
     if (!glinting && was) {
-      return runGlintFadeOut(overlay, halo, () => setGlintMounted(false))
+      return runGlintFadeOut(null, halo, () => setGlintMounted(false))
     }
     if (!glinting) {
-      overlay.style.opacity = '0'
       halo.style.opacity = '0'
-      applyMask(overlay, 'none')
       setGlintMounted(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -231,27 +226,17 @@ export function HafsWord({
           {glintMounted ? (
             <span
               ref={glintHaloRef}
-              className="word-glint-halo hafs-glyph"
+              className="word-glint-halo arabic-glint-surface"
               aria-hidden="true"
               style={{ opacity: 0 }}
             >
-              {word.arabic}
+              <span className="hafs-glyph">{word.arabic}</span>
             </span>
           ) : null}
           {repeatMounted ? (
             <span
               ref={overlayRef}
               className="hafs-repeat-overlay hafs-glyph"
-              aria-hidden="true"
-              style={{ opacity: 0 }}
-            >
-              {word.arabic}
-            </span>
-          ) : null}
-          {glintMounted ? (
-            <span
-              ref={glintRef}
-              className="hafs-glint-overlay hafs-glyph"
               aria-hidden="true"
               style={{ opacity: 0 }}
             >
