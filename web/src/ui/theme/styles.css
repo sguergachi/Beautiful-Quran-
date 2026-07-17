@@ -1635,6 +1635,9 @@ select {
 .word-glint-halo.hafs-glyph {
   inset: -0.28em;
   padding: 0.28em;
+  /* The Arabic paper cover is z-index:1. Glimmer owns its own directional
+     mask, so keep it above that cover or the final left terminal is re-covered. */
+  z-index: 2;
 }
 
 /* Tight white-gold outline halo. It is a duplicate glyph with transparent fill,

@@ -125,7 +125,10 @@ The masked Arabic tint and opacity-animated halo use equal negative inset and
 padding to enlarge only their paint boxes while keeping their glyph origins and
 content widths identical to the base word. This compensating bleed is required
 because masks and opacity compositing otherwise clip overhanging Arabic marks
-and left-terminal strokes at the element border box.
+and left-terminal strokes at the element border box. Both glimmer twins sit
+above the web Arabic paper cover (`z-index: 2` over the cover's `z-index: 1`):
+the glimmer already owns its directional mask, and leaving it below the cover
+re-covers the final left terminal while the word forms.
 The shipped CSS uses a 62% glint tint plus two shadows: 36% at `0.055em` and
 18% at `0.15em`. These values are fixed on web; the live controls below tune
 the Android renderer only.
