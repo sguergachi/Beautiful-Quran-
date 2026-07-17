@@ -1287,9 +1287,12 @@ select {
   /* Shared with .word-arabic / .ayah-mark so the verse sign tracks glyph size. */
   --word-arabic-size: calc(1.8rem * var(--font-scale, 1));
   --word-arabic-line: 1.9;
-  /* Skip paint/layout for off-screen verses after mount (browser virtualization). */
+  /*
+   * Off-screen paint skip. Intrinsic size must not under-estimate real
+   * verse height or fast scroll shows empty paper where content will land.
+   */
   content-visibility: auto;
-  contain-intrinsic-size: auto 7.5rem;
+  contain-intrinsic-size: auto 14rem;
 }
 
 /* FocusEngine needs the chosen ayah's real wrapped-text height even while it

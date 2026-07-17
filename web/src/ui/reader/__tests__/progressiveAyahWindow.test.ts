@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  expandWindowToward,
   initialAyahMountRange,
   mountRangeForAyah,
   slideWindowToward,
@@ -67,17 +68,35 @@ describe('mountRangeForAyah', () => {
   })
 })
 
-describe('slideWindowToward', () => {
-  it('holds still while the center stays clear of the edges', () => {
-    const current = slidingAyahMountRange(286, 100)
-    expect(slideWindowToward(current, 286, 102)).toBe(current)
+describe('expandWindowToward', () => {
+  it('grows the high edge as the center advances', () => {
+    const current = slidingAyahMountRange(286, 1)
+    const next = expandWindowToward(current, 286, 40)
+    expect(next.lo).toBe(1)
+    expect(next.hi).toBeGreaterThan(current.hi)
+    expect(next.hi).toBe(40 + WINDOW_AFTER)
   })
 
-  it('re-slides when the center nears the high edge', () => {
-    const current = slidingAyahMountRange(286, 100)
-    const next = slideWindowToward(current, 286, current.hi - 2)
-    expect(next).not.toBe(current)
-    expect(next.lo).toBeLessThanOrEqual(current.hi - 2)
-    expect(next.hi).toBeGreaterThanOrEqual(current.hi - 2)
+  it('never shrinks when the center moves back toward the start', () => {
+    const grown = expandWindowToward(slidingAyahMountRange(286, 1), 286, 50)
+    const back = expandWindowToward(grown, 286, 5)
+    // Still holds the high water from scrolling down — no blank unmount.
+    expect(back.lo).toBe(grown.lo)
+    expect(back.hi).toBe(grown.hi)
+  })
+
+  it('is a no-op when the center is already comfortably covered', () => {
+    // Window already wide enough that wantLo/wantHi sit inside lo/hi.
+    const current = { lo: 50, hi: 150, complete: false as const }
+    expect(expandWindowToward(current, 286, 100)).toBe(current)
+  })
+})
+
+describe('slideWindowToward', () => {
+  it('aliases expand-only behaviour', () => {
+    const current = slidingAyahMountRange(286, 1)
+    expect(slideWindowToward(current, 286, 40)).toEqual(
+      expandWindowToward(current, 286, 40),
+    )
   })
 })

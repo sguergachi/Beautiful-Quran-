@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
 
 /**
- * Sliding mount window around the reading / recitation center.
+ * Progressive mount window around the reading / recitation center.
  *
- * Long chapters never fully mount — offscreen ayahs stay as pad spacers so
- * React + DOM stay O(window) instead of O(surah). Short chapters that fit
- * entirely inside the window report complete:true.
+ * **Invariant:** free scroll must never unmount content under the viewport.
+ * The window only *expands* as the user scrolls or recitation advances.
+ * Shrinking (and the blank pad gaps it caused) happens only on a far jump
+ * via [mountRangeForAyah].
  */
-export const WINDOW_BEFORE = 12
-export const WINDOW_AFTER = 18
+export const WINDOW_BEFORE = 16
+export const WINDOW_AFTER = 24
 
 export interface AyahMountRange {
   lo: number
@@ -18,7 +19,7 @@ export interface AyahMountRange {
 }
 
 /** Estimated height per unmounted ayah for top/bottom scroll padding. */
-export const AYAH_SPACER_EST_PX = 104
+export const AYAH_SPACER_EST_PX = 120
 
 /** Pure window around [centerAyah] — unit-tested. */
 export function slidingAyahMountRange(
@@ -42,8 +43,8 @@ export function initialAyahMountRange(
 
 /**
  * Materialize a requested ayah before the focus controller measures it.
- * A far target gets a fresh tight window; already-visible targets keep the
- * current window until the center effect re-slides.
+ * Already-visible targets keep the current window. Far targets get a fresh
+ * tight window (the only path that unmounts distant content).
  */
 export function mountRangeForAyah(
   current: AyahMountRange,
@@ -57,33 +58,40 @@ export function mountRangeForAyah(
 }
 
 /**
- * Expand [current] just enough to include [center] with hysteresis so small
- * scroll/playhead steps do not remount every frame. Only re-centers when the
- * center approaches the window edge.
+ * Grow [current] so it covers [center] with a comfortable margin.
+ * **Never shrinks** — unmounting mid-scroll left blank spacer gaps.
  */
-export function slideWindowToward(
+export function expandWindowToward(
   current: AyahMountRange,
   ayahCount: number,
   centerAyah: number,
 ): AyahMountRange {
   if (ayahCount < 1) return { lo: 1, hi: 1, complete: true }
+  if (current.complete) return current
   const center = Math.min(ayahCount, Math.max(1, Math.round(centerAyah)))
-  // Comfort margin: re-slide when within 4 ayahs of either edge.
-  const edge = 4
-  if (center - current.lo >= edge && current.hi - center >= edge) {
-    return current
-  }
-  const next = slidingAyahMountRange(ayahCount, center)
-  if (next.lo === current.lo && next.hi === current.hi) return current
-  return next
+  const wantLo = Math.max(1, center - WINDOW_BEFORE)
+  const wantHi = Math.min(ayahCount, center + WINDOW_AFTER)
+  const lo = Math.min(current.lo, wantLo)
+  const hi = Math.max(current.hi, wantHi)
+  const complete = lo === 1 && hi === ayahCount
+  if (lo === current.lo && hi === current.hi) return current
+  return { lo, hi, complete }
+}
+
+/** @deprecated use expandWindowToward — shrink-on-scroll was the blank-view bug. */
+export function slideWindowToward(
+  current: AyahMountRange,
+  ayahCount: number,
+  centerAyah: number,
+): AyahMountRange {
+  return expandWindowToward(current, ayahCount, centerAyah)
 }
 
 /**
  * Progressive ayah mount window for the reader.
  *
- * Mount a sliding window around [centerAyah] (open anchor, focus, or playhead).
- * Never expands to the full surah on long chapters — that was the main source
- * of ~50k DOM nodes on Al-Baqarah.
+ * Starts tight around the open anchor, then expands as focus / playhead moves.
+ * Never unmounts during scroll — only a far selector/search jump re-windows.
  */
 export function useProgressiveAyahWindow(
   ayahCount: number,
@@ -106,14 +114,14 @@ export function useProgressiveAyahWindow(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [surahKey, ayahCount])
 
-  // Follow playhead / focus with hysteresis so we do not thrash mounts.
+  // Follow playhead / focus by expanding only (never shrink → never blank).
   useEffect(() => {
     if (!surahKey || ayahCount < 1) return
-    setRange((prev) => slideWindowToward(prev, ayahCount, centerAyah))
+    setRange((prev) => expandWindowToward(prev, ayahCount, centerAyah))
   }, [centerAyah, ayahCount, surahKey])
 
-  // Selector/search/playback jumps may arrive before the sliding window has
-  // the target. Put that target in the DOM first so FocusEngine can measure it.
+  // Selector/search/playback jumps may arrive before the window covers them.
+  // Far targets re-window tightly; near targets no-op.
   useEffect(() => {
     if (!surahKey || requestedAyah == null) return
     setRange((prev) => mountRangeForAyah(prev, ayahCount, requestedAyah))
