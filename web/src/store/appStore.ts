@@ -125,6 +125,11 @@ class AppStore {
   private readonly highlightClock = new HighlightClock()
   /** Bumps when a newer openSurah supersedes an in-flight peel→load. */
   private openToken = 0
+  /**
+   * True when opening the root viewer paused an active chapter recitation.
+   * Normal close resumes; concordance jumps and other navigations discard it.
+   */
+  private rootViewerResumePlayback = false
 
   state: AppState = {
     ready: false,
@@ -366,7 +371,9 @@ class AppStore {
       wordPosition != null && wordPosition > 0 ? wordPosition : null
     const flash =
       flashWord != null ? { ayah: openAyah, wordPosition: flashWord } : null
-    const rootViewerClosing = this.state.rootViewer != null ? true : false
+    // Navigating away from the lexicon never resumes the pre-open session.
+    const rootViewerClosing = this.state.rootViewer != null
+    if (rootViewerClosing) this.rootViewerResumePlayback = false
 
     // Same chapter already loaded — peel only (no remount). The CSS sheet
     // glide is the whole point of this path.
@@ -681,19 +688,44 @@ class AppStore {
     this.set({ followEnabled })
   }
 
-  /** Begin the exit hole-punch; content stays until [finishCloseRootViewer]. */
-  closeRootViewer() {
+  /**
+   * Begin the exit hole-punch; content stays until [finishCloseRootViewer].
+   * When [resumeReading] is true (default), restores chapter playback if the
+   * viewer paused it — Android [closeRootViewer] parity. Concordance jumps
+   * pass false so the old location is not resumed.
+   */
+  closeRootViewer(resumeReading = true) {
     if (!this.state.rootViewer || this.state.rootViewerClosing) return
+    const shouldResume = resumeReading && this.rootViewerResumePlayback
+    this.rootViewerResumePlayback = false
     this.set({ rootViewerClosing: true })
+    if (shouldResume) void player.play()
   }
 
   /** Drop root-viewer state after the bleed-out animation completes. */
   finishCloseRootViewer() {
     if (!this.state.rootViewer) return
+    this.rootViewerResumePlayback = false
     this.set({ rootViewer: null, rootViewerClosing: false })
   }
 
   openRootViewer(surahId: number, ayah: number, word: Word) {
+    // Android pauseForRootViewer: only pause/resume a live reading of this chapter.
+    const ps = this.state.player
+    const np = ps.nowPlaying
+    const readerSurahId = this.state.content?.surah.id
+    if (
+      ps.isPlaying &&
+      np != null &&
+      readerSurahId != null &&
+      np.surahId === readerSurahId
+    ) {
+      this.rootViewerResumePlayback = true
+      player.pause()
+    } else {
+      this.rootViewerResumePlayback = false
+    }
+
     const morph = QuranRepository.wordMorphology(surahId, ayah, word.position)
     if (!morph || !morph.root) {
       this.set({
