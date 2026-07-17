@@ -61,10 +61,15 @@ export class MediaElementTransport {
     return this.standbyElement
   }
 
+  /**
+   * Standby is usable once it has current media data. Blob URLs often sit at
+   * HAVE_CURRENT_DATA briefly before FUTURE; requiring FUTURE left joins cold
+   * and forced a full silence-tail wait until natural `ended`.
+   */
   isStandbyReady(index: number): boolean {
     return this.standbyElement != null &&
       this.standbyIndex === index &&
-      this.standbyElement.readyState >= HAVE_FUTURE_DATA
+      this.standbyElement.readyState >= 2 /* HAVE_CURRENT_DATA */
   }
 
   loadActive(source: ActiveSource): void {

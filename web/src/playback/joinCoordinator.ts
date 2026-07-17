@@ -31,6 +31,18 @@ export class JoinCoordinator {
     const src = await this.prefetcher.ensure(item.url)
     if (generation !== this.prepareGeneration || !src) return
     this.transport.prepareStandby(index, src, playbackRate)
+    // Wait until the standby element can actually start — otherwise isStandbyReady
+    // is false at the audible boundary and we fall through to a gappy ended path.
+    const standby = this.transport.standby
+    if (standby) {
+      try {
+        await this.transport.waitForCanPlay(standby)
+      } catch {
+        return
+      }
+    }
+    if (generation !== this.prepareGeneration) return
+    if (!this.transport.isStandbyReady(index)) return
     onPrepared()
   }
 
