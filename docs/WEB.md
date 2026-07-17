@@ -55,7 +55,7 @@ tools/build_db.py  ──►  quran.db  (shared asset; optional web export step)
 web/                          ▼
   domain/          HighlightEngine / HighlightClock + domain policy
   data/            WASM SQLite wrapper + typed queries (same schema)
-  playback/        HTMLAudioElement / Media Session + Cache API LRU
+  playback/        Gapless-5 (default) / dual-`<audio>` fallback + Media Session + Cache API LRU
   ui/reader/       InkEngine + focus engine/controller + reader state policy
   ui/theme/        shared fade math; DOM masks remain render adapters
   render/          mode-specific word drawing (gloss / English / Arabic-only)
@@ -459,9 +459,9 @@ sans.
 ### Phase 5 — Parity polish / cut line
 - ✅ Search within surah (reader top-bar icons + match navigation), floating
   home playback control, Media Session.
-- ✅ Prefetch next ayahs into Cache API; desktop uses a dual-`<audio>` standby,
-  while iOS keeps one HTTPS-backed media element to avoid WebKit stalls (see
-  `web/src/playback/audioPrefetch.ts`).
+- ✅ Prefetch next ayahs into Cache API; verse joins default to Gapless-5
+  (HTML5 + Web Audio hybrid). Developer mode can fall back to dual-`<audio>`
+  standby (iOS single-element HTTPS path on that legacy engine).
 - ✅ Collapsed surah title in the reader top bar once the opening header
   scrolls off (Android `OrnateSurahTitle` parity — Arabic + chapter ·
   transliteration, flanked by gilded flourishes).

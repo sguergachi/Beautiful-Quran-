@@ -34,8 +34,8 @@ export interface Settings {
   /** Reveals developer tools (e.g. the Ornaments Lab). Off by default. */
   developerMode: boolean
   /**
-   * Developer-only: use Gapless-5 (Web Audio hybrid) for verse joins instead
-   * of the dual-`<audio>` transport. Off by default — experimental A/B.
+   * Use Gapless-5 (HTML5 + Web Audio) for verse joins. On by default; the
+   * developer toggle can fall back to dual-`<audio>` handoff for A/B.
    */
   gapless5Playback: boolean
   /** Developer-selectable Chapters bookmark treatment. */
@@ -57,7 +57,7 @@ const DEFAULTS: Settings = {
   lastAyah: 1,
   playbackSpeed: 1,
   developerMode: false,
-  gapless5Playback: false,
+  gapless5Playback: true,
   homeBookmarkStyle: 'top_bound',
   brushCircleStyle: 'baseline',
 }
