@@ -379,9 +379,10 @@ InkEngine owns that too, as data rather than as animation code:
   currently a Nightfall-only signature) and rides the active letter or repeat
   wash — same progress, same feather — as a tinted overlay (`letterFadeIn`
   on word units, `ColorReveal` on shaped lines). Android adds a restrained
-  white-gold halo outside those glyph outlines so the sheen remains legible
-  against Nightfall without turning into a hard or whole-word glow, so it adds
-  no new motion—only a warm sheen that cools as the ink dries. And
+  white-gold halo outside those glyph outlines; web uses two glyph-shaped
+  drop-shadow blooms for the same luminous core and wider aura. The sheen stays
+  legible against Nightfall without becoming a hard or whole-word glow, adding
+  no new motion—only a warm light that cools as the ink dries. And
   `prefaceState(isActive, dimmed)` / `prefaceWashProgress(positionMs, durationMs)`
   for the surah-header basmalah VectorDrawable (Active during the Al-Fatihah
   1:1 lead-in clip, with an RTL `letterFadeIn` wash paced by the clip clock and

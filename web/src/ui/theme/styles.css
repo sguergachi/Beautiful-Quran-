@@ -1618,6 +1618,9 @@ select {
 .word-glint-overlay.word-arabic,
 .word-glint-overlay.word-gloss {
   color: var(--glint, transparent);
+  filter:
+    drop-shadow(0 0 0.1em color-mix(in srgb, var(--glint, transparent) 82%, transparent))
+    drop-shadow(0 0 0.42em color-mix(in srgb, var(--glint, transparent) 58%, transparent));
   position: absolute;
 }
 
@@ -1728,6 +1731,9 @@ select {
 
 .hafs-glint-overlay.hafs-glyph {
   color: var(--glint, transparent);
+  filter:
+    drop-shadow(0 0 0.1em color-mix(in srgb, var(--glint, transparent) 82%, transparent))
+    drop-shadow(0 0 0.42em color-mix(in srgb, var(--glint, transparent) 58%, transparent));
   position: absolute;
 }
 
