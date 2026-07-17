@@ -370,7 +370,17 @@ InkEngine owns that too, as data rather than as animation code:
   with the min/max clamps (the min floor never exceeds the word's lit
   lifetime — stretching past handoff flickered Arabic-only's paper cover),
   `startRevealed(previous, current)` — the rule
-  that only a Recited→Active transition skips the reveal sweep — and
+  that only a Recited→Active transition skips the reveal sweep —
+  `glinting(state, repeat, startRevealed)` — the first-gloss glint rule:
+  only a genuinely new word sweeping in on its first pass (never a repeat,
+  never a word re-lit already revealed) wears the white-gold fresh-ink sheen,
+  which then dissolves back to plain recited ink over `Tuning.glintFadeMs`
+  (1 s). The glint is theme-gated by `QuranAccents.glintInk` (null = off;
+  currently a Nightfall-only signature) and rides the word's existing letter
+  sweep — same progress, same feather — as a tinted overlay (`letterFadeIn`
+  in gloss modes, a `ShapedWordBloom.ColorReveal` in the shaped
+  English/Arabic-only paths), so it adds no new motion, only a warm sheen
+  that cools as the ink dries. And
   `prefaceState(isActive, dimmed)` / `prefaceWashProgress(positionMs, durationMs)`
   for the surah-header basmalah VectorDrawable (Active during the Al-Fatihah
   1:1 lead-in clip, with an RTL `letterFadeIn` wash paced by the clip clock and
@@ -395,7 +405,8 @@ InkEngine owns that too, as data rather than as animation code:
 Settings → Developer (triple-tap the logo) → **Ink Lab overlay** floats a
 collapsible slider panel over the reader (`ui/reader/InkLabPanel.kt`), bound
 directly to `InkEngine.tuning`: upcoming ink, fade timings, sweep clamps,
-repeat timings, wash feather, and the experimental tajweed-pacing toggle with
+repeat timings, the fresh-ink glint fade, wash feather, and the experimental
+tajweed-pacing toggle with
 its paced-feather knob (see [TAJWEED_PACING.md](TAJWEED_PACING.md)). Edits are
 session-only and never persisted —
 shipped behavior cannot drift; **Log values** dumps the current `Tuning` to

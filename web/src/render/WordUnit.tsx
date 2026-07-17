@@ -17,6 +17,8 @@ import { secondaryAlpha, TRANSLITERATION_COLOR_ALPHA } from '../ui/reader/WordHi
 import {
   applyMask,
   clearPaperCover,
+  glintEnabled,
+  runGlintFadeOut,
   runLetterWash,
   runPaperCoverWash,
   runRepeatFadeOut,
@@ -110,6 +112,7 @@ export function WordUnit({
   const baseRef = useRef<HTMLSpanElement>(null)
   const coverRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
+  const glintRef = useRef<HTMLSpanElement>(null)
   const flashRef = useRef<HTMLSpanElement>(null)
   const glossFlashRef = useRef<HTMLSpanElement>(null)
   const glossRef = useRef<HTMLSpanElement>(null)
@@ -120,8 +123,10 @@ export function WordUnit({
   // false so a word that mounts already in the chain still washes orange in
   // (Android Animatable starts at progress 0 when repeat is true on first compose).
   const prevRepeat = useRef(false)
-  /** Mount orange/search overlays only while needed — not for every idle word. */
+  const prevGlint = useRef(false)
+  /** Mount orange/glint/search overlays only while needed — not for every idle word. */
   const [repeatMounted, setRepeatMounted] = useState(ink.repeat)
+  const [glintMounted, setGlintMounted] = useState(false)
   const [flashMounted, setFlashMounted] = useState(searchFlash)
   const tuning = getTuning()
   const baseClass = englishMode ? 'word-gloss' : 'word-arabic'
@@ -197,6 +202,10 @@ export function WordUnit({
 
       if (!enteredActive) return
 
+      // The same branch that starts the first-pass wash mounts the glint twin
+      // (Nightfall): the white-gold sheen rides this wash, drying after it.
+      if (glintEnabled()) setGlintMounted(true)
+
       const duration = activeSweepMs ?? t.repeatSweepMs
       paintSecondary(glossRef.current, translitRef.current, ink, 0, false)
       return runPaperCoverWash(
@@ -241,6 +250,9 @@ export function WordUnit({
 
     if (!enteredActive) return
 
+    // Same glint mount as the Arabic branch — English lyric ink glints too.
+    if (glintEnabled()) setGlintMounted(true)
+
     const duration = activeSweepMs ?? t.repeatSweepMs
     paintSecondary(glossRef.current, translitRef.current, ink, 0, true)
     return runLetterWash(
@@ -260,6 +272,37 @@ export function WordUnit({
     // must not cancel and restart the sweep (that is itself a flicker).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ink.state, ink.repeat, englishMode])
+
+  // Fresh-ink glint (Nightfall only, InkEngine.glinting): washes in alongside
+  // the base ink — same duration, same easing, same directional mask — holds
+  // while the word is lit, then dissolves to plain recited ink over
+  // glintFadeMs. Declared after the wash effect so revealedOnEntry is fresh.
+  useLayoutEffect(() => {
+    if (!glintMounted) {
+      prevGlint.current = false
+      return
+    }
+    const overlay = glintRef.current
+    if (!overlay) return
+    const glinting =
+      ink.state === InkState.Active && !ink.repeat && !revealedOnEntry.current
+    const was = prevGlint.current
+    prevGlint.current = glinting
+
+    if (glinting && !was) {
+      const duration = activeSweepMs ?? getTuning().repeatSweepMs
+      return runRepeatWashIn(overlay, !englishMode, duration)
+    }
+    if (!glinting && was) {
+      return runGlintFadeOut(overlay, () => setGlintMounted(false))
+    }
+    if (!glinting) {
+      overlay.style.opacity = '0'
+      applyMask(overlay, 'none')
+      setGlintMounted(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ink.state, ink.repeat, glintMounted, englishMode])
 
   // Keep secondary alpha in sync when gloss/translit mount or ink leaves Active
   // without a wash restart (e.g. settings toggle mid-verse).
@@ -385,6 +428,16 @@ export function WordUnit({
           >
             {label}
           </span>
+          {glintMounted ? (
+            <span
+              ref={glintRef}
+              className={`word-glint-overlay ${baseClass}`}
+              aria-hidden="true"
+              style={{ opacity: 0 }}
+            >
+              {label}
+            </span>
+          ) : null}
           {repeatMounted ? (
             <span
               ref={overlayRef}

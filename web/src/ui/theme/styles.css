@@ -56,6 +56,10 @@
   --emboss-light: rgba(255, 255, 255, 0.12);
   --repeat: #e08a4a;
   --bookmark: #d64358;
+  /* Fresh-ink glint: white gold a breath brighter and warmer than the
+   * parchment ink, so a newly read word glints on the night page without
+   * shouting. Nightfall-only signature — no other theme defines it. */
+  --glint: #f8e9be;
   color-scheme: dark;
 }
 
@@ -1486,8 +1490,8 @@ select {
 }
 
 @media (hover: hover) {
-  .word-unit:hover .word-arabic:not(.word-repeat-overlay),
-  .word-unit:hover .word-gloss:not(.word-repeat-overlay) {
+  .word-unit:hover .word-arabic:not(.word-repeat-overlay):not(.word-glint-overlay),
+  .word-unit:hover .word-gloss:not(.word-repeat-overlay):not(.word-glint-overlay) {
     color: var(--accent);
   }
 }
@@ -1600,6 +1604,27 @@ select {
   color: var(--repeat);
 }
 
+/* White-gold first-gloss glint (Nightfall) — same geometry rules as the
+   orange repeat twin. `--glint` only exists on the dark theme; the transparent
+   fallback keeps a mid-fade overlay invisible if the theme flips under it. */
+.word-glint-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  margin: 0;
+}
+
+.word-glint-overlay.word-arabic,
+.word-glint-overlay.word-gloss {
+  color: var(--glint, transparent);
+  position: absolute;
+}
+
+.words[data-lyric='english'] .word-glint-overlay.word-gloss {
+  color: var(--glint, transparent);
+}
+
 .word-gloss-flash {
   position: relative;
   display: inline-block;
@@ -1689,6 +1714,20 @@ select {
 /* Beat .hafs-glyph ink (and hover accent) on the shared overlay node. */
 .hafs-repeat-overlay.hafs-glyph {
   color: var(--repeat);
+  position: absolute;
+}
+
+/* White-gold first-gloss glint twin (Nightfall) — see .word-glint-overlay. */
+.hafs-glint-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  margin: 0;
+}
+
+.hafs-glint-overlay.hafs-glyph {
+  color: var(--glint, transparent);
   position: absolute;
 }
 
@@ -1790,7 +1829,7 @@ select {
 }
 
 @media (hover: hover) {
-  .hafs-word:hover .hafs-glyph:not(.hafs-repeat-overlay) {
+  .hafs-word:hover .hafs-glyph:not(.hafs-repeat-overlay):not(.hafs-glint-overlay) {
     color: var(--accent);
   }
 }

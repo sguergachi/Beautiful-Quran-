@@ -54,6 +54,11 @@ data class QuranAccents(
      * third hue, distinct from [gold] (selection/ornament) and [repeatInk]
      * (recitation), so "my marks" never reads as navigation or playback. */
     val bookmarkRibbon: Color,
+    /** Freshly laid ink's white-gold sheen — the first-gloss glint a newly
+     * read word wears for a breath before drying to plain recited ink
+     * (InkEngine.glinting). Null on themes without the effect; currently a
+     * Nightfall-only signature. */
+    val glintInk: Color? = null,
 )
 
 val LocalQuranAccents = staticCompositionLocalOf {
@@ -206,7 +211,14 @@ private val DarkAccents = QuranAccents(
     // Lighter, less-saturated ruby so it lifts off near-black and deep green
     // instead of muddying into the surface. Shared by Nightfall and Royal Green.
     bookmarkRibbon = Color(0xFFD64358),
+    // White gold: a breath brighter and warmer than Parchment, so fresh ink
+    // glints on the night page without shouting.
+    glintInk = Color(0xFFF8E9BE),
 )
+
+/** Royal Green shares Nightfall's accent inks but not its fresh-ink glint —
+ * the white-gold first-gloss sheen is a Nightfall-only signature (for now). */
+private val RoyalGreenAccents = DarkAccents.copy(glintInk = null)
 
 @Composable
 fun themePreviewColors(themeMode: ThemeMode): List<Color> {
@@ -254,11 +266,11 @@ fun BeautifulQuranTheme(
     content: @Composable () -> Unit,
 ) {
     val systemDark = isSystemInDarkTheme()
-    val darkAccents = when (themeMode) {
-        ThemeMode.SYSTEM -> systemDark
-        ThemeMode.LIGHT -> false
-        ThemeMode.DARK -> true
-        ThemeMode.ROYAL_GREEN -> true
+    val accents = when (themeMode) {
+        ThemeMode.SYSTEM -> if (systemDark) DarkAccents else LightAccents
+        ThemeMode.LIGHT -> LightAccents
+        ThemeMode.DARK -> DarkAccents
+        ThemeMode.ROYAL_GREEN -> RoyalGreenAccents
     }
     val colors = when (themeMode) {
         ThemeMode.SYSTEM -> if (systemDark) DarkColors else LightColors
@@ -267,7 +279,7 @@ fun BeautifulQuranTheme(
         ThemeMode.ROYAL_GREEN -> RoyalGreenColors
     }
     androidx.compose.runtime.CompositionLocalProvider(
-        LocalQuranAccents provides if (darkAccents) DarkAccents else LightAccents,
+        LocalQuranAccents provides accents,
     ) {
         MaterialTheme(
             colorScheme = colors,
