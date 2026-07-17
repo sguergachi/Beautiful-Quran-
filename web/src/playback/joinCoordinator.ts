@@ -50,10 +50,11 @@ export class JoinCoordinator {
 
   async prepareBounds(item: PlaylistItem, onPrepared: () => void): Promise<void> {
     if (this.audibleBounds.has(item.url)) return
-    const src = await this.prefetcher.ensure(item.url)
-    if (!src) return
+    // Ensure first so analyze hits a blob URL instead of a second network fetch.
+    const src = (await this.prefetcher.ensure(item.url)) ?? item.url
     const bounds = await this.boundaryAnalyzer.analyze(src)
     if (!bounds) return
+    // Key by playlist URL so boundsFor works regardless of blob vs remote src.
     this.audibleBounds.set(item.url, bounds)
     onPrepared()
   }

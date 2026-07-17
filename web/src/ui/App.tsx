@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { appStore, useAppState } from '../store/appStore'
+import { appStore, shallowEqual, useAppSelector } from '../store/appStore'
 import { hasReaderOpen } from './paper/stack'
 import { HomeScreen } from './home/HomeScreen'
 import { BookmarksScreen } from './bookmarks/BookmarksScreen'
@@ -47,7 +47,22 @@ function retryBoot() {
 }
 
 export function App() {
-  const state = useAppState()
+  // Shell only — ignore karaoke word ticks so the whole paper stack does not
+  // reconcile on every active-word boundary.
+  const state = useAppSelector(
+    (s) => ({
+      ready: s.ready,
+      error: s.error,
+      loadLabel: s.loadLabel,
+      loadProgress: s.loadProgress,
+      stackLayer: s.stackLayer,
+      sheet: s.sheet,
+      content: s.content,
+      bookmarks: s.bookmarks,
+      settings: s.settings,
+    }),
+    shallowEqual,
+  )
   // Once per page load — mirrors Android rememberSaveable entranceDone.
   const [entranceDone, setEntranceDone] = useState(false)
   const isLab = useLabRoute()

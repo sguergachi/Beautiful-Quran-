@@ -74,6 +74,10 @@ export class AudioPrefetcher {
   private readAheadGen = 0
   private warmGen = 0
   private released = false
+  /** When true, whole-surah warm workers yield so join/read-ahead own bandwidth. */
+  private warmPaused = false
+  /** Last whole-surah warm playlist — restarted on [resumeWarm] if still incomplete. */
+  private lastWarmUrls: string[] | null = null
 
   constructor(options: AudioPrefetcherOptions = {}) {
     this.fetchImpl = options.fetch ?? ((input, init) => fetch(input, init))
@@ -159,8 +163,28 @@ export class AudioPrefetcher {
   warmSurah(urls: string[]): void {
     if (this.released || urls.length === 0) return
     if (this.shouldSkipSurahWarm()) return
+    this.lastWarmUrls = urls
+    if (this.warmPaused) return
     const gen = ++this.warmGen
-    void this.cacheAll(urls, () => gen !== this.warmGen)
+    void this.cacheAll(urls, () => gen !== this.warmGen || this.warmPaused)
+  }
+
+  /**
+   * Pause whole-surah warm during verse joins so read-ahead + the active clip
+   * own the network. In-flight warm workers exit on the next iteration.
+   */
+  pauseWarm(): void {
+    if (this.warmPaused) return
+    this.warmPaused = true
+    this.warmGen++
+  }
+
+  /** Resume whole-surah warm after a join settles. */
+  resumeWarm(): void {
+    if (!this.warmPaused) return
+    this.warmPaused = false
+    const urls = this.lastWarmUrls
+    if (urls) this.warmSurah(urls)
   }
 
   /** Drop in-flight work and revoke blob URLs. Cache API entries are kept. */
@@ -168,6 +192,8 @@ export class AudioPrefetcher {
     this.released = true
     this.readAheadGen++
     this.warmGen++
+    this.warmPaused = false
+    this.lastWarmUrls = null
     this.inflight.clear()
     this.pinned.clear()
     for (const objectUrl of this.memory.values()) {
@@ -196,7 +222,7 @@ export class AudioPrefetcher {
     let cursor = 0
     const workers = Array.from({ length: Math.min(this.concurrency, pending.length) }, async () => {
       while (true) {
-        if (cancelled() || this.released) return
+        if (cancelled() || this.released || this.warmPaused) return
         const i = cursor++
         if (i >= pending.length) return
         await this.ensure(pending[i]!)

@@ -217,10 +217,15 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
   })
   const receded = recitingActive && !searchActive
 
-  const mountAnchor = state.openAyah || 1
+  // Virtualization center: follow the reciting ayah, else the open/focus verse.
+  // Sliding window never expands to full long surahs (see useProgressiveAyahWindow).
+  const mountCenter =
+    state.activeAyah != null && state.activeAyah > 0
+      ? state.activeAyah
+      : focusedAyah || state.openAyah || 1
   const mountRange = useProgressiveAyahWindow(
     content?.surah.ayahCount ?? 0,
-    mountAnchor,
+    mountCenter,
     content?.surah.id,
     requestedMountAyah,
   )

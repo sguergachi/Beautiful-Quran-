@@ -11,17 +11,20 @@ export class FakeAudio extends EventTarget {
   volume = 1
   loop = false
   paused = true
+  ended = false
   playsInline = false
   readonly attributes = new Map<string, string>()
 
   readonly play = vi.fn(async () => {
     this.paused = false
+    this.ended = false
     this.emit('play')
     this.emit('playing')
   })
 
   readonly pause = vi.fn(() => {
     this.paused = true
+    this.emit('pause')
   })
 
   readonly load = vi.fn()
