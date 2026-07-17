@@ -69,9 +69,9 @@ Engines are DOM-free and unit-tested against the Android JVM suites. See
   spinner while buffering.
 - **Developer flag — Gapless-5 verse joins:** enable Developer mode (tap the
   version line), then toggle **Gapless-5 verse joins**. That swaps the join
-  engine for [@regosen/gapless-5](https://github.com/regosen/Gapless-5) (HTML5 +
-  Web Audio hybrid with a short equal-power crossfade) so verse seams can be
-  A/B tested. Word highlight still uses the same per-ayah `positionMs` clock.
+  engine for [@regosen/gapless-5](https://github.com/regosen/Gapless-5) (Web
+  Audio, hard abut — no crossfade) so verse seams can be A/B tested. Word
+  highlight still uses the same per-ayah `positionMs` clock.
   Default remains the dual-element transport.
 - Click a word to play from there; right-click / long-press opens the Root Word Viewer.
 - Themes: Paper / Nightfall / Royal green (Settings).
