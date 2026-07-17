@@ -13,6 +13,8 @@ Quick essentials (details and rationale in AGENTS.md):
   `QuranDatabase.DB_FILE_NAME` whenever its content changes.
 - UI follows a strict paper metaphor: no dialogs, ripples, shadows, or cards.
   Read `docs/DESIGN.md` before any UI change.
+- Ink karaoke fidelity is non-negotiable: soft directional wash with a visible
+  faded leading edge (never hard peels / whole-word opacity for "perf").
 
 ## PR Workflow
 

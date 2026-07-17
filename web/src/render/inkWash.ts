@@ -5,18 +5,18 @@
  * Progress timelines run through Motion (`animate`) so wash easing matches
  * the rest of the reader (and Android's cubic-bezier curves).
  *
- * **GPU path:** Active paper peels and orange reveals animate `transform`
- * (and opacity) — compositor-friendly properties. We deliberately avoid
- * rewriting `mask-image` every frame: that forced main-thread paint and GPU
- * mask re-raster on every karaoke step. A *static* soft-edge mask may sit on
- * the peeling cover once; it is not animated.
+ * **Fidelity law:** the active-word wash MUST use the smootherstep directional
+ * mask (`washMaskImage` / `paperCoverMaskImage`) so the reader sees the soft
+ * faded leading edge — the same `letterFadeIn` / `shapedWordBloom` look as
+ * Android. Never replace this with whole-word opacity or a hard `scaleX` cut
+ * for "performance". Quantize + cache mask strings so the hot path stays cheap.
  */
 import { animate, type AnimationPlaybackControls } from 'motion'
 import { cubicBezierEase, paperCoverMaskImage, washMaskImage } from '../ui/theme/Fade'
 import { getTuning } from '../ui/reader/InkEngine'
 import { cubicBezierTuple, type CubicBezierEase } from '../ui/motion/easing'
 
-/** Quantize wash progress to ~48 steps — fewer style writes than display Hz. */
+/** Quantize wash progress to ~48 steps — visually identical, far fewer strings. */
 const WASH_STEPS = 48
 
 const washMaskCache = new Map<string, string>()
@@ -38,7 +38,6 @@ function sweepEase() {
   }
 }
 
-/** @deprecated Prefer [runPaperCoverPeel]; kept for tests / rare mask needs. */
 export function cachedWashMask(
   progress: number,
   restingAlpha: number,
@@ -56,7 +55,6 @@ export function cachedWashMask(
   return mask
 }
 
-/** @deprecated Prefer [runPaperCoverPeel]. */
 export function cachedPaperCoverMask(
   progress: number,
   restingAlpha: number,
@@ -83,6 +81,7 @@ export function applyMask(el: HTMLElement | SVGElement, mask: string) {
     el.classList.remove('word-wash')
     return
   }
+  // Skip redundant writes when the quantized mask hasn't changed.
   if (el.style.maskImage === mask) {
     if (!el.classList.contains('word-wash')) el.classList.add('word-wash')
     return
@@ -132,6 +131,11 @@ export function runWash(
   let cancelled = false
   let lastQuantized = -1
 
+  // Motion applies the cubic-bezier to the animated value, so the onUpdate
+  // value *is* the eased progress. Pass the same number for both args so
+  // existing callers that paint from `eased` keep working.
+  // Skip ticks whose quantized progress matches the previous frame so mask
+  // rebuilds / style writes stay off the critical path.
   controls = animate(0, 1, {
     duration: Math.max(0.001, durationMs / 1000),
     ease: [...curve] as [number, number, number, number],
@@ -156,38 +160,43 @@ export function runWash(
 }
 
 /**
- * Active-entry paper peel — compositor-friendly `transform: scaleX`.
+ * Active Arabic paper-cover bloom — Android `shapedWordBloom`.
  *
- * RTL (Arabic): origin left so the right side uncovers first (script start).
- * LTR (English cover twin): origin right so the left side uncovers first.
- * Soft edge is a *static* CSS mask on `.ink-cover-peel` (not rewritten per frame).
+ * Glyphs stay full opaque ink; a paper overlay peels away with the
+ * smootherstep directional mask so the soft faded edge is always visible.
  */
-export function runPaperCoverPeel(
+export function runPaperCoverWash(
   cover: HTMLElement,
   rtl: boolean,
   durationMs: number,
   ease: { x1: number; y1: number; x2: number; y2: number } | CubicBezierEase,
+  restingAlpha: number,
   onTick?: WashTick,
   onDone?: () => void,
 ): () => void {
+  const t = getTuning()
+  const feather = t.washFeather
   cover.style.transition = 'none'
   cover.style.opacity = '1'
-  cover.style.transformOrigin = rtl ? 'left center' : 'right center'
-  cover.style.transform = 'scaleX(1)'
-  cover.style.willChange = 'transform'
-  cover.dataset.peel = rtl ? 'rtl' : 'ltr'
-  cover.classList.add('ink-cover-peel')
-  applyMask(cover, 'none')
+  cover.classList.remove('ink-cover-peel')
+  cover.removeAttribute('data-peel')
+  cover.style.removeProperty('transform')
+  cover.style.removeProperty('transform-origin')
+  cover.style.removeProperty('will-change')
+  applyMask(cover, cachedPaperCoverMask(0, restingAlpha, rtl, feather))
 
   return runWash(
     durationMs,
     ease,
     cubicBezierEase,
     (p, eased) => {
-      const remaining = Math.max(0, 1 - eased)
-      cover.style.transform = `scaleX(${remaining})`
+      if (p >= 1) {
+        clearPaperCover(cover)
+        onTick?.(p, eased)
+        return
+      }
+      applyMask(cover, cachedPaperCoverMask(eased, restingAlpha, rtl, feather))
       onTick?.(p, eased)
-      if (p >= 1) clearPaperCover(cover)
     },
     () => {
       clearPaperCover(cover)
@@ -197,41 +206,79 @@ export function runPaperCoverPeel(
 }
 
 /**
- * English letter reveal — opacity only (Latin has no overlapping marks).
- * Compositor-friendly; no mask-image thrash.
+ * Active English letter wash — Android `letterFadeIn`.
+ * Directional smootherstep mask on the glyph (soft faded edge required).
  */
-export function runOpacityReveal(
+export function runLetterWash(
   el: HTMLElement,
-  fromAlpha: number,
-  toAlpha: number,
+  rtl: boolean,
   durationMs: number,
   ease: { x1: number; y1: number; x2: number; y2: number } | CubicBezierEase,
+  restingAlpha: number,
   onTick?: WashTick,
   onDone?: () => void,
 ): () => void {
-  const from = Math.min(1, Math.max(0, fromAlpha))
-  const to = Math.min(1, Math.max(0, toAlpha))
-  el.style.willChange = 'opacity'
-  el.style.opacity = String(from)
+  const t = getTuning()
+  const feather = t.washFeather
+  el.style.removeProperty('opacity')
+  applyMask(el, cachedWashMask(0, restingAlpha, rtl, feather))
 
   return runWash(
     durationMs,
     ease,
     cubicBezierEase,
     (p, eased) => {
-      el.style.opacity = String(from + (to - from) * eased)
+      if (p >= 1) {
+        applyMask(el, 'none')
+        onTick?.(p, eased)
+        return
+      }
+      applyMask(el, cachedWashMask(eased, restingAlpha, rtl, feather))
       onTick?.(p, eased)
     },
     () => {
-      el.style.opacity = String(to)
-      el.style.removeProperty('will-change')
+      applyMask(el, 'none')
       onDone?.()
     },
   )
 }
 
+/** @deprecated Use [runPaperCoverWash] — kept so older call sites type-check. */
+export function runPaperCoverPeel(
+  cover: HTMLElement,
+  rtl: boolean,
+  durationMs: number,
+  ease: { x1: number; y1: number; x2: number; y2: number } | CubicBezierEase,
+  onTick?: WashTick,
+  onDone?: () => void,
+): () => void {
+  return runPaperCoverWash(
+    cover,
+    rtl,
+    durationMs,
+    ease,
+    getTuning().upcomingAlpha,
+    onTick,
+    onDone,
+  )
+}
+
+/** @deprecated Use [runLetterWash] for directional English ink. */
+export function runOpacityReveal(
+  el: HTMLElement,
+  fromAlpha: number,
+  _toAlpha: number,
+  durationMs: number,
+  ease: { x1: number; y1: number; x2: number; y2: number } | CubicBezierEase,
+  onTick?: WashTick,
+  onDone?: () => void,
+): () => void {
+  return runLetterWash(el, false, durationMs, ease, fromAlpha, onTick, onDone)
+}
+
 /**
- * Orange repeat wash-in: scaleX grow + opacity (transform path, not mask).
+ * Orange repeat wash-in: directional ink-engine mask (restingAlpha 0) over the
+ * orange overlay, then clear the mask so full orange holds.
  */
 export function runRepeatWashIn(
   el: HTMLElement,
@@ -239,35 +286,30 @@ export function runRepeatWashIn(
   durationMs: number,
   onDone?: () => void,
 ): () => void {
+  const t = getTuning()
   el.style.opacity = '1'
-  el.style.transformOrigin = rtl ? 'right center' : 'left center'
-  el.style.transform = 'scaleX(0)'
-  el.style.willChange = 'transform'
-  el.dataset.peel = rtl ? 'rtl' : 'ltr'
-  el.classList.add('ink-cover-peel')
-  applyMask(el, 'none')
-
+  el.style.removeProperty('transform')
+  el.style.removeProperty('transform-origin')
+  el.classList.remove('ink-cover-peel')
+  el.removeAttribute('data-peel')
+  applyMask(el, cachedWashMask(0, 0, rtl, t.washFeather))
   return runWash(
     durationMs,
     sweepEase(),
     cubicBezierEase,
     (_p, eased) => {
-      el.style.transform = `scaleX(${eased})`
+      applyMask(el, cachedWashMask(eased, 0, rtl, t.washFeather))
     },
     () => {
-      el.style.transform = 'none'
-      el.style.removeProperty('transform-origin')
-      el.style.removeProperty('will-change')
-      el.classList.remove('ink-cover-peel')
-      el.removeAttribute('data-peel')
-      el.style.opacity = '1'
+      applyMask(el, 'none')
       onDone?.()
     },
   )
 }
 
 /**
- * Orange repeat dissolve: fade overlay opacity to 0 (compositor-friendly).
+ * Orange repeat dissolve: clear the wash mask, then fade overlay opacity to 0
+ * over [InkTuning.repeatFadeOutMs] with the ink sweep easing.
  */
 export function runRepeatFadeOut(
   el: HTMLElement,
@@ -275,7 +317,6 @@ export function runRepeatFadeOut(
 ): () => void {
   const t = getTuning()
   applyMask(el, 'none')
-  el.style.willChange = 'opacity'
   return runWash(
     t.repeatFadeOutMs,
     sweepEase(),
@@ -285,8 +326,6 @@ export function runRepeatFadeOut(
     },
     () => {
       el.style.opacity = '0'
-      el.style.removeProperty('will-change')
-      el.style.removeProperty('transform')
       onDone?.()
     },
   )
@@ -295,8 +334,7 @@ export function runRepeatFadeOut(
 /**
  * Search-hit flash: [runRepeatWashIn] then [runRepeatFadeOut], [pulses] times.
  * Callers pass a dedicated orange overlay (same classes as the karaoke repeat
- * layer) so the peel sizes to the glyphs — never a stretched inset box.
- * Overlay may be unmounted after [onDone].
+ * layer) so the mask sizes to the glyphs. Overlay may be unmounted after [onDone].
  */
 export function runSearchHitDoubleWash(
   el: HTMLElement,

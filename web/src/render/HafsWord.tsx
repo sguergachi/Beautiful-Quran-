@@ -3,7 +3,7 @@
  *
  * Mirrors Android `ResponsiveHafsAyah` / `shapedWordBloom`: glyphs stay opaque
  * full ink; Upcoming/recess use a paper cover; Active peels that cover with
- * compositor-friendly `transform: scaleX` (not per-frame mask-image).
+ * the smootherstep directional mask (soft faded edge — required fidelity).
  */
 import {
   useLayoutEffect,
@@ -15,8 +15,9 @@ import {
 import type { Word } from '../data/models'
 import { InkState, getTuning, startRevealed, type InkWord } from '../ui/reader/InkEngine'
 import {
+  applyMask,
   clearPaperCover,
-  runPaperCoverPeel,
+  runPaperCoverWash,
   runRepeatFadeOut,
   runRepeatWashIn,
   runSearchHitDoubleWash,
@@ -64,10 +65,10 @@ export function HafsWord({
   if (searchFlash && !flashMounted) setFlashMounted(true)
 
   /*
-   * Paper-cover bloom on Active entry (Android shapedWordBloom).
-   * useLayoutEffect so progress-0 lands before paint; peel uses transform
-   * scaleX (not per-frame mask-image). Snap-clear on leave to avoid a solid
-   * paper flash after handoff.
+   * Paper-cover bloom on Active entry (Android shapedWordBloom / InkReveal).
+   * useLayoutEffect so progress-0 lands before paint. The wash is a
+   * smootherstep directional mask — soft faded edge is required fidelity.
+   * Snap-clear on leave to avoid a solid paper flash after handoff.
    */
   useLayoutEffect(() => {
     const cover = coverRef.current
@@ -115,7 +116,7 @@ export function HafsWord({
     if (!enteredActive) return
 
     const duration = activeSweepMs ?? t.repeatSweepMs
-    return runPaperCoverPeel(cover, true, duration, ease)
+    return runPaperCoverWash(cover, true, duration, ease, resting)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ink.state, ink.repeat])
 
@@ -140,10 +141,10 @@ export function HafsWord({
     }
     if (ink.repeat) {
       overlay.style.opacity = '1'
-      overlay.style.transform = 'none'
+      applyMask(overlay, 'none')
     } else {
       overlay.style.opacity = '0'
-      overlay.style.transform = 'none'
+      applyMask(overlay, 'none')
       setRepeatMounted(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
