@@ -160,7 +160,8 @@ function RootViewerBleed({ closing, rv }: { closing: boolean; rv: RootViewerStat
                                 data-current={current ? 'true' : undefined}
                                 key={`${entry.surahId}:${entry.ayahNumber}:${entry.position}`}
                                 onClick={() => {
-                                  appStore.closeRootViewer()
+                                  // Concordance jump: do not resume the pre-open session.
+                                  appStore.closeRootViewer(false)
                                   appStore.openSurah(entry.surahId, entry.ayahNumber)
                                 }}
                               >
