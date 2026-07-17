@@ -121,10 +121,11 @@ cleanup unreliable.
 
 The halo element deliberately has no `background`, `box-shadow`, or `filter`.
 Its parent allows overflow so the soft edge is not clipped at the word box.
-The masked Arabic tint uses equal negative inset and padding to enlarge only its
-paint box while keeping its glyph origin and content width identical to the
-base word. This compensating bleed is required because a CSS mask otherwise
-clips overhanging Arabic marks at the element border box.
+The masked Arabic tint and opacity-animated halo use equal negative inset and
+padding to enlarge only their paint boxes while keeping their glyph origins and
+content widths identical to the base word. This compensating bleed is required
+because masks and opacity compositing otherwise clip overhanging Arabic marks
+and left-terminal strokes at the element border box.
 The shipped CSS uses a 62% glint tint plus two shadows: 36% at `0.055em` and
 18% at `0.15em`. These values are fixed on web; the live controls below tune
 the Android renderer only.
