@@ -2,6 +2,7 @@ package com.beautifulquran.ui.reader
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -31,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -75,6 +77,7 @@ import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.data.model.Ayah
 import com.beautifulquran.data.model.Word
 import com.beautifulquran.domain.EnglishTypography
+import com.beautifulquran.domain.TajweedPacing
 import com.beautifulquran.ui.theme.ArabicTitleStyle
 import com.beautifulquran.ui.theme.ArabicWordStyle
 import com.beautifulquran.ui.theme.GeneratedChapterRosette
@@ -270,12 +273,20 @@ private fun Modifier.repeatInkLayer(
  *
  * [sweepMs] is captured at Active entry only: mid-word retunes (speed, etc.)
  * must not cancel and restart the wash — that is itself a flicker.
+ *
+ * With a [pacing] curve (tajweed pacing) the Animatable becomes a *linear
+ * clock* and the curve shapes it into letter dwell — the ink stalls on a held
+ * madd and glides over short letters. The bezier sweep easing would distort
+ * that letter timing, so paced words drop it; the feathered wash edge keeps
+ * the soft toe and shoulder. Like [sweepMs], the curve is captured at Active
+ * entry.
  */
 @Composable
 private fun rememberLetterSweep(
     active: Boolean,
     sweepMs: Int?,
     startRevealed: Boolean = false,
+    pacing: TajweedPacing.Curve? = null,
 ): State<Float> {
     val runSweep = active && sweepMs != null && !startRevealed
     val sweep = remember(active) { Animatable(if (runSweep) 0f else 1f) }
@@ -285,12 +296,15 @@ private fun rememberLetterSweep(
         val ms = sweepMs
         if (active && ms != null && !startRevealed) {
             sweep.snapTo(0f)
-            sweep.animateTo(1f, tween(ms, easing = InkEngine.sweepEasing))
+            val easing = if (pacing != null) LinearEasing else InkEngine.sweepEasing
+            sweep.animateTo(1f, tween(ms, easing = easing))
         } else {
             sweep.snapTo(1f)
         }
     }
-    return sweep.asState()
+    return remember(active) {
+        if (pacing == null) sweep.asState() else derivedStateOf { pacing.at(sweep.value) }
+    }
 }
 
 /**
@@ -361,6 +375,7 @@ private class WordHighlight(
     private val lyricInk: State<Float>,
     private val sweep: State<Float>,
     val repeatWash: RepeatWash,
+    private val pacing: TajweedPacing.Curve? = null,
 ) {
     /** Modifier for the base text layer: letters sweep in while the word is
      * active, rest at the lyric ink otherwise. While the word is repeating,
@@ -371,7 +386,8 @@ private class WordHighlight(
             progress = { sweep.value },
             rtl = rtl,
             restingAlpha = InkEngine.State.Upcoming.inkAlpha(),
-            feather = InkEngine.tuning.washFeather,
+            feather = pacing?.let { InkEngine.pacedFeather(it.letterCount) }
+                ?: InkEngine.tuning.washFeather,
         )
         else -> Modifier.graphicsLayer { alpha = lyricInk.value }
     }
@@ -389,6 +405,7 @@ private class WordHighlight(
 private fun rememberWordHighlight(
     ink: InkEngine.Word,
     sweepMs: Int?,
+    pacing: TajweedPacing.Curve? = null,
 ): WordHighlight {
     val isActive = ink.state == InkEngine.State.Active
     return WordHighlight(
@@ -399,8 +416,10 @@ private fun rememberWordHighlight(
             active = isActive,
             sweepMs = sweepMs,
             startRevealed = rememberStartRevealed(ink.state),
+            pacing = if (isActive) pacing else null,
         ),
         repeatWash = rememberRepeatWash(ink.repeat, sweepMs.takeIf { isActive }),
+        pacing = if (isActive) pacing else null,
     )
 }
 
@@ -506,8 +525,10 @@ fun WordUnit(
     onLongClick: (() -> Unit)? = null,
     /** When true, run the orange search-hit wash on Arabic + gloss. */
     showFlash: Boolean = false,
+    /** Tajweed pacing of the active word's sweep — null for the plain sweep. */
+    pacing: TajweedPacing.Curve? = null,
 ) {
-    val highlight = rememberWordHighlight(ink, sweepMs)
+    val highlight = rememberWordHighlight(ink, sweepMs, pacing)
     val searchHitWash = rememberSearchHitWash(showFlash)
     val repeatInk = LocalQuranAccents.current.repeatInk
     val glossWeight = if (searchHit) FontWeight.Bold else null
@@ -630,12 +651,14 @@ private fun rememberWordInkPalette(): WordInkPalette {
 private fun rememberLetterSweeps(
     inks: List<InkEngine.Word>,
     activeSweepMs: Int?,
+    pacing: TajweedPacing.Curve? = null,
 ): List<State<Float>> = inks.map { ink ->
     val active = ink.state == InkEngine.State.Active
     rememberLetterSweep(
         active = active,
         sweepMs = activeSweepMs.takeIf { active },
         startRevealed = rememberStartRevealed(ink.state),
+        pacing = if (active) pacing else null,
     )
 }
 
@@ -858,6 +881,8 @@ private fun ResponsiveHafsAyah(
     markAlpha: () -> Float,
     fontSize: TextUnit,
     activeSweepMs: Int?,
+    /** Tajweed pacing of the active word's sweep — null for the plain sweep. */
+    pacing: TajweedPacing.Curve? = null,
     flashWordPosition: Int? = null,
     /** When the verse is taller than the viewport, keep the active word in the
      * reading band so large type does not disappear under the player bar. */
@@ -868,7 +893,7 @@ private fun ResponsiveHafsAyah(
 ) {
     val palette = rememberWordInkPalette()
     val ayahMarkInk = LocalQuranAccents.current.gold
-    val sweeps = rememberLetterSweeps(inks, activeSweepMs)
+    val sweeps = rememberLetterSweeps(inks, activeSweepMs, pacing)
     val repeatWashes = rememberRepeatWashes(inks, activeSweepMs)
     val searchHitWash = rememberSearchHitWash(flashWordPosition != null)
     val activeIndex = inks.indexOfFirst { it.state == InkEngine.State.Active }
@@ -988,6 +1013,9 @@ private fun ResponsiveHafsAyah(
                                 progress = sweeps[activeIndex].value,
                                 paper = palette.paperColor,
                                 restingAlpha = InkEngine.State.Upcoming.inkAlpha(),
+                                feather = pacing?.let {
+                                    InkEngine.pacedFeather(it.letterCount)
+                                },
                             )
                         }
                     }
@@ -1157,6 +1185,15 @@ fun AyahBlock(
     // word, corrected for the chosen playback speed.
     val sweepMs = InkEngine.sweepMs(activeWord, playbackSpeed)
 
+    // Letter-level tajweed pacing of that sweep (Ink Lab toggle,
+    // docs/TAJWEED_PACING.md): null keeps the plain constant-rate wash.
+    val pacing = activeWord
+        ?.takeIf { isActiveAyah }
+        ?.let { aw ->
+            ayah.words.firstOrNull { it.position == aw.wordPosition }
+                ?.let { word -> InkEngine.pacing(word.arabic, aw) }
+        }
+
     // Each word's ink behaviour, derived once for the whole ayah. All the
     // policy (upcoming/active/recited/high-water, repeat chain) lives in
     // InkEngine; the render branches below only draw what it decided.
@@ -1231,6 +1268,7 @@ fun AyahBlock(
                                 ink = ink,
                                 fontScale = fontScale,
                                 sweepMs = sweepMs.takeIf { isActiveWord },
+                                pacing = pacing.takeIf { isActiveWord },
                                 showGloss = showGloss,
                                 showTransliteration = showTransliteration,
                                 searchHit = hits(word),
@@ -1258,6 +1296,7 @@ fun AyahBlock(
                         markAlpha = { ayahMarkAlpha.value },
                         fontSize = ArabicWordStyle.fontSize * fontScale * ARABIC_ONLY_HAFS_FONT_MULTIPLIER,
                         activeSweepMs = sweepMs,
+                        pacing = pacing,
                         flashWordPosition = flashWordPosition,
                         keepActiveWordInView = keepActiveWordInView,
                         onAyahClick = onAyahClick,
