@@ -38,6 +38,7 @@ import {
   sheetAtLayer,
   type StackLayer,
 } from '../ui/paper/stack'
+import { wordClipBounds } from '../ui/root/wordClipBounds'
 
 export type Sheet = 'bookmarks' | 'home' | 'reader' | 'settings'
 
@@ -66,11 +67,16 @@ export interface RootViewerState {
     translation: string
     surahNameTransliteration: string
   }[]
+  /** True while the header speaker is auditioning this word. */
+  isPlayingWord: boolean
 }
 
 const LONG_AYAH_MIN_WORDS = 20
 const MIDPOINT_SEEK_GRACE_MS = 1_000
 const START_SEEK_GRACE_MS = 1_500
+const WORD_CLIP_POLL_MS = 16
+const WORD_CLIP_READY_TIMEOUT_MS = 4_000
+const WORD_CLIP_SEEK_SLACK_MS = 40
 
 export interface AppState {
   ready: boolean
@@ -125,6 +131,16 @@ class AppStore {
   private readonly highlightClock = new HighlightClock()
   /** Bumps when a newer openSurah supersedes an in-flight peel→load. */
   private openToken = 0
+  /**
+   * Reading session paused when the root viewer opened. Normal close restores
+   * and resumes; concordance jumps and other navigations discard it. The
+   * isolated word speaker may move the playhead — this snapshot is the source
+   * of truth for restore (Android [ReaderPlaybackSnapshot] parity).
+   */
+  private rootViewerSnapshot: { ayah: number; positionMs: number } | null = null
+  /** Cancels an in-flight word-clip poll / ready wait. */
+  private wordClipToken = 0
+  private wordClipTimer: ReturnType<typeof setTimeout> | null = null
 
   state: AppState = {
     ready: false,
@@ -286,6 +302,11 @@ class AppStore {
         loadProgress: 1,
       })
       player.setSpeed(this.state.settings.playbackSpeed)
+      if (this.state.settings.gapless5Playback) {
+        // Prefetch the Gapless-5 chunk at boot so the first Play can construct
+        // AudioContext synchronously under the click (Firefox autoplay policy).
+        void player.setGapless5Enabled(true)
+      }
       // sql.js is main-thread only: warm one chapter per idle slice instead of
       // freezing the opening ceremony with a single whole-Quran object scan.
       void QuranRepository.preloadAllSurahContent(this.state.settings.lastSurah)
@@ -313,6 +334,9 @@ class AppStore {
     saveSettings(settings)
     this.set({ settings })
     if (patch.playbackSpeed != null) player.setSpeed(patch.playbackSpeed)
+    if (patch.gapless5Playback != null) {
+      void player.setGapless5Enabled(settings.gapless5Playback)
+    }
     if (patch.reciterId != null && this.state.content) {
       const reciter = this.state.reciters.find((r) => r.id === patch.reciterId)
       if (reciter) this.reloadTimingsAndReciter(reciter)
@@ -366,7 +390,12 @@ class AppStore {
       wordPosition != null && wordPosition > 0 ? wordPosition : null
     const flash =
       flashWord != null ? { ayah: openAyah, wordPosition: flashWord } : null
-    const rootViewerClosing = this.state.rootViewer != null ? true : false
+    // Navigating away from the lexicon never resumes the pre-open session.
+    const rootViewerClosing = this.state.rootViewer != null
+    if (rootViewerClosing) {
+      this.rootViewerSnapshot = null
+      this.stopWordAudition(true)
+    }
 
     // Same chapter already loaded — peel only (no remount). The CSS sheet
     // glide is the whole point of this path.
@@ -681,19 +710,50 @@ class AppStore {
     this.set({ followEnabled })
   }
 
-  /** Begin the exit hole-punch; content stays until [finishCloseRootViewer]. */
-  closeRootViewer() {
+  /**
+   * Begin the exit hole-punch; content stays until [finishCloseRootViewer].
+   * When [resumeReading] is true (default), restores chapter playback if the
+   * viewer paused it — Android [closeRootViewer] parity. Concordance jumps
+   * pass false so the old location is not resumed.
+   */
+  closeRootViewer(resumeReading = true) {
     if (!this.state.rootViewer || this.state.rootViewerClosing) return
+    this.stopWordAudition(true)
+    const snapshot = this.rootViewerSnapshot
+    this.rootViewerSnapshot = null
     this.set({ rootViewerClosing: true })
+    if (resumeReading && snapshot) void this.resumeAfterRootViewer(snapshot)
   }
 
   /** Drop root-viewer state after the bleed-out animation completes. */
   finishCloseRootViewer() {
     if (!this.state.rootViewer) return
+    this.stopWordAudition(true)
+    this.rootViewerSnapshot = null
     this.set({ rootViewer: null, rootViewerClosing: false })
   }
 
   openRootViewer(surahId: number, ayah: number, word: Word) {
+    this.stopWordAudition(true)
+    // Android pauseForRootViewer: only pause/resume a live reading of this chapter.
+    const ps = this.state.player
+    const np = ps.nowPlaying
+    const readerSurahId = this.state.content?.surah.id
+    if (
+      ps.isPlaying &&
+      np != null &&
+      readerSurahId != null &&
+      np.surahId === readerSurahId
+    ) {
+      this.rootViewerSnapshot = {
+        ayah: np.ayah,
+        positionMs: player.positionMs,
+      }
+      player.pause()
+    } else {
+      this.rootViewerSnapshot = null
+    }
+
     const morph = QuranRepository.wordMorphology(surahId, ayah, word.position)
     if (!morph || !morph.root) {
       this.set({
@@ -712,6 +772,7 @@ class AppStore {
           occurrenceCount: 0,
           lemmas: [],
           occurrences: [],
+          isPlayingWord: false,
         },
       })
       return
@@ -733,8 +794,98 @@ class AppStore {
         occurrenceCount: summary?.occurrenceCount ?? 0,
         lemmas: summary?.lemmas ?? [],
         occurrences: summary?.occurrences ?? [],
+        isPlayingWord: false,
       },
     })
+  }
+
+  /**
+   * Plays **only** the open root-viewer word with the current reciter —
+   * from its timing mark to its end, then pauses. Without a usable
+   * segment the speaker is a no-op (never starts the rest of the ayah).
+   * Android [RootViewerViewModel.playCurrentWord] parity.
+   */
+  async playRootViewerWord() {
+    const rv = this.state.rootViewer
+    if (!rv || this.state.rootViewerClosing) return
+    // Prefer the in-memory map; fall back to the repo if idle load hasn't landed.
+    let segments = this.timingSegments.get(rv.ayah)
+    if (!segments || segments.length === 0) {
+      const reciterId =
+        this.state.reciters.find((r) => r.id === this.state.settings.reciterId)?.id ??
+        this.state.reciters[0]?.id
+      if (reciterId != null) {
+        segments = QuranRepository.timings(reciterId, rv.surahId).get(rv.ayah)
+      }
+    }
+    const clip = wordClipBounds(segments ?? [], rv.position)
+    if (!clip) return
+
+    this.stopWordAudition(true)
+    this.set({ rootViewer: { ...rv, isPlayingWord: true } })
+    const token = ++this.wordClipToken
+    // Word audition is not chapter listening — no basmalah, no follow toggle.
+    await player.seekToWordAndPlay(rv.ayah, clip.startMs)
+    if (token !== this.wordClipToken) return
+
+    const readyDeadline = performance.now() + WORD_CLIP_READY_TIMEOUT_MS
+    const poll = () => {
+      if (token !== this.wordClipToken) return
+      const ps = this.state.player
+      const np = ps.nowPlaying
+      const onTarget = np?.surahId === rv.surahId && np.ayah === rv.ayah
+      const engaged = ps.isPlaying || ps.isBuffering
+      const pos = player.positionMs
+
+      if (!onTarget) {
+        // Playlist moved away — stop the audition flag.
+        this.finishWordAudition(token)
+        return
+      }
+      if (engaged && pos >= clip.startMs - WORD_CLIP_SEEK_SLACK_MS) {
+        if (pos >= clip.endMs) {
+          player.pause()
+          this.finishWordAudition(token)
+          return
+        }
+      } else if (performance.now() >= readyDeadline) {
+        // Timed out before engaging — don't leave a runaway ayah playing.
+        player.pause()
+        this.finishWordAudition(token)
+        return
+      }
+      this.wordClipTimer = setTimeout(poll, WORD_CLIP_POLL_MS)
+    }
+    this.wordClipTimer = setTimeout(poll, WORD_CLIP_POLL_MS)
+  }
+
+  /** Restore the chapter playhead displaced by the root viewer's word clip. */
+  private async resumeAfterRootViewer(snapshot: { ayah: number; positionMs: number }) {
+    await player.seekToWordAndPlay(snapshot.ayah, snapshot.positionMs)
+  }
+
+  private stopWordAudition(pauseIfPlaying: boolean) {
+    this.wordClipToken++
+    if (this.wordClipTimer != null) {
+      clearTimeout(this.wordClipTimer)
+      this.wordClipTimer = null
+    }
+    const rv = this.state.rootViewer
+    if (!rv?.isPlayingWord) return
+    if (pauseIfPlaying) player.pause()
+    this.set({ rootViewer: { ...rv, isPlayingWord: false } })
+  }
+
+  private finishWordAudition(token: number) {
+    if (token !== this.wordClipToken) return
+    if (this.wordClipTimer != null) {
+      clearTimeout(this.wordClipTimer)
+      this.wordClipTimer = null
+    }
+    const rv = this.state.rootViewer
+    if (rv?.isPlayingWord) {
+      this.set({ rootViewer: { ...rv, isPlayingWord: false } })
+    }
   }
 
   private recomputeActive(ps: PlayerState) {

@@ -224,6 +224,16 @@ export function HafsWord({
       <span className="hafs-shell">
         <span className="word-ink-slot">
           <span className="hafs-glyph">{word.arabic}</span>
+          {glintMounted ? (
+            <span
+              ref={glintRef}
+              className="hafs-glint-overlay hafs-glyph"
+              aria-hidden="true"
+              style={{ opacity: 0 }}
+            >
+              {word.arabic}
+            </span>
+          ) : null}
           {repeatMounted ? (
             <span
               ref={overlayRef}

@@ -550,6 +550,18 @@ private fun HighlightLayeredText(
             color = color,
             modifier = highlight.baseLayer(rtl),
         )
+        // Fresh-ink glint (Nightfall): white-gold sheen under the orange
+        // overlay, so a repeat chain always reads over a dissolving glint.
+        if (glintInk != null && highlight.showGlintLayer) {
+            Text(
+                text = text,
+                style = style,
+                color = glintInk,
+                modifier = Modifier
+                    .matchParentSize()
+                    .then(highlight.glintLayer(rtl)),
+            )
+        }
         if (orangeWash != null) {
             Text(
                 text = text,
@@ -913,6 +925,22 @@ private fun ResponsiveEnglishAyah(
                             restingAlpha = InkEngine.State.Upcoming.inkAlpha(),
                         )
                     }
+                    // Fresh-ink glint (Nightfall): the newly read word's
+                    // glyphs re-drawn in white gold along the same sweep,
+                    // dissolving back to plain ink once the voice moves on.
+                    // Added before the orange washes so repeats draw on top.
+                    if (glintInk != null) {
+                        glintAlphas.forEachIndexed { index, glint ->
+                            if (glint.value <= 0f) return@forEachIndexed
+                            blooms += ShapedWordBloom.ColorReveal(
+                                range = rendered.wordRanges[index],
+                                progress = sweeps[index].value,
+                                color = glintInk,
+                                restingAlpha = 0f,
+                                layerAlpha = glint.value,
+                            )
+                        }
+                    }
                     repeatWashes.forEachIndexed { index, wash ->
                         if (wash.alpha.value <= 0f) return@forEachIndexed
                         blooms += ShapedWordBloom.ColorReveal(
@@ -1155,6 +1183,31 @@ private fun ResponsiveHafsAyah(
                                 restingAlpha = InkEngine.State.Upcoming.inkAlpha(),
                                 feather = pacing?.let {
                                     InkEngine.pacedFeather(it.letterCount)
+                                },
+                            )
+                        }
+                    }
+                    // Fresh-ink glint (Nightfall): the newly read word's
+                    // glyphs re-drawn in white gold along the same sweep,
+                    // dissolving back to plain ink once the voice moves on.
+                    // Added before the orange washes so repeats draw on top.
+                    if (glintInk != null) {
+                        glintAlphas.forEachIndexed { index, glint ->
+                            if (glint.value <= 0f) return@forEachIndexed
+                            val range = rendered.wordRanges.getOrNull(index)
+                                ?: return@forEachIndexed
+                            blooms += ShapedWordBloom.ColorReveal(
+                                range = range,
+                                progress = sweeps[index].value,
+                                color = glintInk,
+                                restingAlpha = 0f,
+                                layerAlpha = glint.value,
+                                // The active word's paced edge, if any, so the
+                                // gold edge stays exactly the ink edge.
+                                feather = if (index == activeIndex) {
+                                    pacing?.let { InkEngine.pacedFeather(it.letterCount) }
+                                } else {
+                                    null
                                 },
                             )
                         }
