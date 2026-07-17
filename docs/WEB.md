@@ -15,6 +15,12 @@ viewer, and a PWA shell. Production build is published to GitHub Pages at
 `web/README.md` for run instructions. The sections
 below remain the design record and quality bar.
 
+The reader also treats its focused ayah as a keyboard cursor: Up/Down move one
+ayah, Page Up/Down move five, Home/End reach chapter bounds, Space toggles
+playback, `/` opens in-surah search, and `B` toggles the focused bookmark.
+Shortcuts yield to native controls, editable fields, overlays, and modifier
+chords.
+
 ---
 
 ## 1. One-sentence goal
