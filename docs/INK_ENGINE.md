@@ -372,22 +372,29 @@ InkEngine owns that too, as data rather than as animation code:
   `startRevealed(previous, current)` — the rule
   that only a Recited→Active transition skips the reveal sweep —
   `glinting(state, repeat, startRevealed)` — the first-gloss glint rule:
-  only a genuinely new word sweeping in on its first pass (never a repeat,
-  never a word re-lit already revealed) wears the white-gold fresh-ink sheen,
+  a genuinely new word or a new repeat event wears the white-gold sheen
+  (an ordinary already-revealed seek re-entry does not),
   which then dissolves back to plain recited ink over `Tuning.glintFadeMs`
   (1 s). The glint is theme-gated by `QuranAccents.glintInk` (null = off;
-  currently a Nightfall-only signature) and rides the word's existing letter
-  sweep — same progress, same feather — as a tinted overlay (`letterFadeIn`
-  in gloss modes, a `ShapedWordBloom.ColorReveal` in the shaped
-  English/Arabic-only paths), so it adds no new motion, only a warm sheen
-  that cools as the ink dries. And
+  currently a Nightfall-only signature) and rides the active letter or repeat
+  wash — same progress, same feather — as a tinted overlay (`letterFadeIn`
+  on word units, `ColorReveal` on shaped lines). Android adds a restrained
+  white-gold halo outside those glyph outlines; web uses two glyph-shaped
+  layers: a lightly blurred outline and a restrained luminous ink core.
+  Both grow with the wash, peak as the word forms, and recede with the glint.
+  The sheen stays
+  legible against Nightfall without becoming a hard or whole-word glow, adding
+  no new motion—only a warm light that cools as the ink dries.
+  [GLIMMER.md](GLIMMER.md) is the canonical cross-platform rendering,
+  tuning, and visual-verification specification. InkEngine also owns
   `prefaceState(isActive, dimmed)` / `prefaceWashProgress(positionMs, durationMs)`
   for the surah-header basmalah VectorDrawable (Active during the Al-Fatihah
   1:1 lead-in clip, with an RTL `letterFadeIn` wash paced by the clip clock and
   settled to full ink before audio ends; Upcoming while recessed; Plain at rest).
 - **`InkEngine.Tuning`**: every feel knob in one data class — upcoming alpha,
   ink/mark fade durations, recess, sweep clamps, repeat sweep and fade-out,
-  wash feather, and the sweep easing control points. `InkEngine.tuning` is
+  glint tint, glitter time, halo strength/blur, wash feather, and sweep easing
+  control points. `InkEngine.tuning` is
   snapshot-backed (`mutableStateOf`), so release builds read constants while
   the Ink Lab can retune a live session.
 - **Renderers consume `InkEngine.Word`.** `AyahBlock` derives each ayah's ink
@@ -405,10 +412,12 @@ InkEngine owns that too, as data rather than as animation code:
 Settings → Developer (triple-tap the logo) → **Ink Lab overlay** floats a
 collapsible slider panel over the reader (`ui/reader/InkLabPanel.kt`), bound
 directly to `InkEngine.tuning`: upcoming ink, fade timings, sweep clamps,
-repeat timings, the fresh-ink glint fade, wash feather, and the experimental
+repeat timings, the fresh-ink **Glitter time**, **Glint tint**, **Halo
+strength**, and **Halo blur** controls, wash feather, and the experimental
 tajweed-pacing toggle with
 its paced-feather knob (see [TAJWEED_PACING.md](TAJWEED_PACING.md)). Edits are
 session-only and never persisted —
 shipped behavior cannot drift; **Log values** dumps the current `Tuning` to
 Logcat (tag `InkLab`) so a tuned feel can be transcribed into the defaults in
-InkEngine.kt.
+InkEngine.kt. Slider meanings, defaults, ranges, and the halo artifact stress
+check are documented in [GLIMMER.md](GLIMMER.md#ink-lab-controls).

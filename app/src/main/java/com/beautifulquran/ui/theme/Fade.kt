@@ -1,5 +1,6 @@
 package com.beautifulquran.ui.theme
 
+import android.graphics.BlurMaskFilter
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -9,6 +10,9 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -157,6 +161,10 @@ sealed class ShapedWordBloom {
         val restingAlpha: Float = 0f,
         val layerAlpha: Float = 1f,
         val feather: Float? = null,
+        val colorAlpha: Float = 1f,
+        /** Subtle blurred glyph-outline halo used by Nightfall's glimmer. */
+        val glowAlpha: Float = 0f,
+        val glowRadius: Float = 3.5f,
     ) : ShapedWordBloom()
 }
 
@@ -297,6 +305,10 @@ fun Modifier.shapedWordBloom(
                     val w = bounds.width
                     val edge = (w * (bloom.feather ?: feather)).coerceAtLeast(1f)
                     val head = p * (w + edge)
+                    val colorBleed = maxOf(
+                        bleed,
+                        bloom.glowRadius.dp.toPx() * 3f,
+                    )
                     val washColors = stops.map { t ->
                         val s = inkSmootherstep(t)
                         val a = bloom.restingAlpha +
@@ -306,19 +318,34 @@ fun Modifier.shapedWordBloom(
                     drawIntoCanvas { canvas ->
                         canvas.saveLayer(
                             Rect(
-                                bounds.left - bleed,
-                                bounds.top - bleed,
-                                bounds.right + bleed,
-                                bounds.bottom + bleed,
+                                bounds.left - colorBleed,
+                                bounds.top - colorBleed,
+                                bounds.right + colorBleed,
+                                bounds.bottom + colorBleed,
                             ),
                             Paint(),
                         )
+                    }
+                    val glowAlpha = bloom.layerAlpha.coerceIn(0f, 1f) *
+                        bloom.glowAlpha.coerceIn(0f, 1f) * inkSmootherstep(p)
+                    if (glowAlpha > 0f) {
+                        val glowPaint = android.graphics.Paint().apply {
+                            color = bloom.color.copy(alpha = glowAlpha).toArgb()
+                            maskFilter = BlurMaskFilter(
+                                bloom.glowRadius.dp.toPx(),
+                                BlurMaskFilter.Blur.NORMAL,
+                            )
+                        }
+                        drawIntoCanvas { canvas ->
+                            canvas.nativeCanvas.drawPath(path.asAndroidPath(), glowPaint)
+                        }
                     }
                     clipPath(path) {
                         drawText(textLayoutResult = textLayout)
                         drawRect(
                             color = bloom.color.copy(
-                                alpha = bloom.layerAlpha.coerceIn(0f, 1f),
+                                alpha = bloom.layerAlpha.coerceIn(0f, 1f) *
+                                    bloom.colorAlpha.coerceIn(0f, 1f),
                             ),
                             topLeft = Offset(bounds.left, bounds.top),
                             size = Size(bounds.width, bounds.height),
@@ -359,6 +386,7 @@ private const val InkProfileStops = 9
  * the word's draw scope — does not paint onto neighbours. */
 private val FadeLayerBleed = 14.dp
 
+/** Visible but still ink-like halo around Nightfall's active glimmer. */
 /** Horizontal pad beyond [TextLayoutResult.getPathForRange] when painting
  * paper covers. Vertical expansion is forbidden because it masks glyphs on
  * adjacent lines. */

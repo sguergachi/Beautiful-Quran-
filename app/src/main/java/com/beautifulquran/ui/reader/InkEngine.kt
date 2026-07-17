@@ -88,6 +88,10 @@ object InkEngine {
         /** Dissolve of the white-gold first-gloss glint (see [glinting]) back
          *  to plain recited ink once the voice moves on to the next word. */
         val glintFadeMs: Int = 1_000,
+        /** Tint strength plus the subtle glyph-outline halo around Nightfall's glint. */
+        val glintTintAlpha: Float = 0.62f,
+        val glintGlowAlpha: Float = 0.16f,
+        val glintGlowRadius: Float = 3.5f,
         /** Width of the ink feather relative to the word (see
          *  ui/theme/Fade.kt: the wash reads as a whole-word breath). */
         val washFeather: Float = 1.6f,
@@ -231,12 +235,12 @@ object InkEngine {
      * on. Themes opt in via a non-null `QuranAccents.glintInk` (currently
      * Nightfall only); this predicate is the *word* half of the gate.
      *
-     * Only a first-pass Active word glints: a repeat wears the orange wash
-     * instead, and a word re-lit already revealed ([startRevealed] — backward
-     * seek or repeat re-entry) is old ink, not fresh.
+     * Active repeat words glint over their orange wash too. Otherwise a word
+     * re-lit already revealed ([startRevealed] — backward seek) is old ink,
+     * not fresh.
      */
     fun glinting(state: State, repeat: Boolean, startRevealed: Boolean): Boolean =
-        state == State.Active && !repeat && !startRevealed
+        state == State.Active && (repeat || !startRevealed)
 
     /**
      * Whether a word entering [current] from [previous] should start its
