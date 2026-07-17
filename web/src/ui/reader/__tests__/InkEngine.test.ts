@@ -143,7 +143,7 @@ describe('InkEngine', () => {
     expect(startRevealed(InkState.Active, InkState.Recited)).toBe(false)
   })
 
-  it('only a first-pass active word wears the fresh-ink glint', () => {
+  it('new and repeated active words wear the fresh-ink glint', () => {
     expect(glinting(InkState.Active, false, false)).toBe(true)
     // Repeats carry the glint over their orange wash, including re-entry.
     expect(glinting(InkState.Active, true, false)).toBe(true)

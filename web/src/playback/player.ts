@@ -6,6 +6,10 @@
  * WebKit supports one media stream reliably, while dual-element/blob promotion
  * can wedge its playback pipeline. [AudioPrefetcher] still warms upcoming URLs.
  *
+ * Default join path is Gapless-5 (HTML5 + Web Audio hybrid). [setGapless5Enabled]
+ * can fall back to dual-element promote for A/B. HighlightEngine still receives
+ * per-ayah positionMs either way.
+ *
  * `isPlaying` is set on play *intent* (before canplay / `HTMLMediaElement.play`)
  * so reader chrome can recede on the tap rather than after the buffer fills.
  *
@@ -17,10 +21,8 @@ import {
 } from '../data/models'
 import { BASMALAH_PLAYLIST_AYAH, surahOpensWithBasmalahPreface } from '../domain/Basmalah'
 import { AudioPrefetcher } from './audioPrefetch'
-import {
-  VERSE_FADE_IN_MS,
-  verseFadeOutMs,
-} from './audioFade'
+import { VERSE_FADE_IN_MS } from './audioFade'
+import { Gapless5Backend } from './gapless5Backend'
 import { isIOSMediaEnvironment } from './iosMedia'
 import { JoinCoordinator } from './joinCoordinator'
 import {
@@ -106,6 +108,12 @@ export class PlayerController {
    * the second would clear isPlaying mid-join.
    */
   private pauseSuppressRemaining = 0
+  /**
+   * Gapless-5 joins (default). When false, dual-`<audio>` promote is used.
+   * Toggled via Settings → Developer for A/B.
+   */
+  private gapless5Enabled = false
+  private gapless5: Gapless5Backend | null = null
 
   constructor(
     prefetcher: AudioPrefetcher = new AudioPrefetcher(),
@@ -197,6 +205,7 @@ export class PlayerController {
    * Desktop then has a warm blob; iOS has a cache-warmed HTTPS request.
    */
   private maybePrepJoin() {
+    if (this.gapless5Enabled) return
     const duration = this.active.duration
     if (!Number.isFinite(duration) || duration <= 0) return
     const remaining = duration - this.active.currentTime
@@ -226,7 +235,152 @@ export class PlayerController {
   }
 
   get positionMs(): number {
+    if (this.gapless5Enabled && this.gapless5) {
+      return this.gapless5.getPositionMs()
+    }
     return Math.round(this.active.currentTime * 1000)
+  }
+
+  /** Whether the experimental Gapless-5 join engine is active. */
+  isGapless5Enabled(): boolean {
+    return this.gapless5Enabled
+  }
+
+  /**
+   * Developer flag: swap verse-join engine. Reloads the current playlist into
+   * the selected transport and resumes from the same ayah/offset when possible.
+   */
+  async setGapless5Enabled(enabled: boolean): Promise<void> {
+    if (this.gapless5Enabled === enabled) return
+
+    const resume = {
+      playing: this.state.isPlaying,
+      index: this.index,
+      positionMs: this.positionMs,
+      playlist: this.playlist,
+      content: this.content,
+      reciter: this.reciter,
+      speed: this.state.speed,
+      repeatMode: this.state.repeatMode,
+    }
+
+    this.playToken++
+    this.pauseSuppressRemaining = 0
+    this.recoveringStall = false
+    this.gaplessAdvancing = false
+    this.stopTick()
+    this.setBuffering(false)
+
+    if (this.gapless5Enabled) {
+      this.gapless5?.dispose()
+      this.gapless5 = null
+    } else {
+      this.joins.cancelFades()
+      this.joins.stop()
+    }
+
+    this.gapless5Enabled = enabled
+
+    if (enabled) {
+      this.gapless5 = this.createGapless5Backend()
+      // Prefetch the JS chunk only. Constructing Gapless5 creates AudioContext;
+      // that must wait for a Play tap (Firefox blocks autoplay otherwise).
+      try {
+        await this.gapless5.preloadModule()
+      } catch (e) {
+        this.gapless5Enabled = false
+        this.gapless5?.dispose()
+        this.gapless5 = null
+        this.patch({
+          error: e instanceof Error ? e.message : 'Gapless-5 failed to load',
+          isPlaying: false,
+        })
+        return
+      }
+    }
+
+    if (!resume.content || !resume.reciter || resume.playlist.length === 0) {
+      this.patch({ isPlaying: false })
+      return
+    }
+
+    this.playlist = resume.playlist
+    this.content = resume.content
+    this.reciter = resume.reciter
+    this.surahId = resume.content.surah.id
+    this.index = Math.min(resume.index, this.playlist.length - 1)
+    this.patch({ speed: resume.speed, isPlaying: false, error: null })
+    this.gapless5?.applyRepeat(resume.repeatMode)
+    this.gapless5?.setSpeed(resume.speed)
+    this.transport.setSpeed(resume.speed)
+
+    await this.playIndex(this.index, resume.playing, { fadeIn: false })
+    if (resume.positionMs > 0) this.seekMs(resume.positionMs)
+  }
+
+  private createGapless5Backend(): Gapless5Backend {
+    return new Gapless5Backend({
+      onTime: (positionMs, durationMs, index) => {
+        if (index >= 0 && index !== this.index) {
+          this.syncGapless5Index(index)
+        }
+        this.patch({ positionMs, durationMs })
+      },
+      onPlay: () => {
+        this.patch({ isPlaying: true, error: null })
+        this.setBuffering(false)
+        this.startTick()
+      },
+      onPause: () => {
+        if (!this.gapless5Enabled) return
+        this.stopTick()
+        this.patch({ isPlaying: false })
+      },
+      onIndex: (index) => this.syncGapless5Index(index),
+      onFinishedAll: () => {
+        this.setBuffering(false)
+        this.stopTick()
+        this.patch({ isPlaying: false })
+      },
+      onError: (message) => {
+        this.setBuffering(false)
+        this.patch({ error: message, isPlaying: false })
+      },
+      onBuffering: (buffering) => this.setBuffering(buffering),
+    })
+  }
+
+  /** Apply Gapless-5 auto-advance; wrap range-repeat when it walks past last. */
+  private syncGapless5Index(index: number) {
+    if (!this.gapless5Enabled || index < 0 || index >= this.playlist.length) return
+
+    if (this.state.repeatMode === 'range' && this.state.repeatRange) {
+      const item = this.playlist[index]
+      if (item && item.ayah > this.state.repeatRange.last) {
+        const first = this.playlist.findIndex(
+          (p) => p.ayah === this.state.repeatRange!.first,
+        )
+        if (first >= 0) {
+          this.gapless5?.goto(first, true)
+          index = first
+        }
+      }
+    }
+
+    if (index === this.index) return
+    this.index = index
+    const item = this.playlist[index]
+    if (!item) return
+    this.patch({
+      nowPlaying: {
+        surahId: this.surahId,
+        ayah: item.ayah,
+        reciterId: this.reciter?.id ?? 0,
+      },
+      error: null,
+    })
+    this.updateMediaSession()
+    this.schedulePrefetch()
   }
 
   private patch(partial: Partial<PlayerState>) {
@@ -237,7 +391,9 @@ export class PlayerController {
   private onTime() {
     this.patch({
       positionMs: this.positionMs,
-      durationMs: Math.round((this.active.duration || 0) * 1000),
+      durationMs: this.gapless5Enabled && this.gapless5
+        ? this.gapless5.getDurationMs()
+        : Math.round((this.active.duration || 0) * 1000),
     })
   }
 
@@ -247,6 +403,22 @@ export class PlayerController {
    */
   private startTick() {
     this.stopTick()
+    if (this.gapless5Enabled) {
+      const loop = () => {
+        if (!this.state.isPlaying) {
+          this.tickTimer = null
+          return
+        }
+        if (this.gapless5) {
+          const idx = this.gapless5.getIndex()
+          if (idx >= 0 && idx !== this.index) this.syncGapless5Index(idx)
+        }
+        this.onTime()
+        this.tickTimer = window.requestAnimationFrame(loop)
+      }
+      this.tickTimer = window.requestAnimationFrame(loop)
+      return
+    }
     this.stallWatchdog.reset(this.active.currentTime, performance.now())
     const loop = (nowMs: number) => {
       if (!this.state.isPlaying) {
@@ -335,6 +507,7 @@ export class PlayerController {
   private schedulePrefetch() {
     const urls = this.playlistUrls()
     this.prefetcher.readAhead(urls, this.index)
+    if (this.gapless5Enabled) return
     void this.prepareAudioBounds(this.index)
     const next = this.peekNextIndex({ forStandby: true })
     if (next != null) void this.prepareAudioBounds(next)
@@ -350,46 +523,46 @@ export class PlayerController {
 
   /**
    * EveryAyah files carry encoded quiet on both sides. At the measured audible
-   * end, taper the outgoing padded tail before starting the next prepared clip
-   * at its own padded audible start. The normal ended path remains the fallback.
+   * end of the current clip, start the next verse immediately — skip the padded
+   * silence and do not fade-out-then-fade-in (that sequence was the audible gap
+   * between ayahs). Prefer a warm standby promote; otherwise load next early
+   * rather than sitting in silence until natural `ended`.
    */
   private maybeAdvanceAtAudibleEnd() {
-    if (this.gaplessAdvancing || !this.state.isPlaying) return
+    if (this.gapless5Enabled || this.gaplessAdvancing || !this.state.isPlaying) return
     const current = this.playlist[this.index]
     if (!this.joins.crossedAudibleEnd(current)) return
 
     const next = this.peekNextIndex({ forStandby: false })
     if (next == null) return
     const nextItem = this.playlist[next]
-    if (!nextItem || !this.joins.boundsFor(nextItem)) return
-    if (this.standby != null && !this.joins.isStandbyReady(next)) return
+    if (!nextItem) return
 
-    const outgoing = this.active
-    const transitionToken = this.playToken
+    // Dual-element: wait only if standby is still loading the wrong index.
+    // Do not require next-clip bounds — seek-to-audible-start is best-effort.
+    if (
+      this.standby != null &&
+      !this.joins.isStandbyReady(next) &&
+      this.prefetcher.isWarm(nextItem.url)
+    ) {
+      // Blob is warm but element not ready — kick prepare and try again next tick.
+      void this.prepareStandby()
+      return
+    }
+
     const fromIndex = this.index
-    const fadeOutMs = verseFadeOutMs(
-      Math.max(0, (outgoing.duration - outgoing.currentTime) * 1_000),
-      this.state.speed,
-    )
     this.gaplessAdvancing = true
     this.prefetcher.pauseWarm()
     void (async () => {
       let advanced = false
       try {
-        outgoing.volume = 1
-        const faded = await this.joins.fade(outgoing, 'out', fadeOutMs)
-        if (!faded || transitionToken !== this.playToken || !this.state.isPlaying) {
-          outgoing.volume = 1
-          return
-        }
-        await this.playIndex(next, true, { fadeIn: true })
-        // playIndex bumps playToken on entry; success is landing on [next] still playing.
+        // Full volume handoff — no sequential fadeOut + fadeIn silence.
+        await this.playIndex(next, true, { fadeIn: false })
         advanced = this.index === next && this.state.isPlaying
       } finally {
-        if (outgoing !== this.active) outgoing.volume = 1
         this.gaplessAdvancing = false
-        // If gapless exited without a successful advance, fall through to the
-        // ordinary ended path so a dropped natural `ended` cannot leave us silent.
+        // If advance failed, fall through so a dropped natural `ended` cannot
+        // leave us silent on the padded tail.
         if (!advanced && this.state.isPlaying && this.index === fromIndex) {
           const ended =
             this.active.ended ||
@@ -409,6 +582,7 @@ export class PlayerController {
 
   /** Timer-backed boundary so a short trim window cannot fall between rAFs. */
   private scheduleGaplessBoundary() {
+    if (this.gapless5Enabled) return
     if (this.gaplessTimer != null) window.clearTimeout(this.gaplessTimer)
     this.gaplessTimer = null
     if (!this.state.isPlaying || this.gaplessAdvancing) return
@@ -437,6 +611,7 @@ export class PlayerController {
    * Safe to call repeatedly; superseded work is ignored by JoinCoordinator.
    */
   private async prepareStandby(): Promise<void> {
+    if (this.gapless5Enabled) return
     const nextIndex = this.peekNextIndex({ forStandby: true })
     if (nextIndex == null) {
       this.joins.clearStandby()
@@ -489,6 +664,7 @@ export class PlayerController {
     this.playlist = buildPlaylist(content, reciter, startAyah)
     this.index = 0
     this.joins.clearStandby()
+    this.gapless5?.clear()
     this.prefetcher.resumeWarm()
     const urls = this.playlistUrls()
     // Always read-ahead the opening window; whole-surah warm is optional.
@@ -548,25 +724,8 @@ export class PlayerController {
     if (this.index !== idx || np.ayah !== ayah) {
       await this.playIndex(idx, true)
     } else if (!this.state.isPlaying) {
-      this.patch({ isPlaying: true, error: null })
-      try {
-        if (this.active.readyState < HAVE_FUTURE_DATA) {
-          this.setBuffering(true)
-          await this.transport.waitForCanPlay()
-        }
-        if (!this.state.isPlaying) return
-        await this.active.play()
-        if (!this.state.isPlaying) return
-        this.setBuffering(false)
-        this.startTick()
-      } catch (e) {
-        this.setBuffering(false)
-        this.patch({
-          error: e instanceof Error ? e.message : 'Playback blocked',
-          isPlaying: false,
-        })
-        return
-      }
+      await this.play()
+      if (!this.state.isPlaying) return
     }
     this.seekMs(Math.max(0, positionMs))
   }
@@ -579,6 +738,10 @@ export class PlayerController {
     if (i < 0 || i >= this.playlist.length) {
       this.setBuffering(false)
       this.patch({ isPlaying: false })
+      return
+    }
+    if (this.gapless5Enabled) {
+      await this.playIndexGapless5(i, autoplay, opts)
       return
     }
     const token = ++this.playToken
@@ -745,6 +908,98 @@ export class PlayerController {
     }
   }
 
+  /** Gapless-5 path for [playIndex] — same nowPlaying / Media Session contract. */
+  private async playIndexGapless5(
+    i: number,
+    autoplay: boolean,
+    opts: { quiet?: boolean; fadeIn?: boolean },
+  ) {
+    const token = ++this.playToken
+    const quiet = opts.quiet === true
+    let backend = this.gapless5
+    if (!backend) {
+      backend = this.createGapless5Backend()
+      this.gapless5 = backend
+    }
+
+    this.index = i
+    const item = this.playlist[i]!
+    if (!quiet) {
+      this.publishNowPlaying(autoplay ? { playing: true } : undefined)
+      this.updateMediaSession()
+    } else {
+      this.state = {
+        ...this.state,
+        nowPlaying: {
+          surahId: this.surahId,
+          ayah: item.ayah,
+          reciterId: this.reciter?.id ?? 0,
+        },
+        positionMs: 0,
+        error: null,
+      }
+    }
+
+    if (autoplay) this.setBuffering(true)
+
+    try {
+      // Firefox: AudioContext must be created/resumed on the user-gesture stack.
+      // Prefer bootSync (module preloaded when the flag was enabled) so we never
+      // await import() before constructing the context.
+      if (!backend.isReady()) {
+        if (!backend.bootSync()) {
+          await backend.ensureReady()
+          if (token !== this.playToken) return
+        }
+      }
+      // Kick resume immediately while still in the play-tap call stack.
+      if (autoplay) void backend.resumeContext()
+
+      backend.syncPlaylist(this.playlist, this.prefetcher)
+      backend.applyRepeat(this.state.repeatMode)
+      backend.setSpeed(this.state.speed)
+      // Warm HTTP cache (never pass blob: to Gapless-5 — breaks HTML5 path).
+      void this.prefetcher.ensure(item.url)
+      this.schedulePrefetch()
+
+      if (quiet) {
+        this.patch({
+          nowPlaying: {
+            surahId: this.surahId,
+            ayah: item.ayah,
+            reciterId: this.reciter?.id ?? 0,
+          },
+          positionMs: 0,
+          durationMs: backend.getDurationMs(),
+          error: null,
+        })
+        this.setBuffering(false)
+        return
+      }
+
+      if (autoplay) {
+        // playToken is the only cancel signal — do not re-check isPlaying after
+        // the library's stop/unload callbacks; those used to abort every start.
+        if (token !== this.playToken) return
+        // HTML5 element path starts here under the play gesture; WebAudio
+        // promotes once decode finishes (Gapless-5 hybrid).
+        backend.goto(i, true)
+        this.startTick()
+        this.prefetcher.resumeWarm()
+      } else {
+        backend.goto(i, false)
+        this.setBuffering(false)
+      }
+    } catch (e) {
+      if (token !== this.playToken) return
+      this.setBuffering(false)
+      this.patch({
+        error: e instanceof Error ? e.message : 'Playback blocked',
+        isPlaying: false,
+      })
+    }
+  }
+
   /**
    * Publish the current playlist item as nowPlaying.
    * When [opts.playing] is true, also set isPlaying immediately (play intent)
@@ -788,7 +1043,11 @@ export class PlayerController {
     this.recoveringStall = false
     this.joins.cancelFades()
     this.prefetcher.resumeWarm()
-    this.active.pause()
+    if (this.gapless5Enabled) {
+      this.gapless5?.pause()
+    } else {
+      this.active.pause()
+    }
     this.setBuffering(false)
     this.stopTick()
     // Explicit — do not wait for the 'pause' event (none fires if play() never
@@ -798,13 +1057,44 @@ export class PlayerController {
 
   async play() {
     if (!this.playlist.length) return
-    const token = ++this.playToken
     this.joins.cancelFades()
     // Recede chrome / flip the transport on the tap, before canplay.
     this.patch({ isPlaying: true, error: null })
+    if (this.gapless5Enabled) {
+      // Single path for gapless — playIndex owns the playToken and must not
+      // await full-surah work before starting audio (autoplay gesture).
+      await this.playIndexGapless5(this.index, true, {})
+      return
+    }
+    const token = ++this.playToken
     // Start the rAF position loop immediately so ink stays live even while
     // the media element is still warming (optimistic play intent).
     this.startTick()
+    if (this.gapless5Enabled) {
+      try {
+        if (!this.gapless5) {
+          this.gapless5 = this.createGapless5Backend()
+          await this.gapless5.ensureReady()
+        }
+        if (token !== this.playToken || !this.state.isPlaying) return
+        await this.gapless5.syncPlaylist(this.playlist, this.prefetcher)
+        if (token !== this.playToken || !this.state.isPlaying) return
+        this.gapless5.applyRepeat(this.state.repeatMode)
+        this.gapless5.setSpeed(this.state.speed)
+        this.gapless5.goto(this.index, true)
+        this.setBuffering(false)
+        this.startTick()
+      } catch (e) {
+        if (token !== this.playToken) return
+        this.setBuffering(false)
+        this.stopTick()
+        this.patch({
+          isPlaying: false,
+          error: e instanceof Error ? e.message : 'Playback blocked',
+        })
+      }
+      return
+    }
     try {
       if (this.active.readyState < HAVE_FUTURE_DATA) {
         this.setBuffering(true)
@@ -831,7 +1121,8 @@ export class PlayerController {
     // Media-session / UI next always advances (ayah-repeat only loops on ended).
     const next = this.peekNextIndex({ forStandby: false })
     if (next == null) {
-      this.active.pause()
+      if (this.gapless5Enabled) this.gapless5?.pause()
+      else this.active.pause()
       this.patch({ isPlaying: false })
       return
     }
@@ -840,14 +1131,12 @@ export class PlayerController {
 
   async prev() {
     if (this.positionMs > 2000) {
-      this.active.currentTime = 0
-      this.onTime()
+      this.seekMs(0)
       return
     }
     const prev = this.index - 1
     if (prev < 0) {
-      this.active.currentTime = 0
-      this.onTime()
+      this.seekMs(0)
       return
     }
     await this.playIndex(prev, true)
@@ -901,6 +1190,11 @@ export class PlayerController {
   }
 
   seekMs(ms: number) {
+    if (this.gapless5Enabled) {
+      this.gapless5?.seekMs(ms)
+      this.onTime()
+      return
+    }
     this.active.currentTime = Math.max(0, ms / 1000)
     this.onTime()
     this.scheduleGaplessBoundary()
@@ -908,6 +1202,7 @@ export class PlayerController {
 
   setSpeed(speed: number) {
     this.transport.setSpeed(speed)
+    this.gapless5?.setSpeed(speed)
     this.patch({ speed })
     this.scheduleGaplessBoundary()
   }
@@ -915,6 +1210,7 @@ export class PlayerController {
   setRepeatMode(mode: PlayerState['repeatMode'], range: PlayerState['repeatRange'] = null) {
     this.patch({ repeatMode: mode, repeatRange: range })
     this.active.loop = mode === 'ayah'
+    this.gapless5?.applyRepeat(mode)
     // Standby target may change when entering/leaving range or surah repeat.
     void this.prepareStandby()
   }
@@ -925,6 +1221,7 @@ export class PlayerController {
     this.recoveringStall = false
     this.joins.cancelFades()
     this.joins.stop()
+    this.gapless5?.clear()
     this.prefetcher.resumeWarm()
     this.playlist = []
     this.index = 0
@@ -933,7 +1230,7 @@ export class PlayerController {
   }
 
   private async onEnded() {
-    if (this.gaplessAdvancing) return
+    if (this.gapless5Enabled || this.gaplessAdvancing) return
     await this.advanceAfterClip()
   }
 
@@ -958,7 +1255,8 @@ export class PlayerController {
     if (nextUrl && !this.prefetcher.isWarm(nextUrl)) {
       this.setBuffering(true)
     }
-    await this.playIndex(next, true)
+    // Full volume — sequential join fades created an audible hole between ayahs.
+    await this.playIndex(next, true, { fadeIn: false })
   }
 
   private updateMediaSession() {

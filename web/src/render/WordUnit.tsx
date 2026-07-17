@@ -429,6 +429,16 @@ export function WordUnit({
           >
             {label}
           </span>
+          {glintMounted ? (
+            <span
+              ref={glintRef}
+              className={`word-glint-overlay ${baseClass}`}
+              aria-hidden="true"
+              style={{ opacity: 0 }}
+            >
+              {label}
+            </span>
+          ) : null}
           {repeatMounted ? (
             <span
               ref={overlayRef}

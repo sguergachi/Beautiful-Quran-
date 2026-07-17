@@ -19,3 +19,14 @@ describe('home bookmark settings', () => {
     }
   })
 })
+
+describe('gapless5Playback setting', () => {
+  it('defaults on and coerces to boolean', () => {
+    expect(normalizeSettings().gapless5Playback).toBe(true)
+    expect(normalizeSettings({ gapless5Playback: false }).gapless5Playback).toBe(false)
+    expect(normalizeSettings({ gapless5Playback: true }).gapless5Playback).toBe(true)
+    expect(
+      normalizeSettings({ gapless5Playback: 1 as unknown as boolean }).gapless5Playback,
+    ).toBe(true)
+  })
+})

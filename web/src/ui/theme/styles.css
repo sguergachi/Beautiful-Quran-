@@ -1618,6 +1618,9 @@ select {
 .word-glint-overlay.word-arabic,
 .word-glint-overlay.word-gloss {
   color: var(--glint, transparent);
+  filter:
+    drop-shadow(0 0 0.1em color-mix(in srgb, var(--glint, transparent) 82%, transparent))
+    drop-shadow(0 0 0.42em color-mix(in srgb, var(--glint, transparent) 58%, transparent));
   position: absolute;
 }
 
@@ -1728,6 +1731,9 @@ select {
 
 .hafs-glint-overlay.hafs-glyph {
   color: var(--glint, transparent);
+  filter:
+    drop-shadow(0 0 0.1em color-mix(in srgb, var(--glint, transparent) 82%, transparent))
+    drop-shadow(0 0 0.42em color-mix(in srgb, var(--glint, transparent) 58%, transparent));
   position: absolute;
 }
 
@@ -3256,12 +3262,40 @@ select {
   margin: 0;
 }
 
+.root-word-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+}
+
 .root-word-arabic {
   color: var(--ink);
   font-family: var(--font-arabic);
   font-size: 3.5rem;
   line-height: 1.38;
   unicode-bidi: isolate;
+}
+
+/* Quiet speaker — plays only this word (timing clip). No chrome. */
+.root-word-speak {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--accent) 65%, transparent);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.root-word-speak[data-playing='true'] {
+  color: color-mix(in srgb, var(--accent) 90%, transparent);
 }
 
 .root-word-gloss {
@@ -3548,6 +3582,7 @@ select {
 
 @media (hover: hover) {
   .ink-bleed .close:hover,
+  .root-word-speak:hover,
   .root-chapter-heading:hover,
   .root-occurrence:hover,
   .root-text-action:hover {

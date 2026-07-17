@@ -47,6 +47,7 @@ import { fieldWeaveBackground, GeneratedRosette } from '../theme/GeneratedOrname
 import { chapterOrnamentSeed, generateChapterOrnament } from '../theme/ornamentGenerator'
 import { resolveTheme } from '../App'
 import type { Word } from '../../data/models'
+import { isKeyboardControl, readerKeyboardAction } from './keyboardNavigation'
 
 /** Usable in-surah query — mirrors Android `SurahSearchState.activeQuery`. */
 function activeSearchQuery(active: boolean, query: string): string | null {
@@ -632,6 +633,58 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     })
   }
 
+  const togglePlayback = useCallback(() => {
+    if (!content || (state.player.isBuffering && !state.player.isPlaying)) return
+    const thisSurahLoaded = state.player.nowPlaying?.surahId === content.surah.id
+    const selected = selectedPlaybackAyah({
+      ayahCount: content.surah.ayahCount,
+      requestedJumpAyah: pendingJumpAyah.current,
+      isThisSurahLoaded: thisSurahLoaded,
+      followEnabled: state.followEnabled,
+      activeAyah: state.activeAyah,
+      scrolledAyah: focusedAyah,
+    })
+    if (!state.player.isPlaying) followWasEnabled.current = false
+    void appStore.playPause({
+      selectedAyah: selected,
+      pendingJump: pendingJumpAyah.current != null,
+      enableFollow: !state.player.isPlaying,
+    })
+  }, [content, focusedAyah, state.activeAyah, state.followEnabled, state.player])
+
+  // The reading line is the keyboard cursor. Reuse rail jumps so keys get the
+  // same progressive mount, focus glide, playback parking, and follow policy.
+  useEffect(() => {
+    if (!isTop || !content || state.rootViewer) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return
+      if (isKeyboardControl(event.target)) return
+      const action = readerKeyboardAction(
+        event.key,
+        pendingJumpAyah.current ?? focusedAyah,
+        content.surah.ayahCount,
+      )
+      if (!action) return
+      // Holding a navigation key should glide continuously; commands such as
+      // Space and B fire once per physical press.
+      if (event.repeat && action.type !== 'jump') return
+      event.preventDefault()
+      if (action.type === 'jump') jumpToAyah(action.ayah)
+      else if (action.type === 'playPause') {
+        // Words are focusable so Enter can audition one. Space belongs to the
+        // reader transport, even if the last Tab/click left a word focused.
+        if (event.target instanceof HTMLElement) event.target.blur()
+        event.stopPropagation()
+        togglePlayback()
+      }
+      else if (action.type === 'search') setSearchActive(true)
+      else appStore.toggleBookmark(focusedAyah)
+    }
+    // Capture before React's word-level key handler can audition the word.
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [content, focusedAyah, isTop, state.rootViewer, togglePlayback])
+
   const closeSearch = () => {
     setSearchActive(false)
     setSearchQuery('')
@@ -814,6 +867,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
               type="button"
               className="icon-btn"
               aria-label="Search in surah"
+              aria-keyshortcuts="/"
               disabled={recitingActive}
               onClick={() => setSearchActive(true)}
             >
@@ -1008,34 +1062,11 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                       ? 'Pause'
                       : 'Play'
                 }
+                aria-keyshortcuts="Space"
                 aria-busy={
                   (state.player.isBuffering && !state.player.isPlaying) || undefined
                 }
-                onClick={() => {
-                  // Pause must always land immediately — even mid-buffer.
-                  // Only block a cold Play while a fetch is already in flight
-                  // without play intent (should be rare with optimistic isPlaying).
-                  if (state.player.isBuffering && !state.player.isPlaying) return
-                  const thisSurahLoaded =
-                    state.player.nowPlaying?.surahId === content.surah.id
-                  const selected = selectedPlaybackAyah({
-                    ayahCount,
-                    requestedJumpAyah: pendingJumpAyah.current,
-                    isThisSurahLoaded: thisSurahLoaded,
-                    followEnabled: state.followEnabled,
-                    activeAyah: state.activeAyah,
-                    scrolledAyah: focusedAyah,
-                  })
-                  const pendingJump = pendingJumpAyah.current != null
-                  if (!state.player.isPlaying) {
-                    followWasEnabled.current = false
-                  }
-                  void appStore.playPause({
-                    selectedAyah: selected,
-                    pendingJump,
-                    enableFollow: !state.player.isPlaying,
-                  })
-                }}
+                onClick={togglePlayback}
               >
                 {state.player.isBuffering && !state.player.isPlaying ? (
                   <IconBuffering />
