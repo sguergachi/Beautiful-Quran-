@@ -1569,8 +1569,6 @@ select {
 .word-ink-slot {
   position: relative;
   display: inline-block;
-  /* Keep the negative-z backlight behind glyphs but above the paper. */
-  isolation: isolate;
 }
 
 .word-ink-slot > .word-arabic,
@@ -1619,33 +1617,34 @@ select {
 
 .word-glint-overlay.word-arabic,
 .word-glint-overlay.word-gloss {
-  color: var(--glint, transparent);
-  filter:
-    drop-shadow(0 0 0.1em color-mix(in srgb, var(--glint, transparent) 82%, transparent))
-    drop-shadow(0 0 0.42em color-mix(in srgb, var(--glint, transparent) 58%, transparent));
+  color: color-mix(in srgb, var(--glint, transparent) 62%, transparent);
   position: absolute;
 }
 
 .words[data-lyric='english'] .word-glint-overlay.word-gloss {
-  color: var(--glint, transparent);
+  color: color-mix(in srgb, var(--glint, transparent) 62%, transparent);
 }
 
-/* Actual light behind the word—not a blurred glyph silhouette. JS grows this
-   with the wash, holds it at the freshly formed peak, then fades it with the
-   glimmer. The isolated parent keeps it behind every ink layer. */
-.word-glint-backlight {
+/* Tight white-gold outline halo. It is a duplicate glyph with transparent fill,
+   so there is no rectangular light layer to expose during the animation. */
+.word-glint-halo {
   position: absolute;
-  z-index: -1;
-  inset: -0.62em -0.95em;
-  border-radius: 50%;
+  inset: 0;
   pointer-events: none;
-  background: radial-gradient(
-    ellipse at center,
-    color-mix(in srgb, var(--glint, transparent) 42%, transparent) 0%,
-    color-mix(in srgb, var(--glint, transparent) 20%, transparent) 38%,
-    transparent 76%
-  );
-  filter: blur(0.16em);
+  white-space: nowrap;
+  margin: 0;
+  color: transparent;
+  text-shadow:
+    0 0 0.055em color-mix(in srgb, var(--glint, transparent) 36%, transparent),
+    0 0 0.15em color-mix(in srgb, var(--glint, transparent) 18%, transparent);
+}
+
+.word-glint-halo.word-arabic,
+.word-glint-halo.word-gloss,
+.word-glint-halo.hafs-glyph,
+.words[data-lyric='english'] .word-glint-halo.word-gloss {
+  position: absolute;
+  color: transparent;
 }
 
 .word-gloss-flash {
@@ -1750,10 +1749,7 @@ select {
 }
 
 .hafs-glint-overlay.hafs-glyph {
-  color: var(--glint, transparent);
-  filter:
-    drop-shadow(0 0 0.1em color-mix(in srgb, var(--glint, transparent) 82%, transparent))
-    drop-shadow(0 0 0.42em color-mix(in srgb, var(--glint, transparent) 58%, transparent));
+  color: color-mix(in srgb, var(--glint, transparent) 62%, transparent);
   position: absolute;
 }
 

@@ -342,29 +342,29 @@ export function runRepeatFadeOut(
   )
 }
 
-/** White-gold glyph wash plus a separate backlight that grows behind it. */
+/** White-gold glyph wash plus its subtle outline halo. */
 export function runGlintWashIn(
   ink: HTMLElement,
-  backlight: HTMLElement,
+  halo: HTMLElement,
   rtl: boolean,
   durationMs: number,
 ): () => void {
-  backlight.style.opacity = '0'
+  halo.style.opacity = '0'
   const cancelInk = runRepeatWashIn(ink, rtl, durationMs)
-  const cancelLight = runWash(
+  const cancelHalo = runWash(
     durationMs,
     sweepEase(),
     cubicBezierEase,
-    (_p, eased) => { backlight.style.opacity = String(eased) },
-    () => { backlight.style.opacity = '1' },
+    (_p, eased) => { halo.style.opacity = String(eased) },
+    () => { halo.style.opacity = '1' },
   )
-  return () => { cancelInk(); cancelLight() }
+  return () => { cancelInk(); cancelHalo() }
 }
 
-/** Glimmer dry-down: glyph sheen and its backlight recede together. */
+/** Glimmer dry-down: glyph sheen and its halo recede together. */
 export function runGlintFadeOut(
   ink: HTMLElement,
-  backlight: HTMLElement,
+  halo: HTMLElement,
   onDone?: () => void,
 ): () => void {
   const t = getTuning()
@@ -382,8 +382,8 @@ export function runGlintFadeOut(
     },
   )
   const cancelInk = fade(ink, onDone)
-  const cancelLight = fade(backlight)
-  return () => { cancelInk(); cancelLight() }
+  const cancelHalo = fade(halo)
+  return () => { cancelInk(); cancelHalo() }
 }
 
 /**

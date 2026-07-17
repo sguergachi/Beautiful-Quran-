@@ -380,7 +380,7 @@ InkEngine owns that too, as data rather than as animation code:
   wash — same progress, same feather — as a tinted overlay (`letterFadeIn`
   on word units, `ColorReveal` on shaped lines). Android adds a restrained
   white-gold halo outside those glyph outlines; web uses two glyph-shaped
-  layers: a radial backlight behind the word and a luminous ink core above it.
+  layers: a lightly blurred outline and a restrained luminous ink core.
   Both grow with the wash, peak as the word forms, and recede with the glint.
   The sheen stays
   legible against Nightfall without becoming a hard or whole-word glow, adding
@@ -391,7 +391,7 @@ InkEngine owns that too, as data rather than as animation code:
   settled to full ink before audio ends; Upcoming while recessed; Plain at rest).
 - **`InkEngine.Tuning`**: every feel knob in one data class — upcoming alpha,
   ink/mark fade durations, recess, sweep clamps, repeat sweep and fade-out,
-  glint fade plus glow strength/radius, wash feather, and the sweep easing
+  glint tint, glitter time, halo strength/blur, wash feather, and sweep easing
   control points. `InkEngine.tuning` is
   snapshot-backed (`mutableStateOf`), so release builds read constants while
   the Ink Lab can retune a live session.

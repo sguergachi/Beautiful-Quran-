@@ -54,7 +54,7 @@ export function HafsWord({
   const coverRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
   const glintRef = useRef<HTMLSpanElement>(null)
-  const glintBacklightRef = useRef<HTMLSpanElement>(null)
+  const glintHaloRef = useRef<HTMLSpanElement>(null)
   const flashRef = useRef<HTMLSpanElement>(null)
   const prevState = useRef(ink.state)
   const revealedOnEntry = useRef(false)
@@ -142,8 +142,8 @@ export function HafsWord({
       return
     }
     const overlay = glintRef.current
-    const backlight = glintBacklightRef.current
-    if (!overlay || !backlight) return
+    const halo = glintHaloRef.current
+    if (!overlay || !halo) return
     const glinting =
       ink.state === InkState.Active && (ink.repeat || !revealedOnEntry.current)
     const was = prevGlint.current
@@ -151,14 +151,14 @@ export function HafsWord({
 
     if (glinting && !was) {
       const duration = activeSweepMs ?? getTuning().repeatSweepMs
-      return runGlintWashIn(overlay, backlight, true, duration)
+      return runGlintWashIn(overlay, halo, true, duration)
     }
     if (!glinting && was) {
-      return runGlintFadeOut(overlay, backlight, () => setGlintMounted(false))
+      return runGlintFadeOut(overlay, halo, () => setGlintMounted(false))
     }
     if (!glinting) {
       overlay.style.opacity = '0'
-      backlight.style.opacity = '0'
+      halo.style.opacity = '0'
       applyMask(overlay, 'none')
       setGlintMounted(false)
     }
@@ -230,11 +230,13 @@ export function HafsWord({
           <span className="hafs-glyph">{word.arabic}</span>
           {glintMounted ? (
             <span
-              ref={glintBacklightRef}
-              className="word-glint-backlight"
+              ref={glintHaloRef}
+              className="word-glint-halo hafs-glyph"
               aria-hidden="true"
               style={{ opacity: 0 }}
-            />
+            >
+              {word.arabic}
+            </span>
           ) : null}
           {repeatMounted ? (
             <span

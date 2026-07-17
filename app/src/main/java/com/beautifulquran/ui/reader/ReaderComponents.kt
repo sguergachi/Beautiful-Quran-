@@ -39,11 +39,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -449,26 +451,20 @@ private class WordHighlight(
                     ?: InkEngine.tuning.washFeather,
             )
 
-    /** Word-local backlight: grows as the glimmer forms, peaks when the wash
-     * settles, then recedes with [glintAlpha]. It is deliberately broader
-     * than the glyph silhouette so it reads as light behind ink. */
-    fun glintGlowLayer(color: Color): Modifier = Modifier.drawBehind {
+    /** Tight glyph halo: forms with the word and recedes with [glintAlpha]. */
+    fun glintHaloLayer(): Modifier = Modifier.drawWithContent {
         val progress = if (repeat) repeatWash.progress.value else sweep.value
         val alpha = glintAlpha.value * inkSmootherstep(progress)
-        if (alpha <= 0f) return@drawBehind
-        val radius = maxOf(size.width, size.height) * InkEngine.tuning.glintGlowRadius
-        val strength = InkEngine.tuning.glintGlowAlpha * alpha
-        drawCircle(
-            brush = Brush.radialGradient(
-                0f to color.copy(alpha = strength),
-                0.42f to color.copy(alpha = strength * 0.45f),
-                1f to Color.Transparent,
-                center = center,
-                radius = radius,
-            ),
-            center = center,
-            radius = radius,
-        )
+        if (alpha <= 0f) return@drawWithContent
+        val bleed = 12.dp.toPx()
+        drawIntoCanvas { canvas ->
+            canvas.saveLayer(
+                Rect(-bleed, -bleed, size.width + bleed, size.height + bleed),
+                Paint().apply { this.alpha = alpha },
+            )
+        }
+        drawContent()
+        drawIntoCanvas { canvas -> canvas.restore() }
     }
 
     /** Draw-phase alpha for secondary lines (gloss, transliteration): they
@@ -568,13 +564,20 @@ private fun HighlightLayeredText(
         else -> null
     }
     Box(modifier) {
-        // A broad word-local backlight blooms before every ink layer. Unlike
-        // a text shadow it remains visible outside the glyph silhouette.
+        // A restrained glyph-shaped halo sits behind the ink—no radial field.
         if (glintInk != null && highlight.showGlintLayer) {
-            Spacer(
+            Text(
+                text = text,
+                style = style.copy(
+                    shadow = Shadow(
+                        color = glintInk.copy(alpha = InkEngine.tuning.glintGlowAlpha),
+                        blurRadius = InkEngine.tuning.glintGlowRadius,
+                    ),
+                ),
+                color = glintInk.copy(alpha = 0.01f),
                 modifier = Modifier
                     .matchParentSize()
-                    .then(highlight.glintGlowLayer(glintInk)),
+                    .then(highlight.glintHaloLayer()),
             )
         }
         Text(
@@ -600,7 +603,7 @@ private fun HighlightLayeredText(
             Text(
                 text = text,
                 style = style,
-                color = glintInk,
+                color = glintInk.copy(alpha = InkEngine.tuning.glintTintAlpha),
                 modifier = Modifier
                     .matchParentSize()
                     .then(highlight.glintLayer(rtl)),
@@ -958,6 +961,7 @@ private fun ResponsiveEnglishAyah(
                                 color = glintInk,
                                 restingAlpha = 0f,
                                 layerAlpha = glint.value,
+                                colorAlpha = InkEngine.tuning.glintTintAlpha,
                                 glowAlpha = InkEngine.tuning.glintGlowAlpha,
                                 glowRadius = InkEngine.tuning.glintGlowRadius,
                             )
@@ -1212,6 +1216,7 @@ private fun ResponsiveHafsAyah(
                                 color = glintInk,
                                 restingAlpha = 0f,
                                 layerAlpha = glint.value,
+                                colorAlpha = InkEngine.tuning.glintTintAlpha,
                                 glowAlpha = InkEngine.tuning.glintGlowAlpha,
                                 glowRadius = InkEngine.tuning.glintGlowRadius,
                                 feather = if (index == activeIndex) {

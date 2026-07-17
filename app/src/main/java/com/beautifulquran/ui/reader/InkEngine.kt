@@ -88,9 +88,10 @@ object InkEngine {
         /** Dissolve of the white-gold first-gloss glint (see [glinting]) back
          *  to plain recited ink once the voice moves on to the next word. */
         val glintFadeMs: Int = 1_000,
-        /** Peak opacity and word-relative reach of Nightfall's backlight. */
-        val glintGlowAlpha: Float = 0.48f,
-        val glintGlowRadius: Float = 0.72f,
+        /** Tint strength plus the subtle glyph-outline halo around Nightfall's glint. */
+        val glintTintAlpha: Float = 0.62f,
+        val glintGlowAlpha: Float = 0.16f,
+        val glintGlowRadius: Float = 3.5f,
         /** Width of the ink feather relative to the word (see
          *  ui/theme/Fade.kt: the wash reads as a whole-word breath). */
         val washFeather: Float = 1.6f,
