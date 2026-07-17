@@ -131,6 +131,33 @@ shipped web halo uses two shadows: 36% at `0.055em` and 18% at `0.15em`; English
 also uses a 62% glint tint. These values are fixed on web; the live controls
 below tune the Android renderer only.
 
+### Web Hafs clipping: what to trust
+
+Matching `getBoundingClientRect()` values prove layout alignment, not identical
+font paint. Hafs terminals and marks can extend beyond their advance width, and
+Chromium may rasterize the same Arabic text differently once a duplicate is
+masked, faded, or placed on its own compositing surface. Increasing the
+duplicate's padding can hide one example without making that second fill safe.
+
+A decisive diagnostic is the lifetime of the defect: if the missing terminal
+returns exactly when the glimmer layer unmounts, the base glyph is intact and
+the temporary layer is the problem. Inspect the real failing word while the
+effect is active; do not infer glyph paint bounds from a synthetic box or a
+resting frame.
+
+The web contract is therefore:
+
+- Arabic has one authoritative filled glyph—the base ink layer.
+- Glimmer may duplicate its shape only with transparent fill and `text-shadow`.
+- The halo wrapper may be oversized, but it must not own an Arabic reveal mask.
+- The existing paper-cover wash remains the only directional Arabic boundary.
+- Hover rules must target the direct base child so they cannot recolor the halo.
+
+For regression review, use overhanging left terminals such as `رَبِّ` and
+`مَٰلِكِ`. Compare formation, peak, fade, and the frame after unmount; confirm
+there is no filled `.hafs-glint-overlay`, no box edge, and no shift or missing
+ink at any point.
+
 ## Ink Lab controls
 
 Enable developer mode in Settings, turn on **Ink Lab overlay**, start a
