@@ -6,10 +6,9 @@
  * WebKit supports one media stream reliably, while dual-element/blob promotion
  * can wedge its playback pipeline. [AudioPrefetcher] still warms upcoming URLs.
  *
- * Developer flag [setGapless5Enabled] swaps the join path for Gapless-5
- * (Web Audio hybrid) so verse seams can be A/B tested without changing the
- * default dual-element transport. HighlightEngine still receives per-ayah
- * positionMs either way.
+ * Default join path is Gapless-5 (HTML5 + Web Audio hybrid). [setGapless5Enabled]
+ * can fall back to dual-element promote for A/B. HighlightEngine still receives
+ * per-ayah positionMs either way.
  *
  * `isPlaying` is set on play *intent* (before canplay / `HTMLMediaElement.play`)
  * so reader chrome can recede on the tap rather than after the buffer fills.
@@ -110,8 +109,8 @@ export class PlayerController {
    */
   private pauseSuppressRemaining = 0
   /**
-   * Developer A/B: Gapless-5 joins instead of dual-`<audio>` promote.
-   * Off by default; toggled via Settings → Developer.
+   * Gapless-5 joins (default). When false, dual-`<audio>` promote is used.
+   * Toggled via Settings → Developer for A/B.
    */
   private gapless5Enabled = false
   private gapless5: Gapless5Backend | null = null

@@ -474,7 +474,7 @@ export function SettingsScreen({
             <div className="settings-dev-block">
               <PaperSwitch
                 id="setting-gapless5"
-                label="Gapless-5 verse joins"
+                label="Gapless verse joins"
                 checked={s.gapless5Playback}
                 checkParams={checkParams}
                 paintToken={checkPaintToken}
@@ -483,9 +483,8 @@ export function SettingsScreen({
                 }
               />
               <p className="settings-caption">
-                Experimental Web Audio joins (Gapless-5) instead of dual-element handoff.
-                Word highlight still follows the reciter; compare verse seams with this on
-                and off.
+                Default on: Gapless-5 (Web Audio hybrid) for seamless verse joins. Turn off
+                to compare the legacy dual-element handoff.
               </p>
             </div>
 

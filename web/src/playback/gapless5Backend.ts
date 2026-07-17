@@ -1,7 +1,7 @@
 /**
- * Developer-only transport: Gapless-5 for A/B testing seamless verse joins.
- * Position is per-track ms — the same contract HighlightEngine already consumes
- * from the default dual-element path.
+ * Default verse-join transport: Gapless-5 for seamless joins.
+ * Position is per-track ms — the same contract HighlightEngine consumes from
+ * the legacy dual-element path.
  *
  * Loaded dynamically so unit tests / cold boot never touch `window` from the
  * UMD package until the flag is on in a real browser.
