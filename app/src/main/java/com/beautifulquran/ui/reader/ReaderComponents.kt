@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -39,9 +40,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -62,6 +67,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -92,6 +98,7 @@ import com.beautifulquran.ui.theme.ornament.chapterOrnamentSeed
 import com.beautifulquran.ui.theme.ornament.generateChapterOrnament
 import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.shapedWordBloom
+import com.beautifulquran.ui.theme.inkSmootherstep
 import com.beautifulquran.ui.theme.verticalFadingEdges
 import kotlinx.coroutines.flow.StateFlow
 
@@ -348,6 +355,7 @@ private fun rememberStartRevealed(state: InkEngine.State): Boolean {
  * Shared with [ReaderScreen] so the focus engine's bottom guard matches. */
 internal val ActiveWordTopMargin = 144.dp
 internal val ActiveWordBottomMargin = 132.dp
+private val GlintLayerBleed = 14.dp
 
 /** Measures the active word as (top, bottom) in LazyColumn viewport pixels. */
 private typealias WordViewportMeasure = () -> Pair<Float, Float>?
@@ -437,14 +445,42 @@ private class WordHighlight(
      * then dissolves via [glintAlpha] once the word settles to Recited. */
     fun glintLayer(rtl: Boolean): Modifier =
         Modifier
-            .graphicsLayer { alpha = glintAlpha.value }
+            .drawWithContent {
+                val alpha = glintAlpha.value
+                if (alpha <= 0f) return@drawWithContent
+                val bleed = GlintLayerBleed.toPx()
+                drawIntoCanvas { canvas ->
+                    canvas.saveLayer(
+                        Rect(-bleed, -bleed, size.width + bleed, size.height + bleed),
+                        Paint().apply { this.alpha = alpha },
+                    )
+                }
+                drawContent()
+                drawIntoCanvas { canvas -> canvas.restore() }
+            }
             .letterFadeIn(
-                progress = { sweep.value },
+                progress = { if (repeat) repeatWash.progress.value else sweep.value },
                 rtl = rtl,
                 restingAlpha = 0f,
                 feather = pacing?.let { InkEngine.pacedFeather(it.letterCount) }
                     ?: InkEngine.tuning.washFeather,
             )
+
+    /** Tight glyph halo: forms with the word and recedes with [glintAlpha]. */
+    fun glintHaloLayer(): Modifier = Modifier.drawWithContent {
+        val progress = if (repeat) repeatWash.progress.value else sweep.value
+        val alpha = glintAlpha.value * inkSmootherstep(progress)
+        if (alpha <= 0f) return@drawWithContent
+        val bleed = GlintLayerBleed.toPx()
+        drawIntoCanvas { canvas ->
+            canvas.saveLayer(
+                Rect(-bleed, -bleed, size.width + bleed, size.height + bleed),
+                Paint().apply { this.alpha = alpha },
+            )
+        }
+        drawContent()
+        drawIntoCanvas { canvas -> canvas.restore() }
+    }
 
     /** Draw-phase alpha for secondary lines (gloss, transliteration): they
      * fade with the word's sweep but never letter-reveal. */
@@ -519,10 +555,37 @@ private fun Modifier.wordUnitBehavior(
         }
 }
 
+/** Paint-only text twin: the wrapper fills the base word without contributing
+ * to its measurement, while [Text] keeps the base word's natural constraints.
+ * Forcing the text itself to matchParentSize can reflow Arabic by a pixel and
+ * clip its overhanging marks while a wash mask is active. */
+@Composable
+private fun BoxScope.InkOverlayText(
+    text: String,
+    style: TextStyle,
+    color: Color,
+    modifier: Modifier,
+) {
+    Box(
+        contentAlignment = AbsoluteAlignment.TopLeft,
+        modifier = Modifier.matchParentSize(),
+    ) {
+        Text(
+            text = text,
+            style = style,
+            color = color,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Visible,
+            modifier = modifier,
+        )
+    }
+}
+
 /** The two-layer karaoke text every word unit renders: the base ink, plus an
  * orange overlay that sweeps in while the word belongs to a repeat chain and
  * dissolves back out once the chain releases. An optional [searchHitWash]
- * reuses that same overlay (matchParentSize + [repeatInkLayer]) for the home
+ * reuses that same overlay ([InkOverlayText] + [repeatInkLayer]) for the home
  * search-hit flash — never a second measured Text that would shift layout. */
 @Composable
 private fun HighlightLayeredText(
@@ -543,34 +606,44 @@ private fun HighlightLayeredText(
         else -> null
     }
     Box(modifier) {
+        // A restrained glyph-shaped halo sits behind the ink—no radial field.
+        if (glintInk != null && highlight.showGlintLayer) {
+            InkOverlayText(
+                text = text,
+                style = style.copy(
+                    shadow = Shadow(
+                        color = glintInk.copy(alpha = InkEngine.tuning.glintGlowAlpha),
+                        blurRadius = InkEngine.tuning.glintGlowRadius,
+                    ),
+                ),
+                color = glintInk.copy(alpha = 0.01f),
+                modifier = highlight.glintHaloLayer(),
+            )
+        }
         Text(
             text = text,
             style = style,
             color = color,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Visible,
             modifier = highlight.baseLayer(rtl),
         )
-        // Fresh-ink glint (Nightfall): white-gold sheen under the orange
-        // overlay, so a repeat chain always reads over a dissolving glint.
-        if (glintInk != null && highlight.showGlintLayer) {
-            Text(
-                text = text,
-                style = style,
-                color = glintInk,
-                modifier = Modifier
-                    .matchParentSize()
-                    .then(highlight.glintLayer(rtl)),
-            )
-        }
         if (orangeWash != null) {
-            Text(
+            InkOverlayText(
                 text = text,
                 style = style,
                 color = repeatInk,
-                // matchParentSize: overlay must not contribute to Box measure —
-                // composing a second Text was shifting FlowRow words.
-                modifier = Modifier
-                    .matchParentSize()
-                    .repeatInkLayer(orangeWash, rtl),
+                modifier = Modifier.repeatInkLayer(orangeWash, rtl),
+            )
+        }
+        // Nightfall's white-gold sheen sits above both fresh and repeat ink.
+        if (glintInk != null && highlight.showGlintLayer) {
+            InkOverlayText(
+                text = text,
+                style = style,
+                color = glintInk.copy(alpha = InkEngine.tuning.glintTintAlpha),
+                modifier = highlight.glintLayer(rtl),
             )
         }
     }
@@ -900,22 +973,6 @@ private fun ResponsiveEnglishAyah(
                             restingAlpha = InkEngine.State.Upcoming.inkAlpha(),
                         )
                     }
-                    // Fresh-ink glint (Nightfall): the newly read word's
-                    // glyphs re-drawn in white gold along the same sweep,
-                    // dissolving back to plain ink once the voice moves on.
-                    // Added before the orange washes so repeats draw on top.
-                    if (glintInk != null) {
-                        glintAlphas.forEachIndexed { index, glint ->
-                            if (glint.value <= 0f) return@forEachIndexed
-                            blooms += ShapedWordBloom.ColorReveal(
-                                range = rendered.wordRanges[index],
-                                progress = sweeps[index].value,
-                                color = glintInk,
-                                restingAlpha = 0f,
-                                layerAlpha = glint.value,
-                            )
-                        }
-                    }
                     repeatWashes.forEachIndexed { index, wash ->
                         if (wash.alpha.value <= 0f) return@forEachIndexed
                         blooms += ShapedWordBloom.ColorReveal(
@@ -925,6 +982,27 @@ private fun ResponsiveEnglishAyah(
                             restingAlpha = 0f,
                             layerAlpha = wash.alpha.value,
                         )
+                    }
+                    // Nightfall's white-gold sheen sits above both fresh and
+                    // orange repeat ink, following whichever wash is active.
+                    if (glintInk != null) {
+                        glintAlphas.forEachIndexed { index, glint ->
+                            if (glint.value <= 0f) return@forEachIndexed
+                            blooms += ShapedWordBloom.ColorReveal(
+                                range = rendered.wordRanges[index],
+                                progress = if (inks[index].repeat) {
+                                    repeatWashes[index].progress.value
+                                } else {
+                                    sweeps[index].value
+                                },
+                                color = glintInk,
+                                restingAlpha = 0f,
+                                layerAlpha = glint.value,
+                                colorAlpha = InkEngine.tuning.glintTintAlpha,
+                                glowAlpha = InkEngine.tuning.glintGlowAlpha,
+                                glowRadius = InkEngine.tuning.glintGlowRadius,
+                            )
+                        }
                     }
                     val flashIndex = ayah.words.indexOfFirst { it.position == flashWordPosition }
                     if (flashIndex >= 0 && searchHitWash.alpha.value > 0f) {
@@ -1143,31 +1221,6 @@ private fun ResponsiveHafsAyah(
                             )
                         }
                     }
-                    // Fresh-ink glint (Nightfall): the newly read word's
-                    // glyphs re-drawn in white gold along the same sweep,
-                    // dissolving back to plain ink once the voice moves on.
-                    // Added before the orange washes so repeats draw on top.
-                    if (glintInk != null) {
-                        glintAlphas.forEachIndexed { index, glint ->
-                            if (glint.value <= 0f) return@forEachIndexed
-                            val range = rendered.wordRanges.getOrNull(index)
-                                ?: return@forEachIndexed
-                            blooms += ShapedWordBloom.ColorReveal(
-                                range = range,
-                                progress = sweeps[index].value,
-                                color = glintInk,
-                                restingAlpha = 0f,
-                                layerAlpha = glint.value,
-                                // The active word's paced edge, if any, so the
-                                // gold edge stays exactly the ink edge.
-                                feather = if (index == activeIndex) {
-                                    pacing?.let { InkEngine.pacedFeather(it.letterCount) }
-                                } else {
-                                    null
-                                },
-                            )
-                        }
-                    }
                     // Orange directional bloom: SrcIn-tint the shaped glyphs,
                     // then DstIn-wash — same motion as gloss mode's orange
                     // overlay, without re-shaping or painting neighbour rects.
@@ -1182,6 +1235,34 @@ private fun ResponsiveHafsAyah(
                             restingAlpha = 0f,
                             layerAlpha = wash.alpha.value,
                         )
+                    }
+                    // Nightfall's white-gold sheen sits above both fresh and
+                    // orange repeat ink, following whichever wash is active.
+                    if (glintInk != null) {
+                        glintAlphas.forEachIndexed { index, glint ->
+                            if (glint.value <= 0f) return@forEachIndexed
+                            val range = rendered.wordRanges.getOrNull(index)
+                                ?: return@forEachIndexed
+                            blooms += ShapedWordBloom.ColorReveal(
+                                range = range,
+                                progress = if (inks[index].repeat) {
+                                    repeatWashes[index].progress.value
+                                } else {
+                                    sweeps[index].value
+                                },
+                                color = glintInk,
+                                restingAlpha = 0f,
+                                layerAlpha = glint.value,
+                                colorAlpha = InkEngine.tuning.glintTintAlpha,
+                                glowAlpha = InkEngine.tuning.glintGlowAlpha,
+                                glowRadius = InkEngine.tuning.glintGlowRadius,
+                                feather = if (index == activeIndex) {
+                                    pacing?.let { InkEngine.pacedFeather(it.letterCount) }
+                                } else {
+                                    null
+                                },
+                            )
+                        }
                     }
                     // Home search-hit flash: same ColorReveal wash as the
                     // orange repeat bloom — directional mask + dissolve × 2.

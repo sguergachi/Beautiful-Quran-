@@ -334,8 +334,14 @@ Fresh-ink glint (Nightfall only): a third overlay twin in white gold
 genuinely new word's first-pass ink — same duration, easing, and directional
 mask — then dissolves to plain recited ink over `glintFadeMs` (1 s) once the
 voice moves on. Gate: `InkEngine.glinting` (word half) × `glintEnabled()` in
-`render/inkWash.ts` (theme half). Repeats and startRevealed re-entries never
-glint. Same policy and color as Android (`QuranAccents.glintInk`).
+`render/inkWash.ts` (theme half). Repeat events always retrigger the glimmer,
+including when the word starts already revealed; an ordinary backward-seek
+re-entry does not. A transparent duplicate glyph supplies the tight two-radius
+`text-shadow` halo while the crisp overlay keeps the directional mask. The halo
+has no background, box shadow, or filter, and overflow remains visible so its
+edge cannot expose the word box. Same policy and color as Android
+(`QuranAccents.glintInk`); see [GLIMMER.md](GLIMMER.md) for the complete layer
+and visual-verification contract.
 
 ## 9. UI surface (paper metaphor)
 
