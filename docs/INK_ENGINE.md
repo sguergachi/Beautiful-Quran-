@@ -384,7 +384,9 @@ InkEngine owns that too, as data rather than as animation code:
   Both grow with the wash, peak as the word forms, and recede with the glint.
   The sheen stays
   legible against Nightfall without becoming a hard or whole-word glow, adding
-  no new motion—only a warm light that cools as the ink dries. And
+  no new motion—only a warm light that cools as the ink dries.
+  [GLIMMER.md](GLIMMER.md) is the canonical cross-platform rendering,
+  tuning, and visual-verification specification. InkEngine also owns
   `prefaceState(isActive, dimmed)` / `prefaceWashProgress(positionMs, durationMs)`
   for the surah-header basmalah VectorDrawable (Active during the Al-Fatihah
   1:1 lead-in clip, with an RTL `letterFadeIn` wash paced by the clip clock and
@@ -410,10 +412,12 @@ InkEngine owns that too, as data rather than as animation code:
 Settings → Developer (triple-tap the logo) → **Ink Lab overlay** floats a
 collapsible slider panel over the reader (`ui/reader/InkLabPanel.kt`), bound
 directly to `InkEngine.tuning`: upcoming ink, fade timings, sweep clamps,
-repeat timings, the fresh-ink glint fade, wash feather, and the experimental
+repeat timings, the fresh-ink **Glitter time**, **Glint tint**, **Halo
+strength**, and **Halo blur** controls, wash feather, and the experimental
 tajweed-pacing toggle with
 its paced-feather knob (see [TAJWEED_PACING.md](TAJWEED_PACING.md)). Edits are
 session-only and never persisted —
 shipped behavior cannot drift; **Log values** dumps the current `Tuning` to
 Logcat (tag `InkLab`) so a tuned feel can be transcribed into the defaults in
-InkEngine.kt.
+InkEngine.kt. Slider meanings, defaults, ranges, and the halo artifact stress
+check are documented in [GLIMMER.md](GLIMMER.md#ink-lab-controls).

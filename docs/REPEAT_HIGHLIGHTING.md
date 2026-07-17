@@ -201,7 +201,10 @@ HighlightEngine.activeInfo(segments, positionMs)
   `repeatInk`, **slow dissolve** (`REPEAT_FADE_OUT_MS`, 900 ms) back to normal ink
   when the chain releases. On Nightfall, each newly active repeat word also
   replays the white-gold glimmer over that orange bloom: the repeat is a new
-  event even though the word's base ink was already revealed.
+  event even though the word's base ink was already revealed. This includes
+  same-word repeats and repeat-chain re-entry; `repeat` deliberately overrides
+  the ordinary `startRevealed` suppression. See
+  [GLIMMER.md](GLIMMER.md) for the lifecycle, layer order, and artifact rules.
 - `repeatInk` is defined per theme in `QuranAccents` — `#B4551E` (light),
   `#E0904E` (dark).
 

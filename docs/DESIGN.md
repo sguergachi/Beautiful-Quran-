@@ -157,8 +157,10 @@ Two themes, both "paper":
   soft green `#7FB8A4`, warmer gold `#D9B44A`. Nightfall alone adds a
   **fresh-ink glint** `#F8E9BE`: a newly read word's ink lands white-gold —
   riding the same letter sweep, never a separate motion — and dries back to
-  parchment over 1 s. It is ink catching light, not a glow effect: no blur,
-  no shadow, just a warmer tint that cools.
+  parchment over 1 s. A very slight glyph-shaped halo makes it feel lit from
+  within at the peak, then recedes with the tint. It is not a spotlight: no
+  radial field, background glow, box shadow, or clipped word rectangle. See
+  [GLIMMER.md](GLIMMER.md).
 - **Royal green**: deep green `#062C24`, parchment ink `#E8E2D5`,
   soft green `#7FB8A4`, warmer gold `#D9B44A`.
 
