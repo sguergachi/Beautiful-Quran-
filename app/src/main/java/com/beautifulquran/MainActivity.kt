@@ -227,6 +227,12 @@ private fun PaperStackApp(
     var selectedStartAyah by rememberSaveable { mutableIntStateOf(0) }
     /** 1-based word position from a home word-search hit; 0 means no flash. */
     var selectedStartWord by rememberSaveable { mutableIntStateOf(0) }
+    /**
+     * Remount key for the reader. Bumped on home/bookmarks/concordance/voice
+     * opens so scroll state resets; **not** bumped on next-chapter advance so
+     * the continuous scroll transition can keep the same composition.
+     */
+    var readerSession by rememberSaveable { mutableIntStateOf(0) }
     var settledLayer by rememberSaveable { mutableIntStateOf(COVER_LAYER) }
     var ayahSelectorExpanded by remember { mutableStateOf(false) }
     /** The Timings Lab is not a page in the stack: it is a work sheet that
@@ -373,6 +379,7 @@ private fun PaperStackApp(
         selectedStartAyah = startAyah
         selectedStartWord = 0
         jumpEpoch++
+        readerSession++
         animateTo(AYAH_LAYER)
     }
 
@@ -478,6 +485,7 @@ private fun PaperStackApp(
         selectedStartAyah = ayah
         selectedStartWord = 0
         jumpEpoch++
+        readerSession++
         animateTo(AYAH_LAYER)
     }
 
@@ -492,6 +500,7 @@ private fun PaperStackApp(
         selectedStartAyah = target.ayah
         selectedStartWord = 0
         jumpEpoch++
+        readerSession++
         animateTo(AYAH_LAYER)
     }
 
@@ -601,6 +610,7 @@ private fun PaperStackApp(
                     selectedStartAyah = ayah
                     selectedStartWord = 0
                     jumpEpoch++
+                    readerSession++
                     animateTo(AYAH_LAYER)
                 },
             )
@@ -634,7 +644,7 @@ private fun PaperStackApp(
                 settingsLayer = settingsLayer,
                 modifier = Modifier.zIndex(if (readerBleedOpen) 3f else 1f),
             ) {
-                key(selectedSurahId, selectedStartAyah, selectedStartWord, jumpEpoch) {
+                key(readerSession) {
                     ReaderScreen(
                         surahId = selectedSurahId,
                         startAyah = selectedStartAyah.takeIf { it > 0 },
@@ -642,6 +652,13 @@ private fun PaperStackApp(
                         viewModel = readerViewModel,
                         onBack = { animateTo(COVER_LAYER) },
                         onOpenSettings = { animateTo(SETTINGS_LAYER) },
+                        onOpenNextChapter = { nextId ->
+                            // Content is already installed by the reader's
+                            // continuous-scroll advance — only sync the sheet id.
+                            selectedSurahId = nextId
+                            selectedStartAyah = 0
+                            selectedStartWord = 0
+                        },
                         onAyahSelectorExpandedChange = { ayahSelectorExpanded = it },
                         onOpenRootViewer = { sid, a, word -> onWordLongPress(sid, a, word) },
                         onRootReturnUserMoved = { onRootReturnUserMovedLatest.value() },
@@ -720,6 +737,7 @@ private fun PaperStackApp(
                     selectedSurahId = surahId
                     selectedStartAyah = ayah ?: 0
                     selectedStartWord = wordPosition ?: 0
+                    readerSession++
                     animateTo(AYAH_LAYER)
                 },
                 onOpenSettings = { animateTo(SETTINGS_LAYER) },

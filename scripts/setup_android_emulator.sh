@@ -115,9 +115,41 @@ build_quran_db_if_missing() {
   (cd "$REPO_ROOT" && python3 tools/build_db.py)
 }
 
+# Host GPU + enough RAM for Compose. Without this, avdmanager often leaves
+# hw.gpu.enabled=no and the emulator is unusably laggy.
+tune_avd_performance() {
+  local cfg="$HOME/.android/avd/${ANDROID_AVD_NAME}.avd/config.ini"
+  if [[ ! -f "$cfg" ]]; then
+    return
+  fi
+  log "Tuning AVD for host GPU acceleration: $ANDROID_AVD_NAME"
+  # shellcheck disable=SC2016
+  if grep -q '^hw.gpu.enabled=' "$cfg"; then
+    sed -i 's/^hw\.gpu\.enabled=.*/hw.gpu.enabled=yes/' "$cfg"
+  else
+    printf 'hw.gpu.enabled=yes\n' >> "$cfg"
+  fi
+  if grep -q '^hw.gpu.mode=' "$cfg"; then
+    sed -i 's/^hw\.gpu\.mode=.*/hw.gpu.mode=host/' "$cfg"
+  else
+    printf 'hw.gpu.mode=host\n' >> "$cfg"
+  fi
+  if grep -q '^hw.ramSize=' "$cfg"; then
+    sed -i 's/^hw\.ramSize=.*/hw.ramSize=4096/' "$cfg"
+  else
+    printf 'hw.ramSize=4096\n' >> "$cfg"
+  fi
+  if grep -q '^hw.cpu.ncore=' "$cfg"; then
+    sed -i 's/^hw\.cpu\.ncore=.*/hw.cpu.ncore=6/' "$cfg"
+  else
+    printf 'hw.cpu.ncore=6\n' >> "$cfg"
+  fi
+}
+
 create_avd_if_missing() {
   if "$AVDMANAGER" list avd | grep -Fq "Name: $ANDROID_AVD_NAME"; then
     log "AVD already exists: $ANDROID_AVD_NAME"
+    tune_avd_performance
     return
   fi
 
@@ -132,6 +164,7 @@ create_avd_if_missing() {
     --name "$ANDROID_AVD_NAME" \
     --package "$SYSTEM_IMAGE" \
     "${device_args[@]}"
+  tune_avd_performance
 }
 
 main() {

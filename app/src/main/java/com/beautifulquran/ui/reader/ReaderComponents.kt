@@ -6,6 +6,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,9 +40,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -1519,6 +1528,96 @@ fun AyahBlock(
 }
 
 /**
+ * Shared chapter opening — the weave, medallion, and title used by both the
+ * real [SurahHeader] and the end-of-chapter invitation so a continuous advance
+ * can hand one off as the other without a pattern or type flash.
+ *
+ * [rosetteScale] is paint-only (graphicsLayer) so invitation polish never
+ * thrash layout height during a scroll handoff.
+ */
+@Composable
+fun ChapterOpening(
+    chapterNumber: Int,
+    nameArabic: String,
+    nameTransliteration: String,
+    nameTranslation: String,
+    revelationPlace: String,
+    ayahCount: Int,
+    sheen: State<Float>,
+    modifier: Modifier = Modifier,
+    /** Tighter bottom when a basmalah block follows (real header only). */
+    compactBottom: Boolean = surahOpensWithBasmalahPreface(chapterNumber),
+    rosetteScale: Float = 1f,
+    rosetteAlpha: Float = 1f,
+) {
+    val accents = LocalQuranAccents.current
+    val weaveFade = MaterialTheme.colorScheme.background
+    val ornament = remember(chapterNumber, ayahCount) {
+        generateChapterOrnament(chapterOrnamentSeed(chapterNumber, ayahCount))
+    }
+    val scale = rosetteScale.coerceIn(0.5f, 1.2f)
+    // Weave fades into the page; titles stay full ink (fade was clipping the
+    // chapter meta line when it sat on the Column itself).
+    Box(modifier = modifier.fillMaxWidth()) {
+        Box(
+            Modifier
+                .matchParentSize()
+                .generatedFieldWeave(
+                    field = ornament.field,
+                    ink = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.04f),
+                    embossLight = accents.embossLight.copy(alpha = 0.05f),
+                )
+                .verticalFadingEdges(color = weaveFade, top = 12.dp, bottom = 36.dp),
+        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    top = 36.dp,
+                    bottom = if (compactBottom) 8.dp else 30.dp,
+                    start = 24.dp,
+                    end = 24.dp,
+                ),
+        ) {
+            GeneratedChapterRosette(
+                spec = ornament.rosette,
+                size = 52.dp,
+                brightGold = accents.goldBright,
+                deepGold = accents.goldDeep,
+                embossDark = accents.embossDark,
+                embossLight = accents.embossLight,
+                sheen = sheen,
+                modifier = Modifier.graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    alpha = rosetteAlpha.coerceIn(0f, 1f)
+                },
+            )
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = "سُورَةُ $nameArabic",
+                style = ArabicTitleStyle,
+                fontSize = 32.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "$nameTransliteration · $nameTranslation",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Chapter $chapterNumber · ${revelationPlace.replaceFirstChar { it.uppercase() }} · $ayahCount ayahs",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            )
+        }
+    }
+}
+
+/**
  * Surah opening: quiet centered typography over a whisper-faint embossed
  * star-and-cross weave, crowned by a gilded eight-fold rosette whose sheen
  * shifts with the page ([sheen] is read at draw time only). The chapter-opening
@@ -1535,65 +1634,15 @@ fun SurahHeader(
     ayahCount: Int,
     sheen: State<Float>,
 ) {
-    val accents = LocalQuranAccents.current
-    val weaveFade = MaterialTheme.colorScheme.background
-    val hasBasmalahBelow = surahOpensWithBasmalahPreface(chapterNumber)
-    // A distinct rosette and backing field per chapter, grown from one
-    // seed: ayah count is the dominant term (length as fingerprint), folded
-    // with the chapter number so all 114 chapters render distinctly even
-    // though many share an ayah count. The field replaces the fixed weave
-    // every chapter used to share — the header's whole ornament is now
-    // this chapter's own.
-    val ornament = remember(chapterNumber, ayahCount) {
-        generateChapterOrnament(chapterOrnamentSeed(chapterNumber, ayahCount))
-    }
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .fillMaxWidth()
-            .generatedFieldWeave(
-                field = ornament.field,
-                ink = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.04f),
-                embossLight = accents.embossLight.copy(alpha = 0.05f),
-            )
-            .verticalFadingEdges(color = weaveFade, top = 12.dp, bottom = 36.dp)
-            .padding(
-                top = 36.dp,
-                // Tighter bottom when the basmalah block follows immediately.
-                bottom = if (hasBasmalahBelow) 8.dp else 30.dp,
-                start = 24.dp,
-                end = 24.dp,
-            ),
-    ) {
-        GeneratedChapterRosette(
-            spec = ornament.rosette,
-            size = 52.dp,
-            brightGold = accents.goldBright,
-            deepGold = accents.goldDeep,
-            embossDark = accents.embossDark,
-            embossLight = accents.embossLight,
-            sheen = sheen,
-        )
-        Spacer(Modifier.height(16.dp))
-        Text(
-            text = "سُورَةُ $nameArabic",
-            style = ArabicTitleStyle,
-            fontSize = 32.sp,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(Modifier.height(10.dp))
-        Text(
-            text = "$nameTransliteration · $nameTranslation",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = "Chapter $chapterNumber · ${revelationPlace.replaceFirstChar { it.uppercase() }} · $ayahCount ayahs",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-        )
-    }
+    ChapterOpening(
+        chapterNumber = chapterNumber,
+        nameArabic = nameArabic,
+        nameTransliteration = nameTransliteration,
+        nameTranslation = nameTranslation,
+        revelationPlace = revelationPlace,
+        ayahCount = ayahCount,
+        sheen = sheen,
+    )
 }
 
 /**
@@ -1736,6 +1785,184 @@ fun PageBreak(page: Int, useArabicIndicDigits: Boolean = true) {
                     color = pageNumberColor,
                 )
             }
+        }
+    }
+}
+
+/**
+ * End-of-chapter invitation built around the same [ChapterOpening] as the real
+ * header. Invitation chrome (air, "NEXT", Continue pill) only fades via alpha —
+ * heights stay fixed so measuring/sliding the opening never jumps.
+ *
+ * [headerMorph] 0 = full invitation, 1 = chrome faded (opening ready to fly).
+ * [pullProgress] fills the Continue pill during bottom overscroll.
+ * [openingAlpha] fades the in-list opening while a flying overlay carries it.
+ * [onOpeningPositioned] reports the opening block for the slide animation.
+ */
+@Composable
+fun NextChapterFooter(
+    chapterNumber: Int,
+    nameArabic: String,
+    nameTransliteration: String,
+    nameTranslation: String,
+    revelationPlace: String,
+    ayahCount: Int,
+    sheen: State<Float>,
+    onOpen: () -> Unit,
+    enabled: Boolean = true,
+    pullProgress: Float = 0f,
+    headerMorph: Float = 0f,
+    openingAlpha: Float = 1f,
+    onOpeningPositioned: ((LayoutCoordinates) -> Unit)? = null,
+) {
+    val accents = LocalQuranAccents.current
+    val morph = FastOutSlowInEasing.transform(headerMorph.coerceIn(0f, 1f))
+    val invite = (1f - morph).coerceIn(0f, 1f)
+    val openA = openingAlpha.coerceIn(0f, 1f)
+    val rosetteScale = 40f / 52f + (1f - 40f / 52f) * morph
+    val rosetteAlpha = (0.88f + 0.12f * morph) * openA
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        // Fixed-height invitation chrome — alpha only, no layout thrash.
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+                .graphicsLayer { alpha = invite },
+        ) {
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = "NEXT",
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 3.sp),
+                fontSize = 10.sp,
+                color = accents.gold.copy(alpha = 0.55f),
+            )
+        }
+
+        // Pixel-identical opening to [SurahHeader] — the continuous handoff target.
+        ChapterOpening(
+            chapterNumber = chapterNumber,
+            nameArabic = nameArabic,
+            nameTransliteration = nameTransliteration,
+            nameTranslation = nameTranslation,
+            revelationPlace = revelationPlace,
+            ayahCount = ayahCount,
+            sheen = sheen,
+            compactBottom = false,
+            rosetteScale = rosetteScale,
+            rosetteAlpha = rosetteAlpha,
+            modifier = Modifier
+                .graphicsLayer { alpha = openA }
+                .then(
+                    if (onOpeningPositioned != null) {
+                        Modifier.onGloballyPositioned(onOpeningPositioned)
+                    } else {
+                        Modifier
+                    },
+                ),
+        )
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(82.dp)
+                .graphicsLayer { alpha = invite },
+        ) {
+            Spacer(Modifier.height(22.dp))
+            NextChapterOpenPill(
+                chapterName = nameTransliteration,
+                onClick = onOpen,
+                enabled = enabled && invite > 0.45f,
+                fillProgress = pullProgress,
+            )
+        }
+    }
+}
+
+/**
+ * Quiet green stadium control for advancing to the next chapter. Soft accent
+ * wash at rest; [fillProgress] paints a left-to-right green fill so bottom
+ * overscroll can read as a progress bar. Tap still opens immediately.
+ */
+@Composable
+fun NextChapterOpenPill(
+    chapterName: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    fillProgress: Float = 0f,
+) {
+    val colors = MaterialTheme.colorScheme
+    val label = "Open $chapterName"
+    val fill = fillProgress.coerceIn(0f, 1f)
+    // Ink flips to the fill's contrasting color once the wash covers the label.
+    val contentColor = androidx.compose.ui.graphics.lerp(
+        colors.primary,
+        colors.onPrimary,
+        ((fill - 0.32f) / 0.28f).coerceIn(0f, 1f),
+    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+        modifier = modifier
+            .height(44.dp)
+            .graphicsLayer { alpha = if (enabled) 1f else 0.45f }
+            .drawBehind {
+                val h = size.height
+                val r = h / 2f
+                val capsule = Path().apply {
+                    addRoundRect(
+                        RoundRect(
+                            left = 0f,
+                            top = 0f,
+                            right = size.width,
+                            bottom = h,
+                            cornerRadius = CornerRadius(r, r),
+                        ),
+                    )
+                }
+                // Quiet resting wash.
+                drawPath(capsule, colors.primary.copy(alpha = 0.10f))
+                // Progress fill — clipped stadium growing left → right.
+                if (fill > 0f) {
+                    clipRect(right = size.width * fill) {
+                        drawPath(capsule, colors.primary)
+                    }
+                }
+            }
+            .quietClickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 22.dp)
+            .semantics {
+                contentDescription = label
+                role = Role.Button
+            },
+    ) {
+        Text(
+            text = "Continue",
+            style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 0.6.sp),
+            color = contentColor,
+        )
+        Spacer(Modifier.width(8.dp))
+        // Downward chevron — continue reading further down the page.
+        Canvas(Modifier.size(18.dp)) {
+            val stroke = Stroke(
+                width = 2.2.dp.toPx(),
+                cap = StrokeCap.Round,
+                join = StrokeJoin.Round,
+            )
+            val w = size.width
+            val h = size.height
+            val path = Path().apply {
+                moveTo(w * 0.22f, h * 0.38f)
+                lineTo(w * 0.50f, h * 0.62f)
+                lineTo(w * 0.78f, h * 0.38f)
+            }
+            drawPath(path, contentColor, style = stroke)
         }
     }
 }
