@@ -915,18 +915,18 @@ export class PlayerController {
   ) {
     const token = ++this.playToken
     const quiet = opts.quiet === true
-    const backend = this.gapless5
+    let backend = this.gapless5
     if (!backend) {
-      this.patch({ error: 'Gapless-5 is not ready', isPlaying: false })
-      return
+      backend = this.createGapless5Backend()
+      this.gapless5 = backend
     }
 
     this.index = i
+    const item = this.playlist[i]!
     if (!quiet) {
       this.publishNowPlaying(autoplay ? { playing: true } : undefined)
       this.updateMediaSession()
     } else {
-      const item = this.playlist[i]!
       this.state = {
         ...this.state,
         nowPlaying: {
@@ -939,19 +939,24 @@ export class PlayerController {
       }
     }
 
-    const item = this.playlist[i]!
-    if (autoplay && !this.prefetcher.isWarm(item.url)) {
-      this.setBuffering(true)
-    }
+    if (autoplay) this.setBuffering(true)
 
     try {
-      await backend.ensureReady()
+      // First enable may still be importing the UMD chunk; after that this is
+      // sync. Never await a full-surah prefetch here — that drops autoplay.
+      if (!backend.isReady()) await backend.ensureReady()
       if (token !== this.playToken) return
-      await backend.syncPlaylist(this.playlist, this.prefetcher)
-      if (token !== this.playToken) return
+
+      // Unlock Web Audio on the same turn as the user gesture when possible.
+      if (autoplay) void backend.resumeContext()
+
+      backend.syncPlaylist(this.playlist, this.prefetcher)
       backend.applyRepeat(this.state.repeatMode)
       backend.setSpeed(this.state.speed)
-      backend.goto(i, autoplay)
+      // Warm current (and let read-ahead fill the rest) without blocking play.
+      void this.prefetcher.ensure(item.url)
+      this.schedulePrefetch()
+
       if (quiet) {
         this.patch({
           nowPlaying: {
@@ -963,23 +968,21 @@ export class PlayerController {
           durationMs: backend.getDurationMs(),
           error: null,
         })
-        this.schedulePrefetch()
+        this.setBuffering(false)
         return
       }
+
       if (autoplay) {
-        if (!this.state.isPlaying) {
-          // User paused during load — honour that.
-          backend.pause()
-          this.setBuffering(false)
-          return
-        }
+        // playToken is the only cancel signal — do not re-check isPlaying after
+        // the library's stop/unload callbacks; those used to abort every start.
+        if (token !== this.playToken) return
+        backend.goto(i, true)
         this.setBuffering(false)
         this.startTick()
-        this.schedulePrefetch()
         this.prefetcher.resumeWarm()
       } else {
+        backend.goto(i, false)
         this.setBuffering(false)
-        this.schedulePrefetch()
       }
     } catch (e) {
       if (token !== this.playToken) return
@@ -1048,38 +1051,19 @@ export class PlayerController {
 
   async play() {
     if (!this.playlist.length) return
-    const token = ++this.playToken
     this.joins.cancelFades()
     // Recede chrome / flip the transport on the tap, before canplay.
     this.patch({ isPlaying: true, error: null })
+    if (this.gapless5Enabled) {
+      // Single path for gapless — playIndex owns the playToken and must not
+      // await full-surah work before starting audio (autoplay gesture).
+      await this.playIndexGapless5(this.index, true, {})
+      return
+    }
+    const token = ++this.playToken
     // Start the rAF position loop immediately so ink stays live even while
     // the media element is still warming (optimistic play intent).
     this.startTick()
-    if (this.gapless5Enabled) {
-      try {
-        if (!this.gapless5) {
-          this.gapless5 = this.createGapless5Backend()
-          await this.gapless5.ensureReady()
-        }
-        if (token !== this.playToken || !this.state.isPlaying) return
-        await this.gapless5.syncPlaylist(this.playlist, this.prefetcher)
-        if (token !== this.playToken || !this.state.isPlaying) return
-        this.gapless5.applyRepeat(this.state.repeatMode)
-        this.gapless5.setSpeed(this.state.speed)
-        this.gapless5.goto(this.index, true)
-        this.setBuffering(false)
-        this.startTick()
-      } catch (e) {
-        if (token !== this.playToken) return
-        this.setBuffering(false)
-        this.stopTick()
-        this.patch({
-          isPlaying: false,
-          error: e instanceof Error ? e.message : 'Playback blocked',
-        })
-      }
-      return
-    }
     try {
       if (this.active.readyState < HAVE_FUTURE_DATA) {
         this.setBuffering(true)
