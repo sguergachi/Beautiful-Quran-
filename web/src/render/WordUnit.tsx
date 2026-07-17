@@ -1,6 +1,7 @@
 import {
   useLayoutEffect,
   useRef,
+  useState,
   type CSSProperties,
   type MouseEvent,
   type MutableRefObject,
@@ -121,10 +122,16 @@ export function WordUnit({
   // false so a word that mounts already in the chain still washes orange in
   // (Android Animatable starts at progress 0 when repeat is true on first compose).
   const prevRepeat = useRef(false)
+  /** Mount orange/search overlays only while needed — not for every idle word. */
+  const [repeatMounted, setRepeatMounted] = useState(ink.repeat)
+  const [flashMounted, setFlashMounted] = useState(searchFlash)
   const tuning = getTuning()
   const baseClass = englishMode ? 'word-gloss' : 'word-arabic'
   const upcomingCover = 1 - tuning.upcomingAlpha
   const interaction = useWordInteraction(onPlay, onHold)
+
+  if (ink.repeat && !repeatMounted) setRepeatMounted(true)
+  if (searchFlash && !flashMounted) setFlashMounted(true)
 
   /*
    * Active-entry wash.
@@ -290,7 +297,12 @@ export function WordUnit({
   // Orange repeat overlay: wash in on chain entry, dissolve on release.
   // Key only on `ink.repeat` (Android LaunchedEffect(repeat)) — advancing the
   // active word inside a chain must not cancel a mid-wash on earlier members.
+  // Overlay DOM is mounted only while repeating (or fading out).
   useLayoutEffect(() => {
+    if (!repeatMounted) {
+      prevRepeat.current = ink.repeat
+      return
+    }
     const overlay = overlayRef.current
     if (!overlay) return
     const was = prevRepeat.current
@@ -304,7 +316,7 @@ export function WordUnit({
       return runRepeatWashIn(overlay, rtl, duration)
     }
     if (leftRepeat) {
-      return runRepeatFadeOut(overlay)
+      return runRepeatFadeOut(overlay, () => setRepeatMounted(false))
     }
     if (ink.repeat) {
       // Still in chain from a prior entry — hold full orange, do not restart.
@@ -313,32 +325,49 @@ export function WordUnit({
     } else {
       overlay.style.opacity = '0'
       applyMask(overlay, 'none')
+      setRepeatMounted(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.repeat, englishMode])
+  }, [ink.repeat, englishMode, repeatMounted])
 
-  // Search-hit pulse: same ink-engine wash helpers as the karaoke repeat
-  // overlay, on a dedicated always-mounted twin (left/top, glyph-sized) so
-  // the mask edge aligns with the letters and never fights real repeat.
+  // Search-hit pulse: mount the twin overlay only while flashing.
   useLayoutEffect(() => {
-    if (!searchFlash) return
+    if (!flashMounted) return
+    if (!searchFlash) {
+      setFlashMounted(false)
+      return
+    }
     const cancels: Array<() => void> = []
+    let pending = 0
+    const doneOne = () => {
+      pending--
+      if (pending <= 0) setFlashMounted(false)
+    }
     if (flashRef.current) {
+      pending++
       cancels.push(
         runSearchHitDoubleWash(
           flashRef.current,
           !englishMode,
           SearchHitFlash.PULSES,
+          doneOne,
         ),
       )
     }
     if (glossFlashRef.current) {
+      pending++
       cancels.push(
-        runSearchHitDoubleWash(glossFlashRef.current, false, SearchHitFlash.PULSES),
+        runSearchHitDoubleWash(
+          glossFlashRef.current,
+          false,
+          SearchHitFlash.PULSES,
+          doneOne,
+        ),
       )
     }
+    if (pending === 0) setFlashMounted(false)
     return () => cancels.forEach((c) => c())
-  }, [searchFlash, englishMode])
+  }, [searchFlash, englishMode, flashMounted])
 
   const rtl = !englishMode
   const style: CSSProperties = englishMode
@@ -373,22 +402,26 @@ export function WordUnit({
           >
             {label}
           </span>
-          <span
-            ref={overlayRef}
-            className={`word-repeat-overlay ${baseClass}`}
-            aria-hidden="true"
-            style={{ opacity: 0 }}
-          >
-            {label}
-          </span>
-          <span
-            ref={flashRef}
-            className={`word-repeat-overlay ${baseClass}`}
-            aria-hidden="true"
-            style={{ opacity: 0 }}
-          >
-            {label}
-          </span>
+          {repeatMounted ? (
+            <span
+              ref={overlayRef}
+              className={`word-repeat-overlay ${baseClass}`}
+              aria-hidden="true"
+              style={{ opacity: 0 }}
+            >
+              {label}
+            </span>
+          ) : null}
+          {flashMounted ? (
+            <span
+              ref={flashRef}
+              className={`word-repeat-overlay ${baseClass}`}
+              aria-hidden="true"
+              style={{ opacity: 0 }}
+            >
+              {label}
+            </span>
+          ) : null}
         </span>
         {/* Arabic only: opaque full-ink glyphs + paper cover (never glyph alpha). */}
         {!englishMode ? (
@@ -407,14 +440,16 @@ export function WordUnit({
           >
             {word.translation}
           </span>
-          <span
-            ref={glossFlashRef}
-            className="word-repeat-overlay word-gloss"
-            aria-hidden="true"
-            style={{ opacity: 0 }}
-          >
-            {word.translation}
-          </span>
+          {flashMounted ? (
+            <span
+              ref={glossFlashRef}
+              className="word-repeat-overlay word-gloss"
+              aria-hidden="true"
+              style={{ opacity: 0 }}
+            >
+              {word.translation}
+            </span>
+          ) : null}
         </span>
       ) : null}
       {showTransliteration && word.transliteration ? (

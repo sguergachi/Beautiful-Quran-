@@ -39,6 +39,8 @@ function instantPrefetcher(): AudioPrefetcher {
     isWarm: vi.fn(() => true),
     warmSurah: vi.fn(),
     readAhead: vi.fn(),
+    pauseWarm: vi.fn(),
+    resumeWarm: vi.fn(),
   } as unknown as AudioPrefetcher
 }
 
@@ -50,14 +52,16 @@ describe('PlayerController event sequences', () => {
   })
 
   beforeEach(() => {
+    const raf = vi.fn(() => 1)
+    const caf = vi.fn()
     vi.stubGlobal('window', {
-      requestAnimationFrame: vi.fn(() => 1),
-      cancelAnimationFrame: vi.fn(),
+      requestAnimationFrame: raf,
+      cancelAnimationFrame: caf,
       setTimeout,
       clearTimeout,
     })
-    vi.stubGlobal('requestAnimationFrame', window.requestAnimationFrame)
-    vi.stubGlobal('cancelAnimationFrame', window.cancelAnimationFrame)
+    vi.stubGlobal('requestAnimationFrame', raf)
+    vi.stubGlobal('cancelAnimationFrame', caf)
   })
 
   afterEach(() => {
@@ -110,5 +114,93 @@ describe('PlayerController event sequences', () => {
     expect(player.getState()).toMatchObject({ isPlaying: true })
     created[0]!.emit('pause')
     expect(player.getState()).toMatchObject({ isPlaying: true })
+  })
+
+  it('suppresses multiple pause events during an autoplay src swap', async () => {
+    const audio = new FakeAudio()
+    const player = new PlayerController(
+      instantPrefetcher(),
+      true,
+      null,
+      () => audio.asAudio(),
+    )
+    player.loadSurah(content, reciter, 1, { quiet: true, warm: false })
+    await player.play()
+    expect(player.getState().isPlaying).toBe(true)
+
+    // Next ayah must wait for canplay so play/playing do not clear suppress yet.
+    audio.readyState = 0
+    const advancing = player.next()
+    // playIndex is async (ensure + load); wait until suppress is armed.
+    await vi.waitFor(() => expect(player.getState().isBuffering).toBe(true))
+    // loadActive already emitted one pause; extra pause events during the
+    // swap must not clear isPlaying.
+    audio.emit('pause')
+    audio.emit('pause')
+    expect(player.getState().isPlaying).toBe(true)
+
+    audio.readyState = 4
+    audio.emit('canplay')
+    await advancing
+    expect(player.getState().isPlaying).toBe(true)
+  })
+
+  it('retries silent-stall recovery before hard-stopping', async () => {
+    vi.useFakeTimers()
+    const audio = new FakeAudio()
+    let playCalls = 0
+    audio.play.mockImplementation(async () => {
+      playCalls++
+      if (playCalls === 1) {
+        // Initial user play succeeds.
+        audio.paused = false
+        audio.emit('play')
+        audio.emit('playing')
+        return
+      }
+      // Recovery attempts fail.
+      throw new Error('NotAllowedError')
+    })
+
+    const player = new PlayerController(
+      instantPrefetcher(),
+      true,
+      null,
+      () => audio.asAudio(),
+    )
+    player.loadSurah(content, reciter, 1, { quiet: true, warm: false })
+    await player.play()
+    expect(player.getState().isPlaying).toBe(true)
+
+    audio.currentTime = 2
+    const recovery = (
+      player as unknown as { recoverSilentStall(): Promise<void> }
+    ).recoverSilentStall()
+    await vi.runAllTimersAsync()
+    await recovery
+
+    expect(player.getState().isPlaying).toBe(false)
+    expect(player.getState().error).toMatch(/stall|NotAllowed|Playback/i)
+    expect(playCalls).toBeGreaterThanOrEqual(3)
+    vi.useRealTimers()
+  })
+
+  it('advances on natural ended when gapless path is not used', async () => {
+    const audio = new FakeAudio()
+    const player = new PlayerController(
+      instantPrefetcher(),
+      true,
+      null,
+      () => audio.asAudio(),
+    )
+    player.loadSurah(content, reciter, 1, { quiet: true, warm: false })
+    await player.play()
+    const ayahBefore = player.getState().nowPlaying?.ayah
+    audio.ended = true
+    audio.emit('ended')
+    await vi.waitFor(() => {
+      expect(player.getState().nowPlaying?.ayah).not.toBe(ayahBefore)
+    })
+    expect(player.getState().isPlaying).toBe(true)
   })
 })

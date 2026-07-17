@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { QuranRepository } from '../../data/repository'
 import { VerseBookmarkRibbon } from '../../render/VerseBookmarkRibbon'
-import { appStore, useAppState } from '../../store/appStore'
+import { appStore, useAppSelector } from '../../store/appStore'
 import { PaperInput } from '../kit/PaperInput'
 import { BOOKMARKS_LAYER, COVER_LAYER, type StackLayer } from '../paper/stack'
 import {
@@ -16,21 +16,21 @@ import {
 type BookmarkKey = `${number}:${number}`
 
 export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
-  const state = useAppState()
+  const bookmarks = useAppSelector((s) => s.bookmarks)
   const [query, setQuery] = useState('')
   const [pendingRemoval, setPendingRemoval] = useState<BookmarkKey | null>(null)
   const [expandedSurahs, setExpandedSurahs] = useState<Set<number>>(new Set())
   const active = stackLayer === BOOKMARKS_LAYER
   const searching = query.trim().length > 0
   const verses = useMemo<BookmarkedVerse[]>(() => {
-    return [...state.bookmarks]
+    return [...bookmarks]
       .sort((a, b) => a.surahId - b.surahId || a.ayah - b.ayah)
       .flatMap((bookmark) => {
         const content = QuranRepository.surahContent(bookmark.surahId)
         const ayah = content.ayahs.find((item) => item.number === bookmark.ayah)
         return ayah ? [{ surah: content.surah, ayah }] : []
       })
-  }, [state.bookmarks])
+  }, [bookmarks])
   const sections = useMemo(
     () => filterBookmarkSections(verses, query),
     [verses, query],

@@ -117,11 +117,13 @@ type AudioContextConstructor = new () => AudioContext
 export class AudioBoundaryAnalyzer {
   private context: AudioContext | null = null
   private readonly cache = new Map<string, Promise<AudibleBounds | null>>()
+  /** Serialize decodes so join prep cannot pile up concurrent PCM spikes. */
+  private chain: Promise<void> = Promise.resolve()
 
   analyze(src: string): Promise<AudibleBounds | null> {
     const prior = this.cache.get(src)
     if (prior) return prior
-    const pending = this.decode(src)
+    const pending = this.enqueue(src)
     this.cache.set(src, pending)
     void pending.then((result) => {
       // A pre-gesture WebKit decode can fail; allow the user-started attempt
@@ -130,6 +132,16 @@ export class AudioBoundaryAnalyzer {
     })
     while (this.cache.size > 64) this.cache.delete(this.cache.keys().next().value!)
     return pending
+  }
+
+  private enqueue(src: string): Promise<AudibleBounds | null> {
+    const run = this.chain.then(() => this.decode(src))
+    // Keep the chain alive even when a decode rejects.
+    this.chain = run.then(
+      () => undefined,
+      () => undefined,
+    )
+    return run
   }
 
   private async decode(src: string): Promise<AudibleBounds | null> {
@@ -141,6 +153,7 @@ export class AudioBoundaryAnalyzer {
       ) as AudioContextConstructor | undefined
       if (!Context) return null
       this.context ??= new Context()
+      // Prefer a warm blob (from AudioPrefetcher) so we do not re-hit the network.
       const response = await fetch(src)
       if (!response.ok) return null
       const decoded = await this.context.decodeAudioData(await response.arrayBuffer())

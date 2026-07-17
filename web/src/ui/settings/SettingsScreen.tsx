@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { assetUrl } from '../../assetUrl'
-import { appStore, useAppState } from '../../store/appStore'
+import { appStore, useAppSelector } from '../../store/appStore'
 import {
   type AyahSelectorSide,
   type HomeBookmarkStyle,
@@ -91,8 +91,9 @@ export function SettingsScreen({
   stackLayer: StackLayer
   hasReader: boolean
 }) {
-  const state = useAppState()
-  const s = state.settings
+  // Settings ignores karaoke emits — only settings / reciter catalog matter.
+  const s = useAppSelector((st) => st.settings)
+  const reciters = useAppSelector((st) => st.reciters)
   const layer = settingsLayerFor(hasReader)
   const isTop = stackLayer === layer
   const depth = Math.max(0, stackLayer - layer)
@@ -356,7 +357,7 @@ export function SettingsScreen({
           <PaperChoiceList
             aria-label="Reciter"
             value={String(s.reciterId)}
-            options={state.reciters.map((r) => ({
+            options={reciters.map((r) => ({
               value: String(r.id),
               label: r.name,
               description: r.hasTimings ? undefined : 'No word highlighting',

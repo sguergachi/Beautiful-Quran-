@@ -56,6 +56,26 @@ describe('AudioPrefetcher', () => {
     }) as typeof URL.revokeObjectURL
   }
 
+  it('pauseWarm defers warmSurah until resumeWarm', async () => {
+    stubObjectUrls()
+    const { cache } = memoryCache()
+    const fetchMock = vi.fn(async () => okResponse('x'))
+    const prefetcher = new AudioPrefetcher({
+      fetch: fetchMock,
+      openCache: async () => cache,
+      concurrency: 1,
+    })
+    prefetcher.pauseWarm()
+    prefetcher.warmSurah(['https://example.com/a.mp3', 'https://example.com/b.mp3'])
+    await new Promise((r) => setTimeout(r, 20))
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    prefetcher.resumeWarm()
+    await vi.waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(0))
+    expect(prefetcher.isWarm('https://example.com/a.mp3')).toBe(true)
+    prefetcher.release()
+  })
+
   it('ensure fetches once, caches, and returns a blob URL', async () => {
     stubObjectUrls()
     const { cache, store } = memoryCache()

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { appStore, useAppState, type RootViewerState } from '../../store/appStore'
+import { appStore, useAppSelector, type RootViewerState } from '../../store/appStore'
 import { IconClose } from '../icons/PlaybackIcons'
 import { featureSummary, posLabel, spacedRoot } from './morphologyLabels'
 import {
@@ -23,9 +23,8 @@ function occurrences(count: number) {
 
 /** Root lexicon ink bleed hosted inside the reader sheet. */
 export function RootViewer() {
-  const state = useAppState()
-  const rv = state.rootViewer
-  const closing = state.rootViewerClosing
+  const rv = useAppSelector((s) => s.rootViewer)
+  const closing = useAppSelector((s) => s.rootViewerClosing)
 
   useEffect(() => {
     if (!closing) return
