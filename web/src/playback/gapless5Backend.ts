@@ -145,6 +145,7 @@ export class Gapless5Backend {
     // HTML5 + WebAudio: HTML5 starts on the play gesture (Firefox-friendly);
     // WebAudio takes over once decoded for sample-accurate joins. HTTPS only
     // — never blob: (HTML5 blob path uses illegal srcObject = Blob).
+    // No crossfade — abut verses at full level (recitation should not blend).
     const player = new Gapless5Ctor({
       useWebAudio: true,
       useHTML5Audio: true,
