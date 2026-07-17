@@ -4,6 +4,7 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.beautifulquran.domain.TajweedPacing
 
 /**
  * The reader's single source of truth for *how a word's ink should behave*.
@@ -93,6 +94,16 @@ object InkEngine {
         val sweepEaseY1: Float = 0.24f,
         val sweepEaseX2: Float = 0.7f,
         val sweepEaseY2: Float = 0.78f,
+        /** Letter-level tajweed pacing of the active word's sweep — the ink
+         *  dwells on held letters (madd, ghunnah) instead of sweeping at a
+         *  constant rate. Experimental; auditioned via the Ink Lab.
+         *  See docs/TAJWEED_PACING.md. */
+        val tajweedPacing: Boolean = false,
+        /** Wash feather per pronounced letter while tajweed pacing is on:
+         *  the whole-word breath of [washFeather] would swamp letter dwell,
+         *  so paced words get an edge that narrows with letter density
+         *  (clamped in [pacedFeather]). */
+        val pacedFeatherPerLetter: Float = 2.5f,
     )
 
     /**
@@ -170,6 +181,32 @@ object InkEngine {
         val floor = minOf(tuning.minSweepMs, raw)
         return raw.coerceIn(floor, tuning.maxSweepMs)
     }
+
+    /**
+     * The active word's tajweed pacing curve — how the sweep's linear clock
+     * maps to wash position so the ink dwells on held letters — or null for
+     * the plain constant-rate sweep (toggle off, word too short, or no
+     * recognisable letters). [arabic] is the active word's Hafs Uthmani text;
+     * the voiced share comes from [ActiveWord.spokenMs] vs the karaoke hold,
+     * so letters never smear across the breath gap before the next word.
+     */
+    fun pacing(arabic: String, activeWord: ActiveWord): TajweedPacing.Curve? {
+        if (!tuning.tajweedPacing) return null
+        val spokenFraction =
+            if (activeWord.durationMs <= 0L) 1f
+            else activeWord.spokenMs.toFloat() / activeWord.durationMs
+        return TajweedPacing.curve(arabic, spokenFraction)
+    }
+
+    /**
+     * Feather width for a tajweed-paced wash: [Tuning.washFeather]'s 1.6×
+     * whole-word breath would hide letter dwell entirely, so the paced edge
+     * narrows with the number of pronounced letters — wide enough to stay a
+     * wash, narrow enough that a held madd visibly stalls the edge.
+     */
+    fun pacedFeather(letterCount: Int): Float =
+        (tuning.pacedFeatherPerLetter / letterCount.coerceAtLeast(1))
+            .coerceIn(0.3f, 0.8f)
 
     /**
      * Whether a word entering [current] from [previous] should start its
