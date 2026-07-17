@@ -2,10 +2,10 @@ package com.beautifulquran.ui.reader
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,14 +23,13 @@ import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -45,7 +44,9 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -63,7 +64,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -75,6 +75,7 @@ import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.data.model.Ayah
 import com.beautifulquran.data.model.Word
 import com.beautifulquran.domain.EnglishTypography
+import com.beautifulquran.domain.TajweedPacing
 import com.beautifulquran.ui.theme.ArabicTitleStyle
 import com.beautifulquran.ui.theme.ArabicWordStyle
 import com.beautifulquran.ui.theme.GeneratedChapterRosette
@@ -270,12 +271,20 @@ private fun Modifier.repeatInkLayer(
  *
  * [sweepMs] is captured at Active entry only: mid-word retunes (speed, etc.)
  * must not cancel and restart the wash — that is itself a flicker.
+ *
+ * With a [pacing] curve (tajweed pacing) the Animatable becomes a *linear
+ * clock* and the curve shapes it into letter dwell — the ink stalls on a held
+ * madd and glides over short letters. The bezier sweep easing would distort
+ * that letter timing, so paced words drop it; the feathered wash edge keeps
+ * the soft toe and shoulder. Like [sweepMs], the curve is captured at Active
+ * entry.
  */
 @Composable
 private fun rememberLetterSweep(
     active: Boolean,
     sweepMs: Int?,
     startRevealed: Boolean = false,
+    pacing: TajweedPacing.Curve? = null,
 ): State<Float> {
     val runSweep = active && sweepMs != null && !startRevealed
     val sweep = remember(active) { Animatable(if (runSweep) 0f else 1f) }
@@ -285,12 +294,15 @@ private fun rememberLetterSweep(
         val ms = sweepMs
         if (active && ms != null && !startRevealed) {
             sweep.snapTo(0f)
-            sweep.animateTo(1f, tween(ms, easing = InkEngine.sweepEasing))
+            val easing = if (pacing != null) LinearEasing else InkEngine.sweepEasing
+            sweep.animateTo(1f, tween(ms, easing = easing))
         } else {
             sweep.snapTo(1f)
         }
     }
-    return sweep.asState()
+    return remember(active) {
+        if (pacing == null) sweep.asState() else derivedStateOf { pacing.at(sweep.value) }
+    }
 }
 
 /**
@@ -309,45 +321,57 @@ private fun rememberStartRevealed(state: InkEngine.State): Boolean {
 }
 
 /** Comfortable reading band the active word is kept inside while follow mode
- * scrolls the sheet (see [wordUnitBehavior] / [shapedActiveWordInView]). */
-private val ActiveWordTopMargin = 144.dp
-private val ActiveWordBottomMargin = 132.dp
+ * scrolls the sheet (see [wordUnitBehavior] / [shapedActiveWordInView]).
+ * Shared with [ReaderScreen] so the focus engine's bottom guard matches. */
+internal val ActiveWordTopMargin = 144.dp
+internal val ActiveWordBottomMargin = 132.dp
+
+/** Measures the active word as (top, bottom) in LazyColumn viewport pixels. */
+private typealias WordViewportMeasure = () -> Pair<Float, Float>?
+
+/** Hands a live [WordViewportMeasure] to the focus controller (may re-call). */
+private typealias OnKeepWordInView = (measure: WordViewportMeasure) -> Unit
 
 /**
- * Word-level lyric follow for a single shaped paragraph (Hafs / English): when
- * [keepInView] is on, expand the active word's glyph box by the reading-band
- * margins and ask the LazyColumn to bring that rect on-screen. Per-word units
- * use [wordUnitBehavior] instead; this is the multi-word `Text` path.
+ * Word-level lyric follow for a single shaped paragraph (Hafs / English).
+ * On each active-word change, asks [onKeepWordInView] to measure the word's
+ * list-viewport bounds and scroll it into the reading band via the focus
+ * controller — more reliable than BringIntoView inside a tall LazyColumn item.
+ * Per-word units use [wordUnitBehavior] instead.
  */
 @Composable
-@OptIn(ExperimentalFoundationApi::class)
 private fun Modifier.shapedActiveWordInView(
     keepInView: Boolean,
     activeIndex: Int,
     wordRanges: List<IntRange>,
     layoutResult: TextLayoutResult?,
+    listCoordinates: () -> LayoutCoordinates?,
+    onKeepWordInView: OnKeepWordInView?,
 ): Modifier {
-    val bringIntoViewRequester = remember { BringIntoViewRequester() }
-    val density = LocalDensity.current
-    val topMarginPx = with(density) { ActiveWordTopMargin.toPx() }
-    val bottomMarginPx = with(density) { ActiveWordBottomMargin.toPx() }
-    LaunchedEffect(keepInView, activeIndex, layoutResult, wordRanges) {
-        if (!keepInView || activeIndex < 0) return@LaunchedEffect
-        val layout = layoutResult ?: return@LaunchedEffect
-        val range = wordRanges.getOrNull(activeIndex) ?: return@LaunchedEffect
-        if (range.isEmpty()) return@LaunchedEffect
-        val first = layout.getBoundingBox(range.first)
-        val last = layout.getBoundingBox(range.last)
-        bringIntoViewRequester.bringIntoView(
-            Rect(
-                left = minOf(first.left, last.left),
-                top = minOf(first.top, last.top) - topMarginPx,
-                right = maxOf(first.right, last.right),
-                bottom = maxOf(first.bottom, last.bottom) + bottomMarginPx,
-            ),
-        )
+    var textCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    LaunchedEffect(keepInView, activeIndex, layoutResult, wordRanges, textCoordinates) {
+        if (!keepInView || activeIndex < 0 || onKeepWordInView == null) return@LaunchedEffect
+        // Snapshot the index/layout the effect was launched for; measure is
+        // re-invoked inside the focus lock after any competing scroll settles.
+        val index = activeIndex
+        val layout = layoutResult
+        onKeepWordInView {
+            val textLayout = layout ?: return@onKeepWordInView null
+            val textCoords = textCoordinates?.takeIf { it.isAttached } ?: return@onKeepWordInView null
+            val listCoords = listCoordinates()?.takeIf { it.isAttached } ?: return@onKeepWordInView null
+            val range = wordRanges.getOrNull(index) ?: return@onKeepWordInView null
+            if (range.isEmpty()) return@onKeepWordInView null
+            val first = textLayout.getBoundingBox(range.first)
+            val last = textLayout.getBoundingBox(range.last)
+            val top = minOf(first.top, last.top)
+            val bottom = maxOf(first.bottom, last.bottom)
+            val listTop = listCoords.boundsInWindow().top
+            val wordTop = textCoords.localToWindow(Offset(0f, top)).y - listTop
+            val wordBottom = textCoords.localToWindow(Offset(0f, bottom)).y - listTop
+            wordTop to wordBottom
+        }
     }
-    return this.bringIntoViewRequester(bringIntoViewRequester)
+    return this.onGloballyPositioned { textCoordinates = it }
 }
 
 /**
@@ -361,6 +385,7 @@ private class WordHighlight(
     private val lyricInk: State<Float>,
     private val sweep: State<Float>,
     val repeatWash: RepeatWash,
+    private val pacing: TajweedPacing.Curve? = null,
 ) {
     /** Modifier for the base text layer: letters sweep in while the word is
      * active, rest at the lyric ink otherwise. While the word is repeating,
@@ -371,7 +396,8 @@ private class WordHighlight(
             progress = { sweep.value },
             rtl = rtl,
             restingAlpha = InkEngine.State.Upcoming.inkAlpha(),
-            feather = InkEngine.tuning.washFeather,
+            feather = pacing?.let { InkEngine.pacedFeather(it.letterCount) }
+                ?: InkEngine.tuning.washFeather,
         )
         else -> Modifier.graphicsLayer { alpha = lyricInk.value }
     }
@@ -389,6 +415,7 @@ private class WordHighlight(
 private fun rememberWordHighlight(
     ink: InkEngine.Word,
     sweepMs: Int?,
+    pacing: TajweedPacing.Curve? = null,
 ): WordHighlight {
     val isActive = ink.state == InkEngine.State.Active
     return WordHighlight(
@@ -399,44 +426,41 @@ private fun rememberWordHighlight(
             active = isActive,
             sweepMs = sweepMs,
             startRevealed = rememberStartRevealed(ink.state),
+            pacing = if (isActive) pacing else null,
         ),
         repeatWash = rememberRepeatWash(ink.repeat, sweepMs.takeIf { isActive }),
+        pacing = if (isActive) pacing else null,
     )
 }
 
 /**
  * Shared word-unit chrome: keeps the word inside the comfortable reading band
- * while it is active and follow mode is on, and makes it tappable (quietly)
- * when [onClick] is provided. Apply before the unit's own padding.
+ * while it is active and follow mode is on (via [onKeepWordInView] → focus
+ * controller), and makes it tappable (quietly) when [onClick] is provided.
+ * Apply before the unit's own padding.
  */
 @Composable
-@OptIn(ExperimentalFoundationApi::class)
 private fun Modifier.wordUnitBehavior(
     active: Boolean,
     keepInView: Boolean,
+    listCoordinates: () -> LayoutCoordinates?,
+    onKeepWordInView: OnKeepWordInView?,
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)? = null,
 ): Modifier {
-    val bringIntoViewRequester = remember { BringIntoViewRequester() }
-    val density = LocalDensity.current
-    val topMarginPx = with(density) { ActiveWordTopMargin.toPx() }
-    val bottomMarginPx = with(density) { ActiveWordBottomMargin.toPx() }
-    var wordSize by remember { mutableStateOf(IntSize.Zero) }
-    LaunchedEffect(active, keepInView, wordSize) {
-        if (active && keepInView && wordSize != IntSize.Zero) {
-            bringIntoViewRequester.bringIntoView(
-                Rect(
-                    left = 0f,
-                    top = -topMarginPx,
-                    right = wordSize.width.toFloat(),
-                    bottom = wordSize.height + bottomMarginPx,
-                ),
-            )
+    var wordCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    LaunchedEffect(active, keepInView, wordCoordinates) {
+        if (!active || !keepInView || onKeepWordInView == null) return@LaunchedEffect
+        onKeepWordInView {
+            val wordCoords = wordCoordinates?.takeIf { it.isAttached } ?: return@onKeepWordInView null
+            val listCoords = listCoordinates()?.takeIf { it.isAttached } ?: return@onKeepWordInView null
+            val bounds = wordCoords.boundsInWindow()
+            val listTop = listCoords.boundsInWindow().top
+            (bounds.top - listTop) to (bounds.bottom - listTop)
         }
     }
     return this
-        .bringIntoViewRequester(bringIntoViewRequester)
-        .onSizeChanged { wordSize = it }
+        .onGloballyPositioned { wordCoordinates = it }
         .let { m ->
             when {
                 onClick != null && onLongClick != null ->
@@ -502,19 +526,30 @@ fun WordUnit(
     showTransliteration: Boolean,
     searchHit: Boolean,
     keepInView: Boolean,
+    listCoordinates: () -> LayoutCoordinates? = { null },
+    onKeepWordInView: OnKeepWordInView? = null,
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)? = null,
     /** When true, run the orange search-hit wash on Arabic + gloss. */
     showFlash: Boolean = false,
+    /** Tajweed pacing of the active word's sweep — null for the plain sweep. */
+    pacing: TajweedPacing.Curve? = null,
 ) {
-    val highlight = rememberWordHighlight(ink, sweepMs)
+    val highlight = rememberWordHighlight(ink, sweepMs, pacing)
     val searchHitWash = rememberSearchHitWash(showFlash)
     val repeatInk = LocalQuranAccents.current.repeatInk
     val glossWeight = if (searchHit) FontWeight.Bold else null
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .wordUnitBehavior(highlight.isActive, keepInView, onClick, onLongClick)
+            .wordUnitBehavior(
+                active = highlight.isActive,
+                keepInView = keepInView,
+                listCoordinates = listCoordinates,
+                onKeepWordInView = onKeepWordInView,
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
             .padding(horizontal = 5.dp, vertical = 2.dp),
     ) {
         HighlightLayeredText(
@@ -581,6 +616,8 @@ fun ConnectedArabicWordUnit(
     fontScale: Float,
     sweepMs: Int?,
     keepInView: Boolean,
+    listCoordinates: () -> LayoutCoordinates? = { null },
+    onKeepWordInView: OnKeepWordInView? = null,
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)? = null,
 ) {
@@ -592,7 +629,14 @@ fun ConnectedArabicWordUnit(
         color = MaterialTheme.colorScheme.onBackground,
         style = ArabicWordStyle.copy(fontSize = ArabicWordStyle.fontSize * fontScale),
         modifier = Modifier
-            .wordUnitBehavior(highlight.isActive, keepInView, onClick, onLongClick)
+            .wordUnitBehavior(
+                active = highlight.isActive,
+                keepInView = keepInView,
+                listCoordinates = listCoordinates,
+                onKeepWordInView = onKeepWordInView,
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
             .padding(horizontal = 4.dp, vertical = 3.dp),
     )
 }
@@ -630,12 +674,14 @@ private fun rememberWordInkPalette(): WordInkPalette {
 private fun rememberLetterSweeps(
     inks: List<InkEngine.Word>,
     activeSweepMs: Int?,
+    pacing: TajweedPacing.Curve? = null,
 ): List<State<Float>> = inks.map { ink ->
     val active = ink.state == InkEngine.State.Active
     rememberLetterSweep(
         active = active,
         sweepMs = activeSweepMs.takeIf { active },
         startRevealed = rememberStartRevealed(ink.state),
+        pacing = if (active) pacing else null,
     )
 }
 
@@ -666,6 +712,8 @@ private fun ResponsiveEnglishAyah(
     searchQuery: String?,
     flashWordPosition: Int?,
     keepActiveWordInView: Boolean,
+    listCoordinates: () -> LayoutCoordinates?,
+    onKeepWordInView: OnKeepWordInView?,
     onAyahClick: () -> Unit,
     onWordClick: ((Word) -> Unit)?,
     onWordLongClick: ((Word) -> Unit)?,
@@ -745,6 +793,8 @@ private fun ResponsiveEnglishAyah(
                 activeIndex = activeIndex,
                 wordRanges = rendered.wordRanges,
                 layoutResult = layoutResult,
+                listCoordinates = listCoordinates,
+                onKeepWordInView = onKeepWordInView,
             )
             .shapedWordBloom(
                 blooms = {
@@ -858,17 +908,21 @@ private fun ResponsiveHafsAyah(
     markAlpha: () -> Float,
     fontSize: TextUnit,
     activeSweepMs: Int?,
+    /** Tajweed pacing of the active word's sweep — null for the plain sweep. */
+    pacing: TajweedPacing.Curve? = null,
     flashWordPosition: Int? = null,
     /** When the verse is taller than the viewport, keep the active word in the
      * reading band so large type does not disappear under the player bar. */
     keepActiveWordInView: Boolean = false,
+    listCoordinates: () -> LayoutCoordinates? = { null },
+    onKeepWordInView: OnKeepWordInView? = null,
     onAyahClick: () -> Unit,
     onWordClick: ((Word) -> Unit)?,
     onWordLongClick: ((Word) -> Unit)? = null,
 ) {
     val palette = rememberWordInkPalette()
     val ayahMarkInk = LocalQuranAccents.current.gold
-    val sweeps = rememberLetterSweeps(inks, activeSweepMs)
+    val sweeps = rememberLetterSweeps(inks, activeSweepMs, pacing)
     val repeatWashes = rememberRepeatWashes(inks, activeSweepMs)
     val searchHitWash = rememberSearchHitWash(flashWordPosition != null)
     val activeIndex = inks.indexOfFirst { it.state == InkEngine.State.Active }
@@ -937,6 +991,8 @@ private fun ResponsiveHafsAyah(
                 activeIndex = activeIndex,
                 wordRanges = rendered.wordRanges,
                 layoutResult = layoutResult,
+                listCoordinates = listCoordinates,
+                onKeepWordInView = onKeepWordInView,
             )
             .shapedWordBloom(
                 blooms = {
@@ -988,6 +1044,9 @@ private fun ResponsiveHafsAyah(
                                 progress = sweeps[activeIndex].value,
                                 paper = palette.paperColor,
                                 restingAlpha = InkEngine.State.Upcoming.inkAlpha(),
+                                feather = pacing?.let {
+                                    InkEngine.pacedFeather(it.letterCount)
+                                },
                             )
                         }
                     }
@@ -1125,6 +1184,11 @@ fun AyahBlock(
     /** 1-based word to orange-flash (home search hit); null = no flash. */
     flashWordPosition: Int? = null,
     keepActiveWordInView: Boolean = false,
+    /** LazyColumn layout coords — used to map the active word into viewport
+     * space for word-band follow. */
+    listCoordinates: () -> LayoutCoordinates? = { null },
+    /** Hands a live word-bounds measure to the focus controller. */
+    onKeepWordInView: OnKeepWordInView? = null,
     /** Bookmark ribbon lives in this block's outer margin (opposite the
      * ayah selector). Null hides the ribbon entirely. */
     bookmarkSide: AyahSelectorSide? = null,
@@ -1156,6 +1220,15 @@ fun AyahBlock(
     // The letter fade paces itself to how long the reciter dwells on the
     // word, corrected for the chosen playback speed.
     val sweepMs = InkEngine.sweepMs(activeWord, playbackSpeed)
+
+    // Letter-level tajweed pacing of that sweep (Ink Lab toggle,
+    // docs/TAJWEED_PACING.md): null keeps the plain constant-rate wash.
+    val pacing = activeWord
+        ?.takeIf { isActiveAyah }
+        ?.let { aw ->
+            ayah.words.firstOrNull { it.position == aw.wordPosition }
+                ?.let { word -> InkEngine.pacing(word.arabic, aw) }
+        }
 
     // Each word's ink behaviour, derived once for the whole ayah. All the
     // policy (upcoming/active/recited/high-water, repeat chain) lives in
@@ -1211,6 +1284,8 @@ fun AyahBlock(
                     searchQuery = searchQuery,
                     flashWordPosition = flashWordPosition,
                     keepActiveWordInView = keepActiveWordInView,
+                    listCoordinates = listCoordinates,
+                    onKeepWordInView = onKeepWordInView,
                     onAyahClick = onAyahClick,
                     onWordClick = onWordClick,
                     onWordLongClick = onWordLongClick,
@@ -1231,10 +1306,13 @@ fun AyahBlock(
                                 ink = ink,
                                 fontScale = fontScale,
                                 sweepMs = sweepMs.takeIf { isActiveWord },
+                                pacing = pacing.takeIf { isActiveWord },
                                 showGloss = showGloss,
                                 showTransliteration = showTransliteration,
                                 searchHit = hits(word),
                                 keepInView = keepActiveWordInView && isActiveWord,
+                                listCoordinates = listCoordinates,
+                                onKeepWordInView = onKeepWordInView,
                                 onClick = onWordClick?.let { handler -> { handler(word) } },
                                 onLongClick = onWordLongClick?.let { handler -> { handler(word) } },
                                 showFlash = flashing,
@@ -1258,8 +1336,11 @@ fun AyahBlock(
                         markAlpha = { ayahMarkAlpha.value },
                         fontSize = ArabicWordStyle.fontSize * fontScale * ARABIC_ONLY_HAFS_FONT_MULTIPLIER,
                         activeSweepMs = sweepMs,
+                        pacing = pacing,
                         flashWordPosition = flashWordPosition,
                         keepActiveWordInView = keepActiveWordInView,
+                        listCoordinates = listCoordinates,
+                        onKeepWordInView = onKeepWordInView,
                         onAyahClick = onAyahClick,
                         onWordClick = onWordClick?.let { handler -> { word -> handler(word) } },
                         onWordLongClick = onWordLongClick?.let { handler -> { word -> handler(word) } },

@@ -135,12 +135,15 @@ sealed class ShapedWordBloom {
     ) : ShapedWordBloom()
 
     /** First-pass ink: paper cover over full-ink glyphs, wash from
-     * [restingAlpha] → 1 (same curve as [letterFadeIn]). */
+     * [restingAlpha] → 1 (same curve as [letterFadeIn]). [feather] overrides
+     * the modifier-level feather when set — a tajweed-paced word narrows its
+     * edge so letter dwell stays visible. */
     data class InkReveal(
         override val range: IntRange,
         val progress: Float,
         val paper: Color,
         val restingAlpha: Float,
+        val feather: Float? = null,
     ) : ShapedWordBloom()
 
     /** Repeat (orange): shaped glyphs tinted to [color], wash from
@@ -253,7 +256,7 @@ fun Modifier.shapedWordBloom(
                         // progress snaps to 1.
                         val washLeft = cover.left
                         val w = cover.width
-                        val edge = (w * feather).coerceAtLeast(1f)
+                        val edge = (w * (bloom.feather ?: feather)).coerceAtLeast(1f)
                         val head = p * (w + edge)
                         val brush = if (rtl) {
                             Brush.horizontalGradient(

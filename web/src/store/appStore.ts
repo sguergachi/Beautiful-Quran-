@@ -154,16 +154,16 @@ class AppStore {
       this.recomputeActive(ps)
 
       // Continue Listening tracks verses actually recited, not open/scroll.
+      // Quiet chapter open parks a new nowPlaying while pause is async — never
+      // treat a surah identity change while already "playing" as a listen.
       const np = ps.nowPlaying
-      if (
-        ps.isPlaying &&
-        np != null &&
-        np.ayah >= 1 &&
-        (prev.nowPlaying?.surahId !== np.surahId ||
-          prev.nowPlaying?.ayah !== np.ayah ||
-          !prev.isPlaying)
-      ) {
-        this.rememberListened(np.surahId, np.ayah)
+      if (ps.isPlaying && np != null && np.ayah >= 1) {
+        const surahChanged = prev.nowPlaying?.surahId !== np.surahId
+        const ayahChanged = prev.nowPlaying?.ayah !== np.ayah
+        const startedPlaying = !prev.isPlaying
+        if (startedPlaying || (!surahChanged && ayahChanged)) {
+          this.rememberListened(np.surahId, np.ayah)
+        }
       }
 
       // Emit only on UI-visible changes — not every 33 ms position tick.

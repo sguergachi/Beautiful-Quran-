@@ -18,17 +18,16 @@ import {
 import { BASMALAH_PLAYLIST_AYAH, surahOpensWithBasmalahPreface } from '../domain/Basmalah'
 import { AudioPrefetcher } from './audioPrefetch'
 import {
-  AudioBoundaryAnalyzer,
-  crossedAudibleEnd,
-  type AudibleBounds,
-} from './audioBounds'
-import {
-  audioFadeGain,
   VERSE_FADE_IN_MS,
   verseFadeOutMs,
-  type AudioFadeDirection,
 } from './audioFade'
 import { isIOSMediaEnvironment } from './iosMedia'
+import { JoinCoordinator } from './joinCoordinator'
+import {
+  HAVE_FUTURE_DATA,
+  MediaElementTransport,
+  type AudioElementFactory,
+} from './mediaElementTransport'
 import { PlaybackStallWatchdog } from './playbackStallWatchdog'
 import { peekPlaylistNextIndex } from './playlistNext'
 import { MediaSessionBridge, browserMediaSession } from './mediaSessionBridge'
@@ -67,17 +66,10 @@ const initial: PlayerState = {
   error: null,
 }
 
-/** HTMLMediaElement.HAVE_FUTURE_DATA — enough to start without an immediate stall. */
-const HAVE_FUTURE_DATA = 3
-
 /** How soon before ayah end we insist the next clip has been fetched. */
 const JOIN_PREP_REMAINING_S = 4
 
 export class PlayerController {
-  /** Active playback element (swaps with [standby] on ayah joins). */
-  private active: HTMLAudioElement
-  /** Preloaded next-ayah element; omitted on iOS to keep one media pipeline. */
-  private standby: HTMLAudioElement | null
   private state: PlayerState = { ...initial }
   private listeners = new Set<Listener>()
   private playlist: PlaylistItem[] = []
@@ -88,12 +80,8 @@ export class PlayerController {
   private tickTimer: number | null = null
   private gaplessTimer: number | null = null
   private readonly prefetcher: AudioPrefetcher
-  private readonly boundaryAnalyzer = new AudioBoundaryAnalyzer()
-  private readonly audibleBounds = new Map<string, AudibleBounds>()
-  private readonly singleElementPlayback: boolean
-  /** Playlist index the standby element is prepared for, or -1. */
-  private standbyIndex = -1
-  private prepareToken = 0
+  private readonly transport: MediaElementTransport
+  private readonly joins: JoinCoordinator
   /** Bumps on every playIndex entry so a superseded load aborts after awaits. */
   private playToken = 0
   private readonly stallWatchdog = new PlaybackStallWatchdog()
@@ -102,7 +90,6 @@ export class PlayerController {
   private recoveringStall = false
   /** Prevents rAF + `ended` from advancing the same audible boundary twice. */
   private gaplessAdvancing = false
-  private volumeFadeGeneration = 0
   /**
    * When true, the next `pause` event on the active element must not clear
    * isPlaying — set while swapping `src` during an in-flight playIndex
@@ -118,11 +105,41 @@ export class PlayerController {
     prefetcher: AudioPrefetcher = new AudioPrefetcher(),
     singleElementPlayback = isIOSMediaEnvironment(),
     mediaSession: MediaSession | null = browserMediaSession(),
+    createAudio?: AudioElementFactory,
   ) {
     this.prefetcher = prefetcher
-    this.singleElementPlayback = singleElementPlayback
-    this.active = this.createAudio()
-    this.standby = singleElementPlayback ? null : this.createAudio()
+    this.transport = new MediaElementTransport(
+      singleElementPlayback,
+      {
+        timeUpdate: () => {
+          this.onTime()
+          this.maybePrepJoin()
+        },
+        ended: () => void this.onEnded(),
+        play: () => {
+          this.suppressPauseSync = false
+          this.patch({ isPlaying: true, error: null })
+        },
+        playing: () => {
+          this.suppressPauseSync = false
+          this.setBuffering(false)
+          this.patch({ isPlaying: true, error: null })
+        },
+        pause: () => this.onMediaPause(),
+        waiting: () => this.setBuffering(true),
+        stalled: () => this.setBuffering(true),
+        error: () => this.onMediaError(),
+        loadedMetadata: () => {
+          this.patch({ durationMs: Math.round((this.active.duration || 0) * 1000) })
+        },
+        canPlayThrough: () => {
+          this.setBuffering(false)
+          void this.prepareStandby()
+        },
+      },
+      createAudio,
+    )
+    this.joins = new JoinCoordinator(this.transport, prefetcher)
     this.mediaSession = new MediaSessionBridge(
       {
         play: () => void this.play(),
@@ -132,88 +149,32 @@ export class PlayerController {
       },
       mediaSession,
     )
-    this.bindAudio(this.active)
-    if (this.standby) this.bindAudio(this.standby)
   }
 
-  private createAudio(): HTMLAudioElement {
-    const audio = new Audio()
-    audio.preload = 'auto'
-    // iOS / mobile: keep playback in-page (no fullscreen takeover).
-    audio.setAttribute('playsinline', 'true')
-    audio.setAttribute('webkit-playsinline', 'true')
-    ;(audio as HTMLAudioElement & { playsInline?: boolean }).playsInline = true
-    return audio
+  private get active(): HTMLAudioElement {
+    return this.transport.active
   }
 
-  private bindAudio(audio: HTMLAudioElement) {
-    audio.addEventListener('timeupdate', () => {
-      if (audio !== this.active) return
-      this.onTime()
-      this.maybePrepJoin()
-    })
-    audio.addEventListener('ended', () => {
-      if (audio !== this.active) return
-      void this.onEnded()
-    })
-    audio.addEventListener('play', () => {
-      if (audio !== this.active) return
-      // Playback resumed — any pending swap-pause is now moot.
+  private get standby(): HTMLAudioElement | null {
+    return this.transport.standby
+  }
+
+  private onMediaPause() {
+    if (this.recoveringStall || this.gaplessAdvancing) return
+    if (this.suppressPauseSync) {
       this.suppressPauseSync = false
-      this.patch({ isPlaying: true, error: null })
-    })
-    audio.addEventListener('playing', () => {
-      if (audio !== this.active) return
-      this.suppressPauseSync = false
-      this.setBuffering(false)
-      this.patch({ isPlaying: true, error: null })
-    })
-    audio.addEventListener('pause', () => {
-      if (audio !== this.active) return
-      // A watchdog recovery deliberately cycles pause/play; it must preserve
-      // the user's play intent while the media element restarts.
-      if (this.recoveringStall) return
-      // The encoded file may end during its fitted fade-out. The boundary
-      // transition still owns play intent and will promote the prepared clip.
-      if (this.gaplessAdvancing) return
-      // `pause()` fires this asynchronously; consume the one swap-induced pause
-      // so the mid-join src swap does not momentarily clear isPlaying.
-      if (this.suppressPauseSync) {
-        this.suppressPauseSync = false
-        return
-      }
-      this.patch({ isPlaying: false })
-    })
-    // Mid-stream underrun (common on mobile Safari with remote progressive MP3).
-    audio.addEventListener('waiting', () => {
-      if (audio !== this.active) return
-      this.setBuffering(true)
-    })
-    audio.addEventListener('stalled', () => {
-      if (audio !== this.active) return
-      this.setBuffering(true)
-    })
-    audio.addEventListener('error', () => {
-      if (audio !== this.active) return
-      this.setBuffering(false)
-      // Basmalah clip missing → skip into ayah 1 (Android parity).
-      if (this.playlist[this.index]?.ayah === BASMALAH_PLAYLIST_AYAH) {
-        void this.playIndex(this.index + 1)
-        return
-      }
-      this.patch({ error: 'Audio failed to load', isPlaying: false })
-    })
-    audio.addEventListener('loadedmetadata', () => {
-      if (audio !== this.active) return
-      this.patch({ durationMs: Math.round((audio.duration || 0) * 1000) })
-    })
-    // When the active clip has buffered enough, kick standby prep (covers the
-    // case where playIndex raced ahead of prefetch).
-    audio.addEventListener('canplaythrough', () => {
-      if (audio !== this.active) return
-      this.setBuffering(false)
-      void this.prepareStandby()
-    })
+      return
+    }
+    this.patch({ isPlaying: false })
+  }
+
+  private onMediaError() {
+    this.setBuffering(false)
+    if (this.playlist[this.index]?.ayah === BASMALAH_PLAYLIST_AYAH) {
+      void this.playIndex(this.index + 1)
+      return
+    }
+    this.patch({ error: 'Audio failed to load', isPlaying: false })
   }
 
   private setBuffering(isBuffering: boolean) {
@@ -360,14 +321,8 @@ export class PlayerController {
   /** Decode only the current/next warm blobs; failures retain ordinary playback. */
   private async prepareAudioBounds(index: number): Promise<void> {
     const item = this.playlist[index]
-    if (!item || this.audibleBounds.has(item.url)) return
-    const src = await this.prefetcher.ensure(item.url)
-    if (!src) return
-    const bounds = await this.boundaryAnalyzer.analyze(src)
-    if (bounds) {
-      this.audibleBounds.set(item.url, bounds)
-      this.scheduleGaplessBoundary()
-    }
+    if (!item) return
+    await this.joins.prepareBounds(item, () => this.scheduleGaplessBoundary())
   }
 
   /**
@@ -378,19 +333,13 @@ export class PlayerController {
   private maybeAdvanceAtAudibleEnd() {
     if (this.gaplessAdvancing || !this.state.isPlaying) return
     const current = this.playlist[this.index]
-    const bounds = current ? this.audibleBounds.get(current.url) : null
-    if (!crossedAudibleEnd(this.active.currentTime, this.active.duration, bounds)) return
+    if (!this.joins.crossedAudibleEnd(current)) return
 
     const next = this.peekNextIndex({ forStandby: false })
     if (next == null) return
     const nextItem = this.playlist[next]
-    if (!nextItem || !this.audibleBounds.has(nextItem.url)) return
-    if (
-      this.standby != null &&
-      (this.standbyIndex !== next || this.standby.readyState < HAVE_FUTURE_DATA)
-    ) {
-      return
-    }
+    if (!nextItem || !this.joins.boundsFor(nextItem)) return
+    if (this.standby != null && !this.joins.isStandbyReady(next)) return
 
     const outgoing = this.active
     const transitionToken = this.playToken
@@ -401,7 +350,7 @@ export class PlayerController {
     this.gaplessAdvancing = true
     void (async () => {
       outgoing.volume = 1
-      const faded = await this.fadeMediaVolume(outgoing, 'out', fadeOutMs)
+      const faded = await this.joins.fade(outgoing, 'out', fadeOutMs)
       if (!faded || transitionToken !== this.playToken || !this.state.isPlaying) {
         outgoing.volume = 1
         return
@@ -414,47 +363,13 @@ export class PlayerController {
     })
   }
 
-  /** Cancellable media-element gain envelope used only at automatic joins. */
-  private fadeMediaVolume(
-    audio: HTMLAudioElement,
-    direction: AudioFadeDirection,
-    durationMs: number,
-  ): Promise<boolean> {
-    const generation = ++this.volumeFadeGeneration
-    const startedAt = performance.now()
-    return new Promise((resolve) => {
-      const step = () => {
-        if (generation !== this.volumeFadeGeneration) {
-          resolve(false)
-          return
-        }
-        const progress = durationMs <= 0
-          ? 1
-          : Math.min(1, (performance.now() - startedAt) / durationMs)
-        audio.volume = audioFadeGain(progress, direction)
-        if (progress >= 1) {
-          resolve(true)
-          return
-        }
-        window.setTimeout(step, 10)
-      }
-      step()
-    })
-  }
-
-  private cancelVolumeFades() {
-    this.volumeFadeGeneration++
-    this.active.volume = 1
-    if (this.standby) this.standby.volume = 1
-  }
-
   /** Timer-backed boundary so a short trim window cannot fall between rAFs. */
   private scheduleGaplessBoundary() {
     if (this.gaplessTimer != null) window.clearTimeout(this.gaplessTimer)
     this.gaplessTimer = null
     if (!this.state.isPlaying || this.gaplessAdvancing) return
     const item = this.playlist[this.index]
-    const bounds = item ? this.audibleBounds.get(item.url) : null
+    const bounds = this.joins.boundsFor(item)
     const duration = this.active.duration
     if (!bounds || !Number.isFinite(duration) || duration - bounds.endS < 0.04) return
     const remainingS = Math.max(0, bounds.endS - this.active.currentTime)
@@ -470,63 +385,26 @@ export class PlayerController {
   }
 
   private seekActiveToAudibleStart(index: number) {
-    const item = this.playlist[index]
-    const startS = item ? this.audibleBounds.get(item.url)?.startS : null
-    if (startS != null && startS > 0 && this.active.currentTime < startS) {
-      this.active.currentTime = startS
-    }
+    this.joins.seekToAudibleStart(this.playlist[index])
   }
 
   /**
    * Load the next playlist item into the standby element (blob URL when warm).
-   * Safe to call repeatedly; superseded work is ignored via [prepareToken].
+   * Safe to call repeatedly; superseded work is ignored by JoinCoordinator.
    */
   private async prepareStandby(): Promise<void> {
-    if (!this.standby) return
     const nextIndex = this.peekNextIndex({ forStandby: true })
     if (nextIndex == null) {
-      this.clearStandby()
+      this.joins.clearStandby()
       return
     }
-    if (this.standbyIndex === nextIndex && this.standby.readyState >= HAVE_FUTURE_DATA) {
-      return
-    }
-
-    const token = ++this.prepareToken
     const item = this.playlist[nextIndex]!
-    // Wait for a full blob before assigning the desktop standby element.
-    const blobSrc = await this.prefetcher.ensure(item.url)
-    if (token !== this.prepareToken) return
-    if (!blobSrc) return
-
-    if (this.standbyIndex === nextIndex && this.standbySrcMatches(blobSrc)) {
-      return
-    }
-
-    this.standby.pause()
-    this.standby.volume = 1
-    this.standby.loop = false
-    this.standby.src = blobSrc
-    this.standby.playbackRate = this.state.speed
-    this.standby.load()
-    this.standbyIndex = nextIndex
-    this.scheduleGaplessBoundary()
-  }
-
-  private standbySrcMatches(src: string): boolean {
-    if (!this.standby) return false
-    // HTMLAudioElement.src is absolute; compare against resolved currentSrc/src.
-    const current = this.standby.currentSrc || this.standby.src
-    return current === src || current.endsWith(src) || src.endsWith(current)
-  }
-
-  private clearStandby() {
-    this.prepareToken++
-    this.standbyIndex = -1
-    if (!this.standby) return
-    this.standby.pause()
-    this.standby.removeAttribute('src')
-    this.standby.load()
+    await this.joins.prepareStandby(
+      nextIndex,
+      item,
+      this.state.speed,
+      () => this.scheduleGaplessBoundary(),
+    )
   }
 
   /**
@@ -566,7 +444,7 @@ export class PlayerController {
     this.surahId = content.surah.id
     this.playlist = buildPlaylist(content, reciter, startAyah)
     this.index = 0
-    this.clearStandby()
+    this.joins.clearStandby()
     const urls = this.playlistUrls()
     // Always read-ahead the opening window; whole-surah warm is optional.
     if (opts.warm !== false) this.prefetcher.warmSurah(urls)
@@ -629,7 +507,7 @@ export class PlayerController {
       try {
         if (this.active.readyState < HAVE_FUTURE_DATA) {
           this.setBuffering(true)
-          await this.waitForCanPlay(this.active)
+          await this.transport.waitForCanPlay()
         }
         if (!this.state.isPlaying) return
         await this.active.play()
@@ -660,17 +538,15 @@ export class PlayerController {
     }
     const token = ++this.playToken
     const quiet = opts.quiet === true
-    this.volumeFadeGeneration++
+    this.joins.cancelFades()
     if (!opts.fadeIn) this.active.volume = 1
 
     // Fast path: standby already holds this index — swap and play immediately.
     if (
       autoplay &&
-      this.standby != null &&
-      this.standbyIndex === i &&
-      this.standby.readyState >= HAVE_FUTURE_DATA
+      this.joins.isStandbyReady(i)
     ) {
-      this.swapToStandby()
+      this.joins.promoteStandby(i)
       this.index = i
       this.seekActiveToAudibleStart(i)
       this.active.volume = opts.fadeIn ? 0 : 1
@@ -692,7 +568,7 @@ export class PlayerController {
           this.patch({ isPlaying: true, error: null })
         }
         if (opts.fadeIn) {
-          void this.fadeMediaVolume(this.active, 'in', VERSE_FADE_IN_MS)
+          void this.joins.fade(this.active, 'in', VERSE_FADE_IN_MS)
         }
         this.startTick()
         this.schedulePrefetch()
@@ -746,19 +622,19 @@ export class PlayerController {
     // iOS gets one persistent media element and an ordinary HTTPS source.
     // The read-ahead fetch above warms the browser HTTP cache, while avoiding
     // WebKit's fragile blob-media and multi-element playback paths.
-    const src = this.singleElementPlayback ? item.url : warmedSrc
+    const src = this.transport.singleElement ? item.url : warmedSrc
 
     // Only suppress the pause→isPlaying:false sync when we intend to keep
     // playing after the src swap. Quiet loads (openSurah) must still clear it.
     // The flag is consumed by the async `pause` event / a resumed `play`, not
     // reset here — a synchronous reset lands before `pause()` fires its event.
     if (autoplay) this.suppressPauseSync = true
-    this.active.pause()
-    this.active.loop = this.state.repeatMode === 'ayah'
-    this.active.src = src
-    this.active.playbackRate = this.state.speed
-    this.active.volume = opts.fadeIn ? 0 : 1
-    this.active.load()
+    this.transport.loadActive({
+      src,
+      loop: this.state.repeatMode === 'ayah',
+      playbackRate: this.state.speed,
+      volume: opts.fadeIn ? 0 : 1,
+    })
     if (quiet) {
       // One emit after src assign — listeners see nowPlaying without a second
       // mid-mount patch from publishNowPlaying.
@@ -788,7 +664,7 @@ export class PlayerController {
       try {
         if (this.active.readyState < HAVE_FUTURE_DATA) {
           this.setBuffering(true)
-          await this.waitForCanPlay(this.active)
+          await this.transport.waitForCanPlay()
         }
         if (token !== this.playToken || !this.state.isPlaying) {
           this.setBuffering(false)
@@ -802,7 +678,7 @@ export class PlayerController {
           this.patch({ isPlaying: true, error: null })
         }
         if (opts.fadeIn) {
-          void this.fadeMediaVolume(this.active, 'in', VERSE_FADE_IN_MS)
+          void this.joins.fade(this.active, 'in', VERSE_FADE_IN_MS)
         }
         this.setBuffering(false)
         this.startTick()
@@ -846,49 +722,6 @@ export class PlayerController {
     })
   }
 
-  /** Promote standby → active; former active becomes the new standby. */
-  private swapToStandby() {
-    if (!this.standby) return
-    const prev = this.active
-    this.active = this.standby
-    this.standby = prev
-    this.standbyIndex = -1
-    // Reset the retired element so it can take the following ayah.
-    this.standby.pause()
-    this.standby.removeAttribute('src')
-    this.standby.load()
-  }
-
-  /**
-   * Resolve when [audio] can start, or immediately if already buffered.
-   * Rejects on error / empty src.
-   */
-  private waitForCanPlay(audio: HTMLAudioElement, timeoutMs = 15_000): Promise<void> {
-    if (audio.readyState >= HAVE_FUTURE_DATA) return Promise.resolve()
-    return new Promise((resolve, reject) => {
-      let settled = false
-      const finish = (ok: boolean, err?: Error) => {
-        if (settled) return
-        settled = true
-        window.clearTimeout(timer)
-        audio.removeEventListener('canplay', onCanPlay)
-        audio.removeEventListener('error', onError)
-        if (ok) resolve()
-        else reject(err ?? new Error('Audio failed to load'))
-      }
-      const onCanPlay = () => finish(true)
-      const onError = () => finish(false, new Error('Audio failed to load'))
-      const timer = window.setTimeout(
-        () => finish(false, new Error('Audio buffer timeout')),
-        timeoutMs,
-      )
-      audio.addEventListener('canplay', onCanPlay)
-      audio.addEventListener('error', onError)
-      // readyState may have advanced between the check and listener attach.
-      if (audio.readyState >= HAVE_FUTURE_DATA) finish(true)
-    })
-  }
-
   async toggle() {
     if (!this.playlist.length) return
     // Prefer play-intent state over the media element: optimistic isPlaying
@@ -908,7 +741,7 @@ export class PlayerController {
     // User intent to stop wins — never let a pending swap suppress this pause.
     this.suppressPauseSync = false
     this.recoveringStall = false
-    this.cancelVolumeFades()
+    this.joins.cancelFades()
     this.active.pause()
     this.setBuffering(false)
     this.stopTick()
@@ -920,7 +753,7 @@ export class PlayerController {
   async play() {
     if (!this.playlist.length) return
     const token = ++this.playToken
-    this.cancelVolumeFades()
+    this.joins.cancelFades()
     // Recede chrome / flip the transport on the tap, before canplay.
     this.patch({ isPlaying: true, error: null })
     // Start the rAF position loop immediately so ink stays live even while
@@ -929,7 +762,7 @@ export class PlayerController {
     try {
       if (this.active.readyState < HAVE_FUTURE_DATA) {
         this.setBuffering(true)
-        await this.waitForCanPlay(this.active)
+        await this.transport.waitForCanPlay()
       }
       if (token !== this.playToken || !this.state.isPlaying) return
       this.seekActiveToAudibleStart(this.index)
@@ -1028,8 +861,7 @@ export class PlayerController {
   }
 
   setSpeed(speed: number) {
-    this.active.playbackRate = speed
-    if (this.standby) this.standby.playbackRate = speed
+    this.transport.setSpeed(speed)
     this.patch({ speed })
     this.scheduleGaplessBoundary()
   }
@@ -1045,10 +877,8 @@ export class PlayerController {
     this.playToken++
     this.suppressPauseSync = false
     this.recoveringStall = false
-    this.cancelVolumeFades()
-    this.active.pause()
-    this.active.removeAttribute('src')
-    this.clearStandby()
+    this.joins.cancelFades()
+    this.joins.stop()
     this.playlist = []
     this.index = 0
     this.stopTick()

@@ -21,22 +21,16 @@ Grab **BeautifulQuran.apk** from the
 [latest release](../../releases/latest), open it on your Android phone
 (Android 8.0+), and allow the install when prompted.
 
-### Voice commands (GitHub APK)
+### Voice commands
 
-**Gemini / Google Assistant cannot see sideloaded GitHub installs.** App Actions
-only register for apps published on the Play Store, so “Hey Google, play chapter
-2” will open YouTube Music instead of this app. That is a Google platform limit,
-not a bug in the APK.
+Beautiful Quran has no in-app microphone or listening controls. It exposes
+media, App Actions, and Android 17 AppFunctions to the operating system instead.
+Direct Android hooks work in a sideloaded build, but classic Assistant needs an
+App Actions development preview or reviewed Play release, and Gemini invocation
+of AppFunctions is currently a Google trusted-tester preview.
 
-Use **Listen** on the chapters screen (under the title) instead:
-
-- “play chapter 2” — open Al-Baqarah and start recitation
-- “open chapter 2” — open without playing
-- “bookmark this” — mark the verse under the reading line
-- “continue” / “bookmarks”
-
-Once the app is on Play with App Actions reviewed, Assistant phrases can target
-it; until then, **Listen** is the voice path.
+See [Android voice and Assistant support](docs/ASSISTANT.md) for the capability
+matrix, testing commands, current platform limits, and full-support checklist.
 
 ## Building
 
