@@ -199,10 +199,11 @@ class InkEngineTest {
     // --- glinting ---
 
     @Test
-    fun `only a first-pass active word wears the fresh-ink glint`() {
+    fun `new and repeated active words wear the fresh-ink glint`() {
         assertTrue(InkEngine.glinting(State.Active, repeat = false, startRevealed = false))
-        // A repeat wears the orange wash, never the glint.
-        assertFalse(InkEngine.glinting(State.Active, repeat = true, startRevealed = false))
+        // A repeat glints again over its orange wash, including re-entry.
+        assertTrue(InkEngine.glinting(State.Active, repeat = true, startRevealed = false))
+        assertTrue(InkEngine.glinting(State.Active, repeat = true, startRevealed = true))
         // Re-lit already revealed (seek / repeat re-entry): old ink, not fresh.
         assertFalse(InkEngine.glinting(State.Active, repeat = false, startRevealed = true))
         // Resting states never glint.

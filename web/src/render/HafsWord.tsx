@@ -19,6 +19,7 @@ import {
   clearPaperCover,
   glintEnabled,
   runGlintFadeOut,
+  runGlintWashIn,
   runPaperCoverWash,
   runRepeatFadeOut,
   runRepeatWashIn,
@@ -53,6 +54,7 @@ export function HafsWord({
   const coverRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
   const glintRef = useRef<HTMLSpanElement>(null)
+  const glintBacklightRef = useRef<HTMLSpanElement>(null)
   const flashRef = useRef<HTMLSpanElement>(null)
   const prevState = useRef(ink.state)
   const revealedOnEntry = useRef(false)
@@ -67,6 +69,7 @@ export function HafsWord({
   const interaction = useWordInteraction(onPlay, onHold)
 
   if (ink.repeat && !repeatMounted) setRepeatMounted(true)
+  if (ink.repeat && glintEnabled() && !glintMounted) setGlintMounted(true)
   if (searchFlash && !flashMounted) setFlashMounted(true)
 
   /*
@@ -139,21 +142,23 @@ export function HafsWord({
       return
     }
     const overlay = glintRef.current
-    if (!overlay) return
+    const backlight = glintBacklightRef.current
+    if (!overlay || !backlight) return
     const glinting =
-      ink.state === InkState.Active && !ink.repeat && !revealedOnEntry.current
+      ink.state === InkState.Active && (ink.repeat || !revealedOnEntry.current)
     const was = prevGlint.current
     prevGlint.current = glinting
 
     if (glinting && !was) {
       const duration = activeSweepMs ?? getTuning().repeatSweepMs
-      return runRepeatWashIn(overlay, true, duration)
+      return runGlintWashIn(overlay, backlight, true, duration)
     }
     if (!glinting && was) {
-      return runGlintFadeOut(overlay, () => setGlintMounted(false))
+      return runGlintFadeOut(overlay, backlight, () => setGlintMounted(false))
     }
     if (!glinting) {
       overlay.style.opacity = '0'
+      backlight.style.opacity = '0'
       applyMask(overlay, 'none')
       setGlintMounted(false)
     }
@@ -225,18 +230,26 @@ export function HafsWord({
           <span className="hafs-glyph">{word.arabic}</span>
           {glintMounted ? (
             <span
-              ref={glintRef}
-              className="hafs-glint-overlay hafs-glyph"
+              ref={glintBacklightRef}
+              className="word-glint-backlight"
+              aria-hidden="true"
+              style={{ opacity: 0 }}
+            />
+          ) : null}
+          {repeatMounted ? (
+            <span
+              ref={overlayRef}
+              className="hafs-repeat-overlay hafs-glyph"
               aria-hidden="true"
               style={{ opacity: 0 }}
             >
               {word.arabic}
             </span>
           ) : null}
-          {repeatMounted ? (
+          {glintMounted ? (
             <span
-              ref={overlayRef}
-              className="hafs-repeat-overlay hafs-glyph"
+              ref={glintRef}
+              className="hafs-glint-overlay hafs-glyph"
               aria-hidden="true"
               style={{ opacity: 0 }}
             >

@@ -1569,6 +1569,8 @@ select {
 .word-ink-slot {
   position: relative;
   display: inline-block;
+  /* Keep the negative-z backlight behind glyphs but above the paper. */
+  isolation: isolate;
 }
 
 .word-ink-slot > .word-arabic,
@@ -1618,11 +1620,32 @@ select {
 .word-glint-overlay.word-arabic,
 .word-glint-overlay.word-gloss {
   color: var(--glint, transparent);
+  filter:
+    drop-shadow(0 0 0.1em color-mix(in srgb, var(--glint, transparent) 82%, transparent))
+    drop-shadow(0 0 0.42em color-mix(in srgb, var(--glint, transparent) 58%, transparent));
   position: absolute;
 }
 
 .words[data-lyric='english'] .word-glint-overlay.word-gloss {
   color: var(--glint, transparent);
+}
+
+/* Actual light behind the word—not a blurred glyph silhouette. JS grows this
+   with the wash, holds it at the freshly formed peak, then fades it with the
+   glimmer. The isolated parent keeps it behind every ink layer. */
+.word-glint-backlight {
+  position: absolute;
+  z-index: -1;
+  inset: -0.62em -0.95em;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--glint, transparent) 42%, transparent) 0%,
+    color-mix(in srgb, var(--glint, transparent) 20%, transparent) 38%,
+    transparent 76%
+  );
+  filter: blur(0.16em);
 }
 
 .word-gloss-flash {
@@ -1728,6 +1751,9 @@ select {
 
 .hafs-glint-overlay.hafs-glyph {
   color: var(--glint, transparent);
+  filter:
+    drop-shadow(0 0 0.1em color-mix(in srgb, var(--glint, transparent) 82%, transparent))
+    drop-shadow(0 0 0.42em color-mix(in srgb, var(--glint, transparent) 58%, transparent));
   position: absolute;
 }
 

@@ -157,6 +157,9 @@ sealed class ShapedWordBloom {
         val restingAlpha: Float = 0f,
         val layerAlpha: Float = 1f,
         val feather: Float? = null,
+        /** Soft halo outside the glyph outline, used by Nightfall's glimmer. */
+        val glowAlpha: Float = 0f,
+        val glowRadius: Float = 0.72f,
     ) : ShapedWordBloom()
 }
 
@@ -314,6 +317,22 @@ fun Modifier.shapedWordBloom(
                             Paint(),
                         )
                     }
+                    val glowAlpha = bloom.layerAlpha.coerceIn(0f, 1f) *
+                        bloom.glowAlpha.coerceIn(0f, 1f) * inkSmootherstep(p)
+                    if (glowAlpha > 0f) {
+                        val radius = maxOf(bounds.width, bounds.height) * bloom.glowRadius
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                0f to bloom.color.copy(alpha = glowAlpha),
+                                0.42f to bloom.color.copy(alpha = glowAlpha * 0.45f),
+                                1f to Color.Transparent,
+                                center = bounds.center,
+                                radius = radius,
+                            ),
+                            center = bounds.center,
+                            radius = radius,
+                        )
+                    }
                     clipPath(path) {
                         drawText(textLayoutResult = textLayout)
                         drawRect(
@@ -359,6 +378,7 @@ private const val InkProfileStops = 9
  * the word's draw scope — does not paint onto neighbours. */
 private val FadeLayerBleed = 14.dp
 
+/** Visible but still ink-like halo around Nightfall's active glimmer. */
 /** Horizontal pad beyond [TextLayoutResult.getPathForRange] when painting
  * paper covers. Vertical expansion is forbidden because it masks glyphs on
  * adjacent lines. */

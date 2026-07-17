@@ -19,6 +19,7 @@ import {
   clearPaperCover,
   glintEnabled,
   runGlintFadeOut,
+  runGlintWashIn,
   runLetterWash,
   runPaperCoverWash,
   runRepeatFadeOut,
@@ -113,6 +114,7 @@ export function WordUnit({
   const coverRef = useRef<HTMLSpanElement>(null)
   const overlayRef = useRef<HTMLSpanElement>(null)
   const glintRef = useRef<HTMLSpanElement>(null)
+  const glintBacklightRef = useRef<HTMLSpanElement>(null)
   const flashRef = useRef<HTMLSpanElement>(null)
   const glossFlashRef = useRef<HTMLSpanElement>(null)
   const glossRef = useRef<HTMLSpanElement>(null)
@@ -134,6 +136,7 @@ export function WordUnit({
   const interaction = useWordInteraction(onPlay, onHold)
 
   if (ink.repeat && !repeatMounted) setRepeatMounted(true)
+  if (ink.repeat && glintEnabled() && !glintMounted) setGlintMounted(true)
   if (searchFlash && !flashMounted) setFlashMounted(true)
 
   /*
@@ -283,21 +286,23 @@ export function WordUnit({
       return
     }
     const overlay = glintRef.current
-    if (!overlay) return
+    const backlight = glintBacklightRef.current
+    if (!overlay || !backlight) return
     const glinting =
-      ink.state === InkState.Active && !ink.repeat && !revealedOnEntry.current
+      ink.state === InkState.Active && (ink.repeat || !revealedOnEntry.current)
     const was = prevGlint.current
     prevGlint.current = glinting
 
     if (glinting && !was) {
       const duration = activeSweepMs ?? getTuning().repeatSweepMs
-      return runRepeatWashIn(overlay, !englishMode, duration)
+      return runGlintWashIn(overlay, backlight, !englishMode, duration)
     }
     if (!glinting && was) {
-      return runGlintFadeOut(overlay, () => setGlintMounted(false))
+      return runGlintFadeOut(overlay, backlight, () => setGlintMounted(false))
     }
     if (!glinting) {
       overlay.style.opacity = '0'
+      backlight.style.opacity = '0'
       applyMask(overlay, 'none')
       setGlintMounted(false)
     }
@@ -430,18 +435,26 @@ export function WordUnit({
           </span>
           {glintMounted ? (
             <span
-              ref={glintRef}
-              className={`word-glint-overlay ${baseClass}`}
+              ref={glintBacklightRef}
+              className="word-glint-backlight"
+              aria-hidden="true"
+              style={{ opacity: 0 }}
+            />
+          ) : null}
+          {repeatMounted ? (
+            <span
+              ref={overlayRef}
+              className={`word-repeat-overlay ${baseClass}`}
               aria-hidden="true"
               style={{ opacity: 0 }}
             >
               {label}
             </span>
           ) : null}
-          {repeatMounted ? (
+          {glintMounted ? (
             <span
-              ref={overlayRef}
-              className={`word-repeat-overlay ${baseClass}`}
+              ref={glintRef}
+              className={`word-glint-overlay ${baseClass}`}
               aria-hidden="true"
               style={{ opacity: 0 }}
             >

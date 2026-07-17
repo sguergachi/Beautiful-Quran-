@@ -342,18 +342,34 @@ export function runRepeatFadeOut(
   )
 }
 
-/**
- * Fresh-ink glint dissolve: clear the wash mask, then fade the white-gold
- * overlay to 0 over [InkTuning.glintFadeMs] with the ink sweep easing — the
- * sheen drying back to plain recited ink.
- */
+/** White-gold glyph wash plus a separate backlight that grows behind it. */
+export function runGlintWashIn(
+  ink: HTMLElement,
+  backlight: HTMLElement,
+  rtl: boolean,
+  durationMs: number,
+): () => void {
+  backlight.style.opacity = '0'
+  const cancelInk = runRepeatWashIn(ink, rtl, durationMs)
+  const cancelLight = runWash(
+    durationMs,
+    sweepEase(),
+    cubicBezierEase,
+    (_p, eased) => { backlight.style.opacity = String(eased) },
+    () => { backlight.style.opacity = '1' },
+  )
+  return () => { cancelInk(); cancelLight() }
+}
+
+/** Glimmer dry-down: glyph sheen and its backlight recede together. */
 export function runGlintFadeOut(
-  el: HTMLElement,
+  ink: HTMLElement,
+  backlight: HTMLElement,
   onDone?: () => void,
 ): () => void {
   const t = getTuning()
-  applyMask(el, 'none')
-  return runWash(
+  applyMask(ink, 'none')
+  const fade = (el: HTMLElement, done?: () => void) => runWash(
     t.glintFadeMs,
     sweepEase(),
     cubicBezierEase,
@@ -362,9 +378,12 @@ export function runGlintFadeOut(
     },
     () => {
       el.style.opacity = '0'
-      onDone?.()
+      done?.()
     },
   )
+  const cancelInk = fade(ink, onDone)
+  const cancelLight = fade(backlight)
+  return () => { cancelInk(); cancelLight() }
 }
 
 /**

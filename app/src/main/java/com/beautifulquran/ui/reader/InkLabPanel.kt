@@ -98,6 +98,12 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
             TuningSlider("Glint fade ms", t.glintFadeMs.toFloat(), 100f..2400f, integer = true) {
                 InkEngine.tuning = t.copy(glintFadeMs = it.roundToInt())
             }
+            TuningSlider("Glint glow", t.glintGlowAlpha, 0f..1f) {
+                InkEngine.tuning = t.copy(glintGlowAlpha = it)
+            }
+            TuningSlider("Glint radius", t.glintGlowRadius, 0.3f..1.5f) {
+                InkEngine.tuning = t.copy(glintGlowRadius = it)
+            }
             TuningSlider("Wash feather", t.washFeather, 0.2f..3f) {
                 InkEngine.tuning = t.copy(washFeather = it)
             }
