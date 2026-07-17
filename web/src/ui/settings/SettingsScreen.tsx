@@ -472,6 +472,24 @@ export function SettingsScreen({
             </p>
 
             <div className="settings-dev-block">
+              <PaperSwitch
+                id="setting-gapless5"
+                label="Gapless-5 verse joins"
+                checked={s.gapless5Playback}
+                checkParams={checkParams}
+                paintToken={checkPaintToken}
+                onChange={(checked) =>
+                  appStore.updateSettings({ gapless5Playback: checked })
+                }
+              />
+              <p className="settings-caption">
+                Experimental Web Audio joins (Gapless-5) instead of dual-element handoff.
+                Word highlight still follows the reciter; compare verse seams with this on
+                and off.
+              </p>
+            </div>
+
+            <div className="settings-dev-block">
               <p className="settings-body-label">Home bookmark</p>
               <p className="settings-caption">
                 Changes the Chapters shortcut; bookmark ribbons inside verses are unchanged.
