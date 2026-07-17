@@ -8,6 +8,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -848,7 +849,10 @@ fun ReaderScreen(
         },
     ) { padding ->
         val content = uiState.content
-        val readerContentAlpha = remember(surahId, startAyah) { Animatable(0f) }
+        // Not keyed on surahId: next-chapter handoff updates the sheet id while
+        // the flyer is still dissolving — recreating Animatable(0) blanked the
+        // whole page (including the flyer) for a frame.
+        val readerContentAlpha = remember { Animatable(0f) }
         // Only fade in on cold open / external nav — never when finishing a
         // next-chapter handoff (that used to snap the settled header).
         LaunchedEffect(content?.surah?.id, startAyah) {
@@ -980,40 +984,40 @@ fun ReaderScreen(
                 }
 
                 // Handoff under the flying opening (covers the list remount).
-                // Real header starts invisible; flyer fades out onto it.
-                // Critical: list translation must already be 0 so scrollToItem(0)
-                // lands the real header exactly under the flyer — no later jump.
+                // Paint the real header fully opaque under the flyer first, then
+                // dissolve only the flyer — dual alpha crossfades dipped through
+                // empty paper and flickered at the end.
+                // List translation must already be 0 so scrollToItem(0) lands the
+                // real header exactly under the flyer.
                 verseRevealForSurah = nextId
                 verseReveal.snapTo(0f)
-                realHeaderAlpha.snapTo(0f)
+                realHeaderAlpha.snapTo(1f)
                 viewModel.installPrepared(prepared)
                 listState.scrollToItem(0)
-                onOpenNextChapter(nextId)
                 // Two frames so the new LazyColumn lays out at scroll 0 under
-                // the still-visible flyer before we crossfade.
+                // the still-visible flyer before we dissolve it.
                 withFrameNanos { }
                 withFrameNanos { }
-                // Crossfade: flyer out, settled header in — nothing snaps off.
                 if (flyingHeader != null) {
-                    launch {
-                        realHeaderAlpha.animateTo(
-                            1f,
-                            tween(320, easing = chapterAdvanceEasing),
-                        )
-                    }
                     flyerAlpha.animateTo(
                         0f,
-                        tween(320, easing = chapterAdvanceEasing),
+                        tween(320, easing = LinearEasing),
                     )
-                } else {
-                    realHeaderAlpha.snapTo(1f)
+                    // Hold one frame at alpha 0 so the last dissolve paint lands
+                    // before unmount (avoids a one-frame flash).
+                    withFrameNanos { }
                 }
                 flyingHeader = null
+                // Reset flyer animatables only after the overlay has left the tree.
+                withFrameNanos { }
                 flyProgress.snapTo(0f)
                 flyerAlpha.snapTo(1f)
                 openingInListAlpha.snapTo(1f)
                 headerMorph.snapTo(0f)
                 chapterAdvancing = false
+                // Sync the sheet id after the dissolve so surahId/startAyah
+                // prop changes cannot interrupt the handoff composition.
+                onOpenNextChapter(nextId)
                 // Top-nav pin has finished fading (or was never set).
                 pinnedTopNavTitle = null
 
@@ -1458,7 +1462,9 @@ fun ReaderScreen(
                         revelationPlace = flying.surah.revelationPlace,
                         ayahCount = flying.surah.ayahCount,
                         sheen = sheen,
-                        compactBottom = false,
+                        // Match the settled SurahHeader so the dissolve doesn't
+                        // pop padding when the flyer unmounts.
+                        compactBottom = surahOpensWithBasmalahPreface(flying.surah.id),
                         rosetteScale = 1f,
                         rosetteAlpha = 1f,
                     )
