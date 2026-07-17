@@ -79,10 +79,15 @@ For future runs, use:
 scripts/run_android_app.sh
 ```
 
-The emulator window opens by default. When a shell was started outside the
-desktop environment, the script reconnects to its local Xwayland display. For
-a CI or SSH shell without a display, use
-`ANDROID_EMULATOR_HEADLESS=1 scripts/run_android_app.sh`.
+**Default is a visible emulator window** (not headless). When a shell was
+started outside the desktop environment, the script reconnects to its local
+Xwayland display. It only reuses an already-running emulator if that instance
+is the requested AVD (`BeautifulQuran_API_35` by default); a headless instance
+of that AVD is restarted with a window. Headless is opt-in only:
+
+```bash
+ANDROID_EMULATOR_HEADLESS=1 scripts/run_android_app.sh
+```
 
 If the emulator window does not appear or booting times out, check
 `.android-emulator.log`. To make the SDK tools available in your current shell:
