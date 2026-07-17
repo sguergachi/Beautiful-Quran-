@@ -284,8 +284,10 @@ export class PlayerController {
 
     if (enabled) {
       this.gapless5 = this.createGapless5Backend()
+      // Prefetch the JS chunk only. Constructing Gapless5 creates AudioContext;
+      // that must wait for a Play tap (Firefox blocks autoplay otherwise).
       try {
-        await this.gapless5.ensureReady()
+        await this.gapless5.preloadModule()
       } catch (e) {
         this.gapless5Enabled = false
         this.gapless5?.dispose()
@@ -942,20 +944,22 @@ export class PlayerController {
     if (autoplay) this.setBuffering(true)
 
     try {
-      // First enable may still be importing the UMD chunk; after that this is
-      // sync. Never await a full-surah prefetch here — that drops autoplay.
-      if (!backend.isReady()) await backend.ensureReady()
-      if (token !== this.playToken) return
-
-      // WebAudio-only: unlock the context on the user-gesture stack so later
-      // source.start() after decode still works.
-      if (autoplay) await backend.resumeContext()
-      if (token !== this.playToken) return
+      // Firefox: AudioContext must be created/resumed on the user-gesture stack.
+      // Prefer bootSync (module preloaded when the flag was enabled) so we never
+      // await import() before constructing the context.
+      if (!backend.isReady()) {
+        if (!backend.bootSync()) {
+          await backend.ensureReady()
+          if (token !== this.playToken) return
+        }
+      }
+      // Kick resume immediately while still in the play-tap call stack.
+      if (autoplay) void backend.resumeContext()
 
       backend.syncPlaylist(this.playlist, this.prefetcher)
       backend.applyRepeat(this.state.repeatMode)
       backend.setSpeed(this.state.speed)
-      // Warm HTTP cache for the XHR decode path (never pass blob: to Gapless-5).
+      // Warm HTTP cache (never pass blob: to Gapless-5 — breaks HTML5 path).
       void this.prefetcher.ensure(item.url)
       this.schedulePrefetch()
 
@@ -978,8 +982,9 @@ export class PlayerController {
         // playToken is the only cancel signal — do not re-check isPlaying after
         // the library's stop/unload callbacks; those used to abort every start.
         if (token !== this.playToken) return
+        // HTML5 element path starts here under the play gesture; WebAudio
+        // promotes once decode finishes (Gapless-5 hybrid).
         backend.goto(i, true)
-        // Stay in buffering until onPlay — first ayah needs decodeAudioData.
         this.startTick()
         this.prefetcher.resumeWarm()
       } else {
