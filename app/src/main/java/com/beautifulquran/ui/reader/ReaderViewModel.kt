@@ -8,6 +8,7 @@ import com.beautifulquran.data.QuranRepository
 import com.beautifulquran.data.SettingsRepository
 import com.beautifulquran.data.model.Reciter
 import com.beautifulquran.data.model.Segment
+import com.beautifulquran.data.model.Surah
 import com.beautifulquran.data.model.SurahContent
 import com.beautifulquran.domain.BASMALAH_PLAYLIST_AYAH
 import com.beautifulquran.domain.HighlightClock
@@ -57,10 +58,21 @@ data class ActiveWord(
 
 data class ReaderUiState(
     val content: SurahContent? = null,
+    /** Next surah in order, or null on chapter 114 / while loading. */
+    val nextSurah: Surah? = null,
     val reciters: List<Reciter> = emptyList(),
     val currentReciter: Reciter? = null,
     val hasTimings: Boolean = false,
     val isLoading: Boolean = true,
+)
+
+/** Off-screen chapter payload for continuous next-chapter advance. */
+data class PreparedSurah(
+    val content: SurahContent,
+    val nextSurah: Surah?,
+    val reciters: List<Reciter>,
+    val reciter: Reciter,
+    val timings: Map<Int, List<Segment>>,
 )
 
 /** Reading-session state temporarily displaced by an in-page surface such as
@@ -309,27 +321,51 @@ class ReaderViewModel(
         )
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
-            val reciters = repository.reciters()
-            val reciter = currentReciter(reciters)
-            // Always pull timings — a reciter with no bundled data can still
-            // have hand-made corrections from the Timings Lab fused in.
-            val loadedTimings = timingsWithBasmalahLeadIn(reciter.id, surahId)
-            val content = repository.surahContent(surahId)
+            val prepared = materialize(surahId) ?: return@launch
             if (this@ReaderViewModel.surahId != surahId) return@launch
-            installTimings(loadedTimings)
-            _uiState.value = ReaderUiState(
-                content = content,
-                reciters = reciters,
-                currentReciter = reciter,
-                hasTimings = loadedTimings.isNotEmpty(),
-                isLoading = false,
-            )
+            installPrepared(prepared)
             val playAyah = pendingPlayAyah
             pendingPlayAyah = null
             if (playAyah != null) {
                 playFromAyah(playAyah)
             }
         }
+    }
+
+    /**
+     * Builds the next chapter off-screen for the continuous scroll advance —
+     * does not touch [uiState], so the outgoing page stays put until
+     * [installPrepared] commits at the mid-transition apex.
+     */
+    suspend fun materialize(surahId: Int): PreparedSurah? {
+        val reciters = repository.reciters()
+        val reciter = currentReciter(reciters)
+        val loadedTimings = timingsWithBasmalahLeadIn(reciter.id, surahId)
+        val content = repository.surahContent(surahId)
+        val nextSurah = repository.surahs().firstOrNull { it.id == surahId + 1 }
+        return PreparedSurah(
+            content = content,
+            nextSurah = nextSurah,
+            reciters = reciters,
+            reciter = reciter,
+            timings = loadedTimings,
+        )
+    }
+
+    /** Publish a [materialize]d chapter as the live reader page. */
+    fun installPrepared(prepared: PreparedSurah) {
+        surahId = prepared.content.surah.id
+        loadedSurah.value = surahId
+        focusedAyah = 1
+        installTimings(prepared.timings)
+        _uiState.value = ReaderUiState(
+            content = prepared.content,
+            nextSurah = prepared.nextSurah,
+            reciters = prepared.reciters,
+            currentReciter = prepared.reciter,
+            hasTimings = prepared.timings.isNotEmpty(),
+            isLoading = false,
+        )
     }
 
     private suspend fun onReciterChanged() {

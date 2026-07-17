@@ -35,21 +35,30 @@ want_window() {
 
 restore_local_display() {
   want_window || return 0
-  [[ -n "${DISPLAY:-}" ]] && return 0
 
   local socket xauthority
-  for socket in /tmp/.X11-unix/X*; do
-    [[ -S "$socket" ]] || continue
-    export DISPLAY=":${socket##*/X}"
+  # Always attach XAUTHORITY when possible — host GPU (-gpu host) needs a
+  # working GL context on the display. Missing cookies force SwiftShader.
+  if [[ -z "${XAUTHORITY:-}" || ! -r "${XAUTHORITY:-}" ]]; then
     for xauthority in "/run/user/$(id -u)"/xauth_* "$HOME/.Xauthority"; do
       if [[ -r "$xauthority" ]]; then
         export XAUTHORITY="$xauthority"
         break
       fi
     done
+  fi
+
+  if [[ -n "${DISPLAY:-}" ]]; then
+    export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
+    return 0
+  fi
+
+  for socket in /tmp/.X11-unix/X*; do
+    [[ -S "$socket" ]] || continue
+    export DISPLAY=":${socket##*/X}"
     # Prefer X11/Xwayland over a missing Qt Wayland plugin.
     export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
-    log "Using local X11 display: $DISPLAY"
+    log "Using local X11 display: $DISPLAY (XAUTHORITY=${XAUTHORITY:-unset})"
     return 0
   done
 
@@ -111,16 +120,23 @@ start_emulator_if_needed() {
   fi
 
   log "Starting emulator: $ANDROID_AVD_NAME"
+  # Host GPU + KVM by default (software GL is unusably laggy for Compose).
+  # Override with ANDROID_EMULATOR_GPU=swiftshader_indirect if host GL fails.
+  local gpu_mode="${ANDROID_EMULATOR_GPU:-host}"
   local emulator_args=(
     -avd "$ANDROID_AVD_NAME"
     -netdelay none
     -netspeed full
+    -gpu "$gpu_mode"
+    -accel on
   )
 
   if ! want_window; then
     log "Starting headless"
+    # Headless still benefits from host GPU when available; fall back via env.
     emulator_args+=(-no-window)
   fi
+  log "Graphics: -gpu $gpu_mode (KVM accel on)"
 
   # Detach fully so the emulator outlives this shell and keeps DISPLAY/Xauth.
   if command -v setsid >/dev/null 2>&1; then

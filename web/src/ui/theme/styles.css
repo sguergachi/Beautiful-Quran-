@@ -973,6 +973,12 @@ select {
   opacity: 1;
 }
 
+/* Next-chapter advance: force-fade the previous surah name (pin holds content). */
+.reader-top-title[data-advancing='true'] {
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
 .reader-top[data-search='true'] .reader-top-title {
   opacity: 0;
 }
@@ -1121,6 +1127,8 @@ select {
   position: relative;
   display: flex;
   flex-direction: column;
+  /* Clip the continuous next-chapter slide so pages don't paint outside. */
+  overflow: hidden;
 }
 
 /*
@@ -1226,6 +1234,146 @@ select {
   color: var(--ink-muted);
   margin: 0;
   font-size: 0.92rem;
+}
+
+/* End-of-chapter invitation: invitation chrome around a real .surah-header
+   opening block. --invite 1→0 collapses only the chrome; the opening layout
+   never changes, so continuous advance can lift it into the header slot. */
+.next-chapter {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: var(--reader-max);
+  margin: 0 auto;
+  text-align: center;
+}
+
+.next-chapter-invite-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
+  height: calc(3rem * var(--invite, 1));
+  opacity: var(--invite, 1);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.next-chapter-label {
+  font-family: var(--font-ui, var(--font-display));
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gold);
+  opacity: 0.55;
+  margin: 0 0 0.5rem;
+}
+
+/* Reuses .surah-header styles; only the rosette paint is invitation-scaled. */
+.next-chapter-opening {
+  width: 100%;
+}
+
+.next-chapter-opening .next-chapter-rosette,
+.next-chapter-opening .rosette {
+  transform: scale(var(--rosette-scale, 1));
+  opacity: var(--rosette-alpha, 1);
+  transform-origin: center center;
+}
+
+.next-chapter-invite-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  height: calc(5.25rem * var(--invite, 1));
+  padding-top: calc(1.25rem * var(--invite, 1));
+  opacity: var(--invite, 1);
+  overflow: hidden;
+}
+
+/* Green stadium control — continue reading further down the page.
+   Bottom overscroll fills the pill left→right like a progress bar. */
+.next-chapter-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  height: 2.75rem;
+  padding: 0 1.35rem;
+  border: none;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.next-chapter-pill[data-filled] {
+  color: var(--paper);
+}
+
+.next-chapter-pill-fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: var(--accent);
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.next-chapter-pill-label,
+.next-chapter-pill-arrow {
+  position: relative;
+  z-index: 1;
+}
+
+.next-chapter-pill:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.next-chapter-pill:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.next-chapter-pill-arrow {
+  display: block;
+  flex-shrink: 0;
+}
+
+.scroll[data-chapter-advancing] {
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* After next-chapter header handoff: verses rest low and invisible, then
+   fade + rise into place. --verse-reveal drives lift; --verse-fade is a
+   smootherstep opacity (set in JS) so the ink wash-in reads clearly. */
+.reader-verse-rise {
+  transform: translate3d(0, calc((1 - var(--verse-reveal, 1)) * 2.5rem), 0);
+  opacity: var(--verse-fade, 1);
+  will-change: transform, opacity;
+}
+
+/* Detached clone that slides from the end-of-chapter opening to the header. */
+.chapter-fly-header {
+  box-sizing: border-box;
+  max-width: var(--reader-max, 42rem);
+  background: transparent;
 }
 
 .basmalah-block {
