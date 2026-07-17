@@ -98,6 +98,14 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
             TuningSlider("Wash feather", t.washFeather, 0.2f..3f) {
                 InkEngine.tuning = t.copy(washFeather = it)
             }
+            // Letter-level tajweed pacing of the active sweep — experimental,
+            // auditioned here before it ships on (docs/TAJWEED_PACING.md).
+            TuningToggle("Tajweed pacing", t.tajweedPacing) {
+                InkEngine.tuning = t.copy(tajweedPacing = it)
+            }
+            TuningSlider("Paced feather", t.pacedFeatherPerLetter, 0.5f..6f) {
+                InkEngine.tuning = t.copy(pacedFeatherPerLetter = it)
+            }
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 Text(
@@ -118,6 +126,38 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
                 )
             }
         }
+    }
+}
+
+/** On/off knob in the panel's quiet-ink idiom — a word, not a switch. */
+@Composable
+private fun TuningToggle(
+    label: String,
+    value: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(112.dp),
+        )
+        Text(
+            text = if (value) "on" else "off",
+            style = MaterialTheme.typography.labelLarge,
+            color = if (value) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier
+                .quietClickable { onChange(!value) }
+                .padding(horizontal = 2.dp, vertical = 6.dp),
+        )
     }
 }
 
