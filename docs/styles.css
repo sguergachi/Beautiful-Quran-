@@ -75,7 +75,20 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Hero demo: motion by default, static poster when the user prefers less motion. */
+.phone-frame--hero .hero-static {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .phone-frame--hero .hero-motion {
+    display: none;
+  }
+
+  .phone-frame--hero .hero-static {
+    display: block;
+  }
+
   html {
     scroll-behavior: auto;
   }
@@ -260,11 +273,19 @@ img {
   outline: 1px solid var(--phone-rim);
 }
 
-.phone-frame img {
+.phone-frame img,
+.phone-frame video {
+  display: block;
   border-radius: 20px;
   width: 100%;
   height: auto;
   background: var(--surface-high);
+}
+
+.phone-frame video {
+  object-fit: cover;
+  /* Mute autoplay; keep the clip looping as a silent product demo. */
+  pointer-events: none;
 }
 
 .phone-frame--hero {

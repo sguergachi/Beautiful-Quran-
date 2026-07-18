@@ -115,6 +115,37 @@ build_quran_db_if_missing() {
   (cd "$REPO_ROOT" && python3 tools/build_db.py)
 }
 
+# Point the emulator at the host Vulkan ICD so guest Vulkan does not fall
+# through to bundled Lavapipe (which has SIGSEGV'd RenderThread under load).
+ensure_host_vulkan_features() {
+  local features_ini="$HOME/.android/advancedFeatures.ini"
+  local icd=""
+  for candidate in \
+    /usr/share/vulkan/icd.d/nvidia_icd.json \
+    /usr/share/vulkan/icd.d/radeon_icd.x86_64.json \
+    /usr/share/vulkan/icd.d/intel_icd.x86_64.json \
+    /etc/vulkan/icd.d/nvidia_icd.json; do
+    if [[ -r "$candidate" ]]; then
+      icd="$candidate"
+      break
+    fi
+  done
+  [[ -n "$icd" ]] || return 0
+
+  mkdir -p "$HOME/.android"
+  if [[ -f "$features_ini" ]] && grep -qE '^[[:space:]]*Vulkan[[:space:]]*=[[:space:]]*off' "$features_ini"; then
+    log "Re-enabling host Vulkan in $features_ini (ICD: $icd)"
+    sed -i 's/^[[:space:]]*Vulkan[[:space:]]*=[[:space:]]*off/Vulkan = on/' "$features_ini"
+  elif [[ ! -f "$features_ini" ]] || ! grep -qE '^[[:space:]]*Vulkan[[:space:]]*=' "$features_ini"; then
+    log "Writing host Vulkan feature flags to $features_ini"
+    {
+      printf '# Host GPU Vulkan ICD — avoids emulator Lavapipe crashes\n'
+      printf 'Vulkan = on\n'
+      printf 'GLDirectMem = on\n'
+    } >> "$features_ini"
+  fi
+}
+
 # Host GPU + enough RAM for Compose. Without this, avdmanager often leaves
 # hw.gpu.enabled=no and the emulator is unusably laggy.
 tune_avd_performance() {
@@ -175,6 +206,7 @@ main() {
   write_local_properties
   build_quran_db_if_missing
   create_avd_if_missing
+  ensure_host_vulkan_features
 
   cat <<EOF
 
