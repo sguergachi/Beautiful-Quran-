@@ -60,16 +60,19 @@ data class ReaderUiState(
     val content: SurahContent? = null,
     /** Next surah in order, or null on chapter 114 / while loading. */
     val nextSurah: Surah? = null,
+    /** Previous surah in order, or null on chapter 1 / while loading. */
+    val previousSurah: Surah? = null,
     val reciters: List<Reciter> = emptyList(),
     val currentReciter: Reciter? = null,
     val hasTimings: Boolean = false,
     val isLoading: Boolean = true,
 )
 
-/** Off-screen chapter payload for continuous next-chapter advance. */
+/** Off-screen chapter payload for continuous chapter advance. */
 data class PreparedSurah(
     val content: SurahContent,
     val nextSurah: Surah?,
+    val previousSurah: Surah?,
     val reciters: List<Reciter>,
     val reciter: Reciter,
     val timings: Map<Int, List<Segment>>,
@@ -333,19 +336,22 @@ class ReaderViewModel(
     }
 
     /**
-     * Builds the next chapter off-screen for the continuous scroll advance —
-     * does not touch [uiState], so the outgoing page stays put until
-     * [installPrepared] commits at the mid-transition apex.
+     * Builds a chapter off-screen for continuous scroll advance — does not
+     * touch [uiState], so the outgoing page stays put until [installPrepared]
+     * commits at the mid-transition apex.
      */
     suspend fun materialize(surahId: Int): PreparedSurah? {
         val reciters = repository.reciters()
         val reciter = currentReciter(reciters)
         val loadedTimings = timingsWithBasmalahLeadIn(reciter.id, surahId)
         val content = repository.surahContent(surahId)
-        val nextSurah = repository.surahs().firstOrNull { it.id == surahId + 1 }
+        val surahs = repository.surahs()
+        val nextSurah = surahs.firstOrNull { it.id == surahId + 1 }
+        val previousSurah = surahs.firstOrNull { it.id == surahId - 1 }
         return PreparedSurah(
             content = content,
             nextSurah = nextSurah,
+            previousSurah = previousSurah,
             reciters = reciters,
             reciter = reciter,
             timings = loadedTimings,
@@ -361,6 +367,7 @@ class ReaderViewModel(
         _uiState.value = ReaderUiState(
             content = prepared.content,
             nextSurah = prepared.nextSurah,
+            previousSurah = prepared.previousSurah,
             reciters = prepared.reciters,
             currentReciter = prepared.reciter,
             hasTimings = prepared.timings.isNotEmpty(),

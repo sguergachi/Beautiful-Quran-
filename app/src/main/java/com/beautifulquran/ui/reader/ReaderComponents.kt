@@ -2001,9 +2001,12 @@ fun NextChapterFooter(
 }
 
 /**
- * Quiet green stadium control for advancing to the next chapter. Soft accent
- * wash at rest; [fillProgress] paints a left-to-right green fill so bottom
- * overscroll can read as a progress bar. Tap still opens immediately.
+ * Quiet green stadium control for chapter advance. Soft accent wash at rest;
+ * [fillProgress] paints a left-to-right green fill so overscroll can read as a
+ * progress bar. Tap still opens immediately.
+ *
+ * [actionLabel] is the visible verb ("Continue" / "Open"); [chevronDown] flips
+ * the chevron for previous-chapter pull.
  */
 @Composable
 fun NextChapterOpenPill(
@@ -2012,6 +2015,8 @@ fun NextChapterOpenPill(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     fillProgress: Float = 0f,
+    actionLabel: String = "Continue",
+    chevronDown: Boolean = true,
 ) {
     val colors = MaterialTheme.colorScheme
     val label = "Open $chapterName"
@@ -2059,12 +2064,11 @@ fun NextChapterOpenPill(
             },
     ) {
         Text(
-            text = "Continue",
+            text = actionLabel,
             style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 0.6.sp),
             color = contentColor,
         )
         Spacer(Modifier.width(8.dp))
-        // Downward chevron — continue reading further down the page.
         Canvas(Modifier.size(18.dp)) {
             val stroke = Stroke(
                 width = 2.2.dp.toPx(),
@@ -2074,12 +2078,64 @@ fun NextChapterOpenPill(
             val w = size.width
             val h = size.height
             val path = Path().apply {
-                moveTo(w * 0.22f, h * 0.38f)
-                lineTo(w * 0.50f, h * 0.62f)
-                lineTo(w * 0.78f, h * 0.38f)
+                if (chevronDown) {
+                    moveTo(w * 0.22f, h * 0.38f)
+                    lineTo(w * 0.50f, h * 0.62f)
+                    lineTo(w * 0.78f, h * 0.38f)
+                } else {
+                    moveTo(w * 0.22f, h * 0.62f)
+                    lineTo(w * 0.50f, h * 0.38f)
+                    lineTo(w * 0.78f, h * 0.62f)
+                }
             }
             drawPath(path, contentColor, style = stroke)
         }
+    }
+}
+
+/**
+ * Above-header invitation to the previous chapter. Lives as its own list item
+ * above [SurahHeader] so upward scroll is two-stage: the list rests on the
+ * header first; scrolling further up reveals this block. [pullProgress] fills
+ * the Open pill during overscroll past the absolute top (same as Continue).
+ */
+@Composable
+fun PreviousChapterPullChrome(
+    nameTransliteration: String,
+    pullProgress: Float,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val accents = LocalQuranAccents.current
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .padding(top = 12.dp, bottom = 28.dp),
+    ) {
+        Text(
+            text = "PREVIOUS",
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 3.sp),
+            fontSize = 10.sp,
+            color = accents.gold.copy(alpha = 0.55f),
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = nameTransliteration,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+        )
+        Spacer(Modifier.height(18.dp))
+        NextChapterOpenPill(
+            chapterName = nameTransliteration,
+            onClick = onOpen,
+            enabled = enabled,
+            fillProgress = pullProgress.coerceIn(0f, 1f),
+            actionLabel = "Open",
+            chevronDown = false,
+        )
     }
 }
 
