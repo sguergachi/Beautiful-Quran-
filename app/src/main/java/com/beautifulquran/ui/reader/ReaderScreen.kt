@@ -200,10 +200,9 @@ fun ReaderScreen(
 
     val listState = rememberLazyListState()
     // Gilding sheen: light catches the header rosette as the page moves.
-    // At chapter end (scrolled) sheen is bright (~0.85); at the top of a
-    // chapter it rests dim (~0.15). Next-chapter advance pins the bright
-    // value so the medallion doesn't snap dark when scroll lands at 0, then
-    // eases to rest after the handoff.
+    // At chapter end (scrolled) sheen is bright (~0.85); cold open at the top
+    // rests dimmer (~0.15). Next-chapter advance pins the bright value for the
+    // whole fly and **keeps** it after landing so the medallion stays lit.
     fun scrollSheenValue(): Float =
         if (listState.firstVisibleItemIndex == 0) {
             0.15f + 0.7f * (listState.firstVisibleItemScrollOffset / 900f).coerceIn(0f, 1f)
@@ -247,6 +246,14 @@ fun ReaderScreen(
     val verseReveal = remember { Animatable(1f) }
     /** Surah the delayed verse rise belongs to; 0 = none. */
     var verseRevealForSurah by remember { mutableIntStateOf(0) }
+    // Normal navigation (not continuous handoff): restore scroll-linked sheen.
+    // Advance pins bright gold and leaves sheenFollowScroll false on purpose.
+    LaunchedEffect(surahId) {
+        if (!chapterAdvancing && verseRevealForSurah == 0) {
+            sheenFollowScroll = true
+            sheenAnim.snapTo(scrollSheenValue())
+        }
+    }
     val chapterAdvanceEasing = remember { CubicBezierEasing(0.22f, 1f, 0.36f, 1f) }
     // Bottom overscroll fills the Continue pill (0..1). Release at full opens.
     var nextChapterPull by remember { mutableFloatStateOf(0f) }
@@ -1037,18 +1044,9 @@ fun ReaderScreen(
                 // Top-nav pin has finished fading (or was never set).
                 pinnedTopNavTitle = null
 
-                // Softly settle gold to the at-rest header sheen (scroll top),
-                // in parallel with the verse rise — still locked off scroll-follow.
-                launch {
-                    sheenAnim.animateTo(
-                        targetValue = 0.15f,
-                        animationSpec = tween(
-                            durationMillis = 480,
-                            easing = chapterAdvanceEasing,
-                        ),
-                    )
-                    sheenFollowScroll = true
-                }
+                // Keep the bright sheen after landing (do not ease to the dim
+                // at-rest header value). sheenFollowScroll stays false so the
+                // medallion remains bright on the new chapter top.
 
                 // Verses fade and rise in as soon as the header has landed.
                 if (verseRevealForSurah != nextId) return@launch
