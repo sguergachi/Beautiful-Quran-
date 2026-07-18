@@ -592,14 +592,28 @@ class ReaderViewModel(
         player.setRepeatMode(mode)
     }
 
-    /** Loops ayahs [from]..[to]; starts the surah if it isn't playing yet. */
+    /**
+     * Loops ayahs [from]..[to]. If already playing inside that range, keep the
+     * current position (do not seek back to the first ayah). Otherwise start
+     * the surah from [from].
+     */
     fun setRepeatRange(from: Int, to: Int) {
         val content = _uiState.value.content ?: return
         val start = from.coerceIn(1, content.surah.ayahCount)
         val end = to.coerceIn(start, content.surah.ayahCount)
-        if (!startSurah(start, preserveRepeatRange = false)) return
+        val reciter = _uiState.value.currentReciter
+        val np = playerState.value.nowPlaying
+        val playingInRange = playerState.value.isPlaying &&
+            reciter != null &&
+            np != null &&
+            np.surahId == surahId &&
+            np.reciterId == reciter.id &&
+            np.ayah in start..end
+        if (!playingInRange) {
+            if (!startSurah(start, preserveRepeatRange = false)) return
+            rememberListened(start)
+        }
         player.setRepeatRange(start, end, repeatEndPositionFor(end))
-        rememberListened(start)
     }
 
     private fun repeatEndPositionFor(ayah: Int): Long? =
