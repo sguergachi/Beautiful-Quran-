@@ -1265,14 +1265,14 @@ fun ReaderScreen(
                     // at the header top. A fling from mid-chapter stops on the
                     // header and must not turn residual velocity into a pull.
                     // Longer threshold than next so a small tug does not fill.
+                    // (beganAtTop is set on pointer-down; no UserInput-only gate —
+                    // some devices never report that source for nested overscroll.)
                     if (
                         previousSurahLatest.value != null &&
                         nextChapterPull <= 0f &&
                         beganAtTopLatest.value &&
                         !listState.canScrollBackward &&
-                        available.y > 0f &&
-                        // UserInput = finger drag; SideEffect includes fling carry.
-                        source == NestedScrollSource.UserInput
+                        available.y > 0f
                     ) {
                         val add = available.y / previousPullFillThresholdPx
                         val next = (previousChapterPull + add).coerceIn(0f, 1f)
@@ -1411,10 +1411,10 @@ fun ReaderScreen(
             // Enough travel to clear a full phone page of verse ink (next-fly).
             val nextExitScrollPx = with(density) { 420.dp.toPx() }
             val paper = MaterialTheme.colorScheme.background
-            // Content below the top app bar. The previous chrome was drawn at
-            // y=0 of the scaffold body (under the TopAppBar) and stayed fully
-            // obscured — both the reveal band and the list viewport start
-            // under the bar now.
+            // Below the top app bar. Previous chrome is a real layout slot that
+            // grows with pull (Column height) — not a graphicsLayer sibling that
+            // can be covered by the full-size LazyColumn layer. (Drawing at y=0
+            // of the scaffold body put the chrome under the TopAppBar.)
             val topInset = padding.calculateTopPadding()
             val previous = uiState.previousSurah
             val revealPx = when {
@@ -1425,38 +1425,37 @@ fun ReaderScreen(
                 previousPullRubberPx > 0.5f -> previousPullRubberPx
                 else -> 0f
             }
-            // Pull viewport: everything below the top bar, clipped so the
-            // sliding list can't paint over chrome outside this rect.
-            Box(
+            val revealDp = with(density) { revealPx.toDp() }
+            val pullT = previousChapterPull.coerceIn(0f, 1f)
+            Column(
                 Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxSize()
                     .padding(top = topInset)
                     .clipToBounds(),
             ) {
-                if (previous != null && revealPx > 1f) {
-                    val pullT = previousChapterPull.coerceIn(0f, 1f)
+                // Layout-owned reveal: height grows with pull, list is weight(1)
+                // below it. Chrome cannot be obscured by a translated list layer.
+                if (previous != null) {
                     Box(
                         Modifier
-                            .align(Alignment.TopCenter)
-                            .widthIn(max = 680.dp)
                             .fillMaxWidth()
-                            .height(with(density) { revealPx.toDp() })
+                            .height(revealDp)
                             .clipToBounds()
-                            .background(paper)
-                            .zIndex(0f),
+                            .background(paper),
                     ) {
-                        // Top-align so PREVIOUS + pill enter as soon as the
-                        // band opens (bottom-align kept them clipped away).
-                        PreviousChapterPullChrome(
-                            nameTransliteration = previous.nameTransliteration,
-                            pullProgress = if (previousPageExitNow > 0f) 1f else pullT,
-                            onOpen = { advanceToPreviousChapter(previous.id) },
-                            enabled = !chapterAdvancing && pullT > 0.35f,
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .fillMaxWidth(),
-                        )
+                        if (revealPx > 1f) {
+                            PreviousChapterPullChrome(
+                                nameTransliteration = previous.nameTransliteration,
+                                pullProgress = if (previousPageExitNow > 0f) 1f else pullT,
+                                onOpen = { advanceToPreviousChapter(previous.id) },
+                                enabled = !chapterAdvancing && pullT > 0.35f,
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .widthIn(max = 680.dp)
+                                    .fillMaxWidth(),
+                            )
+                        }
                     }
                 }
                 LazyColumn(
@@ -1467,14 +1466,10 @@ fun ReaderScreen(
                         bottom = listBottomPad,
                     ),
                     modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxHeight()
+                        .weight(1f)
                         .widthIn(max = 680.dp)
                         .fillMaxWidth()
-                        // Opaque sheet so the previous band never ghosts through
-                        // transparent header weave while the list is sliding.
                         .background(paper)
-                        .zIndex(1f)
                         .graphicsLayer {
                             val fly = flying
                             when {
@@ -1489,11 +1484,10 @@ fun ReaderScreen(
                                     translationY = -lift
                                 }
                                 previousPageExitNow > 0f -> {
-                                    // Outgoing page continues down from rubber pose.
+                                    // Slot already grew via revealPx; only fade out.
                                     val e = previousPageExitNow.coerceIn(0f, 1f)
                                     val u = e * e * (3f - 2f * e)
                                     alpha = 1f - u
-                                    translationY = revealPx
                                 }
                                 previousPageEnterNow < 0.999f -> {
                                     // Previous header eases downward into place with a
@@ -1506,9 +1500,7 @@ fun ReaderScreen(
                                 nextPullRubberPx > 0.5f -> {
                                     translationY = -nextPullRubberPx
                                 }
-                                previousPullRubberPx > 0.5f -> {
-                                    translationY = previousPullRubberPx
-                                }
+                                // previous pull: no translationY — Column slot owns it
                             }
                         }
                         .nestedScroll(chapterPullConnection)
@@ -1738,7 +1730,7 @@ fun ReaderScreen(
                     }
                 }
                 } // LazyColumn
-            } // pull viewport (below top bar)
+            } // Column pull viewport (below top bar)
             // Flying next-chapter opening: continuous slide from footer → header.
             if (flying != null) {
                 val yInBox = flying.startYInRoot +
