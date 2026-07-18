@@ -2116,9 +2116,10 @@ fun NextChapterOpenPill(
 }
 
 /**
- * Top-of-chapter previous invitation. Revealed only by intentional overscroll
- * when the gesture already began docked on the header (never by a mid-chapter
- * fling that hits the top). [pullProgress] fills the Open pill.
+ * Top-of-chapter previous invitation. Sits behind the list; overscroll shoves
+ * the header down so this chrome is revealed above it (never drawn on top of
+ * the header). Only from a gesture that began docked at the top.
+ * [pullProgress] fills the Open pill.
  */
 @Composable
 fun PreviousChapterPullChrome(

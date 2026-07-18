@@ -929,6 +929,9 @@ fun ReaderScreen(
         }
         // Shared with settle / list rubber-band (defined before advance uses it).
         val pullRubberMaxPx = with(density) { 56.dp.toPx() }
+        // Previous pull must shove the header down far enough to fully expose
+        // the invitation chrome above it (taller travel than next-chapter rubber).
+        val previousPullRubberMaxPx = with(density) { 168.dp.toPx() }
         val previousExitScrollPx = with(density) { 360.dp.toPx() }
         // Header travel into place — enough to read as a settle, not a leap.
         val previousEnterScrollPx = with(density) { 120.dp.toPx() }
@@ -939,7 +942,7 @@ fun ReaderScreen(
             scope.launch {
                 val pullAtRelease = previousChapterPull.coerceIn(0f, 1f)
                 val rubberAtRelease =
-                    pullRubberMaxPx * sin(pullAtRelease * PI.toFloat() * 0.5f)
+                    previousPullRubberMaxPx * sin(pullAtRelease * PI.toFloat() * 0.5f)
 
                 chapterAdvancing = true
                 previousChapterPullArmed = false
@@ -1177,6 +1180,8 @@ fun ReaderScreen(
         // from the finger's pose (never snaps back first). Retract / release
         // below threshold animates the bar empty (unfills).
         val pullFillThresholdPx = with(density) { 104.dp.toPx() }
+        // Previous needs a longer pull than next — small nubs should not fill.
+        val previousPullFillThresholdPx = with(density) { 220.dp.toPx() }
         val nextSurahLatest = rememberUpdatedState(uiState.nextSurah)
         val previousSurahLatest = rememberUpdatedState(uiState.previousSurah)
         val advancingLatest = rememberUpdatedState(chapterAdvancing)
@@ -1219,7 +1224,11 @@ fun ReaderScreen(
             }
         }
         val settlePullLatest = rememberUpdatedState(settleChapterPull)
-        val chapterPullConnection = remember(listState, pullFillThresholdPx) {
+        val chapterPullConnection = remember(
+            listState,
+            pullFillThresholdPx,
+            previousPullFillThresholdPx,
+        ) {
             object : NestedScrollConnection {
                 override fun onPostScroll(
                     consumed: Offset,
@@ -1255,6 +1264,7 @@ fun ReaderScreen(
                     // Top: previous chapter — only if this gesture *began* already
                     // at the header top. A fling from mid-chapter stops on the
                     // header and must not turn residual velocity into a pull.
+                    // Longer threshold than next so a small tug does not fill.
                     if (
                         previousSurahLatest.value != null &&
                         nextChapterPull <= 0f &&
@@ -1264,7 +1274,7 @@ fun ReaderScreen(
                         // UserInput = finger drag; SideEffect includes fling carry.
                         source == NestedScrollSource.UserInput
                     ) {
-                        val add = available.y / pullFillThresholdPx
+                        val add = available.y / previousPullFillThresholdPx
                         val next = (previousChapterPull + add).coerceIn(0f, 1f)
                         if (next >= 1f && !previousChapterPullArmed) {
                             previousChapterPullArmed = true
@@ -1274,12 +1284,12 @@ fun ReaderScreen(
                         return Offset(0f, available.y)
                     }
                     if (previousChapterPull > 0f && available.y < 0f) {
-                        val sub = -available.y / pullFillThresholdPx
+                        val sub = -available.y / previousPullFillThresholdPx
                         val prev = previousChapterPull
                         previousChapterPull = (prev - sub).coerceIn(0f, 1f)
                         if (previousChapterPull < 0.85f) previousChapterPullArmed = false
                         val consumedY =
-                            -(prev - previousChapterPull) * pullFillThresholdPx
+                            -(prev - previousChapterPull) * previousPullFillThresholdPx
                         return Offset(0f, consumedY)
                     }
                     // Soft guard: absorb leftover fling overscroll at the top so
@@ -1391,32 +1401,41 @@ fun ReaderScreen(
             }
             val previousPullRubberPx = run {
                 val t = previousChapterPull.coerceIn(0f, 1f)
+                // Ease-out rubber that tracks fill progress and fully exposes
+                // the previous chrome by the time the pill is near full.
                 val eased = sin(t * PI.toFloat() * 0.5f)
-                pullRubberMaxPx * eased
+                previousPullRubberMaxPx * eased
             }
             val previousPageExitNow = previousPageExit.value
             val previousPageEnterNow = previousPageEnter.value
             // Enough travel to clear a full phone page of verse ink (next-fly).
             val nextExitScrollPx = with(density) { 420.dp.toPx() }
-            // Previous invitation is overscroll-only (not a list item) so a fling
-            // from mid-chapter stops on the header without overshooting into it.
+            // Previous invitation sits *behind* the list. Pulling shoves the
+            // header down and reveals the chrome in the gap above — never a
+            // floating overlay on top of the header.
             val previous = uiState.previousSurah
-            if (
-                previous != null &&
-                (previousChapterPull > 0.01f || previousPageExitNow > 0f)
-            ) {
-                PreviousChapterPullChrome(
-                    nameTransliteration = previous.nameTransliteration,
-                    pullProgress = if (previousPageExitNow > 0f) 1f else previousChapterPull,
-                    onOpen = { advanceToPreviousChapter(previous.id) },
-                    enabled = !chapterAdvancing,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .widthIn(max = 680.dp)
-                        .fillMaxWidth()
-                        .padding(top = padding.calculateTopPadding() + 8.dp)
-                        .zIndex(1f),
-                )
+            if (previous != null) {
+                val pullT = previousChapterPull.coerceIn(0f, 1f)
+                val chromeAlpha = when {
+                    previousPageExitNow > 0f -> 1f
+                    pullT <= 0f -> 0f
+                    else -> ((pullT - 0.04f) / 0.20f).coerceIn(0f, 1f)
+                }
+                if (chromeAlpha > 0.01f) {
+                    PreviousChapterPullChrome(
+                        nameTransliteration = previous.nameTransliteration,
+                        pullProgress = if (previousPageExitNow > 0f) 1f else pullT,
+                        onOpen = { advanceToPreviousChapter(previous.id) },
+                        enabled = !chapterAdvancing && pullT > 0.2f,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .widthIn(max = 680.dp)
+                            .fillMaxWidth()
+                            .padding(top = padding.calculateTopPadding() + listFadeTop)
+                            .zIndex(0f)
+                            .graphicsLayer { alpha = chromeAlpha },
+                    )
+                }
             }
             LazyColumn(
                 state = listState,
@@ -1430,6 +1449,7 @@ fun ReaderScreen(
                     .fillMaxHeight()
                     .widthIn(max = 680.dp)
                     .fillMaxWidth()
+                    .zIndex(1f)
                     .graphicsLayer {
                         val fly = flying
                         when {
