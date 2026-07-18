@@ -151,14 +151,6 @@ private sealed interface LazyItem {
     data object NextChapter : LazyItem {
         override val key = "next_chapter"
     }
-    /**
-     * Above-header invitation to the previous surah (absent on 1).
-     * The list rests on [Header]; scrolling further up reveals this item
-     * (two-stage: header first, then previous affordance).
-     */
-    data object PreviousChapter : LazyItem {
-        override val key = "previous_chapter"
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -213,19 +205,13 @@ fun ReaderScreen(
     // At chapter end (scrolled) sheen is bright (~0.85); cold open at the top
     // rests dimmer (~0.15). Next-chapter advance pins the bright value for the
     // whole fly and **keeps** it after landing so the medallion stays lit.
-    // Header list index is 1 when a previous-chapter item sits above it.
-    fun headerListIndex(): Int =
-        if (uiState.previousSurah != null) 1 else 0
-    fun scrollSheenValue(): Float {
-        val headerIdx = headerListIndex()
-        val idx = listState.firstVisibleItemIndex
-        return when {
-            idx == headerIdx ->
-                0.15f + 0.7f *
-                    (listState.firstVisibleItemScrollOffset / 900f).coerceIn(0f, 1f)
-            else -> 0.85f
+    fun scrollSheenValue(): Float =
+        if (listState.firstVisibleItemIndex == 0) {
+            0.15f + 0.7f *
+                (listState.firstVisibleItemScrollOffset / 900f).coerceIn(0f, 1f)
+        } else {
+            0.85f
         }
-    }
     val sheenAnim = remember { Animatable(0.15f) }
     var sheenFollowScroll by remember { mutableStateOf(true) }
     LaunchedEffect(
@@ -282,11 +268,11 @@ fun ReaderScreen(
     var previousChapterPull by remember { mutableFloatStateOf(0f) }
     var previousChapterPullArmed by remember { mutableStateOf(false) }
     /**
-     * After a fling/scroll lands on the chapter header, previous is locked until
-     * the finger lifts — next upward gesture may enter the previous section.
-     * Resets when the reader scrolls back into ayahs.
+     * True only when the current pointer gesture *began* already docked at the
+     * chapter top. Inertia flings from mid-chapter must stop on the header and
+     * must not convert leftover velocity into a previous-chapter pull.
      */
-    var previousSectionUnlocked by remember { mutableStateOf(false) }
+    var gestureBeganAtChapterTop by remember { mutableStateOf(false) }
     /** 0 = idle/settled; 1 = current page fully exited downward (prev advance). */
     val previousPageExit = remember { Animatable(0f) }
     /** Rubber-band lift captured at previous-advance release. */
@@ -365,14 +351,12 @@ fun ReaderScreen(
         }
     }
 
-    val readerItems = remember(uiState.content, uiState.nextSurah, uiState.previousSurah) {
+    val readerItems = remember(uiState.content, uiState.nextSurah) {
         val c = uiState.content
         if (c == null) emptyList() else buildList {
-            // Previous sits above the header; the list rests on Header so a
-            // second upward scroll is needed to reveal this invitation.
-            if (uiState.previousSurah != null) {
-                add(LazyItem.PreviousChapter)
-            }
+            // Header is the true list top so a fling from mid-chapter lands on
+            // it cleanly. Previous-chapter pull is overscroll-only, and only
+            // from a gesture that *began* already at this top.
             add(LazyItem.Header)
             // Own list item so the focus engine can home / place / return onto
             // the calligraphy the same way it does for any verse — not buried
@@ -394,18 +378,6 @@ fun ReaderScreen(
             }
         }
     }
-    val chapterHeaderListIndex = remember(readerItems) {
-        readerItems.indexOfFirst { it is LazyItem.Header }.coerceAtLeast(0)
-    }
-    // Park on the chapter header (not the previous-chapter invitation above it)
-    // so upward scroll is two-stage: header first, then previous affordance.
-    LaunchedEffect(uiState.content?.surah?.id, chapterHeaderListIndex) {
-        if (chapterAdvancing || verseRevealForSurah != 0) return@LaunchedEffect
-        if (startAyah != null && startAyah > 1) return@LaunchedEffect
-        if (chapterHeaderListIndex > 0) {
-            listState.scrollToItem(chapterHeaderListIndex)
-        }
-    }
 
     // Maps between focus targets and their slot in the lazy item list, so the
     // focus engine can resolve either direction cheaply. Ayah numbers are
@@ -417,8 +389,7 @@ fun ReaderScreen(
                 when (item) {
                     LazyItem.Basmalah -> put(BASMALAH_PLAYLIST_AYAH, index)
                     is LazyItem.AyahItem -> put(item.ayahIndex + 1, index)
-                    LazyItem.Header, is LazyItem.PageDivider,
-                    LazyItem.NextChapter, LazyItem.PreviousChapter -> Unit
+                    LazyItem.Header, is LazyItem.PageDivider, LazyItem.NextChapter -> Unit
                 }
             }
         }
@@ -732,10 +703,8 @@ fun ReaderScreen(
                                 .focusRequester(searchFocus),
                         )
                     } else {
-                        val scrolledPastHeader by remember(chapterHeaderListIndex) {
-                            derivedStateOf {
-                                listState.firstVisibleItemIndex > chapterHeaderListIndex
-                            }
+                        val scrolledPastHeader by remember {
+                            derivedStateOf { listState.firstVisibleItemIndex > 0 }
                         }
                         val live = uiState.content?.surah
                         val pinned = pinnedTopNavTitle
@@ -1004,9 +973,7 @@ fun ReaderScreen(
                 verseRevealForSurah = prevId
                 verseReveal.snapTo(0f)
                 viewModel.installPrepared(prepared)
-                // Rest on the header (skip previous-of-previous invitation).
-                val headerIdx = if (prepared.previousSurah != null) 1 else 0
-                listState.scrollToItem(headerIdx)
+                listState.scrollToItem(0)
                 withFrameNanos { }
                 withFrameNanos { }
 
@@ -1150,9 +1117,7 @@ fun ReaderScreen(
                 // Flyer still at full chrome; complementary real chrome starts at 0.
                 flyerAlpha.snapTo(1f)
                 viewModel.installPrepared(prepared)
-                // Rest on the header — not the previous-chapter invitation above it.
-                val headerIdx = if (prepared.previousSurah != null) 1 else 0
-                listState.scrollToItem(headerIdx)
+                listState.scrollToItem(0)
                 // Two frames so the new LazyColumn lays out at scroll 0 under
                 // the still-visible flyer before the chrome crossfade.
                 withFrameNanos { }
@@ -1215,8 +1180,7 @@ fun ReaderScreen(
         val nextSurahLatest = rememberUpdatedState(uiState.nextSurah)
         val previousSurahLatest = rememberUpdatedState(uiState.previousSurah)
         val advancingLatest = rememberUpdatedState(chapterAdvancing)
-        val headerIdxLatest = rememberUpdatedState(chapterHeaderListIndex)
-        val previousUnlockedLatest = rememberUpdatedState(previousSectionUnlocked)
+        val beganAtTopLatest = rememberUpdatedState(gestureBeganAtChapterTop)
         var pullSettling by remember { mutableStateOf(false) }
         fun animatePullUnfill(isNext: Boolean, from: Float) {
             pullSettling = true
@@ -1255,54 +1219,8 @@ fun ReaderScreen(
             }
         }
         val settlePullLatest = rememberUpdatedState(settleChapterPull)
-        // Re-lock previous once the reader is back among the verses.
-        LaunchedEffect(listState.firstVisibleItemIndex, chapterHeaderListIndex) {
-            if (listState.firstVisibleItemIndex > chapterHeaderListIndex) {
-                previousSectionUnlocked = false
-            }
-        }
         val chapterPullConnection = remember(listState, pullFillThresholdPx) {
             object : NestedScrollConnection {
-                override fun onPreScroll(
-                    available: Offset,
-                    source: NestedScrollSource,
-                ): Offset {
-                    if (advancingLatest.value) return Offset.Zero
-                    if (previousSurahLatest.value == null) return Offset.Zero
-                    // Two-stage top: first scroll/fling stops on the header;
-                    // only after the finger lifts there may the next gesture
-                    // continue into the previous-chapter item above it.
-                    val h = headerIdxLatest.value
-                    val atHeaderTop = listState.firstVisibleItemIndex == h &&
-                        listState.firstVisibleItemScrollOffset == 0
-                    if (
-                        atHeaderTop &&
-                        available.y > 0f &&
-                        !previousUnlockedLatest.value
-                    ) {
-                        return Offset(0f, available.y)
-                    }
-                    return Offset.Zero
-                }
-
-                override suspend fun onPreFling(available: Velocity): Velocity {
-                    if (advancingLatest.value) return Velocity.Zero
-                    if (previousSurahLatest.value == null) return Velocity.Zero
-                    val h = headerIdxLatest.value
-                    val atHeaderTop = listState.firstVisibleItemIndex == h &&
-                        listState.firstVisibleItemScrollOffset == 0
-                    // Kill leftover fling that would carry past the header into
-                    // the previous section on the same gesture.
-                    if (
-                        atHeaderTop &&
-                        !previousUnlockedLatest.value &&
-                        available.y > 0f
-                    ) {
-                        return available
-                    }
-                    return Velocity.Zero
-                }
-
                 override fun onPostScroll(
                     consumed: Offset,
                     available: Offset,
@@ -1334,13 +1252,17 @@ fun ReaderScreen(
                         val consumedY = (prev - nextChapterPull) * pullFillThresholdPx
                         return Offset(0f, consumedY)
                     }
-                    // Top: previous chapter (only after unlocked past the header).
+                    // Top: previous chapter — only if this gesture *began* already
+                    // at the header top. A fling from mid-chapter stops on the
+                    // header and must not turn residual velocity into a pull.
                     if (
                         previousSurahLatest.value != null &&
                         nextChapterPull <= 0f &&
-                        previousUnlockedLatest.value &&
+                        beganAtTopLatest.value &&
                         !listState.canScrollBackward &&
-                        available.y > 0f
+                        available.y > 0f &&
+                        // UserInput = finger drag; SideEffect includes fling carry.
+                        source == NestedScrollSource.UserInput
                     ) {
                         val add = available.y / pullFillThresholdPx
                         val next = (previousChapterPull + add).coerceIn(0f, 1f)
@@ -1360,6 +1282,17 @@ fun ReaderScreen(
                             -(prev - previousChapterPull) * pullFillThresholdPx
                         return Offset(0f, consumedY)
                     }
+                    // Soft guard: absorb leftover fling overscroll at the top so
+                    // it never jiggles into a previous pull when the gesture
+                    // didn't start docked on the header.
+                    if (
+                        previousSurahLatest.value != null &&
+                        !beganAtTopLatest.value &&
+                        !listState.canScrollBackward &&
+                        available.y > 0f
+                    ) {
+                        return Offset(0f, available.y)
+                    }
                     return Offset.Zero
                 }
 
@@ -1367,6 +1300,20 @@ fun ReaderScreen(
                     consumed: Velocity,
                     available: Velocity,
                 ): Velocity {
+                    // Kill residual fling at the top when the gesture didn't
+                    // begin there — soft stop on the header.
+                    if (
+                        !beganAtTopLatest.value &&
+                        !listState.canScrollBackward &&
+                        available.y > 0f
+                    ) {
+                        if (previousChapterPull > 0f) {
+                            // Shouldn't happen, but never commit from fling junk.
+                            previousChapterPull = 0f
+                            previousChapterPullArmed = false
+                        }
+                        return available
+                    }
                     if (nextChapterPull > 0f || previousChapterPull > 0f) {
                         settlePullLatest.value()
                     }
@@ -1379,7 +1326,7 @@ fun ReaderScreen(
             nextChapterPullArmed = false
             previousChapterPull = 0f
             previousChapterPullArmed = false
-            previousSectionUnlocked = false
+            gestureBeganAtChapterTop = false
             previousPageExit.snapTo(0f)
             previousPageEnter.snapTo(1f)
         }
@@ -1451,6 +1398,26 @@ fun ReaderScreen(
             val previousPageEnterNow = previousPageEnter.value
             // Enough travel to clear a full phone page of verse ink (next-fly).
             val nextExitScrollPx = with(density) { 420.dp.toPx() }
+            // Previous invitation is overscroll-only (not a list item) so a fling
+            // from mid-chapter stops on the header without overshooting into it.
+            val previous = uiState.previousSurah
+            if (
+                previous != null &&
+                (previousChapterPull > 0.01f || previousPageExitNow > 0f)
+            ) {
+                PreviousChapterPullChrome(
+                    nameTransliteration = previous.nameTransliteration,
+                    pullProgress = if (previousPageExitNow > 0f) 1f else previousChapterPull,
+                    onOpen = { advanceToPreviousChapter(previous.id) },
+                    enabled = !chapterAdvancing,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .widthIn(max = 680.dp)
+                        .fillMaxWidth()
+                        .padding(top = padding.calculateTopPadding() + 8.dp)
+                        .zIndex(1f),
+                )
+            }
             LazyColumn(
                 state = listState,
                 userScrollEnabled = !chapterAdvancing,
@@ -1507,6 +1474,9 @@ fun ReaderScreen(
                         val touchSlop = viewConfiguration.touchSlop
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
+                            // Capture dock state for this gesture only. Mid-chapter
+                            // flings that later hit the top must not become a pull.
+                            gestureBeganAtChapterTop = !listState.canScrollBackward
                             var dragStarted = false
                             try {
                                 do {
@@ -1530,19 +1500,11 @@ fun ReaderScreen(
                                     }
                                 } while (event.changes.any { it.pressed })
                             } finally {
-                                // First gesture ends on the header → unlock previous
-                                // so the *next* upward scroll can reveal it.
-                                val h = chapterHeaderListIndex
-                                if (
-                                    listState.firstVisibleItemIndex == h &&
-                                    listState.firstVisibleItemScrollOffset == 0
-                                ) {
-                                    previousSectionUnlocked = true
-                                }
                                 // Release after top/bottom pull: full → open, else unfill.
                                 if (nextChapterPull > 0f || previousChapterPull > 0f) {
                                     settlePullLatest.value()
                                 }
+                                gestureBeganAtChapterTop = false
                             }
                         }
                     }
@@ -1558,17 +1520,6 @@ fun ReaderScreen(
                     key = { readerItems[it].key },
                 ) { index ->
                     when (val item = readerItems[index]) {
-                        LazyItem.PreviousChapter -> {
-                            val prev = uiState.previousSurah
-                            if (prev != null) {
-                                PreviousChapterPullChrome(
-                                    nameTransliteration = prev.nameTransliteration,
-                                    pullProgress = previousChapterPull,
-                                    onOpen = { advanceToPreviousChapter(prev.id) },
-                                    enabled = !chapterAdvancing,
-                                )
-                            }
-                        }
                         LazyItem.Header -> {
                             // Weave + medallion stay full-strength on this header
                             // during handoff; only titles complementary-crossfade.

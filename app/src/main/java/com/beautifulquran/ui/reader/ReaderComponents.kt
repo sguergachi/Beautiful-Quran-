@@ -2112,10 +2112,9 @@ fun NextChapterOpenPill(
 }
 
 /**
- * Above-header invitation to the previous chapter. Lives as its own list item
- * above [SurahHeader] so upward scroll is two-stage: the list rests on the
- * header first; scrolling further up reveals this block. [pullProgress] fills
- * the Open pill during overscroll past the absolute top (same as Continue).
+ * Top-of-chapter previous invitation. Revealed only by intentional overscroll
+ * when the gesture already began docked on the header (never by a mid-chapter
+ * fling that hits the top). [pullProgress] fills the Open pill.
  */
 @Composable
 fun PreviousChapterPullChrome(
