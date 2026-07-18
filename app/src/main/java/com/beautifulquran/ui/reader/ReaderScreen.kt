@@ -1413,7 +1413,8 @@ fun ReaderScreen(
             val paper = MaterialTheme.colorScheme.background
             // Below the top app bar. Previous chrome is a real layout slot that
             // grows with pull (Column height) — not a graphicsLayer sibling that
-            // can be covered by the full-size LazyColumn layer.
+            // can be covered by the full-size LazyColumn layer. (Drawing at y=0
+            // of the scaffold body put the chrome under the TopAppBar.)
             val topInset = padding.calculateTopPadding()
             val previous = uiState.previousSurah
             val revealPx = when {
@@ -1547,6 +1548,7 @@ fun ReaderScreen(
                             color = paper,
                             top = listFadeTop,
                             bottom = listFadeBottom,
+                            // List is already below the top bar — no status-bar inset.
                             topInset = 0.dp,
                         ),
                 ) {
