@@ -1,5 +1,7 @@
 package com.beautifulquran.domain
 
+import kotlin.math.pow
+
 /**
  * Letter-level pacing of the active word's ink sweep, derived from tajweed
  * rules (docs/TAJWEED_PACING.md).
@@ -22,9 +24,10 @@ object TajweedPacing {
     /**
      * Monotone piecewise-linear map from normalized sweep time (0..1 of the
      * karaoke hold) to wash position (0..1 across the word). Silent letters
-     * contribute width but no time, so the edge steps across them with their
-     * neighbour; the plateau after the spoken span keeps the ink settled
-     * while the reciter breathes before the next word.
+     * contribute width but no time of their own — their slice is folded into
+     * the neighbouring pronounced letter's glide so the edge crosses them in
+     * motion rather than teleporting; the plateau after the spoken span keeps
+     * the ink settled while the reciter breathes before the next word.
      */
     class Curve internal constructor(
         private val times: FloatArray,
@@ -35,8 +38,8 @@ object TajweedPacing {
         fun at(t: Float): Float {
             if (t >= 1f) return 1f
             val c = t.coerceAtLeast(0f)
-            // Last breakpoint at or before c (duplicate times collapse to the
-            // furthest position — that is the step across a silent letter).
+            // Last breakpoint at or before c (a duplicate time collapses to
+            // the furthest position — the settle point when spoken == 1).
             var i = times.size - 1
             while (i > 0 && times[i] > c) i--
             if (i >= times.size - 1) return 1f
@@ -55,30 +58,51 @@ object TajweedPacing {
      * 1 for the remainder, so the ink settles as the voice stops rather than
      * smearing letters across the breath gap.
      *
+     * [contrast] softens the tajweed ratios without changing the word's total
+     * time: each letter's counts are raised to this power before normalizing,
+     * so 1 keeps the raw ratios (a madd lazim moves twelve times slower than
+     * a sākin — dramatic but abrupt), 0 flattens to a uniform sweep, and the
+     * values between trade dwell drama for glide. Because the redistribution
+     * happens inside the word, the edge always finishes exactly with the
+     * measured dwell — softening can never fall behind the reciter.
+     *
      * Returns null when the word is too short to pace (fewer than three
      * pronounced letters) or nothing tokenizes — callers fall back to the
      * plain constant-rate sweep.
      */
-    fun curve(arabic: String, spokenFraction: Float = 1f): Curve? {
+    fun curve(arabic: String, spokenFraction: Float = 1f, contrast: Float = 1f): Curve? {
         val events = tokenize(arabic)
         if (events.isEmpty()) return null
-        val weights = FloatArray(events.size) { weight(events, it) }
+        val exponent = contrast.coerceIn(0f, 1f)
+        val weights = FloatArray(events.size) {
+            val w = weight(events, it)
+            if (w > 0f) w.pow(exponent) else 0f
+        }
         val letters = weights.count { it > 0f }
         if (letters < MIN_LETTERS) return null
         val total = weights.sum()
         val spoken = spokenFraction.coerceIn(MIN_SPOKEN_FRACTION, 1f)
         val n = events.size
-        val times = FloatArray(n + 2)
-        val positions = FloatArray(n + 2)
+        // One breakpoint per pronounced letter. Silent letters get no
+        // breakpoint of their own, so their width slice is swept during the
+        // adjacent letter's glide (leading silents ride the letter after
+        // them, trailing silents the letter before) — continuous motion
+        // instead of an instantaneous step.
+        val lastPronounced = weights.indexOfLast { it > 0f }
+        val times = FloatArray(letters + 2)
+        val positions = FloatArray(letters + 2)
         var cum = 0f
+        var k = 0
         for (i in 0 until n) {
+            if (weights[i] <= 0f) continue
             cum += weights[i]
-            times[i + 1] = (cum / total) * spoken
-            positions[i + 1] = (i + 1f) / n
+            k++
+            times[k] = (cum / total) * spoken
+            positions[k] = if (i == lastPronounced) 1f else (i + 1f) / n
         }
         // Voice stops at the spoken span; ink holds settled until handoff.
-        times[n + 1] = 1f
-        positions[n + 1] = 1f
+        times[letters + 1] = 1f
+        positions[letters + 1] = 1f
         return Curve(times, positions, letters)
     }
 
@@ -99,6 +123,14 @@ object TajweedPacing {
     private fun tokenize(arabic: String): List<Event> {
         val events = ArrayList<Event>(arabic.length)
         for (ch in arabic) {
+            // The DB is always decomposed (alef + combining maddah), but NFC
+            // normalization anywhere upstream would fuse them into U+0622 —
+            // and as a bare base letter it would silently weigh 0.5 counts
+            // instead of a madd. Unfuse it defensively.
+            if (ch == ALEF_MADDA) {
+                events += Event(ALEF).apply { maddah = true }
+                continue
+            }
             if (isBaseLetter(ch)) {
                 events += Event(ch)
                 continue
@@ -184,6 +216,7 @@ object TajweedPacing {
 
     private const val ALEF_WASLA = 'ٱ'
     private const val ALEF = 'ا'
+    private const val ALEF_MADDA = 'آ'
     private const val ALEF_MAKSURA = 'ى'
     private const val WAW = 'و'
     private const val YEH = 'ي'

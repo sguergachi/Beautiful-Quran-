@@ -414,8 +414,8 @@ collapsible slider panel over the reader (`ui/reader/InkLabPanel.kt`), bound
 directly to `InkEngine.tuning`: upcoming ink, fade timings, sweep clamps,
 repeat timings, the fresh-ink **Glitter time**, **Glint tint**, **Halo
 strength**, and **Halo blur** controls, wash feather, and the experimental
-tajweed-pacing toggle with
-its paced-feather knob (see [TAJWEED_PACING.md](TAJWEED_PACING.md)). Edits are
+tajweed-pacing toggle with its paced-feather and pacing-contrast knobs
+(see [TAJWEED_PACING.md](TAJWEED_PACING.md)). Edits are
 session-only and never persisted —
 shipped behavior cannot drift; **Log values** dumps the current `Tuning` to
 Logcat (tag `InkLab`) so a tuned feel can be transcribed into the defaults in

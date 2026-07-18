@@ -91,9 +91,21 @@ letter + its combining marks), then weight each event in harakah counts:
 | Silent letters | hamzat wasl mid-flow, ۟-marked alif, definite-article ل before a sun letter (next letter mushaddad) | 0 |
 
 Normalize to cumulative time fractions `t₀=0 … tₙ=1`. Zero-weight letters
-merge into their neighbour's boundary. Cross-word rules (idghām across a word
-gap, madd ʿāriḍ at waqf) are out of scope for v1. Counts live as named
-constants in `TajweedPacing`.
+merge into their neighbour's glide (see the curve section). Cross-word rules
+(idghām across a word gap, madd ʿāriḍ at waqf) are out of scope for v1.
+Counts live as named constants in `TajweedPacing`.
+
+**Contrast.** Raw tajweed ratios are dramatic: a madd lazim moves twelve
+times slower than a plain sākin, which means short letters flash by too fast
+for the ink fade to read, and every segment boundary is an abrupt speed
+change. `curve(arabic, spokenFraction, contrast)` raises each letter's counts
+to the `contrast` power **before** normalizing: 1 keeps the raw ratios, 0
+flattens to a uniform sweep, and ≈0.7 (the shipped default,
+`Tuning.pacingContrast`, "Pacing contrast" in the Ink Lab) keeps the madd
+dwell clearly readable (~37 % of `ٱلضَّآلِّينَ` instead of 46 %) while its
+neighbours slow enough to enjoy. Because the redistribution happens inside
+the word's measured dwell, softening can never fall behind the reciter — the
+edge always finishes exactly at handoff.
 
 **Orthography facts baked into the parser** (verified against every word in
 `quran.db` — this text is the QPC Hafs encoding, and two conventions are
@@ -118,8 +130,10 @@ word box. That keeps the entire feature pure and free of layout plumbing, and
 it already delivers ~90 % of the effect: the *timing* (dwell on the madd,
 glide over short letters) is exact, only the *position* of the edge is
 approximate, and the feathered wash absorbs letter-width error. Silent
-letters keep their width slice with zero time, so the wash steps across the
-article of `ٱلضَّآلِّينَ` instantly rather than smearing it.
+letters keep their width slice but no time of their own — their slice is
+folded into the adjacent letter's glide (leading silents ride the letter
+after them, trailing silents the one before), so the wash crosses the
+article of `ٱلضَّآلِّينَ` in motion during the `ضّ` rather than teleporting.
 
 If the Ink Lab audition shows the edge visibly missing letters on long words,
 the measured upgrade is:
@@ -138,12 +152,16 @@ the measured upgrade is:
 ### 3. The pacing curve
 
 Breakpoints `(tᵢ, xᵢ)` — cumulative time fraction → cumulative width
-fraction — evaluated as a **monotone piecewise-linear** map (a dozen points;
-binary search per frame, allocation-free). Monotonicity is guaranteed by
-construction: both coordinate lists are cumulative sums, so the ink can never
-move backward. The existing smootherstep feather softens the corners
-spatially, so v1 does not need spline smoothing; Fritsch–Carlson monotone
-cubic is a later polish if PWL reads mechanical at low feather.
+fraction, **one per pronounced letter** — evaluated as a **monotone
+piecewise-linear** map (a dozen points; binary search per frame,
+allocation-free). Monotonicity is guaranteed by construction: both
+coordinate lists are cumulative sums, so the ink can never move backward.
+Silent letters emit no breakpoint, which is what folds their width into the
+neighbouring glide instead of a same-time position step. The smootherstep
+feather softens the remaining corners spatially and the contrast knob
+compresses the speed ratios between them, so v1 does not need spline
+smoothing; Fritsch–Carlson monotone cubic is a later polish if PWL still
+reads mechanical at low feather.
 
 Two refinements built into the curve, not the callers:
 
@@ -164,9 +182,10 @@ Two refinements built into the curve, not the callers:
 
 - **`InkEngine`** — `sweepMs` unchanged. `InkEngine.pacing(arabic, activeWord)`
   returns the nullable curve (gated on `Tuning.tajweedPacing`, default off);
-  `InkEngine.pacedFeather(letterCount)` narrows the wash edge. Two new tuning
-  knobs: the `tajweedPacing` toggle and `pacedFeatherPerLetter`, both in the
-  Ink Lab panel.
+  `InkEngine.pacedFeather(letterCount)` narrows the wash edge. Three tuning
+  knobs in the Ink Lab panel: the `tajweedPacing` toggle,
+  `pacedFeatherPerLetter`, and `pacingContrast` (dwell drama vs glide, see
+  the contrast note above).
 - **`ActiveWord`** — carries `spokenMs` (segment end − start) alongside the
   karaoke-hold `durationMs`, so the curve can rest after the voice stops.
 - **Renderer** — `AyahBlock` computes the active word's curve next to
@@ -176,7 +195,10 @@ Two refinements built into the curve, not the callers:
   { curve.at(clock) }` — the bezier sweep easing is dropped for paced words
   (it would distort letter timing; the feather profile keeps the soft
   toe/shoulder). Pacing costs one curve lookup per frame, zero extra
-  recompositions. Captured at Active entry, like `sweepMs`.
+  recompositions. The clock is captured at Active entry like `sweepMs`, but
+  the curve itself is tracked live (`rememberUpdatedState`), so Ink Lab
+  edits — the toggle, the contrast slider — reshape the word already on
+  screen instead of waiting for the next activation.
 - **Feather** — the make-or-break visual change. The shipped feather is 1.6×
   the word width ("a whole-word breath"); at that width letter pacing would be
   invisible. Paced words use
@@ -244,11 +266,19 @@ the curve, not the weights, is the module boundary.
 - `TajweedPacingTest` (JVM, implemented): golden words with hand-counted
   weights (`ٱلضَّآلِّينَ`, `صِرَٰطَ`, `أَنۡعَمۡتَ`, `كُنتُمۡ`, `قَالُوٓاْ`)
   covering silent letters, sun-letter assimilation, iẓhār vs ikhfāʾ noon,
-  dagger-alef madd, madd lazim/munfasil; short-word fallback; monotone
-  bounded curves with exact endpoints; the spoken-span plateau; the floored
-  degenerate spoken fraction. Port to Vitest with the web module.
-- The full-DB sweep above was run against the compiled implementation; it is
-  not a committed test (JVM unit tests have no SQLite driver — invariant #5).
+  dagger-alef madd, madd lazim/munfasil; the silent-slice glide (word start
+  and the trailing plural alif); zero/partial contrast; short-word fallback;
+  monotone bounded curves with exact endpoints across the
+  spoken × contrast grid; the spoken-span plateau; the floored degenerate
+  spoken fraction. Port to Vitest with the web module. **The golden literals
+  must stay byte-identical to the DB** — an editor or tool that NFC-normalizes
+  the file fuses `ا + ٓ` into precomposed `آ` (U+0622) and silently changes
+  the weights (the parser now unfuses U+0622 defensively, but the DB itself
+  is always decomposed).
+- The full-DB sweep (all distinct words × contrast {0, 0.7, 1} × spoken
+  {0.5, 1}: zero monotonicity violations, exact endpoints) was run against
+  the compiled implementation; it is not a committed test (JVM unit tests
+  have no SQLite driver — invariant #5).
 - Existing `HighlightEngine`/`InkEngine` tests untouched — nothing upstream
   changed.
 

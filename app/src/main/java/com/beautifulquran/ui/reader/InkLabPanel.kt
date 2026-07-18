@@ -119,6 +119,9 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
             TuningSlider("Paced feather", t.pacedFeatherPerLetter, 0.5f..6f) {
                 InkEngine.tuning = t.copy(pacedFeatherPerLetter = it)
             }
+            TuningSlider("Pacing contrast", t.pacingContrast, 0f..1f) {
+                InkEngine.tuning = t.copy(pacingContrast = it)
+            }
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 Text(

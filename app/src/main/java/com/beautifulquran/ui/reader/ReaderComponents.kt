@@ -37,6 +37,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
@@ -339,8 +340,13 @@ private fun rememberLetterSweep(
             sweep.snapTo(1f)
         }
     }
+    // Track the curve across recompositions so Ink Lab edits (the pacing
+    // toggle, the contrast slider) reshape the word already on screen instead
+    // of waiting for the next activation. The clock keeps running; only the
+    // time → position mapping swaps.
+    val curve = rememberUpdatedState(pacing)
     return remember(active) {
-        if (pacing == null) sweep.asState() else derivedStateOf { pacing.at(sweep.value) }
+        derivedStateOf { curve.value?.at(sweep.value) ?: sweep.value }
     }
 }
 

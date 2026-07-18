@@ -111,6 +111,12 @@ object InkEngine {
          *  so paced words get an edge that narrows with letter density
          *  (clamped in [pacedFeather]). */
         val pacedFeatherPerLetter: Float = 2.5f,
+        /** How strongly the paced sweep honours raw tajweed ratios (0..1).
+         *  At 1 a madd lazim moves twelve times slower than a sākin —
+         *  dramatic, but short letters flash by too fast to enjoy the fade;
+         *  0 flattens to a uniform glide. Time only redistributes inside the
+         *  word, so softening never falls behind the reciter. */
+        val pacingContrast: Float = 0.7f,
     )
 
     /**
@@ -205,7 +211,7 @@ object InkEngine {
         val spokenFraction =
             if (activeWord.durationMs <= 0L) 1f
             else activeWord.spokenMs.toFloat() / activeWord.durationMs
-        return TajweedPacing.curve(arabic, spokenFraction).also {
+        return TajweedPacing.curve(arabic, spokenFraction, tuning.pacingContrast).also {
             debugLogPacing("gate=on word=$arabic curve=${it != null}")
         }
     }
