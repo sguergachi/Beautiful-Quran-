@@ -281,6 +281,12 @@ fun ReaderScreen(
     // Top overscroll fills the Previous invitation (0..1). Release at full opens.
     var previousChapterPull by remember { mutableFloatStateOf(0f) }
     var previousChapterPullArmed by remember { mutableStateOf(false) }
+    /**
+     * After a fling/scroll lands on the chapter header, previous is locked until
+     * the finger lifts — next upward gesture may enter the previous section.
+     * Resets when the reader scrolls back into ayahs.
+     */
+    var previousSectionUnlocked by remember { mutableStateOf(false) }
     /** 0 = idle/settled; 1 = current page fully exited downward (prev advance). */
     val previousPageExit = remember { Animatable(0f) }
     /** Rubber-band lift captured at previous-advance release. */
@@ -1203,62 +1209,100 @@ fun ReaderScreen(
 
         // Bottom/top overscroll → pill progress + elastic rubber-band.
         // Release at commit threshold continues into the chapter transition
-        // from the finger's pose (never snaps back first).
+        // from the finger's pose (never snaps back first). Retract / release
+        // below threshold animates the bar empty (unfills).
         val pullFillThresholdPx = with(density) { 104.dp.toPx() }
         val nextSurahLatest = rememberUpdatedState(uiState.nextSurah)
         val previousSurahLatest = rememberUpdatedState(uiState.previousSurah)
         val advancingLatest = rememberUpdatedState(chapterAdvancing)
+        val headerIdxLatest = rememberUpdatedState(chapterHeaderListIndex)
+        val previousUnlockedLatest = rememberUpdatedState(previousSectionUnlocked)
         var pullSettling by remember { mutableStateOf(false) }
+        fun animatePullUnfill(isNext: Boolean, from: Float) {
+            pullSettling = true
+            scope.launch {
+                val anim = Animatable(from)
+                anim.animateTo(
+                    targetValue = 0f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMediumLow,
+                    ),
+                ) {
+                    if (isNext) nextChapterPull = value else previousChapterPull = value
+                }
+                if (isNext) nextChapterPullArmed = false else previousChapterPullArmed = false
+                pullSettling = false
+            }
+        }
         val settleChapterPull: () -> Unit = settle@{
             if (pullSettling || advancingLatest.value) return@settle
             val next = nextSurahLatest.value
             val previous = previousSurahLatest.value
             val nextProgress = nextChapterPull
             val prevProgress = previousChapterPull
+            // Commit only while still at threshold — retracting then releasing
+            // unfills the bar instead of advancing (armed is haptic-only).
             when {
-                next != null && nextProgress > 0f &&
-                    (nextProgress >= 0.85f || nextChapterPullArmed) -> {
+                next != null && nextProgress >= 0.85f -> {
                     advanceToNextChapter(next.id)
                 }
-                previous != null && prevProgress > 0f &&
-                    (prevProgress >= 0.85f || previousChapterPullArmed) -> {
+                previous != null && prevProgress >= 0.85f -> {
                     advanceToPreviousChapter(previous.id)
                 }
-                nextProgress > 0f -> {
-                    pullSettling = true
-                    scope.launch {
-                        val anim = Animatable(nextProgress)
-                        anim.animateTo(
-                            targetValue = 0f,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMediumLow,
-                            ),
-                        ) { nextChapterPull = value }
-                        nextChapterPullArmed = false
-                        pullSettling = false
-                    }
-                }
-                prevProgress > 0f -> {
-                    pullSettling = true
-                    scope.launch {
-                        val anim = Animatable(prevProgress)
-                        anim.animateTo(
-                            targetValue = 0f,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMediumLow,
-                            ),
-                        ) { previousChapterPull = value }
-                        previousChapterPullArmed = false
-                        pullSettling = false
-                    }
-                }
+                nextProgress > 0f -> animatePullUnfill(isNext = true, from = nextProgress)
+                prevProgress > 0f -> animatePullUnfill(isNext = false, from = prevProgress)
             }
         }
         val settlePullLatest = rememberUpdatedState(settleChapterPull)
+        // Re-lock previous once the reader is back among the verses.
+        LaunchedEffect(listState.firstVisibleItemIndex, chapterHeaderListIndex) {
+            if (listState.firstVisibleItemIndex > chapterHeaderListIndex) {
+                previousSectionUnlocked = false
+            }
+        }
         val chapterPullConnection = remember(listState, pullFillThresholdPx) {
             object : NestedScrollConnection {
+                override fun onPreScroll(
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    if (advancingLatest.value) return Offset.Zero
+                    if (previousSurahLatest.value == null) return Offset.Zero
+                    // Two-stage top: first scroll/fling stops on the header;
+                    // only after the finger lifts there may the next gesture
+                    // continue into the previous-chapter item above it.
+                    val h = headerIdxLatest.value
+                    val atHeaderTop = listState.firstVisibleItemIndex == h &&
+                        listState.firstVisibleItemScrollOffset == 0
+                    if (
+                        atHeaderTop &&
+                        available.y > 0f &&
+                        !previousUnlockedLatest.value
+                    ) {
+                        return Offset(0f, available.y)
+                    }
+                    return Offset.Zero
+                }
+
+                override suspend fun onPreFling(available: Velocity): Velocity {
+                    if (advancingLatest.value) return Velocity.Zero
+                    if (previousSurahLatest.value == null) return Velocity.Zero
+                    val h = headerIdxLatest.value
+                    val atHeaderTop = listState.firstVisibleItemIndex == h &&
+                        listState.firstVisibleItemScrollOffset == 0
+                    // Kill leftover fling that would carry past the header into
+                    // the previous section on the same gesture.
+                    if (
+                        atHeaderTop &&
+                        !previousUnlockedLatest.value &&
+                        available.y > 0f
+                    ) {
+                        return available
+                    }
+                    return Velocity.Zero
+                }
+
                 override fun onPostScroll(
                     consumed: Offset,
                     available: Offset,
@@ -1285,13 +1329,16 @@ fun ReaderScreen(
                         val sub = available.y / pullFillThresholdPx
                         val prev = nextChapterPull
                         nextChapterPull = (prev - sub).coerceIn(0f, 1f)
+                        // Retracting below threshold disarms so release unfills.
+                        if (nextChapterPull < 0.85f) nextChapterPullArmed = false
                         val consumedY = (prev - nextChapterPull) * pullFillThresholdPx
                         return Offset(0f, consumedY)
                     }
-                    // Top: previous chapter (content wants down / finger down).
+                    // Top: previous chapter (only after unlocked past the header).
                     if (
                         previousSurahLatest.value != null &&
                         nextChapterPull <= 0f &&
+                        previousUnlockedLatest.value &&
                         !listState.canScrollBackward &&
                         available.y > 0f
                     ) {
@@ -1308,6 +1355,7 @@ fun ReaderScreen(
                         val sub = -available.y / pullFillThresholdPx
                         val prev = previousChapterPull
                         previousChapterPull = (prev - sub).coerceIn(0f, 1f)
+                        if (previousChapterPull < 0.85f) previousChapterPullArmed = false
                         val consumedY =
                             -(prev - previousChapterPull) * pullFillThresholdPx
                         return Offset(0f, consumedY)
@@ -1331,6 +1379,7 @@ fun ReaderScreen(
             nextChapterPullArmed = false
             previousChapterPull = 0f
             previousChapterPullArmed = false
+            previousSectionUnlocked = false
             previousPageExit.snapTo(0f)
             previousPageEnter.snapTo(1f)
         }
@@ -1481,7 +1530,16 @@ fun ReaderScreen(
                                     }
                                 } while (event.changes.any { it.pressed })
                             } finally {
-                                // Release after top/bottom pull: full → open, else snap back.
+                                // First gesture ends on the header → unlock previous
+                                // so the *next* upward scroll can reveal it.
+                                val h = chapterHeaderListIndex
+                                if (
+                                    listState.firstVisibleItemIndex == h &&
+                                    listState.firstVisibleItemScrollOffset == 0
+                                ) {
+                                    previousSectionUnlocked = true
+                                }
+                                // Release after top/bottom pull: full → open, else unfill.
                                 if (nextChapterPull > 0f || previousChapterPull > 0f) {
                                     settlePullLatest.value()
                                 }
