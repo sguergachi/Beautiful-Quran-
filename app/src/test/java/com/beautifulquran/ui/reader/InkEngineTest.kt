@@ -185,13 +185,12 @@ class InkEngineTest {
     // --- startRevealed ---
 
     @Test
-    fun `only a recited word lighting up again starts revealed`() {
-        assertTrue(InkEngine.startRevealed(previous = State.Recited, current = State.Active))
-        // The word playback starts from must run its reveal sweep — it is the
-        // only cue marking it as the word being recited.
+    fun `every active entry re-runs the ink wash including replayed words`() {
+        // Tap-to-play / seek / loop restart must never skip the reveal — full
+        // ink already on the page is not a substitute for the wash motion.
+        assertFalse(InkEngine.startRevealed(previous = State.Recited, current = State.Active))
         assertFalse(InkEngine.startRevealed(previous = State.Plain, current = State.Active))
         assertFalse(InkEngine.startRevealed(previous = State.Upcoming, current = State.Active))
-        // Not lighting up at all.
         assertFalse(InkEngine.startRevealed(previous = State.Recited, current = State.Recited))
         assertFalse(InkEngine.startRevealed(previous = State.Active, current = State.Recited))
     }
@@ -204,7 +203,7 @@ class InkEngineTest {
         // A repeat glints again over its orange wash, including re-entry.
         assertTrue(InkEngine.glinting(State.Active, repeat = true, startRevealed = false))
         assertTrue(InkEngine.glinting(State.Active, repeat = true, startRevealed = true))
-        // Re-lit already revealed (seek / repeat re-entry): old ink, not fresh.
+        // startRevealed still gates non-repeat glint for API callers that set it.
         assertFalse(InkEngine.glinting(State.Active, repeat = false, startRevealed = true))
         // Resting states never glint.
         assertFalse(InkEngine.glinting(State.Plain, repeat = false, startRevealed = false))

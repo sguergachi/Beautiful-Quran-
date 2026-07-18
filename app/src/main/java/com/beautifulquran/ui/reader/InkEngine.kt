@@ -245,9 +245,9 @@ object InkEngine {
      * on. Themes opt in via a non-null `QuranAccents.glintInk` (Nightfall and
      * Royal Green); this predicate is the *word* half of the gate.
      *
-     * Active repeat words glint over their orange wash too. Otherwise a word
-     * re-lit already revealed ([startRevealed] — backward seek) is old ink,
-     * not fresh.
+     * Active repeat words glint over their orange wash too. [startRevealed]
+     * is retained for API parity with older call sites; wash always restarts
+     * on Active entry, so ordinary seeks also glint as a fresh play of the word.
      */
     fun glinting(state: State, repeat: Boolean, startRevealed: Boolean): Boolean =
         state == State.Active && (repeat || !startRevealed)
@@ -257,20 +257,15 @@ object InkEngine {
      * letter sweep already fully revealed (progress 1) instead of snapping to
      * the faint upcoming floor.
      *
-     * True only for Recited → Active: a word already recited this pass that
-     * lights up again after a backward seek or a repeat, where re-running the
-     * reveal would flash it full → faint → sweep for no reason.
-     *
-     * Plain → Active must NOT be held revealed: that is the word the listener
-     * starts playback from (tap-to-play, or play-from-here on a resting
-     * ayah). Since active and recited words both sit at full ink, the reveal
-     * sweep is the *only* thing that marks a word as the one being recited —
-     * skipping it left the starting word indistinguishable from its resting
-     * state, so the highlight appeared to never land on the word playback
-     * began from.
+     * Always false: every Active entry re-runs the ink wash — including
+     * Recited → Active when the listener taps a word to play it again, seeks
+     * backward, or a loop restarts. Skipping that wash made replayed words
+     * look inert (full ink already, no motion). Sampling jitter is filtered
+     * by [com.beautifulquran.domain.HighlightClock] so accidental bounce no
+     * longer needs this suppression.
      */
-    fun startRevealed(previous: State, current: State): Boolean =
-        current == State.Active && previous == State.Recited
+    @Suppress("UNUSED_PARAMETER")
+    fun startRevealed(previous: State, current: State): Boolean = false
 
     /**
      * Ink for the surah-header basmalah calligraphy (a VectorDrawable, not

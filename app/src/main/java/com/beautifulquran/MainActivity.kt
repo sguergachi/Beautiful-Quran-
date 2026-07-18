@@ -659,6 +659,11 @@ private fun PaperStackApp(
                             selectedStartAyah = 0
                             selectedStartWord = 0
                         },
+                        onOpenPreviousChapter = { prevId ->
+                            selectedSurahId = prevId
+                            selectedStartAyah = 0
+                            selectedStartWord = 0
+                        },
                         onAyahSelectorExpandedChange = { ayahSelectorExpanded = it },
                         onOpenRootViewer = { sid, a, word -> onWordLongPress(sid, a, word) },
                         onRootReturnUserMoved = { onRootReturnUserMovedLatest.value() },
