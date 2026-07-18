@@ -1411,10 +1411,11 @@ fun ReaderScreen(
             // Enough travel to clear a full phone page of verse ink (next-fly).
             val nextExitScrollPx = with(density) { 420.dp.toPx() }
             val paper = MaterialTheme.colorScheme.background
-            // Previous chrome lives in a clipped paper band whose height is the
-            // rubber travel. The list is opaque paper on top and translates down
-            // by the same amount — chrome is revealed cleanly above the header
-            // with no bleed-through of the weave/title.
+            // Content below the top app bar. The previous chrome was drawn at
+            // y=0 of the scaffold body (under the TopAppBar) and stayed fully
+            // obscured — both the reveal band and the list viewport start
+            // under the bar now.
+            val topInset = padding.calculateTopPadding()
             val previous = uiState.previousSurah
             val revealPx = when {
                 previousPageExitNow > 0f ->
@@ -1424,130 +1425,141 @@ fun ReaderScreen(
                 previousPullRubberPx > 0.5f -> previousPullRubberPx
                 else -> 0f
             }
-            if (previous != null && revealPx > 1f) {
-                val pullT = previousChapterPull.coerceIn(0f, 1f)
-                Box(
-                    Modifier
+            // Pull viewport: everything below the top bar, clipped so the
+            // sliding list can't paint over chrome outside this rect.
+            Box(
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxSize()
+                    .padding(top = topInset)
+                    .clipToBounds(),
+            ) {
+                if (previous != null && revealPx > 1f) {
+                    val pullT = previousChapterPull.coerceIn(0f, 1f)
+                    Box(
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .widthIn(max = 680.dp)
+                            .fillMaxWidth()
+                            .height(with(density) { revealPx.toDp() })
+                            .clipToBounds()
+                            .background(paper)
+                            .zIndex(0f),
+                    ) {
+                        // Top-align so PREVIOUS + pill enter as soon as the
+                        // band opens (bottom-align kept them clipped away).
+                        PreviousChapterPullChrome(
+                            nameTransliteration = previous.nameTransliteration,
+                            pullProgress = if (previousPageExitNow > 0f) 1f else pullT,
+                            onOpen = { advanceToPreviousChapter(previous.id) },
+                            enabled = !chapterAdvancing && pullT > 0.35f,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth(),
+                        )
+                    }
+                }
+                LazyColumn(
+                    state = listState,
+                    userScrollEnabled = !chapterAdvancing,
+                    contentPadding = PaddingValues(
+                        top = listFadeTop,
+                        bottom = listBottomPad,
+                    ),
+                    modifier = Modifier
                         .align(Alignment.TopCenter)
+                        .fillMaxHeight()
                         .widthIn(max = 680.dp)
                         .fillMaxWidth()
-                        .height(with(density) { revealPx.toDp() })
-                        .clipToBounds()
+                        // Opaque sheet so the previous band never ghosts through
+                        // transparent header weave while the list is sliding.
                         .background(paper)
-                        .zIndex(0f),
-                ) {
-                    PreviousChapterPullChrome(
-                        nameTransliteration = previous.nameTransliteration,
-                        pullProgress = if (previousPageExitNow > 0f) 1f else pullT,
-                        onOpen = { advanceToPreviousChapter(previous.id) },
-                        enabled = !chapterAdvancing && pullT > 0.35f,
-                        // Pin to the list edge so more pull peels more chrome
-                        // into view from the contact line (no floating mid-gap).
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth(),
-                    )
-                }
-            }
-            LazyColumn(
-                state = listState,
-                userScrollEnabled = !chapterAdvancing,
-                contentPadding = PaddingValues(
-                    top = padding.calculateTopPadding() + listFadeTop,
-                    bottom = listBottomPad,
-                ),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxHeight()
-                    .widthIn(max = 680.dp)
-                    .fillMaxWidth()
-                    // Opaque sheet so the previous band never ghosts through
-                    // transparent header weave while the list is sliding.
-                    .background(paper)
-                    .zIndex(1f)
-                    .graphicsLayer {
-                        val fly = flying
-                        when {
-                            fly != null && content.surah.id != fly.surah.id -> {
-                                // Front-load: outgoing page fully gone ~28% into
-                                // the fly (~220ms of the 780ms slide).
-                                val exitT = (flyProgressNow / 0.28f).coerceIn(0f, 1f)
-                                val e = 1f - (1f - exitT) * (1f - exitT)
-                                alpha = 1f - e
-                                val lift = fly.startLiftPx +
-                                    (nextExitScrollPx - fly.startLiftPx) * e
-                                translationY = -lift
-                            }
-                            previousPageExitNow > 0f -> {
-                                // Outgoing page continues down from rubber pose.
-                                val e = previousPageExitNow.coerceIn(0f, 1f)
-                                val u = e * e * (3f - 2f * e)
-                                alpha = 1f - u
-                                translationY = revealPx
-                            }
-                            previousPageEnterNow < 0.999f -> {
-                                // Previous header eases downward into place with a
-                                // soft fade (verses still parked via verseReveal).
-                                val e = previousPageEnterNow.coerceIn(0f, 1f)
-                                val u = e * e * (3f - 2f * e)
-                                alpha = u
-                                translationY = -previousEnterScrollPx * (1f - u)
-                            }
-                            nextPullRubberPx > 0.5f -> {
-                                translationY = -nextPullRubberPx
-                            }
-                            previousPullRubberPx > 0.5f -> {
-                                translationY = previousPullRubberPx
+                        .zIndex(1f)
+                        .graphicsLayer {
+                            val fly = flying
+                            when {
+                                fly != null && content.surah.id != fly.surah.id -> {
+                                    // Front-load: outgoing page fully gone ~28% into
+                                    // the fly (~220ms of the 780ms slide).
+                                    val exitT = (flyProgressNow / 0.28f).coerceIn(0f, 1f)
+                                    val e = 1f - (1f - exitT) * (1f - exitT)
+                                    alpha = 1f - e
+                                    val lift = fly.startLiftPx +
+                                        (nextExitScrollPx - fly.startLiftPx) * e
+                                    translationY = -lift
+                                }
+                                previousPageExitNow > 0f -> {
+                                    // Outgoing page continues down from rubber pose.
+                                    val e = previousPageExitNow.coerceIn(0f, 1f)
+                                    val u = e * e * (3f - 2f * e)
+                                    alpha = 1f - u
+                                    translationY = revealPx
+                                }
+                                previousPageEnterNow < 0.999f -> {
+                                    // Previous header eases downward into place with a
+                                    // soft fade (verses still parked via verseReveal).
+                                    val e = previousPageEnterNow.coerceIn(0f, 1f)
+                                    val u = e * e * (3f - 2f * e)
+                                    alpha = u
+                                    translationY = -previousEnterScrollPx * (1f - u)
+                                }
+                                nextPullRubberPx > 0.5f -> {
+                                    translationY = -nextPullRubberPx
+                                }
+                                previousPullRubberPx > 0.5f -> {
+                                    translationY = previousPullRubberPx
+                                }
                             }
                         }
-                    }
-                    .nestedScroll(chapterPullConnection)
-                    .onGloballyPositioned { listCoordinates = it }
-                    .pointerInput(Unit) {
-                        val touchSlop = viewConfiguration.touchSlop
-                        awaitEachGesture {
-                            val down = awaitFirstDown(requireUnconsumed = false)
-                            // Capture dock state for this gesture only. Mid-chapter
-                            // flings that later hit the top must not become a pull.
-                            gestureBeganAtChapterTop = !listState.canScrollBackward
-                            var dragStarted = false
-                            try {
-                                do {
-                                    val event = awaitPointerEvent()
-                                    if (!dragStarted) {
-                                        val change = event.changes.firstOrNull { it.id == down.id }
-                                        if (change != null) {
-                                            val distance = (change.position - down.position).getDistance()
-                                            if (distance > touchSlop) {
-                                                dragStarted = true
-                                                if (rootReturnVisible) {
-                                                    onRootReturnUserMovedLatest.value()
-                                                }
-                                                val dx = change.position.x - down.position.x
-                                                val dy = change.position.y - down.position.y
-                                                if (abs(dy) > abs(dx)) {
-                                                    followEnabled = false
+                        .nestedScroll(chapterPullConnection)
+                        .onGloballyPositioned { listCoordinates = it }
+                        .pointerInput(Unit) {
+                            val touchSlop = viewConfiguration.touchSlop
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                // Capture dock state for this gesture only. Mid-chapter
+                                // flings that later hit the top must not become a pull.
+                                gestureBeganAtChapterTop = !listState.canScrollBackward
+                                var dragStarted = false
+                                try {
+                                    do {
+                                        val event = awaitPointerEvent()
+                                        if (!dragStarted) {
+                                            val change = event.changes.firstOrNull { it.id == down.id }
+                                            if (change != null) {
+                                                val distance =
+                                                    (change.position - down.position).getDistance()
+                                                if (distance > touchSlop) {
+                                                    dragStarted = true
+                                                    if (rootReturnVisible) {
+                                                        onRootReturnUserMovedLatest.value()
+                                                    }
+                                                    val dx = change.position.x - down.position.x
+                                                    val dy = change.position.y - down.position.y
+                                                    if (abs(dy) > abs(dx)) {
+                                                        followEnabled = false
+                                                    }
                                                 }
                                             }
                                         }
+                                    } while (event.changes.any { it.pressed })
+                                } finally {
+                                    // Release after top/bottom pull: full → open, else unfill.
+                                    if (nextChapterPull > 0f || previousChapterPull > 0f) {
+                                        settlePullLatest.value()
                                     }
-                                } while (event.changes.any { it.pressed })
-                            } finally {
-                                // Release after top/bottom pull: full → open, else unfill.
-                                if (nextChapterPull > 0f || previousChapterPull > 0f) {
-                                    settlePullLatest.value()
+                                    gestureBeganAtChapterTop = false
                                 }
-                                gestureBeganAtChapterTop = false
                             }
                         }
-                    }
-                    .verticalFadingEdges(
-                        color = MaterialTheme.colorScheme.background,
-                        top = listFadeTop,
-                        bottom = listFadeBottom,
-                        topInset = statusBarTop,
-                    ),
-            ) {
+                        .verticalFadingEdges(
+                            color = paper,
+                            top = listFadeTop,
+                            bottom = listFadeBottom,
+                            // List is already below the top bar — no status-bar inset.
+                            topInset = 0.dp,
+                        ),
+                ) {
                 items(
                     count = readerItems.size,
                     key = { readerItems[it].key },
@@ -1725,7 +1737,8 @@ fun ReaderScreen(
                         }
                     }
                 }
-            }
+                } // LazyColumn
+            } // pull viewport (below top bar)
             // Flying next-chapter opening: continuous slide from footer → header.
             if (flying != null) {
                 val yInBox = flying.startYInRoot +
