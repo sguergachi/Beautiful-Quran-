@@ -163,7 +163,8 @@ ink at any point.
 Enable developer mode in Settings, turn on **Ink Lab overlay**, start a
 Nightfall recitation, and expand **Ink Lab**. These controls are Android-only,
 session-only auditioning values; **Reset** restores the shipped defaults and
-**Log values** writes the current `InkEngine.Tuning` to Logcat.
+**Copy values** puts a paste-ready `InkEngine.Tuning(…)` constructor on the
+clipboard (also written to Logcat under tag `InkLab`).
 
 | Slider | `InkEngine.Tuning` | Shipped value | Range | Effect |
 |---|---|---:|---:|---|

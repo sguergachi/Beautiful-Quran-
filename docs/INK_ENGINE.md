@@ -417,7 +417,8 @@ strength**, and **Halo blur** controls, wash feather, and the experimental
 tajweed-pacing toggle with its paced-feather and pacing-contrast knobs
 (see [TAJWEED_PACING.md](TAJWEED_PACING.md)). Edits are
 session-only and never persisted —
-shipped behavior cannot drift; **Log values** dumps the current `Tuning` to
-Logcat (tag `InkLab`) so a tuned feel can be transcribed into the defaults in
-InkEngine.kt. Slider meanings, defaults, ranges, and the halo artifact stress
-check are documented in [GLIMMER.md](GLIMMER.md#ink-lab-controls).
+shipped behavior cannot drift; **Copy values** puts a paste-ready
+`InkEngine.Tuning(…)` constructor on the clipboard (and Logcat tag `InkLab`)
+so a tuned feel can be transcribed into the defaults in InkEngine.kt. Slider
+meanings, defaults, ranges, and the halo artifact stress check are documented
+in [GLIMMER.md](GLIMMER.md#ink-lab-controls).
