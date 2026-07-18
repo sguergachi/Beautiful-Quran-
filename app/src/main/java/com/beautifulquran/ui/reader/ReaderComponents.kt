@@ -2116,9 +2116,9 @@ fun NextChapterOpenPill(
 }
 
 /**
- * Top-of-chapter previous invitation. Drawn inside a clipped paper band whose
- * height tracks overscroll; the list (opaque) slides down so this peels into
- * view above the header without overlapping it. [pullProgress] fills Open.
+ * Top-of-chapter previous invitation. Hosted in a layout slot above the list
+ * whose height tracks overscroll (not a behind-the-list draw layer).
+ * [pullProgress] fills the Open pill.
  */
 @Composable
 fun PreviousChapterPullChrome(

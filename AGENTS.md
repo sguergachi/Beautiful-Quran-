@@ -159,13 +159,13 @@ build/test commands from the "Build, test, run" section above work as-is.
   (`sdk.dir=$HOME/Android/Sdk`). The startup update script re-creates it, so a
   fresh checkout still builds. Install `platforms;android-37.0` and
   `build-tools;36.0.0` if they are missing (`compileSdk` uses API 37.0).
-- **No emulator / no GUI run is possible here.** The VM has no KVM
-  (`/dev/kvm` absent, no `vmx`/`svm` CPU flags) so the x86_64 emulator can't
-  start, and the modern `emulator` refuses ARM64 images on an x86_64 host. Verify
-  changes with `./gradlew testDebugUnitTest` and by building the APK
-  (`assembleDebug` / `assembleRelease`). The signature word-sync feature lives in
-  the pure-JVM `HighlightEngine` and is fully unit-testable without a device.
-  You can also inspect real bundled data directly with
+- **Emulator / GUI run works here.** Use the repo scripts (KVM is available):
+  `scripts/setup_android_emulator.sh` once if needed, then
+  `scripts/run_android_app.sh` (windowed by default; host GPU + X11). Still
+  verify with `./gradlew testDebugUnitTest` and APK builds
+  (`assembleDebug` / `assembleRelease`) before committing. The signature
+  word-sync feature lives in the pure-JVM `HighlightEngine` and is fully
+  unit-testable without a device. You can also inspect real bundled data with
   `sqlite3 data/quran.db`.
 - **`./gradlew lintDebug` fails on purpose here.** It reports ~37 pre-existing
   Media3 `@UnstableApi` opt-in errors. The real lint gate is `lintVitalRelease`,
