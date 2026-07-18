@@ -35,6 +35,8 @@ interface Props {
   englishText?: string
   ink: InkWord
   sweepMs: number | null
+  /** Seek-generation so replaying this Active word restarts the wash. */
+  activation?: number
   showGloss: boolean
   showTransliteration: boolean
   englishMode?: boolean
@@ -98,6 +100,7 @@ export function WordUnit({
   englishText,
   ink,
   sweepMs: activeSweepMs,
+  activation = 0,
   showGloss,
   showTransliteration,
   englishMode = false,
@@ -119,7 +122,10 @@ export function WordUnit({
   const glossFlashRef = useRef<HTMLSpanElement>(null)
   const glossRef = useRef<HTMLSpanElement>(null)
   const translitRef = useRef<HTMLSpanElement>(null)
-  const prevState = useRef(ink.state)
+  // null until the first layout effect so a word that mounts already Active
+  // still runs its first-pass wash (same idea as prevRepeat starting false).
+  const prevState = useRef<InkState | null>(null)
+  const prevActivation = useRef(activation)
   /** Captured at Active entry — stable for the whole time the word is lit. */
   const revealedOnEntry = useRef(false)
   // false so a word that mounts already in the chain still washes orange in
@@ -156,12 +162,18 @@ export function WordUnit({
   useLayoutEffect(() => {
     const prev = prevState.current
     const enteredActive = ink.state === InkState.Active && prev !== InkState.Active
-    if (enteredActive) {
-      revealedOnEntry.current = startRevealed(prev, ink.state)
+    const reactivated =
+      ink.state === InkState.Active &&
+      prev === InkState.Active &&
+      activation !== prevActivation.current
+    if (enteredActive || reactivated) {
+      // Always re-run the wash on Active entry / seek-reactivation.
+      revealedOnEntry.current = startRevealed(prev ?? InkState.Plain, ink.state)
     } else if (ink.state !== InkState.Active) {
       revealedOnEntry.current = false
     }
     prevState.current = ink.state
+    prevActivation.current = activation
 
     const t = getTuning()
     const resting = t.upcomingAlpha
@@ -203,7 +215,7 @@ export function WordUnit({
         return
       }
 
-      if (!enteredActive) return
+      if (!enteredActive && !reactivated) return
 
       // The same branch that starts the first-pass wash mounts the glint twin
       // (Nightfall): the white-gold sheen rides this wash, drying after it.
@@ -251,7 +263,7 @@ export function WordUnit({
       return
     }
 
-    if (!enteredActive) return
+    if (!enteredActive && !reactivated) return
 
     // Same glint mount as the Arabic branch — English lyric ink glints too.
     if (glintEnabled()) setGlintMounted(true)
@@ -273,8 +285,9 @@ export function WordUnit({
     )
     // speed/duration captured at Active entry only — mid-word setting changes
     // must not cancel and restart the sweep (that is itself a flicker).
+    // activation restarts when the same word is re-sought.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.state, ink.repeat, englishMode])
+  }, [ink.state, ink.repeat, englishMode, activation])
 
   // Fresh-ink glint (Nightfall only, InkEngine.glinting): the halo rises with
   // the base wash; English also gets a masked tint twin. Arabic keeps one
@@ -296,6 +309,10 @@ export function WordUnit({
       const duration = activeSweepMs ?? getTuning().repeatSweepMs
       return runGlintWashIn(overlay, halo, !englishMode, duration)
     }
+    if (glinting && was && ink.state === InkState.Active) {
+      const duration = activeSweepMs ?? getTuning().repeatSweepMs
+      return runGlintWashIn(overlay, halo, !englishMode, duration)
+    }
     if (!glinting && was) {
       return runGlintFadeOut(overlay, halo, () => setGlintMounted(false))
     }
@@ -306,7 +323,7 @@ export function WordUnit({
       setGlintMounted(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.state, ink.repeat, glintMounted, englishMode])
+  }, [ink.state, ink.repeat, glintMounted, englishMode, activation])
 
   // Keep secondary alpha in sync when gloss/translit mount or ink leaves Active
   // without a wash restart (e.g. settings toggle mid-verse).
@@ -325,9 +342,9 @@ export function WordUnit({
   }, [ink.state, ink.repeat, showGloss, showTransliteration, word.translation, word.transliteration, englishMode])
 
   // Orange repeat overlay: wash in on chain entry, dissolve on release.
-  // Key only on `ink.repeat` (Android LaunchedEffect(repeat)) — advancing the
-  // active word inside a chain must not cancel a mid-wash on earlier members.
-  // Overlay DOM is mounted only while repeating (or fading out).
+  // Advancing the active word inside a chain must not cancel a mid-wash on
+  // earlier members (activation is 0 for non-active words). Seek-reactivation
+  // of the active word restarts its orange wash.
   useLayoutEffect(() => {
     if (!repeatMounted) {
       prevRepeat.current = ink.repeat
@@ -345,6 +362,10 @@ export function WordUnit({
       const duration = activeSweepMs ?? getTuning().repeatSweepMs
       return runRepeatWashIn(overlay, rtl, duration)
     }
+    if (ink.repeat && was && ink.state === InkState.Active) {
+      const duration = activeSweepMs ?? getTuning().repeatSweepMs
+      return runRepeatWashIn(overlay, rtl, duration)
+    }
     if (leftRepeat) {
       return runRepeatFadeOut(overlay, () => setRepeatMounted(false))
     }
@@ -358,7 +379,7 @@ export function WordUnit({
       setRepeatMounted(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.repeat, englishMode, repeatMounted])
+  }, [ink.repeat, englishMode, repeatMounted, activation, ink.state])
 
   // Search-hit pulse: mount the twin overlay only while flashing.
   useLayoutEffect(() => {

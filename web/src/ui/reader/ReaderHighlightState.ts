@@ -11,6 +11,8 @@ export interface ReaderHighlightInput {
   isPlaying: boolean
   ayahCount: number
   repeatRange: { first: number; last: number } | null
+  /** Seek-generation so replaying the same Active word restarts ink. */
+  activation?: number
 }
 
 export interface ReaderHighlightState {
@@ -28,6 +30,24 @@ export function readerInkAyah(
   nowPlayingAyah: number | null | undefined,
 ): number | null {
   return activeWord?.ayah ?? nowPlayingAyah ?? null
+}
+
+/**
+ * Whether [ayah] should run active-ayah ink policy: Upcoming prep on unread
+ * words and recess-veil lift.
+ *
+ * The fade-lead focus target ([leadAyah]) is included so the *next* verse
+ * softens before the audio item hands off. Without that, handoff flips the
+ * veil and the first word's wash in the same frame — the directional ink
+ * runs under a lifting paper cover and reads as "first word never animates".
+ * Karaoke ownership stays with [inkAyah] / the active word alone.
+ */
+export function readerAyahInkPolicyActive(
+  ayah: number,
+  inkAyah: number | null | undefined,
+  leadAyah: number | null | undefined,
+): boolean {
+  return inkAyah === ayah || leadAyah === ayah
 }
 
 /**
@@ -65,6 +85,7 @@ export function readerHighlightState(
         isRepeat: info.isRepeat,
         highWater: info.highWater,
         repeatStart: info.repeatStart,
+        activation: input.activation ?? 0,
       }
     }
   }
@@ -83,5 +104,6 @@ export function readerHighlightKey(state: ReaderHighlightState): string {
     word?.isRepeat ?? '-',
     word?.highWater ?? '-',
     word?.repeatStart ?? '-',
+    word?.activation ?? 0,
   ].join(':')
 }

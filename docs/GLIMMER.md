@@ -27,11 +27,10 @@ This produces three deliberate cases:
 |---|---:|---|
 | A genuinely new word becomes active | Yes | Fresh ink is forming for the first time. |
 | A word becomes active because the reciter repeats it | Yes, every repeat event | The repeated utterance is a new performance event even though its base ink is already revealed. |
-| A previously recited word becomes active after an ordinary backward seek | No | The ink is already dry; replaying the sheen would imply a repeat that the timing data did not report. |
+| A previously recited word becomes active after a seek / word tap | Yes | Replay re-runs the ink wash; the sheen rides that wash so the word reads as being recited again. |
 
-`repeat` therefore takes precedence over `startRevealed`. A repeated word must
-reappear and glimmer again, including a same-word repeat or re-entry into an
-orange repeat chain.
+`startRevealed` no longer suppresses the wash (or the glimmer) on seek/replay —
+tapping a word must restart the directional ink animation.
 
 ## Motion and layer order
 

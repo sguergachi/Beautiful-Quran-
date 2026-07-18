@@ -54,6 +54,11 @@ data class ActiveWord(
      * [repeatStart]..[wordPosition] all hold the orange fade until the chain
      * completes. Equals [wordPosition] when not repeating. */
     val repeatStart: Int = wordPosition,
+    /**
+     * Bumps on a genuine backward seek so the ink wash restarts even when the
+     * same word stays Active (tap the current word to play it from the start).
+     */
+    val activation: Long = 0L,
 )
 
 data class ReaderUiState(
@@ -194,13 +199,42 @@ class ReaderViewModel(
      * boundary — the source of the random full → faint → wash word flicker. */
     private val highlightClock = HighlightClock()
 
+    /** Bumps on genuine seeks so replaying the same Active word restarts ink. */
+    private var inkActivation = 0L
+    private var lastInkSampleKey: Any? = null
+    private var lastInkClockMs = -1L
+    /**
+     * User seek target (ayah → ms) applied on the next poll once that ayah is
+     * the media item — so ink jumps to the tapped word without waiting for
+     * MediaController's position estimate to catch up.
+     */
+    private var forcedHighlight: Pair<Int, Long>? = null
+
     /** Emits the active word ~30x/sec while this surah is playing, but only
      * publishes on change, so the UI recomposes once per word. The highlight
      * holds while paused (like a lyrics player); it only clears when this
      * surah stops being the loaded one. */
     val activeWord: StateFlow<ActiveWord?> = pollingWhileLoaded(key = { it }) { np ->
+        val forced = forcedHighlight
+        val rawMs = if (forced != null && forced.first == np.ayah) {
+            forcedHighlight = null
+            forced.second
+        } else {
+            player.positionMs
+        }
+        val clockMs = highlightClock.sample(np, rawMs)
+        if (lastInkSampleKey != np) {
+            lastInkSampleKey = np
+        } else if (
+            lastInkClockMs >= 0L &&
+            clockMs + HighlightClock.SEEK_THRESHOLD_MS < lastInkClockMs
+        ) {
+            // Large backward jump within the same media item (scrub / unnoted seek).
+            inkActivation++
+        }
+        lastInkClockMs = clockMs
         preparedTimings[np.ayah]
-            ?.activeInfo(highlightClock.sample(np, player.positionMs))
+            ?.activeInfo(clockMs)
             ?.let {
                 ActiveWord(
                     ayah = np.ayah,
@@ -213,6 +247,7 @@ class ReaderViewModel(
                     isRepeat = it.isRepeat,
                     highWater = it.highWater,
                     repeatStart = it.repeatStart,
+                    activation = inkActivation,
                 )
             }
     }
@@ -487,6 +522,7 @@ class ReaderViewModel(
     fun playFromAyah(ayah: Int) {
         // Playing a specific ayah abandons any active repeat range.
         // Chapter openings (ayah 1) include the basmalah lead-in.
+        noteInkRestart(ayah, seekMs = 0L)
         if (startSurah(ayah, preserveRepeatRange = false, startWithBasmalah = ayah == 1)) {
             rememberListened(ayah)
         }
@@ -498,19 +534,35 @@ class ReaderViewModel(
         // Keep the loop when the tapped verse is inside the active range;
         // only abandon it when the user jumps outside.
         val keepRepeat = playerState.value.repeatRange?.let { ayah in it } == true
+        // Always restart ink: tap-to-play must re-run the wash even when the
+        // same word stays Active or the seek is shorter than the jitter hold.
+        val seekMs = positionMs.coerceAtLeast(0L)
+        noteInkRestart(ayah, seekMs)
         if (np != null && np.surahId == surahId && np.reciterId == reciter.id) {
             if (!keepRepeat) player.clearRepeatRange()
-            player.seekToWordAndPlay(ayah, positionMs)
+            player.seekToWordAndPlay(ayah, seekMs)
             rememberListened(ayah)
-        } else if (startSurah(ayah, startPositionMs = positionMs, preserveRepeatRange = keepRepeat)) {
+        } else if (startSurah(ayah, startPositionMs = seekMs, preserveRepeatRange = keepRepeat)) {
             rememberListened(ayah)
         }
     }
 
     /** Resume a loaded playlist from [ayah] and mark it as listened. */
     fun playLoadedFromAyah(ayah: Int) {
+        noteInkRestart(ayah, seekMs = 0L)
         player.playLoadedFromAyah(ayah)
         rememberListened(ayah)
+    }
+
+    /**
+     * User-initiated play/seek: bump ink activation, accept the next clock
+     * sample, and pin highlight to [seekMs] on [ayah] so the wash restarts
+     * on the word being played (not the pre-seek active word).
+     */
+    private fun noteInkRestart(ayah: Int, seekMs: Long) {
+        inkActivation++
+        highlightClock.acceptNextSample()
+        forcedHighlight = ayah to seekMs
     }
 
     /**

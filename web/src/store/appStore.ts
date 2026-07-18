@@ -129,6 +129,10 @@ class AppStore {
   private lastActiveKey = ''
   private lastEmitKey = ''
   private readonly highlightClock = new HighlightClock()
+  /** Bumps on genuine seeks so replaying the same Active word restarts ink. */
+  private inkActivation = 0
+  private lastInkMediaKey = ''
+  private lastInkClockMs = -1
   /** Bumps when a newer openSurah supersedes an in-flight peel→load. */
   private openToken = 0
   /**
@@ -905,6 +909,16 @@ class AppStore {
 
     const mediaKey = `${np.surahId}:${np.ayah}:${np.reciterId}`
     const positionMs = this.highlightClock.sample(mediaKey, ps.positionMs)
+    if (mediaKey !== this.lastInkMediaKey) {
+      this.lastInkMediaKey = mediaKey
+    } else if (
+      this.lastInkClockMs >= 0 &&
+      positionMs + HighlightClock.SEEK_THRESHOLD_MS < this.lastInkClockMs
+    ) {
+      // Large backward jump within the same media item: word tap / scrub.
+      this.inkActivation++
+    }
+    this.lastInkClockMs = positionMs
     const next = readerHighlightState(
       {
         ayah: np.ayah,
@@ -913,6 +927,7 @@ class AppStore {
         isPlaying: ps.isPlaying,
         ayahCount: this.state.content?.surah.ayahCount ?? 0,
         repeatRange: ps.repeatRange,
+        activation: this.inkActivation,
       },
       this.ensurePrepared(np.ayah) ?? undefined,
     )

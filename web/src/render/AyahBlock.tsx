@@ -121,14 +121,16 @@ function AyahBlockInner({
         <p className="hafs-ayah" dir="rtl">
           {words.map((w, index) => {
             const ink = inks[index]!
+            const isActive = ink.state === InkState.Active
             return (
               <HafsWord
                 key={w.position}
                 word={w}
                 ink={ink}
-                sweepMs={ink.state === InkState.Active ? activeSweepMs : null}
+                sweepMs={isActive ? activeSweepMs : null}
+                activation={isActive ? (activeWord?.activation ?? 0) : 0}
                 searchFlash={flashWordPosition === w.position}
-                rootRef={ink.state === InkState.Active ? activeWordRef : undefined}
+                rootRef={isActive ? activeWordRef : undefined}
                 onPlay={() => onPlayWord(ayah.number, w.position)}
                 onHold={() =>
                   onHoldWord(ayah.number, w)
@@ -146,19 +148,21 @@ function AyahBlockInner({
         <div className="words" dir={englishOnly ? 'ltr' : 'rtl'} data-lyric={englishOnly ? 'english' : 'arabic'}>
           {words.map((w, index) => {
             const ink = inks[index]!
+            const isActive = ink.state === InkState.Active
             return (
               <span key={w.position} className={englishOnly ? 'english-word-run' : 'word-unit-run'}>
                 <WordUnit
                   word={w}
                   englishText={englishOnly ? englishWords[index] : undefined}
                   ink={ink}
-                  sweepMs={ink.state === InkState.Active ? activeSweepMs : null}
+                  sweepMs={isActive ? activeSweepMs : null}
+                  activation={isActive ? (activeWord?.activation ?? 0) : 0}
                   showGloss={!englishOnly && showWordGloss}
                   showTransliteration={showTransliteration}
                   englishMode={englishOnly}
                   searchHit={hits(w.translation)}
                   searchFlash={flashWordPosition === w.position}
-                  rootRef={ink.state === InkState.Active ? activeWordRef : undefined}
+                  rootRef={isActive ? activeWordRef : undefined}
                   onPlay={() => onPlayWord(ayah.number, w.position)}
                   onHold={() =>
                     onHoldWord(ayah.number, w)
@@ -198,6 +202,7 @@ export const AyahBlock = memo(AyahBlockInner, (prev, next) => {
   return (
     prev.ayah === next.ayah &&
     prev.activeWord === next.activeWord &&
+    prev.activeWord?.activation === next.activeWord?.activation &&
     prev.isActiveAyah === next.isActiveAyah &&
     prev.dimmed === next.dimmed &&
     prev.focused === next.focused &&

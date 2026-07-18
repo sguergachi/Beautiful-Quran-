@@ -136,7 +136,8 @@ describe('InkEngine', () => {
   })
 
   it('only a recited word lighting up again starts revealed', () => {
-    expect(startRevealed(InkState.Recited, InkState.Active)).toBe(true)
+    // Every Active entry re-runs the wash — including Recited → Active replay.
+    expect(startRevealed(InkState.Recited, InkState.Active)).toBe(false)
     expect(startRevealed(InkState.Plain, InkState.Active)).toBe(false)
     expect(startRevealed(InkState.Upcoming, InkState.Active)).toBe(false)
     expect(startRevealed(InkState.Recited, InkState.Recited)).toBe(false)

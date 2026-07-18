@@ -37,7 +37,7 @@ import { ReaderFocusController } from './focus/ReaderFocusController'
 import { selectedPlaybackAyah } from './selectedPlaybackAyah'
 import { shouldPauseFollowOnDrag } from './followGesture'
 import { isRecitingSession } from './recitingActive'
-import { readerInkAyah } from './ReaderHighlightState'
+import { readerAyahInkPolicyActive, readerInkAyah } from './ReaderHighlightState'
 import {
   AYAH_SPACER_EST_PX,
   useProgressiveAyahWindow,
@@ -1002,9 +1002,12 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     state.followEnabled && recitingActive && activeExceedsViewport
   // Focus leads by 500 ms to begin the glide before an ayah ends. Karaoke ink
   // stays with the actual word/media owner until the audio item hands off.
+  // Fade-lead still prepares the *next* verse (Upcoming + recess lift) so the
+  // first word's wash is not buried under the veil at handoff.
   const inkAyah = recitingActive
     ? readerInkAyah(state.activeWord, state.player.nowPlaying?.ayah)
     : null
+  const leadAyah = recitingActive ? state.activeAyah : null
   const reciterName =
     state.reciters.find((r) => r.id === state.settings.reciterId)?.name ?? 'Reciter'
   const matchLabel =
@@ -1206,12 +1209,21 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                 }
                 const ayah = item.ayah
                 const isFocusTarget = state.activeAyah === ayah.number
-                // Karaoke ink only while audio is moving. Global recess is CSS
-                // on `.scroll[data-reciting]` — keep dimmed false so inactive
-                // ayahs do not reconcile on play/pause.
-                const inkActive = inkAyah === ayah.number
+                // Karaoke word ownership is ink-only. Active-ayah *policy*
+                // (Upcoming prep + recess veil) also includes fade-lead so the
+                // next verse is faint before handoff — otherwise the first
+                // word's wash runs under the lifting paper veil.
+                // dimmed stays false: global recess is CSS on
+                // `.scroll[data-reciting]`, so inactive ayahs do not reconcile
+                // on play/pause.
+                const inkOwner = inkAyah === ayah.number
+                const policyActive = readerAyahInkPolicyActive(
+                  ayah.number,
+                  inkAyah,
+                  leadAyah,
+                )
                 const aw =
-                  inkActive && state.activeWord?.ayah === ayah.number
+                  inkOwner && state.activeWord?.ayah === ayah.number
                     ? state.activeWord
                     : null
                 return (
@@ -1223,7 +1235,7 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     <AyahBlock
                       ayah={ayah}
                       activeWord={aw}
-                      isActiveAyah={inkActive}
+                      isActiveAyah={policyActive}
                       dimmed={false}
                       focused={focusedAyah === ayah.number}
                       keepActiveWordInView={keepWordInView && isFocusTarget}
