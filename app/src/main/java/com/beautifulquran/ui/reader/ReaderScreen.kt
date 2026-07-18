@@ -929,9 +929,9 @@ fun ReaderScreen(
         }
         // Shared with settle / list rubber-band (defined before advance uses it).
         val pullRubberMaxPx = with(density) { 56.dp.toPx() }
-        // Previous pull must shove the header down far enough to fully expose
-        // the invitation chrome above it (taller travel than next-chapter rubber).
-        val previousPullRubberMaxPx = with(density) { 168.dp.toPx() }
+        // Previous pull shoves the list down by this much at full fill — matches
+        // the previous-chrome band height so the invitation is fully exposed.
+        val previousPullRubberMaxPx = with(density) { 156.dp.toPx() }
         val previousExitScrollPx = with(density) { 360.dp.toPx() }
         // Header travel into place — enough to read as a settle, not a leap.
         val previousEnterScrollPx = with(density) { 120.dp.toPx() }
@@ -1401,39 +1401,51 @@ fun ReaderScreen(
             }
             val previousPullRubberPx = run {
                 val t = previousChapterPull.coerceIn(0f, 1f)
-                // Ease-out rubber that tracks fill progress and fully exposes
-                // the previous chrome by the time the pill is near full.
-                val eased = sin(t * PI.toFloat() * 0.5f)
+                // Near-linear rubber so the revealed band tracks the finger
+                // without jumping ahead of the list edge.
+                val eased = t * (2f - t) // ease-out quad
                 previousPullRubberMaxPx * eased
             }
             val previousPageExitNow = previousPageExit.value
             val previousPageEnterNow = previousPageEnter.value
             // Enough travel to clear a full phone page of verse ink (next-fly).
             val nextExitScrollPx = with(density) { 420.dp.toPx() }
-            // Previous invitation sits *behind* the list. Pulling shoves the
-            // header down and reveals the chrome in the gap above — never a
-            // floating overlay on top of the header.
+            val paper = MaterialTheme.colorScheme.background
+            // Previous chrome lives in a clipped paper band whose height is the
+            // rubber travel. The list is opaque paper on top and translates down
+            // by the same amount — chrome is revealed cleanly above the header
+            // with no bleed-through of the weave/title.
             val previous = uiState.previousSurah
-            if (previous != null) {
+            val revealPx = when {
+                previousPageExitNow > 0f ->
+                    previousExitStartRubberPx +
+                        (previousExitScrollPx - previousExitStartRubberPx) *
+                        previousPageExitNow.coerceIn(0f, 1f)
+                previousPullRubberPx > 0.5f -> previousPullRubberPx
+                else -> 0f
+            }
+            if (previous != null && revealPx > 1f) {
                 val pullT = previousChapterPull.coerceIn(0f, 1f)
-                val chromeAlpha = when {
-                    previousPageExitNow > 0f -> 1f
-                    pullT <= 0f -> 0f
-                    else -> ((pullT - 0.04f) / 0.20f).coerceIn(0f, 1f)
-                }
-                if (chromeAlpha > 0.01f) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .widthIn(max = 680.dp)
+                        .fillMaxWidth()
+                        .height(with(density) { revealPx.toDp() })
+                        .clipToBounds()
+                        .background(paper)
+                        .zIndex(0f),
+                ) {
                     PreviousChapterPullChrome(
                         nameTransliteration = previous.nameTransliteration,
                         pullProgress = if (previousPageExitNow > 0f) 1f else pullT,
                         onOpen = { advanceToPreviousChapter(previous.id) },
-                        enabled = !chapterAdvancing && pullT > 0.2f,
+                        enabled = !chapterAdvancing && pullT > 0.35f,
+                        // Pin to the list edge so more pull peels more chrome
+                        // into view from the contact line (no floating mid-gap).
                         modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .widthIn(max = 680.dp)
-                            .fillMaxWidth()
-                            .padding(top = padding.calculateTopPadding() + listFadeTop)
-                            .zIndex(0f)
-                            .graphicsLayer { alpha = chromeAlpha },
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth(),
                     )
                 }
             }
@@ -1449,6 +1461,9 @@ fun ReaderScreen(
                     .fillMaxHeight()
                     .widthIn(max = 680.dp)
                     .fillMaxWidth()
+                    // Opaque sheet so the previous band never ghosts through
+                    // transparent header weave while the list is sliding.
+                    .background(paper)
                     .zIndex(1f)
                     .graphicsLayer {
                         val fly = flying
@@ -1468,9 +1483,7 @@ fun ReaderScreen(
                                 val e = previousPageExitNow.coerceIn(0f, 1f)
                                 val u = e * e * (3f - 2f * e)
                                 alpha = 1f - u
-                                val drop = previousExitStartRubberPx +
-                                    (previousExitScrollPx - previousExitStartRubberPx) * u
-                                translationY = drop
+                                translationY = revealPx
                             }
                             previousPageEnterNow < 0.999f -> {
                                 // Previous header eases downward into place with a
