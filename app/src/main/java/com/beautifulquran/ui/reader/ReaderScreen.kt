@@ -200,17 +200,27 @@ fun ReaderScreen(
 
     val listState = rememberLazyListState()
     // Gilding sheen: light catches the header rosette as the page moves.
-    // Derived from scroll and read only at draw time — animates exactly on
-    // scroll frames, costs nothing at rest.
-    val sheen = remember {
-        derivedStateOf {
-            if (listState.firstVisibleItemIndex == 0) {
-                0.15f + 0.7f * (listState.firstVisibleItemScrollOffset / 900f).coerceIn(0f, 1f)
-            } else {
-                0.85f
-            }
+    // At chapter end (scrolled) sheen is bright (~0.85); at the top of a
+    // chapter it rests dim (~0.15). Next-chapter advance pins the bright
+    // value so the medallion doesn't snap dark when scroll lands at 0, then
+    // eases to rest after the handoff.
+    fun scrollSheenValue(): Float =
+        if (listState.firstVisibleItemIndex == 0) {
+            0.15f + 0.7f * (listState.firstVisibleItemScrollOffset / 900f).coerceIn(0f, 1f)
+        } else {
+            0.85f
         }
+    val sheenAnim = remember { Animatable(0.15f) }
+    var sheenFollowScroll by remember { mutableStateOf(true) }
+    LaunchedEffect(
+        listState.firstVisibleItemIndex,
+        listState.firstVisibleItemScrollOffset,
+        sheenFollowScroll,
+    ) {
+        if (!sheenFollowScroll) return@LaunchedEffect
+        sheenAnim.snapTo(scrollSheenValue())
     }
+    val sheen = remember { derivedStateOf { sheenAnim.value } }
     var followEnabled by remember { mutableStateOf(true) }
     var showRepeatDialog by remember { mutableStateOf(false) }
     var requestedJumpAyah by remember { mutableIntStateOf(0) }
@@ -925,6 +935,10 @@ fun ReaderScreen(
                 // drop; fly takes over translation via startLiftPx.
                 nextChapterPullArmed = false
                 followEnabled = false
+                // Hold the bright end-of-chapter sheen for the whole fly +
+                // handoff so the medallion doesn't dim when we scrollToItem(0).
+                sheenFollowScroll = false
+                sheenAnim.snapTo(scrollSheenValue())
                 headerMorph.snapTo(morphAtRelease)
                 flyerAlpha.snapTo(1f)
                 openingInListAlpha.snapTo(1f)
@@ -935,6 +949,7 @@ fun ReaderScreen(
                     nextChapterPull = 0f
                     headerMorph.snapTo(0f)
                     chapterAdvancing = false
+                    sheenFollowScroll = true
                     return@launch
                 }
 
@@ -984,27 +999,28 @@ fun ReaderScreen(
                 }
 
                 // Handoff under the flying opening (covers the list remount).
-                // Paint the real header fully opaque under the flyer first, then
-                // dissolve only the flyer — dual alpha crossfades dipped through
-                // empty paper and flickered at the end.
+                // Weave + medallion ownership switch to the settled header (full
+                // strength, never dual-stacked). Only titles crossfade with
+                // complementary alphas: flyer = t, real = 1 − t.
                 // List translation must already be 0 so scrollToItem(0) lands the
                 // real header exactly under the flyer.
                 verseRevealForSurah = nextId
                 verseReveal.snapTo(0f)
                 realHeaderAlpha.snapTo(1f)
+                // Flyer still at full chrome; complementary real chrome starts at 0.
+                flyerAlpha.snapTo(1f)
                 viewModel.installPrepared(prepared)
                 listState.scrollToItem(0)
                 // Two frames so the new LazyColumn lays out at scroll 0 under
-                // the still-visible flyer before we dissolve it.
+                // the still-visible flyer before the chrome crossfade.
                 withFrameNanos { }
                 withFrameNanos { }
                 if (flyingHeader != null) {
+                    // Linear so flyer + real chrome sum to 1 throughout.
                     flyerAlpha.animateTo(
                         0f,
                         tween(320, easing = LinearEasing),
                     )
-                    // Hold one frame at alpha 0 so the last dissolve paint lands
-                    // before unmount (avoids a one-frame flash).
                     withFrameNanos { }
                 }
                 flyingHeader = null
@@ -1021,8 +1037,20 @@ fun ReaderScreen(
                 // Top-nav pin has finished fading (or was never set).
                 pinnedTopNavTitle = null
 
-                // Verses fade and rise in as soon as the header has landed.
+                // Softly settle gold to the at-rest header sheen (scroll top),
+                // in parallel with the verse rise — still locked off scroll-follow.
+                launch {
+                    sheenAnim.animateTo(
+                        targetValue = 0.15f,
+                        animationSpec = tween(
+                            durationMillis = 480,
+                            easing = chapterAdvanceEasing,
+                        ),
+                    )
+                    sheenFollowScroll = true
+                }
 
+                // Verses fade and rise in as soon as the header has landed.
                 if (verseRevealForSurah != nextId) return@launch
                 verseReveal.animateTo(
                     targetValue = 1f,
@@ -1272,20 +1300,26 @@ fun ReaderScreen(
                 ) { index ->
                     when (val item = readerItems[index]) {
                         LazyItem.Header -> {
-                            // Fades in under the departing flyer on handoff.
-                            Box(
-                                Modifier.graphicsLayer { alpha = realHeaderAlphaNow },
-                            ) {
-                                SurahHeader(
-                                    chapterNumber = content.surah.id,
-                                    nameArabic = content.surah.nameArabic,
-                                    nameTransliteration = content.surah.nameTransliteration,
-                                    nameTranslation = content.surah.nameTranslation,
-                                    revelationPlace = content.surah.revelationPlace,
-                                    ayahCount = content.surah.ayahCount,
-                                    sheen = sheen,
-                                )
-                            }
+                            // Weave + medallion stay full-strength on this header
+                            // during handoff; only titles complementary-crossfade.
+                            val handoffUnderFlyer =
+                                flying != null && content.surah.id == flying.surah.id
+                            ChapterOpening(
+                                chapterNumber = content.surah.id,
+                                nameArabic = content.surah.nameArabic,
+                                nameTransliteration = content.surah.nameTransliteration,
+                                nameTranslation = content.surah.nameTranslation,
+                                revelationPlace = content.surah.revelationPlace,
+                                ayahCount = content.surah.ayahCount,
+                                sheen = sheen,
+                                showFieldWeave = true,
+                                showRosette = true,
+                                contentAlpha = if (handoffUnderFlyer) {
+                                    (1f - flyerAlphaNow).coerceIn(0f, 1f)
+                                } else {
+                                    realHeaderAlphaNow
+                                },
+                            )
                         }
                         LazyItem.Basmalah -> {
                             Box(
@@ -1443,16 +1477,16 @@ fun ReaderScreen(
                 val yInBox = flying.startYInRoot +
                     (flying.endYInRoot - flying.startYInRoot) * flyProgressNow -
                     readerRootY
+                // Weave + medallion ride the flyer until the settled header owns
+                // them (same surah id after install) — one of each at full strength.
+                val flyerOwnsEmbellishment = content.surah.id != flying.surah.id
                 Box(
                     Modifier
                         .align(Alignment.TopCenter)
                         .widthIn(max = 680.dp)
                         .fillMaxWidth()
                         .zIndex(2f)
-                        .graphicsLayer {
-                            translationY = yInBox
-                            alpha = flyerAlphaNow
-                        },
+                        .graphicsLayer { translationY = yInBox },
                 ) {
                     ChapterOpening(
                         chapterNumber = flying.surah.id,
@@ -1467,6 +1501,10 @@ fun ReaderScreen(
                         compactBottom = surahOpensWithBasmalahPreface(flying.surah.id),
                         rosetteScale = 1f,
                         rosetteAlpha = 1f,
+                        showFieldWeave = flyerOwnsEmbellishment,
+                        showRosette = flyerOwnsEmbellishment,
+                        // Titles only — complementary with settled header (1 − t).
+                        contentAlpha = flyerAlphaNow,
                     )
                 }
             }

@@ -1615,6 +1615,10 @@ fun AyahBlock(
  *
  * [rosetteScale] is paint-only (graphicsLayer) so invitation polish never
  * thrash layout height during a scroll handoff.
+ *
+ * Handoff layers are split so a flyer↔header crossfade can keep **one**
+ * constant-strength weave and medallion (both double if stacked) while only
+ * the titles use complementary alphas that sum to 1.
  */
 @Composable
 fun ChapterOpening(
@@ -1630,6 +1634,15 @@ fun ChapterOpening(
     compactBottom: Boolean = surahOpensWithBasmalahPreface(chapterNumber),
     rosetteScale: Float = 1f,
     rosetteAlpha: Float = 1f,
+    /** When false, layout is unchanged but the Hankin field is not painted. */
+    showFieldWeave: Boolean = true,
+    /**
+     * When false, medallion slot is kept (same height) but not painted — used
+     * so only one full-strength rosette exists during a handoff crossfade.
+     */
+    showRosette: Boolean = true,
+    /** Opacity of titles only — not the field weave or medallion. */
+    contentAlpha: Float = 1f,
 ) {
     val accents = LocalQuranAccents.current
     val weaveFade = MaterialTheme.colorScheme.background
@@ -1637,19 +1650,21 @@ fun ChapterOpening(
         generateChapterOrnament(chapterOrnamentSeed(chapterNumber, ayahCount))
     }
     val scale = rosetteScale.coerceIn(0.5f, 1.2f)
-    // Weave fades into the page; titles stay full ink (fade was clipping the
-    // chapter meta line when it sat on the Column itself).
+    val titles = contentAlpha.coerceIn(0f, 1f)
+    // Weave + medallion are full-strength when owned; only titles take contentAlpha.
     Box(modifier = modifier.fillMaxWidth()) {
-        Box(
-            Modifier
-                .matchParentSize()
-                .generatedFieldWeave(
-                    field = ornament.field,
-                    ink = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.04f),
-                    embossLight = accents.embossLight.copy(alpha = 0.05f),
-                )
-                .verticalFadingEdges(color = weaveFade, top = 12.dp, bottom = 36.dp),
-        )
+        if (showFieldWeave) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .generatedFieldWeave(
+                        field = ornament.field,
+                        ink = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.04f),
+                        embossLight = accents.embossLight.copy(alpha = 0.05f),
+                    )
+                    .verticalFadingEdges(color = weaveFade, top = 12.dp, bottom = 36.dp),
+            )
+        }
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
@@ -1661,39 +1676,53 @@ fun ChapterOpening(
                     end = 24.dp,
                 ),
         ) {
-            GeneratedChapterRosette(
-                spec = ornament.rosette,
-                size = 52.dp,
-                brightGold = accents.goldBright,
-                deepGold = accents.goldDeep,
-                embossDark = accents.embossDark,
-                embossLight = accents.embossLight,
-                sheen = sheen,
-                modifier = Modifier.graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    alpha = rosetteAlpha.coerceIn(0f, 1f)
-                },
-            )
+            // Always reserve the 52.dp slot so handoff layout doesn't jump when
+            // ownership moves from flyer → settled header.
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(52.dp),
+            ) {
+                if (showRosette) {
+                    GeneratedChapterRosette(
+                        spec = ornament.rosette,
+                        size = 52.dp,
+                        brightGold = accents.goldBright,
+                        deepGold = accents.goldDeep,
+                        embossDark = accents.embossDark,
+                        embossLight = accents.embossLight,
+                        sheen = sheen,
+                        modifier = Modifier.graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                            alpha = rosetteAlpha.coerceIn(0f, 1f)
+                        },
+                    )
+                }
+            }
             Spacer(Modifier.height(16.dp))
-            Text(
-                text = "سُورَةُ $nameArabic",
-                style = ArabicTitleStyle,
-                fontSize = 32.sp,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.height(10.dp))
-            Text(
-                text = "$nameTransliteration · $nameTranslation",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = "Chapter $chapterNumber · ${revelationPlace.replaceFirstChar { it.uppercase() }} · $ayahCount ayahs",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.graphicsLayer { alpha = titles },
+            ) {
+                Text(
+                    text = "سُورَةُ $nameArabic",
+                    style = ArabicTitleStyle,
+                    fontSize = 32.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = "$nameTransliteration · $nameTranslation",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Chapter $chapterNumber · ${revelationPlace.replaceFirstChar { it.uppercase() }} · $ayahCount ayahs",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                )
+            }
         }
     }
 }
