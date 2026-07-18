@@ -128,10 +128,10 @@ export function startRevealed(previous: InkState, current: InkState): boolean {
  * Whether the word should wear the fresh-ink glint: the subtle white-gold
  * sheen a genuinely new word carries while its ink is still wet, dissolving
  * back to plain recited ink over [InkTuning.glintFadeMs] once the voice moves
- * on. Themes opt in via the `--glint` accent (Nightfall only — see
- * `glintEnabled` in render/inkWash); this predicate is the *word* half of the
- * gate. Active repeat words glint over their orange wash too. Otherwise a word
- * re-lit already revealed ([startRevealed] — backward seek) is old ink.
+ * on. Themes opt in via the `--glint` accent (Nightfall and Royal Green —
+ * see `glintEnabled` in render/inkWash); this predicate is the *word* half of
+ * the gate. Active repeat words glint over their orange wash too. Otherwise a
+ * word re-lit already revealed ([startRevealed] — backward seek) is old ink.
  * Port of Android `InkEngine.glinting`.
  */
 export function glinting(

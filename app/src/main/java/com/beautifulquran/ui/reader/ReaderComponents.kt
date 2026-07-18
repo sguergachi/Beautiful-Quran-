@@ -261,11 +261,11 @@ private fun rememberSearchHitWash(active: Boolean): RepeatWash {
 }
 
 /**
- * White-gold glint of freshly laid ink ([InkEngine.glinting] — Nightfall
- * only): full strength while the new word's letters sweep in, then a slow
- * dissolve back to plain recited ink over [InkEngine.Tuning.glintFadeMs] once
- * the voice moves on. The glint has no sweep of its own — it rides the word's
- * existing letter sweep — so this is just the dissolve alpha.
+ * White-gold glint of freshly laid ink ([InkEngine.glinting] — Nightfall and
+ * Royal Green): full strength while the new word's letters sweep in, then a
+ * slow dissolve back to plain recited ink over [InkEngine.Tuning.glintFadeMs]
+ * once the voice moves on. The glint has no sweep of its own — it rides the
+ * word's existing letter sweep — so this is just the dissolve alpha.
  */
 @Composable
 private fun rememberGlintAlpha(glinting: Boolean): State<Float> {
@@ -648,7 +648,7 @@ private fun HighlightLayeredText(
             InkOverlayText(
                 text = text,
                 style = style,
-                color = repeatInk,
+                color = repeatInk.copy(alpha = InkEngine.tuning.repeatInkAlpha),
                 modifier = Modifier.repeatInkLayer(orangeWash, rtl),
             )
         }
@@ -729,7 +729,7 @@ fun WordUnit(
                         fontSize = 12.sp * fontScale,
                         lineHeight = 15.sp * fontScale,
                         fontWeight = glossWeight,
-                        color = repeatInk,
+                        color = repeatInk.copy(alpha = InkEngine.tuning.repeatInkAlpha),
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .matchParentSize()
@@ -996,10 +996,11 @@ private fun ResponsiveEnglishAyah(
                             color = palette.repeatInkColor,
                             restingAlpha = 0f,
                             layerAlpha = wash.alpha.value,
+                            colorAlpha = InkEngine.tuning.repeatInkAlpha,
                         )
                     }
-                    // Nightfall's white-gold sheen sits above both fresh and
-                    // orange repeat ink, following whichever wash is active.
+                    // White-gold sheen sits above both fresh and orange repeat
+                    // ink, following whichever wash is active.
                     if (glintInk != null) {
                         glintAlphas.forEachIndexed { index, glint ->
                             if (glint.value <= 0f) return@forEachIndexed
@@ -1027,6 +1028,7 @@ private fun ResponsiveEnglishAyah(
                             color = palette.repeatInkColor,
                             restingAlpha = 0f,
                             layerAlpha = searchHitWash.alpha.value,
+                            colorAlpha = InkEngine.tuning.repeatInkAlpha,
                         )
                     }
                     blooms
@@ -1249,10 +1251,11 @@ private fun ResponsiveHafsAyah(
                             color = palette.repeatInkColor,
                             restingAlpha = 0f,
                             layerAlpha = wash.alpha.value,
+                            colorAlpha = InkEngine.tuning.repeatInkAlpha,
                         )
                     }
-                    // Nightfall's white-gold sheen sits above both fresh and
-                    // orange repeat ink, following whichever wash is active.
+                    // White-gold sheen sits above both fresh and orange repeat
+                    // ink, following whichever wash is active.
                     if (glintInk != null) {
                         glintAlphas.forEachIndexed { index, glint ->
                             if (glint.value <= 0f) return@forEachIndexed
@@ -1292,6 +1295,7 @@ private fun ResponsiveHafsAyah(
                                 color = palette.repeatInkColor,
                                 restingAlpha = 0f,
                                 layerAlpha = searchHitWash.alpha.value,
+                                colorAlpha = InkEngine.tuning.repeatInkAlpha,
                             )
                         }
                     }

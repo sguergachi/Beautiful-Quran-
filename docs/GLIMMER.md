@@ -1,9 +1,10 @@
 # Fresh-ink glimmer
 
-The Nightfall reader gives newly formed words a brief white-gold glimmer. It
-should feel as though the ink catches light while it is still wet: a restrained
-luminous tint inside the glyphs and a soft halo immediately outside their
-outline. This is not a spotlight, radial bloom, or rectangular glow layer.
+The Nightfall and Royal Green readers give newly formed words a brief
+white-gold glimmer. It should feel as though the ink catches light while it is
+still wet: a restrained luminous tint inside the glyphs and a soft halo
+immediately outside their outline. This is not a spotlight, radial bloom, or
+rectangular glow layer.
 
 This document is the canonical behavior and rendering specification for the
 glimmer on Android and web. Repeat-chain timing and orange ink are documented
@@ -18,8 +19,9 @@ The word half of the gate is:
 state == Active && (repeat || !startRevealed)
 ```
 
-The theme half requires Nightfall's white-gold glimmer accent (`#F8E9BE`).
-Paper and Royal Green do not provide that accent, so they do not glimmer.
+The theme half requires the white-gold glimmer accent (`#F8E9BE`) provided by
+Nightfall and Royal Green. Paper does not define that accent, so it does not
+glimmer.
 
 This produces three deliberate cases:
 
@@ -167,10 +169,11 @@ session-only auditioning values; **Reset** restores the shipped defaults and
 
 | Slider | `InkEngine.Tuning` | Shipped value | Range | Effect |
 |---|---|---:|---:|---|
+| Repeat ink | `repeatInkAlpha` | 1.0 | 0.2–1 | Peak strength of the orange repeat overlay (and search-hit flash). Hue stays theme-owned (`QuranAccents.repeatInk`). |
 | Glitter time ms | `glintFadeMs` | 1000 ms | 100–2400 ms | How long tint and halo recede after the word stops glimmering. |
 | Glint tint | `glintTintAlpha` | 0.62 | 0–1 | Peak strength of the crisp white-gold ink tint. |
-| Halo strength | `glintGlowAlpha` | 0.16 | 0–0.5 | Peak opacity of the blurred outline. |
-| Halo blur | `glintGlowRadius` | 3.5 | 0–10 | Renderer blur radius around the glyph outline; it is not a word-relative radial size. |
+| Halo strength | `glintGlowAlpha` | 0.49 | 0–1 | Peak opacity of the blurred outline. |
+| Halo blur | `glintGlowRadius` | 10 | 0–10 | Renderer blur radius around the glyph outline; it is not a word-relative radial size. |
 
 The scalar maps to Compose `Shadow.blurRadius` for per-word text and to dp for
 the shaped-path `BlurMaskFilter`; use the visual result, not physical units, as

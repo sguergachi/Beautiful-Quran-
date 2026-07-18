@@ -376,14 +376,14 @@ InkEngine owns that too, as data rather than as animation code:
   (an ordinary already-revealed seek re-entry does not),
   which then dissolves back to plain recited ink over `Tuning.glintFadeMs`
   (1 s). The glint is theme-gated by `QuranAccents.glintInk` (null = off;
-  currently a Nightfall-only signature) and rides the active letter or repeat
+  Nightfall and Royal Green) and rides the active letter or repeat
   wash — same progress, same feather — as a tinted overlay (`letterFadeIn`
   on word units, `ColorReveal` on shaped lines). Android adds a restrained
   white-gold halo outside those glyph outlines; web uses two glyph-shaped
   layers: a lightly blurred outline and a restrained luminous ink core.
   Both grow with the wash, peak as the word forms, and recede with the glint.
   The sheen stays
-  legible against Nightfall without becoming a hard or whole-word glow, adding
+  legible against dark pages without becoming a hard or whole-word glow, adding
   no new motion—only a warm light that cools as the ink dries.
   [GLIMMER.md](GLIMMER.md) is the canonical cross-platform rendering,
   tuning, and visual-verification specification. InkEngine also owns
@@ -392,9 +392,9 @@ InkEngine owns that too, as data rather than as animation code:
   1:1 lead-in clip, with an RTL `letterFadeIn` wash paced by the clip clock and
   settled to full ink before audio ends; Upcoming while recessed; Plain at rest).
 - **`InkEngine.Tuning`**: every feel knob in one data class — upcoming alpha,
-  ink/mark fade durations, recess, sweep clamps, repeat sweep and fade-out,
-  glint tint, glitter time, halo strength/blur, wash feather, and sweep easing
-  control points. `InkEngine.tuning` is
+  ink/mark fade durations, recess, sweep clamps, repeat sweep/fade-out and
+  repeat ink strength, glint tint, glitter time, halo strength/blur, wash
+  feather, sweep easing, and tajweed pacing. `InkEngine.tuning` is
   snapshot-backed (`mutableStateOf`), so release builds read constants while
   the Ink Lab can retune a live session.
 - **Renderers consume `InkEngine.Word`.** `AyahBlock` derives each ayah's ink
@@ -412,9 +412,9 @@ InkEngine owns that too, as data rather than as animation code:
 Settings → Developer (triple-tap the logo) → **Ink Lab overlay** floats a
 collapsible slider panel over the reader (`ui/reader/InkLabPanel.kt`), bound
 directly to `InkEngine.tuning`: upcoming ink, fade timings, sweep clamps,
-repeat timings, the fresh-ink **Glitter time**, **Glint tint**, **Halo
-strength**, and **Halo blur** controls, wash feather, and the experimental
-tajweed-pacing toggle with its paced-feather and pacing-contrast knobs
+repeat timings, **Repeat ink** strength, the fresh-ink **Glitter time**,
+**Glint tint**, **Halo strength**, and **Halo blur** controls, wash feather,
+and the tajweed-pacing toggle with its paced-feather and pacing-contrast knobs
 (see [TAJWEED_PACING.md](TAJWEED_PACING.md)). Edits are
 session-only and never persisted —
 shipped behavior cannot drift; **Log values** dumps the current `Tuning` to

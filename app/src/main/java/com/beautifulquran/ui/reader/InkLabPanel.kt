@@ -95,13 +95,16 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
             TuningSlider("Repeat fade ms", t.repeatFadeOutMs.toFloat(), 100f..2400f, integer = true) {
                 InkEngine.tuning = t.copy(repeatFadeOutMs = it.roundToInt())
             }
+            TuningSlider("Repeat ink", t.repeatInkAlpha, 0.2f..1f) {
+                InkEngine.tuning = t.copy(repeatInkAlpha = it)
+            }
             TuningSlider("Glitter time ms", t.glintFadeMs.toFloat(), 100f..2400f, integer = true) {
                 InkEngine.tuning = t.copy(glintFadeMs = it.roundToInt())
             }
             TuningSlider("Glint tint", t.glintTintAlpha, 0f..1f) {
                 InkEngine.tuning = t.copy(glintTintAlpha = it)
             }
-            TuningSlider("Halo strength", t.glintGlowAlpha, 0f..0.5f) {
+            TuningSlider("Halo strength", t.glintGlowAlpha, 0f..1f) {
                 InkEngine.tuning = t.copy(glintGlowAlpha = it)
             }
             TuningSlider("Halo blur", t.glintGlowRadius, 0f..10f) {
