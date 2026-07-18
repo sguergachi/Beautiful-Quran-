@@ -2116,10 +2116,9 @@ fun NextChapterOpenPill(
 }
 
 /**
- * Top-of-chapter previous invitation. Sits behind the list; overscroll shoves
- * the header down so this chrome is revealed above it (never drawn on top of
- * the header). Only from a gesture that began docked at the top.
- * [pullProgress] fills the Open pill.
+ * Top-of-chapter previous invitation. Drawn inside a clipped paper band whose
+ * height tracks overscroll; the list (opaque) slides down so this peels into
+ * view above the header without overlapping it. [pullProgress] fills Open.
  */
 @Composable
 fun PreviousChapterPullChrome(
@@ -2130,12 +2129,13 @@ fun PreviousChapterPullChrome(
     enabled: Boolean = true,
 ) {
     val accents = LocalQuranAccents.current
+    // Compact so the full invitation fits in the ~156.dp rubber band at full pull.
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp)
-            .padding(top = 12.dp, bottom = 28.dp),
+            .padding(top = 10.dp, bottom = 14.dp),
     ) {
         Text(
             text = "PREVIOUS",
@@ -2143,13 +2143,13 @@ fun PreviousChapterPullChrome(
             fontSize = 10.sp,
             color = accents.gold.copy(alpha = 0.55f),
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
             text = nameTransliteration,
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
         )
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(12.dp))
         NextChapterOpenPill(
             chapterName = nameTransliteration,
             onClick = onOpen,
