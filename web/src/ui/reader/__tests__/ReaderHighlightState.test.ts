@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Segment } from '../../../data/models'
 import { PreparedTimings } from '../../../domain/HighlightEngine'
 import {
+  readerAyahInkPolicyActive,
   readerHighlightKey,
   readerHighlightState,
   readerInkAyah,
@@ -29,6 +30,7 @@ describe('ReaderHighlightState', () => {
       isRepeat: true,
       highWater: 2,
       repeatStart: 1,
+      activation: 0,
     })
   })
 
@@ -45,6 +47,20 @@ describe('ReaderHighlightState', () => {
   it('keeps ink on the media verse when no word owns the trailing silence', () => {
     expect(readerInkAyah(null, 4)).toBe(4)
     expect(readerInkAyah(null, null)).toBeNull()
+  })
+
+  it('prepares the fade-lead verse for Upcoming ink without stealing word ownership', () => {
+    // During fade lead: ink stays on ayah 1, focus leads to ayah 2.
+    // Both must run active-ayah policy so ayah 2 softens before handoff and
+    // its first word can wash in once the media item advances.
+    expect(readerAyahInkPolicyActive(1, 1, 2)).toBe(true)
+    expect(readerAyahInkPolicyActive(2, 1, 2)).toBe(true)
+    expect(readerAyahInkPolicyActive(3, 1, 2)).toBe(false)
+    // Mid-verse: ink and lead agree.
+    expect(readerAyahInkPolicyActive(4, 4, 4)).toBe(true)
+    expect(readerAyahInkPolicyActive(5, 4, 4)).toBe(false)
+    // Idle / not reciting.
+    expect(readerAyahInkPolicyActive(1, null, null)).toBe(false)
   })
 
   it('distinguishes the real handoff when adjacent words share a position', () => {

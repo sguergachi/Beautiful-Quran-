@@ -438,6 +438,10 @@ sans.
 - Audio playlist, basmalah preface, speed, ayah/range repeat.
 - rAF ticker → `PreparedTimings` → `ActiveWord` (stopped on pause).
 - CSS `[data-reciting]` + per-ayah recess veil so play/pause stays ≥60 fps.
+  Fade-lead prepares the *next* verse (Upcoming + veil lift) via
+  `readerAyahInkPolicyActive` while karaoke ownership stays on
+  `readerInkAyah` — otherwise the first word's wash runs under the lifting
+  veil and reads as "no ink animation".
 - `InkEngine` → paper-cover directional wash (Arabic) / letterFadeIn mask (English).
 - Repeat orange wash for repeat-aware reciters.
 - Chrome recede while playing (top bar + ayah rail → fully hidden like

@@ -369,22 +369,24 @@ InkEngine owns that too, as data rather than as animation code:
   `word(...) → InkEngine.Word(state, repeat)`,   `sweepMs(activeWord, speed)`
   with the min/max clamps (the min floor never exceeds the word's lit
   lifetime — stretching past handoff flickered Arabic-only's paper cover),
-  `startRevealed(previous, current)` — the rule
-  that only a Recited→Active transition skips the reveal sweep —
+  `startRevealed(previous, current)` — always false: every Active entry
+  re-runs the ink wash, including Recited→Active when the listener taps a
+  word to play it again. (`ActiveWord.activation` bumps on genuine seeks so
+  the same Active word can restart too.) Sampling jitter is filtered by
+  HighlightClock, so this skip is no longer needed for accidental bounce.
   `glinting(state, repeat, startRevealed)` — the first-gloss glint rule:
-  a genuinely new word or a new repeat event wears the white-gold sheen
-  (an ordinary already-revealed seek re-entry does not),
-  which then dissolves back to plain recited ink over `Tuning.glintFadeMs`
-  (1 s). The glint is theme-gated by `QuranAccents.glintInk` (null = off;
-  currently a Nightfall-only signature) and rides the active letter or repeat
-  wash — same progress, same feather — as a tinted overlay (`letterFadeIn`
-  on word units, `ColorReveal` on shaped lines). Android adds a restrained
-  white-gold halo outside those glyph outlines; web uses two glyph-shaped
-  layers: a lightly blurred outline and a restrained luminous ink core.
-  Both grow with the wash, peak as the word forms, and recede with the glint.
-  The sheen stays
-  legible against Nightfall without becoming a hard or whole-word glow, adding
-  no new motion—only a warm light that cools as the ink dries.
+  Active words wear the white-gold sheen (including seek/replay and
+  repeat events), which then dissolves back to plain recited ink over
+  `Tuning.glintFadeMs` (1 s). The glint is theme-gated by
+  `QuranAccents.glintInk` (null = off; currently a Nightfall-only signature)
+  and rides the active letter or repeat wash — same progress, same feather —
+  as a tinted overlay (`letterFadeIn` on word units, `ColorReveal` on shaped
+  lines). Android adds a restrained white-gold halo outside those glyph
+  outlines; web uses two glyph-shaped layers: a lightly blurred outline and a
+  restrained luminous ink core. Both grow with the wash, peak as the word
+  forms, and recede with the glint. The sheen stays legible against Nightfall
+  without becoming a hard or whole-word glow, adding no new motion—only a
+  warm light that cools as the ink dries.
   [GLIMMER.md](GLIMMER.md) is the canonical cross-platform rendering,
   tuning, and visual-verification specification. InkEngine also owns
   `prefaceState(isActive, dimmed)` / `prefaceWashProgress(positionMs, durationMs)`

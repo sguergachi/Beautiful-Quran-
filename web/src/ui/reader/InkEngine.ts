@@ -120,8 +120,15 @@ export function sweepMs(
   return Math.min(tuning.maxSweepMs, Math.max(floor, raw))
 }
 
-export function startRevealed(previous: InkState, current: InkState): boolean {
-  return current === InkState.Active && previous === InkState.Recited
+/**
+ * Whether a word entering Active should start already fully revealed.
+ * Always false: every Active entry re-runs the ink wash — including when the
+ * listener taps a recited word to play it again. Sampling jitter is filtered
+ * by HighlightClock so accidental bounce no longer needs this suppression.
+ * Port of Android `InkEngine.startRevealed`.
+ */
+export function startRevealed(_previous: InkState, _current: InkState): boolean {
+  return false
 }
 
 /**
@@ -130,8 +137,9 @@ export function startRevealed(previous: InkState, current: InkState): boolean {
  * back to plain recited ink over [InkTuning.glintFadeMs] once the voice moves
  * on. Themes opt in via the `--glint` accent (Nightfall only — see
  * `glintEnabled` in render/inkWash); this predicate is the *word* half of the
- * gate. Active repeat words glint over their orange wash too. Otherwise a word
- * re-lit already revealed ([startRevealed] — backward seek) is old ink.
+ * gate. Active repeat words glint over their orange wash too. [wasStartRevealed]
+ * is retained for API parity; wash always restarts on Active entry, so ordinary
+ * seeks also glint as a fresh play of the word.
  * Port of Android `InkEngine.glinting`.
  */
 export function glinting(
