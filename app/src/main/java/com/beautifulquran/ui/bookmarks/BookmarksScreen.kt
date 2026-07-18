@@ -42,6 +42,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -151,6 +152,7 @@ fun BookmarksScreen(
 
 @Composable
 private fun BookmarksHeader(onClose: () -> Unit) {
+    val focusManager = LocalFocusManager.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
         // Top air comes from LazyColumn contentPadding (matches the soft edge).
@@ -171,7 +173,15 @@ private fun BookmarksHeader(onClose: () -> Unit) {
             style = MaterialTheme.typography.labelMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier
-                .quietClickable(role = Role.Button, onClick = onClose)
+                .quietClickable(
+                    role = Role.Button,
+                    onClick = {
+                        // Search may still hold focus after the sheet peels
+                        // away; drop it so the IME does not follow to Chapters.
+                        focusManager.clearFocus()
+                        onClose()
+                    },
+                )
                 .padding(vertical = 14.dp),
         )
     }
