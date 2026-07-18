@@ -1,5 +1,8 @@
 package com.beautifulquran.ui.reader
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -27,16 +30,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.beautifulquran.ui.theme.quietClickable
+import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
  * Developer-mode overlay for tuning the highlight feel live: sliders bound
  * straight to [InkEngine.tuning], so every change is visible on the page
  * behind it while a recitation plays. Session-only — nothing here persists;
- * "Log values" dumps the current [InkEngine.Tuning] to Logcat (tag `InkLab`)
- * so tuned numbers can be transcribed into the defaults in InkEngine.kt.
+ * "Copy values" puts a paste-ready [InkEngine.Tuning] constructor on the
+ * clipboard (and Logcat tag `InkLab`) so tuned numbers can land in the
+ * defaults in InkEngine.kt.
  *
  * Enabled from Settings → Developer → "Ink Lab overlay" (developer mode
  * itself unlocks by tapping the Settings logo). See docs/INK_ENGINE.md.
@@ -44,6 +50,8 @@ import kotlin.math.roundToInt
 @Composable
 fun InkLabPanel(modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
+    var copyNote by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
     Column(
         horizontalAlignment = Alignment.End,
         modifier = modifier.widthIn(max = 340.dp),
@@ -129,19 +137,75 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
-                        .quietClickable { InkEngine.tuning = InkEngine.Tuning() }
+                        .quietClickable {
+                            InkEngine.tuning = InkEngine.Tuning()
+                            copyNote = null
+                        }
                         .padding(vertical = 6.dp),
                 )
                 Text(
-                    text = "Log values",
+                    text = "Copy values",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
-                        .quietClickable { Log.d("InkLab", InkEngine.tuning.toString()) }
+                        .quietClickable {
+                            val text = formatTuningCopy(InkEngine.tuning)
+                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                                as? ClipboardManager
+                            cm?.setPrimaryClip(ClipData.newPlainText("Ink Lab tuning", text))
+                            Log.d("InkLab", text)
+                            copyNote = "Copied"
+                        }
                         .padding(vertical = 6.dp),
                 )
             }
+            copyNote?.let { note ->
+                Text(
+                    text = note,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
         }
+    }
+}
+
+/**
+ * Paste-ready Kotlin for the current lab values — drop into
+ * [InkEngine.Tuning] defaults or a `InkEngine.tuning = …` call.
+ * Sweep-easing control points are included even though the panel has no
+ * sliders for them, so a full snapshot never silently drops fields.
+ */
+internal fun formatTuningCopy(t: InkEngine.Tuning): String {
+    fun f(v: Float): String {
+        val s = "%.4f".format(Locale.US, v).trimEnd('0').trimEnd('.')
+        return "${s}f"
+    }
+    return buildString {
+        appendLine("// InkEngine.Tuning — paste into defaults or a tuning assignment")
+        appendLine("InkEngine.Tuning(")
+        appendLine("    upcomingAlpha = ${f(t.upcomingAlpha)},")
+        appendLine("    inkFadeMs = ${t.inkFadeMs},")
+        appendLine("    ayahMarkFadeMs = ${t.ayahMarkFadeMs},")
+        appendLine("    recessMs = ${t.recessMs},")
+        appendLine("    minSweepMs = ${t.minSweepMs},")
+        appendLine("    maxSweepMs = ${t.maxSweepMs},")
+        appendLine("    repeatSweepMs = ${t.repeatSweepMs},")
+        appendLine("    repeatFadeOutMs = ${t.repeatFadeOutMs},")
+        appendLine("    glintFadeMs = ${t.glintFadeMs},")
+        appendLine("    glintTintAlpha = ${f(t.glintTintAlpha)},")
+        appendLine("    glintGlowAlpha = ${f(t.glintGlowAlpha)},")
+        appendLine("    glintGlowRadius = ${f(t.glintGlowRadius)},")
+        appendLine("    washFeather = ${f(t.washFeather)},")
+        appendLine("    sweepEaseX1 = ${f(t.sweepEaseX1)},")
+        appendLine("    sweepEaseY1 = ${f(t.sweepEaseY1)},")
+        appendLine("    sweepEaseX2 = ${f(t.sweepEaseX2)},")
+        appendLine("    sweepEaseY2 = ${f(t.sweepEaseY2)},")
+        appendLine("    tajweedPacing = ${t.tajweedPacing},")
+        appendLine("    pacedFeatherPerLetter = ${f(t.pacedFeatherPerLetter)},")
+        appendLine("    pacingContrast = ${f(t.pacingContrast)},")
+        append(")")
     }
 }
 
