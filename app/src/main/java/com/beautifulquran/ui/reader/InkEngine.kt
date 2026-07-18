@@ -85,13 +85,17 @@ object InkEngine {
         val repeatSweepMs: Int = 450,
         /** Dissolve of the orange wash once the repeat chain releases. */
         val repeatFadeOutMs: Int = 900,
+        /** Peak strength of the orange repeat overlay (and search-hit flash).
+         *  Multiplies [com.beautifulquran.ui.theme.QuranAccents.repeatInk]
+         *  so the hue stays theme-owned while visibility is live-tunable. */
+        val repeatInkAlpha: Float = 1f,
         /** Dissolve of the white-gold first-gloss glint (see [glinting]) back
          *  to plain recited ink once the voice moves on to the next word. */
         val glintFadeMs: Int = 1_000,
         /** Tint strength plus the subtle glyph-outline halo around Nightfall's glint. */
         val glintTintAlpha: Float = 0.62f,
-        val glintGlowAlpha: Float = 0.16f,
-        val glintGlowRadius: Float = 3.5f,
+        val glintGlowAlpha: Float = 0.49f,
+        val glintGlowRadius: Float = 10f,
         /** Width of the ink feather relative to the word (see
          *  ui/theme/Fade.kt: the wash reads as a whole-word breath). */
         val washFeather: Float = 1.6f,
@@ -103,7 +107,7 @@ object InkEngine {
         val sweepEaseY2: Float = 0.78f,
         /** Letter-level tajweed pacing of the active word's sweep — the ink
          *  dwells on held letters (madd, ghunnah) instead of sweeping at a
-         *  constant rate. Experimental; auditioned via the Ink Lab.
+         *  constant rate. Off by default; auditioned via the Ink Lab.
          *  See docs/TAJWEED_PACING.md. */
         val tajweedPacing: Boolean = false,
         /** Wash feather per pronounced letter while tajweed pacing is on:
@@ -238,8 +242,8 @@ object InkEngine {
      * Whether the word should wear the fresh-ink glint: the subtle white-gold
      * sheen a genuinely new word carries while its ink is still wet, dissolving
      * back to plain recited ink over [Tuning.glintFadeMs] once the voice moves
-     * on. Themes opt in via a non-null `QuranAccents.glintInk` (currently
-     * Nightfall only); this predicate is the *word* half of the gate.
+     * on. Themes opt in via a non-null `QuranAccents.glintInk` (Nightfall and
+     * Royal Green); this predicate is the *word* half of the gate.
      *
      * Active repeat words glint over their orange wash too. [startRevealed]
      * is retained for API parity with older call sites; wash always restarts

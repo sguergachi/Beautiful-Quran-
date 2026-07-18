@@ -142,7 +142,7 @@ export function HafsWord({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ink.state, ink.repeat, activation])
 
-  // Fresh-ink glint (Nightfall only, InkEngine.glinting): a transparent-fill
+  // Fresh-ink glint (Nightfall/Royal Green, InkEngine.glinting): transparent-fill
   // halo rises with the paper-cover wash. Never add a second filled Hafs glyph:
   // Chromium can rasterize its overhanging terminal differently from the base.
   useLayoutEffect(() => {

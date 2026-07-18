@@ -289,7 +289,7 @@ export function WordUnit({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ink.state, ink.repeat, englishMode, activation])
 
-  // Fresh-ink glint (Nightfall only, InkEngine.glinting): the halo rises with
+  // Fresh-ink glint (Nightfall/Royal Green, InkEngine.glinting): halo rises with
   // the base wash; English also gets a masked tint twin. Arabic keeps one
   // authoritative filled glyph so Hafs overhang cannot rasterize differently.
   useLayoutEffect(() => {

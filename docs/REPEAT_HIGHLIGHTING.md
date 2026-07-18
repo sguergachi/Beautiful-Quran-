@@ -206,7 +206,8 @@ HighlightEngine.activeInfo(segments, positionMs)
   the ordinary `startRevealed` suppression. See
   [GLIMMER.md](GLIMMER.md) for the lifecycle, layer order, and artifact rules.
 - `repeatInk` is defined per theme in `QuranAccents` — `#B4551E` (light),
-  `#E0904E` (dark).
+  `#E06A18` (Nightfall + Royal Green). Peak overlay strength is
+  `InkEngine.Tuning.repeatInkAlpha` (default 1; Ink Lab **Repeat ink** slider).
 
 Worked example (Al-Baqarah 2:14, `… 7 8 9 10 11 [7 8 9 10 11] 12 …`): the first
 pass 1–11 is normal white karaoke. On the jump back to 7 the chain opens

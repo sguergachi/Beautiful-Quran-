@@ -278,12 +278,12 @@ export function runOpacityReveal(
 
 /**
  * Theme half of the fresh-ink glint gate (the word half is
- * `InkEngine.glinting`): the white-gold first-gloss sheen is a Nightfall-only
- * signature, keyed off the `--glint` accent that only `[data-theme='dark']`
- * defines in styles.css.
+ * `InkEngine.glinting`): the white-gold first-gloss sheen is a Nightfall and
+ * Royal Green signature, keyed off themes that define `--glint` in styles.css.
  */
 export function glintEnabled(): boolean {
-  return document.documentElement.getAttribute('data-theme') === 'dark'
+  const theme = document.documentElement.getAttribute('data-theme')
+  return theme === 'dark' || theme === 'royal_green'
 }
 
 /**
