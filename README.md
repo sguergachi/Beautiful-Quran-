@@ -96,6 +96,19 @@ If the emulator window does not appear or booting times out, check
 source scripts/android_env.sh
 ```
 
+**Host Vulkan.** The run script points the emulator at your GPU’s Vulkan ICD
+(NVIDIA / AMD / Intel) and the system `libvulkan`, and re-enables `Vulkan = on`
+in `~/.android/advancedFeatures.ini` when a previous workaround left it off.
+That avoids falling through to the emulator’s bundled Lavapipe, which can
+SIGSEGV under guest HWUI load. Confirm in the log:
+
+```text
+Selecting Vulkan device: NVIDIA GeForce …
+```
+
+If host Vulkan is broken on your machine, you can still fall back with
+`Vulkan = off` in `~/.android/advancedFeatures.ini` (OpenGL-only guest path).
+
 ## Documentation
 
 - [PLAN.md](PLAN.md) — the original product/engineering plan and research

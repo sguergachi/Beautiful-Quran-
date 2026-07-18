@@ -65,6 +65,52 @@ restore_local_display() {
   fail "no graphical display found (DISPLAY unset, no /tmp/.X11-unix/X*). Set DISPLAY, or use ANDROID_EMULATOR_HEADLESS=1"
 }
 
+# Prefer the host GPU's Vulkan ICD over the emulator's bundled Lavapipe.
+# Without this, guest HWUI Vulkan (skiavk) can land in libvulkan_lvp.so and
+# SIGSEGV RenderThread under load. Safe no-op when no host ICD is present.
+configure_host_vulkan() {
+  local icd loader features_ini
+  features_ini="$HOME/.android/advancedFeatures.ini"
+
+  if [[ -z "${VK_ICD_FILENAMES:-}" ]]; then
+    for icd in \
+      /usr/share/vulkan/icd.d/nvidia_icd.json \
+      /usr/share/vulkan/icd.d/radeon_icd.x86_64.json \
+      /usr/share/vulkan/icd.d/intel_icd.x86_64.json \
+      /etc/vulkan/icd.d/nvidia_icd.json; do
+      if [[ -r "$icd" ]]; then
+        export VK_ICD_FILENAMES="$icd"
+        break
+      fi
+    done
+  fi
+
+  if [[ -z "${ANDROID_EMU_VK_LOADER_PATH:-}" ]]; then
+    for loader in /usr/lib/libvulkan.so.1 /usr/lib/x86_64-linux-gnu/libvulkan.so.1; do
+      if [[ -e "$loader" ]]; then
+        export ANDROID_EMU_VK_LOADER_PATH="$loader"
+        break
+      fi
+    done
+  fi
+
+  # Re-enable host Vulkan if a previous workaround left it off.
+  if [[ -n "${VK_ICD_FILENAMES:-}" ]]; then
+    mkdir -p "$HOME/.android"
+    if [[ -f "$features_ini" ]] && grep -qE '^[[:space:]]*Vulkan[[:space:]]*=[[:space:]]*off' "$features_ini"; then
+      sed -i 's/^[[:space:]]*Vulkan[[:space:]]*=[[:space:]]*off/Vulkan = on/' "$features_ini"
+      log "Re-enabled Vulkan in $features_ini (host ICD: $VK_ICD_FILENAMES)"
+    elif [[ ! -f "$features_ini" ]] || ! grep -qE '^[[:space:]]*Vulkan[[:space:]]*=' "$features_ini"; then
+      {
+        printf '# Host GPU Vulkan ICD (set by scripts/run_android_app.sh)\n'
+        printf 'Vulkan = on\n'
+        printf 'GLDirectMem = on\n'
+      } >> "$features_ini"
+    fi
+    log "Host Vulkan: ICD=${VK_ICD_FILENAMES} loader=${ANDROID_EMU_VK_LOADER_PATH:-default}"
+  fi
+}
+
 # Serial of a booted emulator running the requested AVD, or empty.
 serial_for_avd() {
   local avd="$1" serial name
@@ -207,6 +253,7 @@ main() {
 
   build_quran_db_if_missing
   restore_local_display
+  configure_host_vulkan
 
   serial="$(start_emulator_if_needed)"
   wait_for_boot "$serial"
