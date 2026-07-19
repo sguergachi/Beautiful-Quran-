@@ -26,6 +26,8 @@ tools/build_db.py       Data pipeline that generates quran.db (build-time, not a
 tools/timing_overrides/ Committed timing-correction patches applied by build_db.py
 scripts/                Linux emulator setup / run helpers
 docs/                   Architecture, design language, performance, timings docs
+                        …and the GitHub Pages product page (index.html + styles.css)
+docs/ornaments.css      Generated: the product page's ornaments (see below); do not hand-edit
 web/                    Browser port (Vite + React): Focus / Highlight / Ink + paper reader
 .github/workflows/build.yml   CI: tests on all branches; assembleRelease + publish APK on master only
 .github/workflows/web.yml     CI: Vitest + web build; deploys a Pages artifact on master
@@ -45,6 +47,11 @@ Requires **JDK 21**. No Android device/emulator is needed for tests.
   offline with no extra steps. Only run `python3 tools/build_db.py` if you are
   deliberately changing the data (it downloads sources over HTTPS into
   `tools/.cache/` and regenerates the asset).
+- `docs/ornaments.css` and `docs/ornaments/*.svg` are **committed** too: the
+  Pages workflow copies `docs/` verbatim, so the product page can't run the
+  TypeScript ornament generator itself. `npm run build:ornaments` (from `web/`)
+  re-runs it and rewrites both. Only do that to deliberately re-gild the page —
+  a different seed grows an entirely different composition.
 - To run the app in an emulator on Linux: `scripts/setup_android_emulator.sh`
   once, then `scripts/run_android_app.sh` (see README.md).
 - CI runs on every push: verifies the DB asset exists and runs unit tests.

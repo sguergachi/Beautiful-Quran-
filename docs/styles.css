@@ -2,6 +2,10 @@
  *
  * Paper metaphor: no cards, no elevation, no dividers.
  * Hierarchy from spacing, size, and ink strength. Ornament is gilded and rare.
+ *
+ * The gilding is not hand-drawn: every ornament on this page comes from the
+ * app's own ornament generator, pre-rendered into `ornaments.css` as the
+ * `--orn-*` custom properties. See the "Ornament" section near the bottom.
  */
 
 :root {
@@ -32,6 +36,11 @@
 
   --radius: 999px;
   --radius-soft: 18px;
+  /* Height of a tooled frieze run; its period scales with it (ornaments.css). */
+  --band-h: 15px;
+  /* Corner-seal diameter on the CTA cover, and the rule it is centred on. */
+  --seal-size: 44px;
+  --cover-inset: 16px;
   --max-width: 1080px;
   --content: 40rem;
 
@@ -95,6 +104,8 @@ html {
 }
 
 body {
+  /* The field wash bleeds past the text column; never let it grow the page. */
+  overflow-x: hidden;
   font-family: var(--body);
   font-size: 1.05rem;
   line-height: 1.55;
@@ -259,10 +270,29 @@ img {
 }
 
 .hero-stage {
+  position: relative;
   display: flex;
   justify-content: center;
   align-items: flex-end;
   min-height: 0;
+}
+
+/* The medallion behind the device — a rose window the phone sits inside. */
+.hero-stage::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(158%, 620px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background: var(--orn-medallion) center / contain no-repeat;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.hero-stage .phone-frame {
+  position: relative;
 }
 
 .phone-frame {
@@ -284,6 +314,17 @@ img {
 
 .phone-frame video {
   object-fit: cover;
+  /*
+   * A playing video gets promoted to an overlay layer on mobile Chrome, and
+   * an overlay ignores the element's own border-radius — the hero clip
+   * rendered with square corners inside the rounded frame while the
+   * screenshot <img>s beside it were rounded. This mask is opaque
+   * everywhere (both stops are fully opaque, so no pixel changes); it exists
+   * only to force the video off the overlay path, where the radius above is
+   * honoured again. Remove it only if you can confirm on a real device.
+   */
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  mask-image: radial-gradient(#fff, #000);
   /* Mute autoplay; keep the clip looping as a silent product demo. */
   pointer-events: none;
 }
@@ -389,6 +430,18 @@ img {
   margin-bottom: 10px;
 }
 
+/* Every gilded label opens with the seal, shrunk to a mark. */
+.eyebrow::before,
+.section-kicker::before {
+  content: '';
+  display: inline-block;
+  width: 0.95em;
+  height: 0.95em;
+  margin-right: 0.55em;
+  vertical-align: -0.14em;
+  background: var(--orn-pip) center / contain no-repeat;
+}
+
 .section-lead {
   color: var(--ink-muted);
   max-width: 38rem;
@@ -415,13 +468,38 @@ h3 {
 
 /* ── Ink demo (only place full-page fade remains useful) ── */
 
+/* The one opaque panel on the page, so it carries its own field rather than
+ * the body wash it covers — and is closed top and bottom by the frieze. */
 .ink-demo-section {
-  padding: 56px 0 64px;
-  border-top: 1px solid color-mix(in srgb, var(--ink) 7%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--ink) 7%, transparent);
+  position: relative;
+  padding: 68px 0 76px;
   background:
     radial-gradient(ellipse 80% 70% at 50% 0%, color-mix(in srgb, var(--green) 8%, transparent), transparent 70%),
+    var(--orn-field) 0 0 / var(--orn-field-size),
     var(--paper);
+}
+
+.ink-demo-section::before,
+.ink-demo-section::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--band-h);
+  background-image: var(--orn-band-h);
+  background-size: calc(var(--orn-band-period) * var(--band-h)) var(--band-h);
+  background-repeat: repeat-x;
+  pointer-events: none;
+}
+
+.ink-demo-section::before {
+  top: 0;
+}
+
+/* Mirrored, so the frieze faces inward on both rules. */
+.ink-demo-section::after {
+  bottom: 0;
+  transform: scaleY(-1);
 }
 
 .ink-demo-inner {
@@ -609,12 +687,39 @@ h3 {
 
 /* ── CTA band ───────────────────────────────────────────── */
 
+/* The closing panel is dressed as a tooled binding: field weave inside a
+ * gilt rule, with a corner seal pressed over each join. */
 .cta-band {
-  margin: 48px 0 24px;
-  padding: 40px 36px;
+  position: relative;
+  margin: 56px 0 24px;
+  padding: 52px 44px;
   text-align: center;
-  background: color-mix(in srgb, var(--green) 7%, var(--paper));
+  background:
+    var(--orn-field) 0 0 / var(--orn-field-size),
+    color-mix(in srgb, var(--green) 7%, var(--paper));
   border-radius: var(--radius-soft);
+}
+
+.cta-band::before,
+.cta-band::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+}
+
+.cta-band::before {
+  inset: var(--cover-inset);
+  border: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
+  border-radius: 8px;
+}
+
+/* Inset so that each seal's centre lands exactly on a corner of that rule. */
+.cta-band::after {
+  inset: calc(var(--cover-inset) - var(--seal-size) / 2);
+  background-image: var(--orn-seal), var(--orn-seal), var(--orn-seal), var(--orn-seal);
+  background-position: left top, right top, left bottom, right bottom;
+  background-size: var(--seal-size) var(--seal-size);
+  background-repeat: no-repeat;
 }
 
 .cta-band h2 {
@@ -673,9 +778,33 @@ h3 {
 /* ── Footer ─────────────────────────────────────────────── */
 
 .site-footer {
-  padding: 36px 0 48px;
-  border-top: 1px solid color-mix(in srgb, var(--ink) 7%, transparent);
-  margin-top: 24px;
+  position: relative;
+  padding: 44px 0 56px;
+  margin-top: 32px;
+}
+
+/* Frieze rule instead of a hairline border… */
+.site-footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--band-h);
+  background-image: var(--orn-band-h);
+  background-size: calc(var(--orn-band-period) * var(--band-h)) var(--band-h);
+  background-repeat: repeat-x;
+  pointer-events: none;
+}
+
+/* …and a tailpiece to close the page, the way a colophon closes a mushaf. */
+.site-footer::after {
+  content: '';
+  display: block;
+  width: 62px;
+  height: 62px;
+  margin: 30px auto 0;
+  background: var(--orn-tailpiece) center / contain no-repeat;
 }
 
 .footer-links {
@@ -699,6 +828,65 @@ h3 {
   font-size: 0.82rem;
   letter-spacing: 0.03em;
   color: var(--ink-faint);
+}
+
+/* ── Ornament ───────────────────────────────────────────── */
+/*
+ * Every piece here is generated, not drawn: `ornaments.css` is written by
+ * `web/scripts/build-marketing-ornaments.mjs`, which runs the app's ornament
+ * generator on Al-Fatihah's chapter seed. That gives one composition — one
+ * medallion, one corner seal, one frieze period, one field cell — so the
+ * whole page is gilded from a single cover, and re-seeding it re-gilds
+ * everything at once. Pieces are used at:
+ *
+ *   --orn-field       the page wash below, plus the ink demo and CTA panels
+ *   --orn-band-h      frieze rules: ink-demo section, footer
+ *   --orn-medallion   the rose window behind the hero device
+ *   --orn-seal        corner seals on the CTA cover
+ *   --orn-pip         the seal shrunk to a mark, before every gilded label
+ *   --orn-tailpiece   the footer colophon (Al-Ikhlas's seed)
+ *
+ * `--orn-band-v` is generated for completeness; nothing on this page runs a
+ * vertical frieze yet.
+ */
+
+/*
+ * The field, tiled behind everything and masked away from the middle of the
+ * viewport — so it reads as the tooled edge of a binding rather than a
+ * texture running under the words. Fixed, so scrolling is a page moving
+ * across it. Opaque sections (ink demo, CTA) cover it and carry their own.
+ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image: var(--orn-field);
+  background-size: var(--orn-field-size);
+  -webkit-mask-image: radial-gradient(ellipse 64% 56% at 50% 45%, transparent 42%, #000 100%);
+  mask-image: radial-gradient(ellipse 64% 56% at 50% 45%, transparent 42%, #000 100%);
+  pointer-events: none;
+}
+
+/* Narrow screens have no margin to spare: the wash would sit under the text
+ * column, and the hero medallion would swamp a phone-sized device shot. */
+@media (max-width: 700px) {
+  body::before {
+    display: none;
+  }
+
+  .hero-stage::before {
+    width: min(130%, 340px);
+    opacity: 0.32;
+  }
+}
+
+@media (max-width: 560px) {
+  :root {
+    --band-h: 12px;
+    --seal-size: 34px;
+    --cover-inset: 12px;
+  }
 }
 
 /* ── Privacy page ───────────────────────────────────────── */
