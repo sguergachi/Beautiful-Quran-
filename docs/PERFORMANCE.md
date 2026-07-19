@@ -23,7 +23,7 @@ draw phase.
 
 Every fade in the app — word highlights, recited-word settling, ayah
 dimming, the chrome recede — animates a `State<Float>` that is read **only
-inside a `graphicsLayer { }` block**:
+in the draw phase**. Most use a `graphicsLayer { }` block:
 
 ```kotlin
 val ink = animatedInkAlpha(state)          // State<Float>, not read here
@@ -35,6 +35,11 @@ recomposes and re-lays-out **nothing**: it only updates a render-node
 property, which is close to free. The same pattern applies to the player-bar
 chrome (`chromeAlpha: () -> Float` — a deferred read, not a Float
 parameter).
+
+Word-local glyph fades use `Modifier.glyphLayerAlpha` instead. It keeps the
+same draw-phase-only behavior but expands the offscreen layer beyond the
+logical word box, preserving EB Garamond serifs and Hafs marks that overhang
+their advances while alpha is animated.
 
 The paper stack follows the same rule: its live page position is read inside
 each sheet's `graphicsLayer` and shadow draw callback. Only threshold-derived

@@ -104,6 +104,30 @@ fun Modifier.letterFadeIn(
 }
 
 /**
+ * Draw-phase alpha for word-local text. Unlike a tight graphics layer, this
+ * offscreen layer includes enough bleed for Latin serifs and Arabic marks that
+ * paint beyond the word's advance, so animated ink never shears an overhang.
+ */
+fun Modifier.glyphLayerAlpha(alpha: () -> Float): Modifier = drawWithContent {
+    val value = alpha().coerceIn(0f, 1f)
+    if (value >= 1f) {
+        drawContent()
+        return@drawWithContent
+    }
+    if (value <= 0f) return@drawWithContent
+
+    val bleed = FadeLayerBleed.toPx()
+    drawIntoCanvas { canvas ->
+        canvas.saveLayer(
+            Rect(-bleed, -bleed, size.width + bleed, size.height + bleed),
+            Paint().apply { this.alpha = value },
+        )
+    }
+    drawContent()
+    drawIntoCanvas { canvas -> canvas.restore() }
+}
+
+/**
  * One word-local bloom inside a larger shaped [Text] (Arabic-only / no-gloss).
  *
  * Constraints that ruled out earlier approaches:
