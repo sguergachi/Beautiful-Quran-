@@ -64,6 +64,13 @@ gesture by these rules:
   one sheet. The thresholds live beside the layer constants in
   `MainActivity.kt` and are the tuning knobs for swipe eagerness.
 
+Vertical chapter boundaries in the reader are soft stops too. A scroll or
+fling may arrive at the opening header or next-chapter footer, but it never
+turns that leftover motion into a chapter jump. The reader must begin a fresh
+pull from the boundary (or tap its explicit control) to change chapters. Pull
+progress follows the finger in both directions, remains cancellable even after
+filling completely, and commits only when released while still fully filled.
+
 ## The ink bleed
 
 When the app must present something the system would normally raise as a
