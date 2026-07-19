@@ -40,12 +40,17 @@ The glimmer has no independent sweep. It rides the active word's existing
 directional wash, with the same duration, easing, direction, and feather:
 
 1. The normal base ink remains the source of legibility.
-2. During a repeat, the orange repeat wash sits above the base ink.
+2. During a repeat, the glimmer itself uses the dark terracotta repeat ink;
+   white gold remains exclusive to first-pass words.
 3. A glyph-shaped white-gold halo forms behind the visible ink.
 4. A restrained white-gold tint forms inside the glyphs above the other ink.
 5. At the end of the word wash, tint and halo reach their peak together.
-6. When the voice moves on, both recede to zero over `glintFadeMs` while the
-   base or orange ink remains intact.
+6. When the voice moves on, the extra glimmer recedes over `glintFadeMs` while
+   the identical terracotta repeat ink remains intact underneath.
+
+The repeat colour is latched for the glimmer's full rendered lifetime. Chain
+release may change the word back to a normal recited state while its glimmer is
+still fading; that state change must not recolour the drying shimmer white-gold.
 
 The result should read as light forming with the word, peaking when the word is
 complete, then drying away. It must never replace the soft leading edge of the
