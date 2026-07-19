@@ -159,6 +159,13 @@ img {
   position: sticky;
   top: 0;
   z-index: 10;
+}
+
+.top-nav::before {
+  content: '';
+  position: absolute;
+  inset: 0 calc(50% - 50vw);
+  z-index: -1;
   background: color-mix(in srgb, var(--paper) 88%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -274,25 +281,27 @@ img {
   display: flex;
   justify-content: center;
   align-items: flex-end;
+  padding-top: 44px;
   min-height: 0;
 }
 
-/* The medallion behind the device — a rose window the phone sits inside. */
+/* A Moroccan lambrequin opening: geometry belongs to the architecture around
+ * the phone, leaving the reader itself calm and unobstructed. */
 .hero-stage::before {
   content: '';
   position: absolute;
-  top: 50%;
+  top: 0;
   left: 50%;
-  width: min(158%, 620px);
-  aspect-ratio: 1;
-  transform: translate(-50%, -50%);
-  background: var(--orn-medallion) center / contain no-repeat;
-  opacity: 0.45;
+  width: min(132%, 520px);
+  height: 100%;
+  transform: translateX(-50%);
+  background: var(--orn-hero-arch) center top / contain no-repeat;
   pointer-events: none;
 }
 
 .hero-stage .phone-frame {
   position: relative;
+  z-index: 1;
 }
 
 .phone-frame {
@@ -331,7 +340,7 @@ img {
 
 .phone-frame--hero {
   width: min(100%, 280px);
-  transform: rotate(-1.5deg);
+  transform: translateY(44px) rotate(-1.5deg);
 }
 
 @media (max-width: 860px) {
@@ -345,9 +354,13 @@ img {
     order: -1;
   }
 
+  .hero-stage::before {
+    width: min(112%, 430px);
+  }
+
   .phone-frame--hero {
     width: min(100%, 220px);
-    transform: none;
+    transform: translateY(40px);
   }
 
   .hero-lead {
@@ -859,13 +872,13 @@ h3 {
  * Every piece here is generated, not drawn: `ornaments.css` is written by
  * `web/scripts/build-marketing-ornaments.mjs`, which runs the app's ornament
  * generator on Al-Fatihah's chapter seed. That gives one composition — one
- * medallion, one corner seal, one frieze period, one field cell — so the
- * whole page is gilded from a single cover, and re-seeding it re-gilds
- * everything at once. Pieces are used at:
+ * corner seal, one frieze period, one field cell — so the whole page is
+ * gilded from a single cover, and re-seeding it re-gilds everything at once.
+ * Pieces are used at:
  *
- *   --orn-field       the page wash below, plus the ink demo and CTA panels
+ *   --orn-field       the page wash, ink demo, and CTA panels
  *   --orn-band-h      frieze rules: ink-demo section, footer
- *   --orn-medallion   the rose window behind the hero device
+ *   --orn-hero-arch   the hero's tiled architectural surround
  *   --orn-seal        corner seals on the CTA cover
  *   --orn-pip         the seal shrunk to a mark, before every gilded label
  *   --orn-tailpiece   the footer colophon (Al-Ikhlas's seed)
@@ -897,8 +910,8 @@ body::before {
  * would clear the middle of the screen and leave nothing anywhere else. So
  * narrow screens mask it into top and bottom bands instead: the field is
  * pinned to the edges of the viewport (it is fixed), and the reading band
- * through the middle stays clean. The hero medallion also shrinks, or it
- * swamps a phone-sized device shot.
+ * through the middle stays clean. The hero marginalia also soften so they
+ * do not crowd a phone-sized device shot.
  */
 @media (max-width: 700px) {
   body::before {
@@ -908,8 +921,7 @@ body::before {
   }
 
   .hero-stage::before {
-    width: min(130%, 340px);
-    opacity: 0.32;
+    width: min(106%, 380px);
   }
 }
 
