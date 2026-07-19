@@ -314,6 +314,17 @@ img {
 
 .phone-frame video {
   object-fit: cover;
+  /*
+   * A playing video gets promoted to an overlay layer on mobile Chrome, and
+   * an overlay ignores the element's own border-radius — the hero clip
+   * rendered with square corners inside the rounded frame while the
+   * screenshot <img>s beside it were rounded. This mask is opaque
+   * everywhere (both stops are fully opaque, so no pixel changes); it exists
+   * only to force the video off the overlay path, where the radius above is
+   * honoured again. Remove it only if you can confirm on a real device.
+   */
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  mask-image: radial-gradient(#fff, #000);
   /* Mute autoplay; keep the clip looping as a silent product demo. */
   pointer-events: none;
 }
