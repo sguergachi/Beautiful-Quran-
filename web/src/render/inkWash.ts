@@ -366,11 +366,11 @@ export function runGlintFadeOut(
   ink: HTMLElement | null,
   halo: HTMLElement,
   onDone?: () => void,
+  durationMs = getTuning().glintFadeMs,
 ): () => void {
-  const t = getTuning()
   if (ink) applyMask(ink, 'none')
   const fade = (el: HTMLElement, done?: () => void) => runWash(
-    t.glintFadeMs,
+    durationMs,
     sweepEase(),
     cubicBezierEase,
     (_p, eased) => {

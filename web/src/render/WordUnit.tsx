@@ -132,6 +132,8 @@ export function WordUnit({
   // (Android Animatable starts at progress 0 when repeat is true on first compose).
   const prevRepeat = useRef(false)
   const prevGlint = useRef(false)
+  const prevGlintRepeat = useRef(ink.repeat)
+  const glintReplacedByRepeat = useRef(false)
   /** Mount orange/glint/search overlays only while needed — not for every idle word. */
   const [repeatMounted, setRepeatMounted] = useState(ink.repeat)
   const [glintMounted, setGlintMounted] = useState(false)
@@ -303,17 +305,31 @@ export function WordUnit({
     const glinting =
       ink.state === InkState.Active && (ink.repeat || !revealedOnEntry.current)
     const was = prevGlint.current
+    const wasRepeat = prevGlintRepeat.current
     prevGlint.current = glinting
+    prevGlintRepeat.current = ink.repeat
 
     if (glinting && !was) {
+      glintReplacedByRepeat.current = false
       const duration = activeSweepMs ?? getTuning().repeatSweepMs
       return runGlintWashIn(overlay, halo, !englishMode, duration)
+    }
+    // A same-word repeat replaces the already-formed gold glint with orange;
+    // fade it on the repeat wash clock instead of resetting it to zero.
+    if (glinting && was && ink.repeat && !wasRepeat) {
+      glintReplacedByRepeat.current = true
+      const duration = activeSweepMs ?? getTuning().repeatSweepMs
+      return runGlintFadeOut(overlay, halo, undefined, duration)
     }
     if (glinting && was && ink.state === InkState.Active) {
       const duration = activeSweepMs ?? getTuning().repeatSweepMs
       return runGlintWashIn(overlay, halo, !englishMode, duration)
     }
     if (!glinting && was) {
+      if (glintReplacedByRepeat.current) {
+        setGlintMounted(false)
+        return
+      }
       return runGlintFadeOut(overlay, halo, () => setGlintMounted(false))
     }
     if (!glinting) {

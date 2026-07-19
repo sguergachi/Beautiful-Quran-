@@ -48,9 +48,16 @@ directional wash, with the same duration, easing, direction, and feather:
 6. When the voice moves on, the extra glimmer recedes over `glintFadeMs` while
    the identical terracotta repeat ink remains intact underneath.
 
-The repeat colour is latched for the glimmer's full rendered lifetime. Chain
-release may change the word back to a normal recited state while its glimmer is
-still fading; that state change must not recolour the drying shimmer white-gold.
+The glimmer's colour is latched when it forms and held for its full rendered
+lifetime. Chain release may change a repeat word back to a normal recited state
+while its glimmer is still fading; that state change must not recolour the
+drying shimmer white-gold. Conversely, when a single word moves directly from
+its first utterance into a repeat, its formed white-gold glimmer must not snap
+to terracotta or disappear. It recedes with the incoming directional repeat
+wash, so the orange ink visibly replaces the drying gold. A repeat word whose
+glimmer forms as a separate event starts terracotta as usual. Once replaced,
+the first-pass glimmer stays suppressed through chain release; it must not
+reappear above and hide the orange ink's `repeatFadeOutMs` dry-down.
 
 The result should read as light forming with the word, peaking when the word is
 complete, then drying away. It must never replace the soft leading edge of the
