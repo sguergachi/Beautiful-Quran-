@@ -32,6 +32,7 @@ import {
   type BrushKnobKey,
 } from '../kit/brushMark'
 import { FontSizeControl } from '../kit/FontSizeControl'
+import { DisclosureChevron } from '../kit/DisclosureChevron'
 import { InkCheckMark } from '../kit/InkCheckMark'
 import { PaperChoiceList } from '../kit/PaperChoiceList'
 import { PaperSegmented } from '../kit/PaperSegmented'
@@ -511,7 +512,8 @@ export function SettingsScreen({
                 aria-expanded={presetsOpen}
                 onClick={() => setPresetsOpen((o) => !o)}
               >
-                {presetsOpen ? 'Presets ▾' : 'Presets ▸'}
+                <span>Presets</span>
+                <DisclosureChevron expanded={presetsOpen} />
                 <span className="brush-lab-presets-current">
                   {brushCircleParams(s.brushCircleStyle).label}
                 </span>

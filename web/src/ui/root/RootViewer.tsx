@@ -157,7 +157,7 @@ function RootViewerBleed({ closing, rv }: { closing: boolean; rv: RootViewerStat
                         <span className="root-chapter-name"><i>{section.surahId}</i>{section.surahName}</span>
                         <span className="root-chapter-meta" aria-hidden="true">
                           <span className="root-chapter-count">{section.occurrences.length}</span>
-                          <span className="root-chapter-disclosure">{open ? '⌄' : '›'}</span>
+                          <span className="root-chapter-disclosure">{open ? '⌄' : '‹'}</span>
                         </span>
                       </button>
                       {open ? (

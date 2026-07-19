@@ -4,6 +4,7 @@ import {
   bookmarkDisclosureLabel,
   filterBookmarkSections,
   hiddenBookmarkCount,
+  isBookmarkSectionCollapsed,
   visibleBookmarkVerses,
 } from './bookmarkSections'
 
@@ -74,6 +75,11 @@ describe('bookmark section disclosure', () => {
     expect(visibleBookmarkVerses(longSection, false, true)).toHaveLength(7)
     expect(hiddenBookmarkCount(longSection, true, false)).toBe(0)
     expect(hiddenBookmarkCount(longSection, false, true)).toBe(0)
+  })
+
+  it('reveals matches inside a collapsed chapter while searching', () => {
+    expect(isBookmarkSectionCollapsed(2, new Set([2]), false)).toBe(true)
+    expect(isBookmarkSectionCollapsed(2, new Set([2]), true)).toBe(false)
   })
 
   it('uses singular and plural disclosure copy', () => {

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { QuranRepository } from '../../data/repository'
 import { VerseBookmarkRibbon } from '../../render/VerseBookmarkRibbon'
 import { appStore, useAppSelector } from '../../store/appStore'
+import { DisclosureChevron } from '../kit/DisclosureChevron'
 import { PaperInput } from '../kit/PaperInput'
 import { BOOKMARKS_LAYER, COVER_LAYER, type StackLayer } from '../paper/stack'
 import {
@@ -9,6 +10,7 @@ import {
   bookmarkDisclosureLabel,
   filterBookmarkSections,
   hiddenBookmarkCount,
+  isBookmarkSectionCollapsed,
   visibleBookmarkVerses,
   type BookmarkedVerse,
 } from './bookmarkSections'
@@ -20,6 +22,7 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const [query, setQuery] = useState('')
   const [pendingRemoval, setPendingRemoval] = useState<BookmarkKey | null>(null)
   const [expandedSurahs, setExpandedSurahs] = useState<Set<number>>(new Set())
+  const [collapsedSurahs, setCollapsedSurahs] = useState<Set<number>>(new Set())
   const active = stackLayer === BOOKMARKS_LAYER
   const searching = query.trim().length > 0
   const verses = useMemo<BookmarkedVerse[]>(() => {
@@ -99,6 +102,11 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
             {sections.length === 0 ? <BookmarkEmptyState query={query} /> : null}
 
             {sections.map((section, sectionIndex) => {
+              const collapsed = isBookmarkSectionCollapsed(
+                section.surah.id,
+                collapsedSurahs,
+                searching,
+              )
               const expanded = expandedSurahs.has(section.surah.id)
               const visibleVerses = visibleBookmarkVerses(
                 section.verses,
@@ -113,9 +121,21 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
 
               return (
                 <section className="bookmark-section" key={section.surah.id}>
-                  <header
+                  <button
+                    type="button"
                     className="bookmark-section-header"
                     data-first={sectionIndex === 0}
+                    aria-expanded={!collapsed}
+                    disabled={searching}
+                    onClick={() => {
+                      setCollapsedSurahs((current) => {
+                        const next = new Set(current)
+                        if (collapsed) next.delete(section.surah.id)
+                        else next.add(section.surah.id)
+                        return next
+                      })
+                      setPendingRemoval(null)
+                    }}
                   >
                     <span className="bookmark-section-number">
                       {section.surah.id}
@@ -131,10 +151,14 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
                       >
                         {section.surah.nameArabic}
                       </span>
+                      <DisclosureChevron
+                        expanded={!collapsed}
+                        className={`bookmark-section-chevron${searching ? ' bookmark-section-chevron-hidden' : ''}`}
+                      />
                     </span>
-                  </header>
+                  </button>
 
-                  <ul className="bookmark-verses">
+                  <ul className="bookmark-verses" hidden={collapsed}>
                     {visibleVerses.map(({ surah, ayah }) => {
                       const key = `${surah.id}:${ayah.number}` as BookmarkKey
                       return (
@@ -154,7 +178,8 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     })}
                   </ul>
 
-                  {!searching &&
+                  {!collapsed &&
+                  !searching &&
                   section.verses.length > BOOKMARK_SECTION_PREVIEW_LIMIT ? (
                     <button
                       type="button"

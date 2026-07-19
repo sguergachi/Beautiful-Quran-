@@ -6,6 +6,14 @@ export type BookmarkSection = { surah: Surah; verses: BookmarkedVerse[] }
 
 export const BOOKMARK_SECTION_PREVIEW_LIMIT = 5
 
+export function isBookmarkSectionCollapsed(
+  surahId: number,
+  collapsedSurahs: Set<number>,
+  searching: boolean,
+): boolean {
+  return !searching && collapsedSurahs.has(surahId)
+}
+
 export function visibleBookmarkVerses(
   verses: BookmarkedVerse[],
   expanded: boolean,

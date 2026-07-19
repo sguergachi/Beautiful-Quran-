@@ -2371,9 +2371,16 @@ select {
 
 .bookmark-section-header {
   display: grid;
+  width: 100%;
   grid-template-columns: var(--bookmark-spine) minmax(0, 1fr);
   align-items: center;
   padding: 2rem 0 0.75rem;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 .bookmark-section-header[data-first='true'] {
@@ -2407,6 +2414,21 @@ select {
   min-width: 0;
   align-items: center;
   gap: 1rem;
+}
+
+.bookmark-section-chevron {
+  display: block;
+  flex: 0 0 20px;
+  color: var(--accent);
+}
+
+.bookmark-section-chevron-hidden {
+  visibility: hidden;
+}
+
+.bookmark-section-header:disabled {
+  opacity: 1;
+  cursor: default;
 }
 
 .bookmark-section-arabic {
@@ -3640,12 +3662,9 @@ select {
 }
 
 .root-chapter-disclosure {
-  width: 0.75rem;
+  display: block;
+  flex: 0 0 20px;
   color: var(--accent);
-  font-family: var(--font-display);
-  font-size: 1.125rem;
-  line-height: 1;
-  text-align: center;
 }
 
 .root-chapter-occurrences {
@@ -4796,7 +4815,7 @@ html[data-entrance='true'] body {
 
 .brush-lab-presets-toggle {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.65rem;
   margin-top: 0.15rem;
 }

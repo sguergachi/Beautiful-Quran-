@@ -64,6 +64,13 @@ gesture by these rules:
   one sheet. The thresholds live beside the layer constants in
   `MainActivity.kt` and are the tuning knobs for swipe eagerness.
 
+Vertical chapter boundaries in the reader are soft stops too. A scroll or
+fling may arrive at the opening header or next-chapter footer, but it never
+turns that leftover motion into a chapter jump. The reader must begin a fresh
+pull from the boundary (or tap its explicit control) to change chapters. Pull
+progress follows the finger in both directions, remains cancellable even after
+filling completely, and commits only when released while still fully filled.
+
 ## The ink bleed
 
 When the app must present something the system would normally raise as a
@@ -582,9 +589,9 @@ The bookmark index is a compact bilingual concordance, shared by Android and
 web. It uses one centered column (560 dp / 36 rem maximum) and a fixed 40 dp/px
 inner content spine from the outer title rule. The gold number belongs to the
 outer index lane, the English chapter name begins on the inner spine, and the
-isolated RTL Arabic name ends on the far-right Arabic rule. Verse copy balances
-that spine with an equal trailing gutter so its reading measure remains
-centered. Entries then stack Arabic at 24/36, translation at 17/25, and
+isolated RTL Arabic name ends just before the fixed trailing disclosure lane.
+Verse copy balances that spine with an equal trailing gutter so its reading
+measure remains centered. Entries then stack Arabic at 24/36, translation at 17/25, and
 metadata at 14/20; the title is the only display-sized element. Spacing, not
 rules or containers, separates sections.
 
@@ -596,8 +603,9 @@ inset while the narrower gold chapter number begins 4 dp/px from the
 title/search rule. Those offsets are taken from the lane's right-hand air:
 they never widen the 44 dp/px ribbon target or change the page measure. Search
 text, chapter names, verse copy, metadata, and disclosures all begin on the
-same 40 dp/px inner spine; the Arabic chapter name reaches the far-right rule
-shared by the Arabic verse copy.
+same 40 dp/px inner spine; the Arabic chapter name reaches a fixed rule before
+the shared 20 dp/px chevron and its 16 dp/px air, while Arabic verse copy
+retains the sheet's outer rule below it.
 
 The index follows one vertical rhythm on both platforms: 24 dp/px from title
 to search and from search to the first chapter label, 32 dp/px before later
@@ -609,9 +617,9 @@ breathing room, so no extra spacer sits between translation and metadata.
 
 - **Name anchors before assigning padding.** This surface has four: the outer
   title rule, the 44 dp/px index target, the 40 dp/px inner reading spine, and
-  the far-right Arabic rule. Each value expresses one relationship. Scattered
-  child padding recreates almost-aligned edges that fail as soon as the
-  viewport or platform changes.
+  the fixed trailing disclosure lane. Each value expresses one relationship.
+  Scattered child padding recreates almost-aligned edges that fail as soon as
+  the viewport or platform changes.
 - **Visible ink and interaction geometry are separate.** The ribbon keeps a
   44 dp/px target while its narrow cloth sits optically inside it. Moving the
   cloth or chapter numeral must not move the target, widen the gutter, or push
@@ -623,8 +631,9 @@ breathing room, so no extra spacer sits between translation and metadata.
   lane. Tune the marked element, not the whole grid.
 - **Bilingual alignment needs both edges.** English search text, chapter names,
   translation, and metadata begin on the inner left spine. Arabic chapter
-  names and verse copy end on one far-right rule. RTL direction shapes and
-  orders Arabic; it does not place the element on the page.
+  names end before the aligned disclosure lane while verse copy keeps the
+  sheet's far-right rule. RTL direction shapes and orders Arabic; it does not
+  place the element on the page.
 - **Measure rhythm between visible ink, not only boxes.** A 52 dp/px search
   field and a 44 dp/px metadata target contain internal air. Center text inside
   those targets, then judge the visible title-to-search, search-to-section,
@@ -640,9 +649,13 @@ breathing room, so no extra spacer sits between translation and metadata.
   may use different primitives, but these measured relationships must match.
 
 Results remain in Quranic order and can be searched by reference, chapter
-name, or verse text. A chapter initially shows five marked verses; its green
-inline disclosure reveals the remainder, while an active search shows every
-match. The section header establishes the chapter once; an individual result
+name, or verse text. Tapping a chapter header folds or unfolds its complete
+section. The shared disclosure chevron points down to open and up to fold;
+its fixed trailing column keeps every chapter row aligned, with the Arabic
+name ending on the neighboring rule. A chapter initially shows
+five marked verses; its green inline disclosure reveals the remainder, while
+an active search temporarily unfolds every matching chapter so no result is
+hidden. The section header establishes the chapter once; an individual result
 shows only its ayah number. The small ruby strip beside a result opens an
 inline Keep / Remove confirmation in that ayah line's fixed-height space before
 changing the mark, so the page does not jump. Keep is green, Remove is quiet
