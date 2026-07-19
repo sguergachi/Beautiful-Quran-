@@ -23,8 +23,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -57,7 +59,6 @@ import com.beautifulquran.data.model.RootLemmaSummary
 import com.beautifulquran.data.model.RootOccurrence
 import com.beautifulquran.data.model.Word
 import com.beautifulquran.ui.theme.DisplayFontFamily
-import com.beautifulquran.ui.theme.DisclosureChevron
 import com.beautifulquran.ui.theme.HafsFontFamily
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.quietClickable
@@ -490,7 +491,16 @@ private fun ChapterHeading(section: RootOccurrenceSection, open: Boolean, onClic
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
             )
             Spacer(Modifier.width(8.dp))
-            DisclosureChevron(expanded = open)
+            Icon(
+                imageVector = if (open) {
+                    Icons.Rounded.KeyboardArrowDown
+                } else {
+                    Icons.Rounded.KeyboardArrowLeft
+                },
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
 }
