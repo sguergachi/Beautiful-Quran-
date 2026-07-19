@@ -153,6 +153,7 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
                       </span>
                       <DisclosureChevron
                         expanded={!collapsed}
+                        pointsLeftWhenCollapsed
                         className={`bookmark-section-chevron${searching ? ' bookmark-section-chevron-hidden' : ''}`}
                       />
                     </span>

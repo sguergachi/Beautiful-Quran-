@@ -1,10 +1,15 @@
 type Props = {
   expanded: boolean
+  pointsLeftWhenCollapsed?: boolean
   className?: string
 }
 
-/** Shared accordion cue: down to open, up to fold closed. */
-export function DisclosureChevron({ expanded, className }: Props) {
+/** Disclosure cue: sideways toward hidden content, down when it is visible. */
+export function DisclosureChevron({ expanded, pointsLeftWhenCollapsed = false, className }: Props) {
+  const path = expanded
+    ? 'm7 10 5 5 5-5'
+    : pointsLeftWhenCollapsed ? 'm14 7-5 5 5 5' : 'm10 7 5 5-5 5'
+
   return (
     <svg
       className={className}
@@ -18,7 +23,7 @@ export function DisclosureChevron({ expanded, className }: Props) {
       strokeWidth="1.8"
       aria-hidden="true"
     >
-      <path d={expanded ? 'm7 14 5-5 5 5' : 'm7 10 5 5 5-5'} />
+      <path d={path} />
     </svg>
   )
 }

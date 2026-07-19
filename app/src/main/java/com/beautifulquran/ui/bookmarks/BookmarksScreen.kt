@@ -330,6 +330,7 @@ private fun BookmarkSectionHeader(
         Spacer(Modifier.width(16.dp))
         DisclosureChevron(
             expanded = expanded,
+            pointsLeftWhenCollapsed = true,
             modifier = Modifier.alpha(if (collapsible) 1f else 0f),
         )
     }
