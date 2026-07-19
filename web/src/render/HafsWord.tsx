@@ -55,7 +55,9 @@ export function HafsWord({
   const overlayRef = useRef<HTMLSpanElement>(null)
   const glintHaloRef = useRef<HTMLSpanElement>(null)
   const flashRef = useRef<HTMLSpanElement>(null)
-  const prevState = useRef(ink.state)
+  // null until first paint so a word that mounts already Active still runs its
+  // wash (prev === ink.state would set enteredActive false and leave full ink).
+  const prevState = useRef<InkState | null>(null)
   const revealedOnEntry = useRef(false)
   const prevRepeat = useRef(false)
   const prevGlint = useRef(false)
@@ -83,7 +85,7 @@ export function HafsWord({
     const prev = prevState.current
     const enteredActive = ink.state === InkState.Active && prev !== InkState.Active
     if (enteredActive) {
-      revealedOnEntry.current = startRevealed(prev, ink.state)
+      revealedOnEntry.current = startRevealed(prev, ink.state, word.position)
     } else if (ink.state !== InkState.Active) {
       revealedOnEntry.current = false
     }
@@ -127,7 +129,13 @@ export function HafsWord({
     if (glintEnabled()) setGlintMounted(true)
 
     const duration = activeSweepMs ?? t.repeatSweepMs
-    return runPaperCoverWash(cover, true, duration, ease, resting)
+    // Strict Mode cancels the first wash; restore prev so the second pass
+    // still counts as Active entry (first word of a verse mounts Active often).
+    const cancel = runPaperCoverWash(cover, true, duration, ease, resting)
+    return () => {
+      cancel()
+      if (prevState.current === InkState.Active) prevState.current = prev
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ink.state, ink.repeat])
 

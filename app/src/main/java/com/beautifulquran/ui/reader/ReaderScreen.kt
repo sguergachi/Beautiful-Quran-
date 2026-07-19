@@ -190,7 +190,10 @@ fun ReaderScreen(
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val playerState by viewModel.playerState.collectAsStateWithLifecycle()
+    // State form (not `by`) so per-ayah ink derived reads can sample
+    // nowPlaying as a snapshot dependency; unwrapped for the rest of the screen.
+    val playerStateRaw = viewModel.playerState.collectAsStateWithLifecycle()
+    val playerState = playerStateRaw.value
     // Deliberately NOT delegated: the value is only read inside individual
     // list items (via derivedStateOf), so a word change recomposes exactly
     // one ayah block — never the whole screen.
@@ -1344,15 +1347,35 @@ fun ReaderScreen(
                             // Per-ayah derived reads so an ayah/word boundary
                             // recomposes exactly the blocks whose bit flips —
                             // never every visible AyahBlock (docs/PERFORMANCE.md).
-                            val isActive by remember(ayah.number, isThisSurahPlaying) {
-                                derivedStateOf {
-                                    isThisSurahPlaying &&
-                                        activeAyahState.value == ayah.number
-                                }
-                            }
+                            //
+                            // Karaoke ink stays with the media/word owner — not
+                            // [activeAyah], which leads by FADE_LEAD_MS for focus
+                            // scroll. Using the lead for ink made the next verse
+                            // undim early with no Active word, so its first word
+                            // often landed already full rather than washing in
+                            // (web: readerInkAyah). Focus/follow still use lead.
                             val activeWord by remember(ayah.number) {
                                 derivedStateOf {
                                     activeWordState.value?.takeIf { it.ayah == ayah.number }
+                                }
+                            }
+                            val isInkActive by remember(ayah.number, isThisSurahPlaying) {
+                                derivedStateOf {
+                                    if (!isThisSurahPlaying) return@derivedStateOf false
+                                    val word = activeWordState.value
+                                    val inkAyah = word?.ayah
+                                        ?: playerStateRaw.value.nowPlaying
+                                            ?.takeIf { it.surahId == surahId }
+                                            ?.ayah
+                                            ?.takeIf { it > 0 }
+                                    inkAyah == ayah.number
+                                }
+                            }
+                            // Fade-lead focus target (scroll / word-band follow).
+                            val isFocusTarget by remember(ayah.number, isThisSurahPlaying) {
+                                derivedStateOf {
+                                    isThisSurahPlaying &&
+                                        activeAyahState.value == ayah.number
                                 }
                             }
                             // Per-verse derived read so scrolling only recomposes
@@ -1371,8 +1394,8 @@ fun ReaderScreen(
                                 readingMode = settings.readingMode,
                                 activeWord = activeWord,
                                 playbackSpeed = playerState.speed,
-                                isActiveAyah = isActive,
-                                dimmed = recitingActive && !isActive,
+                                isActiveAyah = isInkActive,
+                                dimmed = recitingActive && !isInkActive,
                                 // Keep the page readable the moment a jump
                                 // commits — the decelerating scroll is the cue,
                                 // and a 7 % fade would hide it.
@@ -1385,16 +1408,12 @@ fun ReaderScreen(
                                 searchQuery = activeQuery,
                                 flashWordPosition = searchFlashWord
                                     ?.takeIf { searchFlashAyah == ayah.number },
-                                // Word-level following is always on while this
-                                // verse is the lyric line: bottom-only band
-                                // correction lifts any active word clear of the
-                                // player-bar fold, and no-ops when already in
-                                // band (so short verses keep their top anchor).
-                                // `isActive` short-circuits so only the reciting
-                                // block subscribes.
+                                // Word-level following rides fade-lead focus so
+                                // the band eases onto the next verse early;
+                                // karaoke ink stays on [isInkActive] above.
                                 keepActiveWordInView = followEnabled &&
                                     recitingActive &&
-                                    isActive,
+                                    isFocusTarget,
                                 listCoordinates = { listCoordinates },
                                 onKeepWordInView = onKeepWordInView,
                                 bookmarkSide = bookmarkSide,

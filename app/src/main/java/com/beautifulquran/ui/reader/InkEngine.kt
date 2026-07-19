@@ -253,20 +253,21 @@ object InkEngine {
      * letter sweep already fully revealed (progress 1) instead of snapping to
      * the faint upcoming floor.
      *
-     * True only for Recited → Active: a word already recited this pass that
-     * lights up again after a backward seek or a repeat, where re-running the
-     * reveal would flash it full → faint → sweep for no reason.
+     * True only for Recited → Active on a **mid-verse** word: already recited
+     * this pass and re-lit after a backward seek or a phrase repeat, where
+     * re-running the reveal would flash full → faint → sweep for no reason.
      *
-     * Plain → Active must NOT be held revealed: that is the word the listener
-     * starts playback from (tap-to-play, or play-from-here on a resting
-     * ayah). Since active and recited words both sit at full ink, the reveal
-     * sweep is the *only* thing that marks a word as the one being recited —
-     * skipping it left the starting word indistinguishable from its resting
-     * state, so the highlight appeared to never land on the word playback
-     * began from.
+     * The first word of an ayah ([position] == 1) must **never** start revealed
+     * — not even Recited → Active (verse loop, restart, play-from-start after a
+     * prior pass). That word is the verse's opening ink stroke; skipping the
+     * wash left it sitting in full "already read" ink with no animation.
+     *
+     * Plain → Active must also run the reveal: that is the word the listener
+     * starts playback from on a resting ayah. Active and recited both sit at
+     * full ink, so the sweep is the only cue that playback has landed.
      */
-    fun startRevealed(previous: State, current: State): Boolean =
-        current == State.Active && previous == State.Recited
+    fun startRevealed(previous: State, current: State, position: Int = -1): Boolean =
+        current == State.Active && previous == State.Recited && position != 1
 
     /**
      * Ink for the surah-header basmalah calligraphy (a VectorDrawable, not

@@ -369,8 +369,9 @@ InkEngine owns that too, as data rather than as animation code:
   `word(...) → InkEngine.Word(state, repeat)`,   `sweepMs(activeWord, speed)`
   with the min/max clamps (the min floor never exceeds the word's lit
   lifetime — stretching past handoff flickered Arabic-only's paper cover),
-  `startRevealed(previous, current)` — the rule
-  that only a Recited→Active transition skips the reveal sweep —
+  `startRevealed(previous, current, position)` — the rule that only a
+  mid-verse Recited→Active transition skips the reveal sweep (the first
+  word of an ayah always washes in) —
   `glinting(state, repeat, startRevealed)` — the first-gloss glint rule:
   a genuinely new word or a new repeat event wears the white-gold sheen
   (an ordinary already-revealed seek re-entry does not),

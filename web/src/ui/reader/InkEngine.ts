@@ -120,8 +120,21 @@ export function sweepMs(
   return Math.min(tuning.maxSweepMs, Math.max(floor, raw))
 }
 
-export function startRevealed(previous: InkState, current: InkState): boolean {
-  return current === InkState.Active && previous === InkState.Recited
+/**
+ * Whether a word entering Active should start fully revealed (skip the wash).
+ * Mid-verse Recited→Active only; the first word of an ayah always washes in
+ * (verse loop / restart / play-from-start). Port of Android InkEngine.startRevealed.
+ */
+export function startRevealed(
+  previous: InkState | null | undefined,
+  current: InkState,
+  position = -1,
+): boolean {
+  return (
+    current === InkState.Active &&
+    previous === InkState.Recited &&
+    position !== 1
+  )
 }
 
 /**

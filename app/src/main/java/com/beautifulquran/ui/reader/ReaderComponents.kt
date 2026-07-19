@@ -355,12 +355,19 @@ private fun rememberLetterSweep(
  * live there): tracks the word's previous state and captures the decision the
  * moment the word activates, so it stays stable for the whole time the word
  * is lit and is recomputed fresh on the next activation.
+ *
+ * [position] is the ayah word index (1-based). The first word of a verse always
+ * runs its ink reveal — see [InkEngine.startRevealed].
  */
 @Composable
-private fun rememberStartRevealed(state: InkEngine.State): Boolean {
+private fun rememberStartRevealed(state: InkEngine.State, position: Int = -1): Boolean {
     val active = state == InkEngine.State.Active
     val previousState = remember { mutableStateOf(state) }
-    val startRevealed = InkEngine.startRevealed(previous = previousState.value, current = state)
+    val startRevealed = InkEngine.startRevealed(
+        previous = previousState.value,
+        current = state,
+        position = position,
+    )
     SideEffect { previousState.value = state }
     return remember(active) { startRevealed }
 }
@@ -508,9 +515,11 @@ private fun rememberWordHighlight(
     ink: InkEngine.Word,
     sweepMs: Int?,
     pacing: TajweedPacing.Curve? = null,
+    /** 1-based ayah word position — first word always ink-reveals. */
+    wordPosition: Int = -1,
 ): WordHighlight {
     val isActive = ink.state == InkEngine.State.Active
-    val startRevealed = rememberStartRevealed(ink.state)
+    val startRevealed = rememberStartRevealed(ink.state, wordPosition)
     val glintInk = LocalQuranAccents.current.glintInk
     return WordHighlight(
         isActive = isActive,
@@ -683,7 +692,7 @@ fun WordUnit(
     /** Tajweed pacing of the active word's sweep — null for the plain sweep. */
     pacing: TajweedPacing.Curve? = null,
 ) {
-    val highlight = rememberWordHighlight(ink, sweepMs, pacing)
+    val highlight = rememberWordHighlight(ink, sweepMs, pacing, word.position)
     val searchHitWash = rememberSearchHitWash(showFlash)
     val repeatInk = LocalQuranAccents.current.repeatInk
     val glossWeight = if (searchHit) FontWeight.Bold else null
@@ -769,7 +778,7 @@ fun ConnectedArabicWordUnit(
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)? = null,
 ) {
-    val highlight = rememberWordHighlight(ink, sweepMs)
+    val highlight = rememberWordHighlight(ink, sweepMs, wordPosition = word.position)
     HighlightLayeredText(
         text = word.arabic,
         highlight = highlight,
@@ -820,15 +829,16 @@ private fun rememberWordInkPalette(): WordInkPalette {
  * annotated string — so the sweep does not reshape the ayah every frame. */
 @Composable
 private fun rememberLetterSweeps(
+    words: List<Word>,
     inks: List<InkEngine.Word>,
     activeSweepMs: Int?,
     pacing: TajweedPacing.Curve? = null,
-): List<State<Float>> = inks.map { ink ->
+): List<State<Float>> = words.zip(inks).map { (word, ink) ->
     val active = ink.state == InkEngine.State.Active
     rememberLetterSweep(
         active = active,
         sweepMs = activeSweepMs.takeIf { active },
-        startRevealed = rememberStartRevealed(ink.state),
+        startRevealed = rememberStartRevealed(ink.state, word.position),
         pacing = if (active) pacing else null,
     )
 }
@@ -848,12 +858,19 @@ private fun rememberRepeatWashes(
 /** White-gold glint alpha per word — same lifecycle as gloss mode's overlay.
  * All zeros (and no animation ever starts) on themes without a glint ink. */
 @Composable
-private fun rememberGlintAlphas(inks: List<InkEngine.Word>): List<State<Float>> {
+private fun rememberGlintAlphas(
+    words: List<Word>,
+    inks: List<InkEngine.Word>,
+): List<State<Float>> {
     val glintInk = LocalQuranAccents.current.glintInk
-    return inks.map { ink ->
+    return words.zip(inks).map { (word, ink) ->
         rememberGlintAlpha(
             glinting = glintInk != null &&
-                InkEngine.glinting(ink.state, ink.repeat, rememberStartRevealed(ink.state)),
+                InkEngine.glinting(
+                    ink.state,
+                    ink.repeat,
+                    rememberStartRevealed(ink.state, word.position),
+                ),
         )
     }
 }
@@ -882,9 +899,9 @@ private fun ResponsiveEnglishAyah(
     val palette = rememberWordInkPalette()
     val gold = LocalQuranAccents.current.gold
     val glintInk = LocalQuranAccents.current.glintInk
-    val sweeps = rememberLetterSweeps(inks, activeSweepMs)
+    val sweeps = rememberLetterSweeps(ayah.words, inks, activeSweepMs)
     val repeatWashes = rememberRepeatWashes(inks, activeSweepMs)
-    val glintAlphas = rememberGlintAlphas(inks)
+    val glintAlphas = rememberGlintAlphas(ayah.words, inks)
     val searchHitWash = rememberSearchHitWash(flashWordPosition != null)
     val activeIndex = inks.indexOfFirst { it.state == InkEngine.State.Active }
     val activeIsRepeat = activeIndex >= 0 && inks[activeIndex].repeat
@@ -1107,9 +1124,9 @@ private fun ResponsiveHafsAyah(
     val palette = rememberWordInkPalette()
     val ayahMarkInk = LocalQuranAccents.current.gold
     val glintInk = LocalQuranAccents.current.glintInk
-    val sweeps = rememberLetterSweeps(inks, activeSweepMs, pacing)
+    val sweeps = rememberLetterSweeps(ayah.words, inks, activeSweepMs, pacing)
     val repeatWashes = rememberRepeatWashes(inks, activeSweepMs)
-    val glintAlphas = rememberGlintAlphas(inks)
+    val glintAlphas = rememberGlintAlphas(ayah.words, inks)
     val searchHitWash = rememberSearchHitWash(flashWordPosition != null)
     val activeIndex = inks.indexOfFirst { it.state == InkEngine.State.Active }
     val activeIsRepeat = activeIndex >= 0 && inks[activeIndex].repeat

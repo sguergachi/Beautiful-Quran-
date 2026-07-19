@@ -185,12 +185,25 @@ class InkEngineTest {
     // --- startRevealed ---
 
     @Test
-    fun `only a recited word lighting up again starts revealed`() {
-        assertTrue(InkEngine.startRevealed(previous = State.Recited, current = State.Active))
+    fun `only a mid-verse recited word lighting up again starts revealed`() {
+        // Mid-verse seek/repeat re-entry: skip reveal to avoid full→faint→sweep.
+        assertTrue(
+            InkEngine.startRevealed(previous = State.Recited, current = State.Active, position = 3),
+        )
+        // First word of a verse always washes in — loop, restart, or re-entry.
+        assertFalse(
+            InkEngine.startRevealed(previous = State.Recited, current = State.Active, position = 1),
+        )
         // The word playback starts from must run its reveal sweep — it is the
         // only cue marking it as the word being recited.
         assertFalse(InkEngine.startRevealed(previous = State.Plain, current = State.Active))
         assertFalse(InkEngine.startRevealed(previous = State.Upcoming, current = State.Active))
+        assertFalse(
+            InkEngine.startRevealed(previous = State.Plain, current = State.Active, position = 1),
+        )
+        assertFalse(
+            InkEngine.startRevealed(previous = State.Upcoming, current = State.Active, position = 1),
+        )
         // Not lighting up at all.
         assertFalse(InkEngine.startRevealed(previous = State.Recited, current = State.Recited))
         assertFalse(InkEngine.startRevealed(previous = State.Active, current = State.Recited))

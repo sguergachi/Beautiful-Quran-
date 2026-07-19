@@ -119,7 +119,9 @@ export function WordUnit({
   const glossFlashRef = useRef<HTMLSpanElement>(null)
   const glossRef = useRef<HTMLSpanElement>(null)
   const translitRef = useRef<HTMLSpanElement>(null)
-  const prevState = useRef(ink.state)
+  // null until first paint so a word that mounts already Active still runs its
+  // wash (prev === ink.state would set enteredActive false and leave full ink).
+  const prevState = useRef<InkState | null>(null)
   /** Captured at Active entry — stable for the whole time the word is lit. */
   const revealedOnEntry = useRef(false)
   // false so a word that mounts already in the chain still washes orange in
@@ -157,7 +159,7 @@ export function WordUnit({
     const prev = prevState.current
     const enteredActive = ink.state === InkState.Active && prev !== InkState.Active
     if (enteredActive) {
-      revealedOnEntry.current = startRevealed(prev, ink.state)
+      revealedOnEntry.current = startRevealed(prev, ink.state, word.position)
     } else if (ink.state !== InkState.Active) {
       revealedOnEntry.current = false
     }
@@ -170,6 +172,13 @@ export function WordUnit({
       y1: t.sweepEaseY1,
       x2: t.sweepEaseX2,
       y2: t.sweepEaseY2,
+    }
+
+    /** Strict Mode cancels the wash on the first effect pass; restore [prev]
+     * so the second pass still sees an Active entry and restarts the ink. */
+    const trackWash = (cancel: () => void) => () => {
+      cancel()
+      if (prevState.current === InkState.Active) prevState.current = prev
     }
 
     // ── Arabic: paper cover + directional smootherstep mask ──────────────
@@ -211,18 +220,20 @@ export function WordUnit({
 
       const duration = activeSweepMs ?? t.repeatSweepMs
       paintSecondary(glossRef.current, translitRef.current, ink, 0, false)
-      return runPaperCoverWash(
-        cover,
-        true,
-        duration,
-        ease,
-        resting,
-        (_p, eased) => {
-          paintSecondary(glossRef.current, translitRef.current, ink, eased, false)
-        },
-        () => {
-          paintSecondary(glossRef.current, translitRef.current, ink, 1, false)
-        },
+      return trackWash(
+        runPaperCoverWash(
+          cover,
+          true,
+          duration,
+          ease,
+          resting,
+          (_p, eased) => {
+            paintSecondary(glossRef.current, translitRef.current, ink, eased, false)
+          },
+          () => {
+            paintSecondary(glossRef.current, translitRef.current, ink, 1, false)
+          },
+        ),
       )
     }
 
@@ -258,18 +269,20 @@ export function WordUnit({
 
     const duration = activeSweepMs ?? t.repeatSweepMs
     paintSecondary(glossRef.current, translitRef.current, ink, 0, true)
-    return runLetterWash(
-      el,
-      false,
-      duration,
-      ease,
-      resting,
-      (_p, eased) => {
-        paintSecondary(glossRef.current, translitRef.current, ink, eased, true)
-      },
-      () => {
-        paintSecondary(glossRef.current, translitRef.current, ink, 1, true)
-      },
+    return trackWash(
+      runLetterWash(
+        el,
+        false,
+        duration,
+        ease,
+        resting,
+        (_p, eased) => {
+          paintSecondary(glossRef.current, translitRef.current, ink, eased, true)
+        },
+        () => {
+          paintSecondary(glossRef.current, translitRef.current, ink, 1, true)
+        },
+      ),
     )
     // speed/duration captured at Active entry only — mid-word setting changes
     // must not cancel and restart the sweep (that is itself a flicker).
