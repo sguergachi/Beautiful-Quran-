@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
@@ -168,11 +169,9 @@ private fun BookmarksHeader(onClose: () -> Unit) {
                 color = MaterialTheme.colorScheme.onBackground,
             )
         }
-        Text(
-            text = "Chapters  →",
-            style = MaterialTheme.typography.labelMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
-            color = MaterialTheme.colorScheme.primary,
+        Box(
             modifier = Modifier
+                .size(40.dp)
                 .quietClickable(
                     role = Role.Button,
                     onClick = {
@@ -181,9 +180,16 @@ private fun BookmarksHeader(onClose: () -> Unit) {
                         focusManager.clearFocus()
                         onClose()
                     },
-                )
-                .padding(vertical = 14.dp),
-        )
+                ),
+            contentAlignment = Alignment.CenterEnd,
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                contentDescription = "Back to Chapters",
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                modifier = Modifier.size(24.dp),
+            )
+        }
     }
 }
 
