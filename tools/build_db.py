@@ -37,6 +37,11 @@ ROOT = Path(__file__).resolve().parent.parent
 CACHE = Path(__file__).resolve().parent / ".cache"
 OUT = ROOT / "data" / "quran.db"
 OVERRIDES_DIR = Path(__file__).resolve().parent / "timing_overrides"
+# Auto-generated CTC-arbitrated structural repairs (tools/gen_repairs.py). These
+# strip qdc alignment artifacts (split/mislabel false-repeats), restore flattened
+# re-recitations, and fill dropped words. Applied BEFORE timing_overrides so a
+# manual patch always wins over an automatic repair.
+REPAIRS_DIR = Path(__file__).resolve().parent / "timing_repairs"
 
 QURAN_JSON_TGZ = "https://registry.npmjs.org/quran-json/-/quran-json-3.1.2.tgz"
 WBW_TGZ = (
@@ -524,6 +529,50 @@ def ingest_reciter_timings(rid, word_counts, timing_rows, stats, adjust):
     return covered
 
 
+def apply_timing_repairs(timing_rows, word_counts):
+    """Apply auto-generated CTC-arbitrated repairs (tools/timing_repairs/*.json)
+    on top of the qdc/quran-align timing rows. Same edit shape as overrides plus
+    an ignored ``kind`` tag; validated identically. Runs before overrides so a
+    manual patch wins. Summary-only output (there can be thousands of edits)."""
+    slug_by_id = {r[0]: r[1] for r in RECITERS}
+    by_key = {(rid, sid, ay): segs for (rid, sid, ay, segs) in timing_rows}
+    files = sorted(REPAIRS_DIR.glob("*.json")) if REPAIRS_DIR.is_dir() else []
+    files = [f for f in files if not f.name.endswith(".flagged.json")]
+    if not files:
+        return timing_rows
+    by_kind = {}
+    applied = 0
+    for path in files:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            print(f"  !! cannot parse repair {path.name}: {e}", file=sys.stderr)
+            sys.exit(1)
+        for edit in payload.get("edits") or []:
+            rid, sid, ay = int(edit["reciterId"]), int(edit["surahId"]), int(edit["ayah"])
+            if rid not in slug_by_id:
+                print(f"  !! repair {path.name}: unknown reciterId {rid}", file=sys.stderr)
+                sys.exit(1)
+            n_words = word_counts.get((sid, ay))
+            if n_words is None:
+                print(f"  !! repair {path.name}: surah {sid} ayah {ay} not in corpus", file=sys.stderr)
+                sys.exit(1)
+            segs = []
+            for s in edit.get("segments") or []:
+                pos, start, end = int(s[0]), int(s[1]), int(s[2])
+                if pos < 1 or pos > n_words or start < 0 or end <= start:
+                    print(f"  !! repair {path.name}: surah {sid} ayah {ay} bad segment {s}", file=sys.stderr)
+                    sys.exit(1)
+                segs.append([pos, start, end])
+            segs.sort(key=lambda s: s[1])
+            by_key[(rid, sid, ay)] = json.dumps(segs, separators=(",", ":"))
+            by_kind[edit.get("kind", "repair")] = by_kind.get(edit.get("kind", "repair"), 0) + 1
+            applied += 1
+    new_rows = [(rid, sid, ay, segs) for (rid, sid, ay), segs in sorted(by_key.items())]
+    print(f"  repairs: {applied} ayah(s) across {len(files)} file(s) — {by_kind}")
+    return new_rows
+
+
 def apply_timing_overrides(timing_rows, reciter_rows, word_counts):
     """Apply every JSON file in tools/timing_overrides/ on top of the built
     timing rows, replacing or adding (reciter, surah, ayah) rows.
@@ -941,6 +990,9 @@ def main():
                 print(f"  !! coverage below threshold for {slug}", file=sys.stderr)
                 sys.exit(1)
             reciter_rows.append((rid, slug, name, style, 1))
+
+    print("[repairs] applying tools/timing_repairs/*.json")
+    timing_rows = apply_timing_repairs(timing_rows, word_counts)
 
     print("[overrides] applying tools/timing_overrides/*.json")
     timing_rows, reciter_rows = apply_timing_overrides(timing_rows, reciter_rows, word_counts)
