@@ -23,9 +23,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -63,6 +62,7 @@ import com.beautifulquran.data.model.BookmarkedAyah
 import com.beautifulquran.data.model.Surah
 import com.beautifulquran.ui.reader.VerseBookmarkRibbon
 import com.beautifulquran.ui.theme.ArabicTitleStyle
+import com.beautifulquran.ui.theme.DisclosureChevron
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.verticalFadingEdges
@@ -314,27 +314,17 @@ private fun BookmarkSectionHeader(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        if (collapsible) {
-            Spacer(Modifier.width(8.dp))
-            Icon(
-                imageVector = if (expanded) {
-                    Icons.Rounded.KeyboardArrowDown
-                } else {
-                    Icons.AutoMirrored.Rounded.KeyboardArrowRight
-                },
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-        } else {
-            Spacer(Modifier.width(16.dp))
-        }
+        Spacer(Modifier.width(16.dp))
         Text(
             text = surah.nameArabic,
             style = ArabicTitleStyle.copy(fontSize = 20.sp, lineHeight = 30.sp),
             color = MaterialTheme.colorScheme.primary,
             maxLines = 1,
+        )
+        Spacer(Modifier.width(16.dp))
+        DisclosureChevron(
+            expanded = expanded,
+            modifier = Modifier.alpha(if (collapsible) 1f else 0f),
         )
     }
 }

@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.beautifulquran.ui.theme.DisclosureChevron
 import com.beautifulquran.ui.theme.quietClickable
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -58,16 +59,22 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
     ) {
         // Collapsed the panel is just its name — a quiet ink label that
         // expands into the sliders, so the page stays readable while tuning.
-        Text(
-            text = if (expanded) "Ink Lab ▾" else "Ink Lab ▸",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .clip(RoundedCornerShape(14.dp))
                 .background(MaterialTheme.colorScheme.background.copy(alpha = 0.92f))
                 .quietClickable { expanded = !expanded }
                 .padding(horizontal = 14.dp, vertical = 8.dp),
-        )
+        ) {
+            Text(
+                text = "Ink Lab",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.width(4.dp))
+            DisclosureChevron(expanded = expanded)
+        }
         if (!expanded) return@Column
         Spacer(Modifier.height(6.dp))
         Column(

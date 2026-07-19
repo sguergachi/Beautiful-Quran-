@@ -87,6 +87,7 @@ import com.beautifulquran.data.ReadingMode
 import com.beautifulquran.data.Settings
 import com.beautifulquran.data.ThemeMode
 import com.beautifulquran.ui.PageTurnSounds
+import com.beautifulquran.ui.theme.DisclosureChevron
 import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.themePreviewColors
 import com.beautifulquran.ui.theme.verticalFadingEdges
@@ -527,10 +528,12 @@ private fun DeveloperSection(
             .padding(vertical = 6.dp),
     ) {
         Text(
-            text = if (presetsOpen) "Presets ▾" else "Presets ▸",
+            text = "Presets",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
         )
+        Spacer(Modifier.width(4.dp))
+        DisclosureChevron(expanded = presetsOpen)
         Spacer(Modifier.size(12.dp))
         Text(
             text = brushCircleParams(settings.brushCircleStyle).label,
