@@ -23,7 +23,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -495,7 +495,7 @@ private fun ChapterHeading(section: RootOccurrenceSection, open: Boolean, onClic
                 imageVector = if (open) {
                     Icons.Rounded.KeyboardArrowDown
                 } else {
-                    Icons.Rounded.KeyboardArrowLeft
+                    Icons.AutoMirrored.Rounded.KeyboardArrowLeft
                 },
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
