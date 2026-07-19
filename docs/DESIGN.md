@@ -154,15 +154,16 @@ Two themes, both "paper":
   muted gold `#B8901C` reserved for Quranic ornament (ayah marks, surah
   numbers, the ۞).
 - **Nightfall**: near-black charcoal `#0A0B0C`, parchment ink `#E8E2D5`,
-  soft green `#7FB8A4`, warmer gold `#D9B44A`. Nightfall alone adds a
-  **fresh-ink glint** `#F8E9BE`: a newly read word's ink lands white-gold —
-  riding the same letter sweep, never a separate motion — and dries back to
-  parchment over 1 s. A very slight glyph-shaped halo makes it feel lit from
-  within at the peak, then recedes with the tint. It is not a spotlight: no
-  radial field, background glow, box shadow, or clipped word rectangle. See
-  [GLIMMER.md](GLIMMER.md).
+  soft green `#7FB8A4`, warmer gold `#D9B44A`, deep repeat orange `#E06A18`.
+  Nightfall and Royal Green share a **fresh-ink glint** `#F8E9BE`: a newly
+  read word's ink lands white-gold — riding the same letter sweep, never a
+  separate motion — and dries back to parchment over 1 s. A glyph-shaped halo
+  makes it feel lit from within at the peak, then recedes with the tint. It is
+  not a spotlight: no radial field, background glow, box shadow, or clipped
+  word rectangle. See [GLIMMER.md](GLIMMER.md).
 - **Royal green**: deep green `#062C24`, parchment ink `#E8E2D5`,
-  soft green `#7FB8A4`, warmer gold `#D9B44A`.
+  soft green `#7FB8A4`, warmer gold `#D9B44A`, same deep repeat orange and
+  fresh-ink glint as Nightfall.
 
 Gold never marks interaction; green never decorates. One accent each.
 

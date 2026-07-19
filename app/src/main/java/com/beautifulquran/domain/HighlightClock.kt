@@ -22,9 +22,18 @@ class HighlightClock(private val seekThresholdMs: Long = SEEK_THRESHOLD_MS) {
 
     private var key: Any? = null
     private var clockMs = 0L
+    /** When true, the next [sample] accepts [rawMs] without the jitter hold —
+     * used after a user word-tap / seek so ink tracks the new position. */
+    private var acceptNext = false
 
     /** [rawMs] filtered: monotonic within one [key], except genuine seeks. */
     fun sample(key: Any, rawMs: Long): Long {
+        if (acceptNext) {
+            acceptNext = false
+            this.key = key
+            clockMs = rawMs
+            return rawMs
+        }
         if (key != this.key) {
             this.key = key
             clockMs = rawMs
@@ -34,6 +43,15 @@ class HighlightClock(private val seekThresholdMs: Long = SEEK_THRESHOLD_MS) {
         if (regression > 0 && regression < seekThresholdMs) return clockMs
         clockMs = rawMs
         return rawMs
+    }
+
+    /**
+     * Next [sample] must take the raw position (word tap, scrub, loop).
+     * Without this, a short backward seek is held as jitter and the ink
+     * wash never restarts on the word the listener just played.
+     */
+    fun acceptNextSample() {
+        acceptNext = true
     }
 
     companion object {

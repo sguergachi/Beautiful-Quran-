@@ -135,16 +135,11 @@ describe('InkEngine', () => {
     expect(sweepMs(null, 1)).toBeNull()
   })
 
-  it('only a mid-verse recited word lighting up again starts revealed', () => {
-    // Mid-verse seek/repeat re-entry: skip reveal to avoid full→faint→sweep.
-    expect(startRevealed(InkState.Recited, InkState.Active, 3)).toBe(true)
-    // First word of a verse always washes in — loop, restart, or re-entry.
-    expect(startRevealed(InkState.Recited, InkState.Active, 1)).toBe(false)
+  it('only a recited word lighting up again starts revealed', () => {
+    // Every Active entry re-runs the wash — including Recited → Active replay.
+    expect(startRevealed(InkState.Recited, InkState.Active)).toBe(false)
     expect(startRevealed(InkState.Plain, InkState.Active)).toBe(false)
     expect(startRevealed(InkState.Upcoming, InkState.Active)).toBe(false)
-    expect(startRevealed(InkState.Plain, InkState.Active, 1)).toBe(false)
-    expect(startRevealed(InkState.Upcoming, InkState.Active, 1)).toBe(false)
-    expect(startRevealed(null, InkState.Active, 1)).toBe(false)
     expect(startRevealed(InkState.Recited, InkState.Recited)).toBe(false)
     expect(startRevealed(InkState.Active, InkState.Recited)).toBe(false)
   })

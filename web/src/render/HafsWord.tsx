@@ -32,6 +32,8 @@ interface Props {
   word: Word
   ink: InkWord
   sweepMs: number | null
+  /** Seek-generation so replaying this Active word restarts the wash. */
+  activation?: number
   /** When true, pulse the orange search-hit flash on this Arabic word. */
   searchFlash?: boolean
   rootRef?: MutableRefObject<HTMLElement | null>
@@ -44,6 +46,7 @@ export function HafsWord({
   word,
   ink,
   sweepMs: activeSweepMs,
+  activation = 0,
   searchFlash = false,
   rootRef: externalRootRef,
   onPlay,
@@ -55,9 +58,9 @@ export function HafsWord({
   const overlayRef = useRef<HTMLSpanElement>(null)
   const glintHaloRef = useRef<HTMLSpanElement>(null)
   const flashRef = useRef<HTMLSpanElement>(null)
-  // null until first paint so a word that mounts already Active still runs its
-  // wash (prev === ink.state would set enteredActive false and leave full ink).
+  // null until first layout effect so mount-as-Active still runs the wash.
   const prevState = useRef<InkState | null>(null)
+  const prevActivation = useRef(activation)
   const revealedOnEntry = useRef(false)
   const prevRepeat = useRef(false)
   const prevGlint = useRef(false)
@@ -84,12 +87,18 @@ export function HafsWord({
     if (!cover) return
     const prev = prevState.current
     const enteredActive = ink.state === InkState.Active && prev !== InkState.Active
-    if (enteredActive) {
-      revealedOnEntry.current = startRevealed(prev, ink.state, word.position)
+    const reactivated =
+      ink.state === InkState.Active &&
+      prev === InkState.Active &&
+      activation !== prevActivation.current
+    if (enteredActive || reactivated) {
+      // Always re-run the wash on Active entry / seek-reactivation.
+      revealedOnEntry.current = startRevealed(prev ?? InkState.Plain, ink.state)
     } else if (ink.state !== InkState.Active) {
       revealedOnEntry.current = false
     }
     prevState.current = ink.state
+    prevActivation.current = activation
 
     const t = getTuning()
     const resting = t.upcomingAlpha
@@ -122,24 +131,18 @@ export function HafsWord({
       return
     }
 
-    if (!enteredActive) return
+    if (!enteredActive && !reactivated) return
 
     // The same branch that starts the first-pass wash mounts the glint twin
     // (Nightfall): the white-gold sheen rides this wash, then dries after it.
     if (glintEnabled()) setGlintMounted(true)
 
     const duration = activeSweepMs ?? t.repeatSweepMs
-    // Strict Mode cancels the first wash; restore prev so the second pass
-    // still counts as Active entry (first word of a verse mounts Active often).
-    const cancel = runPaperCoverWash(cover, true, duration, ease, resting)
-    return () => {
-      cancel()
-      if (prevState.current === InkState.Active) prevState.current = prev
-    }
+    return runPaperCoverWash(cover, true, duration, ease, resting)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.state, ink.repeat])
+  }, [ink.state, ink.repeat, activation])
 
-  // Fresh-ink glint (Nightfall only, InkEngine.glinting): a transparent-fill
+  // Fresh-ink glint (Nightfall/Royal Green, InkEngine.glinting): transparent-fill
   // halo rises with the paper-cover wash. Never add a second filled Hafs glyph:
   // Chromium can rasterize its overhanging terminal differently from the base.
   useLayoutEffect(() => {
@@ -158,6 +161,11 @@ export function HafsWord({
       const duration = activeSweepMs ?? getTuning().repeatSweepMs
       return runGlintWashIn(null, halo, true, duration)
     }
+    // Seek-reactivation while still glinting: re-run the wash-in.
+    if (glinting && was && ink.state === InkState.Active) {
+      const duration = activeSweepMs ?? getTuning().repeatSweepMs
+      return runGlintWashIn(null, halo, true, duration)
+    }
     if (!glinting && was) {
       return runGlintFadeOut(null, halo, () => setGlintMounted(false))
     }
@@ -166,7 +174,7 @@ export function HafsWord({
       setGlintMounted(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.state, ink.repeat, glintMounted])
+  }, [ink.state, ink.repeat, glintMounted, activation])
 
   useLayoutEffect(() => {
     if (!repeatMounted) {
@@ -184,6 +192,11 @@ export function HafsWord({
       const duration = activeSweepMs ?? getTuning().repeatSweepMs
       return runRepeatWashIn(overlay, true, duration)
     }
+    // Same-word seek while still in the chain: re-run the orange wash.
+    if (ink.repeat && was && ink.state === InkState.Active) {
+      const duration = activeSweepMs ?? getTuning().repeatSweepMs
+      return runRepeatWashIn(overlay, true, duration)
+    }
     if (leftRepeat) {
       return runRepeatFadeOut(overlay, () => setRepeatMounted(false))
     }
@@ -196,7 +209,7 @@ export function HafsWord({
       setRepeatMounted(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ink.repeat, repeatMounted])
+  }, [ink.repeat, repeatMounted, activation, ink.state])
 
   // Search-hit pulse: mount overlay only while flashing.
   useLayoutEffect(() => {

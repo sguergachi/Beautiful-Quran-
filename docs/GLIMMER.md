@@ -1,9 +1,10 @@
 # Fresh-ink glimmer
 
-The Nightfall reader gives newly formed words a brief white-gold glimmer. It
-should feel as though the ink catches light while it is still wet: a restrained
-luminous tint inside the glyphs and a soft halo immediately outside their
-outline. This is not a spotlight, radial bloom, or rectangular glow layer.
+The Nightfall and Royal Green readers give newly formed words a brief
+white-gold glimmer. It should feel as though the ink catches light while it is
+still wet: a restrained luminous tint inside the glyphs and a soft halo
+immediately outside their outline. This is not a spotlight, radial bloom, or
+rectangular glow layer.
 
 This document is the canonical behavior and rendering specification for the
 glimmer on Android and web. Repeat-chain timing and orange ink are documented
@@ -18,8 +19,9 @@ The word half of the gate is:
 state == Active && (repeat || !startRevealed)
 ```
 
-The theme half requires Nightfall's white-gold glimmer accent (`#F8E9BE`).
-Paper and Royal Green do not provide that accent, so they do not glimmer.
+The theme half requires the white-gold glimmer accent (`#F8E9BE`) provided by
+Nightfall and Royal Green. Paper does not define that accent, so it does not
+glimmer.
 
 This produces three deliberate cases:
 
@@ -27,11 +29,10 @@ This produces three deliberate cases:
 |---|---:|---|
 | A genuinely new word becomes active | Yes | Fresh ink is forming for the first time. |
 | A word becomes active because the reciter repeats it | Yes, every repeat event | The repeated utterance is a new performance event even though its base ink is already revealed. |
-| A previously recited word becomes active after an ordinary backward seek | No | The ink is already dry; replaying the sheen would imply a repeat that the timing data did not report. |
+| A previously recited word becomes active after a seek / word tap | Yes | Replay re-runs the ink wash; the sheen rides that wash so the word reads as being recited again. |
 
-`repeat` therefore takes precedence over `startRevealed`. A repeated word must
-reappear and glimmer again, including a same-word repeat or re-entry into an
-orange repeat chain.
+`startRevealed` no longer suppresses the wash (or the glimmer) on seek/replay —
+tapping a word must restart the directional ink animation.
 
 ## Motion and layer order
 
@@ -39,12 +40,17 @@ The glimmer has no independent sweep. It rides the active word's existing
 directional wash, with the same duration, easing, direction, and feather:
 
 1. The normal base ink remains the source of legibility.
-2. During a repeat, the orange repeat wash sits above the base ink.
+2. During a repeat, the glimmer itself uses the dark terracotta repeat ink;
+   white gold remains exclusive to first-pass words.
 3. A glyph-shaped white-gold halo forms behind the visible ink.
 4. A restrained white-gold tint forms inside the glyphs above the other ink.
 5. At the end of the word wash, tint and halo reach their peak together.
-6. When the voice moves on, both recede to zero over `glintFadeMs` while the
-   base or orange ink remains intact.
+6. When the voice moves on, the extra glimmer recedes over `glintFadeMs` while
+   the identical terracotta repeat ink remains intact underneath.
+
+The repeat colour is latched for the glimmer's full rendered lifetime. Chain
+release may change the word back to a normal recited state while its glimmer is
+still fading; that state change must not recolour the drying shimmer white-gold.
 
 The result should read as light forming with the word, peaking when the word is
 complete, then drying away. It must never replace the soft leading edge of the
@@ -163,14 +169,16 @@ ink at any point.
 Enable developer mode in Settings, turn on **Ink Lab overlay**, start a
 Nightfall recitation, and expand **Ink Lab**. These controls are Android-only,
 session-only auditioning values; **Reset** restores the shipped defaults and
-**Log values** writes the current `InkEngine.Tuning` to Logcat.
+**Copy values** puts a paste-ready `InkEngine.Tuning(…)` constructor on the
+clipboard (also written to Logcat under tag `InkLab`).
 
 | Slider | `InkEngine.Tuning` | Shipped value | Range | Effect |
 |---|---|---:|---:|---|
+| Repeat ink | `repeatInkAlpha` | 1.0 | 0.2–1 | Peak strength of the orange repeat overlay (and search-hit flash). Hue stays theme-owned (`QuranAccents.repeatInk`). |
 | Glitter time ms | `glintFadeMs` | 1000 ms | 100–2400 ms | How long tint and halo recede after the word stops glimmering. |
 | Glint tint | `glintTintAlpha` | 0.62 | 0–1 | Peak strength of the crisp white-gold ink tint. |
-| Halo strength | `glintGlowAlpha` | 0.16 | 0–0.5 | Peak opacity of the blurred outline. |
-| Halo blur | `glintGlowRadius` | 3.5 | 0–10 | Renderer blur radius around the glyph outline; it is not a word-relative radial size. |
+| Halo strength | `glintGlowAlpha` | 0.49 | 0–1 | Peak opacity of the blurred outline. |
+| Halo blur | `glintGlowRadius` | 10 | 0–10 | Renderer blur radius around the glyph outline; it is not a word-relative radial size. |
 
 The scalar maps to Compose `Shadow.blurRadius` for per-word text and to dp for
 the shaped-path `BlurMaskFilter`; use the visual result, not physical units, as

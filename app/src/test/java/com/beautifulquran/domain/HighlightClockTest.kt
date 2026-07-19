@@ -69,4 +69,15 @@ class HighlightClockTest {
         clock.sample("a", 1000)
         assertEquals(1000L, clock.sample("a", 751))
     }
+
+    @Test
+    fun `acceptNextSample lets a short backward seek through`() {
+        val clock = HighlightClock(seekThresholdMs = 250)
+        clock.sample("a", 1000)
+        // Word tap 100 ms earlier would normally be held as jitter.
+        clock.acceptNextSample()
+        assertEquals(900L, clock.sample("a", 900))
+        // Subsequent small regressions are held again.
+        assertEquals(900L, clock.sample("a", 880))
+    }
 }

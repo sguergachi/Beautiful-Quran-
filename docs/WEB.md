@@ -329,19 +329,19 @@ remains a later polish if joining artifacts appear.
 Repeat orange wash: second overlay on the same wash curve; dissolve when
 the repeat chain releases (`InkEngine` + `REPEAT_HIGHLIGHTING.md`).
 
-Fresh-ink glint (Nightfall only): a third overlay twin in white gold
-(`--glint`, defined only on `[data-theme='dark']`) that washes in alongside a
-genuinely new word's first-pass ink — same duration, easing, and directional
-mask — then dissolves to plain recited ink over `glintFadeMs` (1 s) once the
-voice moves on. Gate: `InkEngine.glinting` (word half) × `glintEnabled()` in
-`render/inkWash.ts` (theme half). Repeat events always retrigger the glimmer,
-including when the word starts already revealed; an ordinary backward-seek
-re-entry does not. A transparent duplicate glyph supplies the tight two-radius
-`text-shadow` halo while the crisp overlay keeps the directional mask. The halo
-has no background, box shadow, or filter, and overflow remains visible so its
-edge cannot expose the word box. Same policy and color as Android
-(`QuranAccents.glintInk`); see [GLIMMER.md](GLIMMER.md) for the complete layer
-and visual-verification contract.
+Fresh-ink glint (Nightfall + Royal Green): a third overlay twin in white gold
+(`--glint`, defined on `[data-theme='dark']` and `[data-theme='royal_green']`)
+that washes in alongside a genuinely new word's first-pass ink — same duration,
+easing, and directional mask — then dissolves to plain recited ink over
+`glintFadeMs` (1 s) once the voice moves on. Gate: `InkEngine.glinting` (word
+half) × `glintEnabled()` in `render/inkWash.ts` (theme half). Repeat events
+always retrigger the glimmer, including when the word starts already revealed;
+an ordinary backward-seek re-entry does not. A transparent duplicate glyph
+supplies the tight two-radius `text-shadow` halo while the crisp overlay keeps
+the directional mask. The halo has no background, box shadow, or filter, and
+overflow remains visible so its edge cannot expose the word box. Same policy
+and color as Android (`QuranAccents.glintInk`); see [GLIMMER.md](GLIMMER.md) for
+the complete layer and visual-verification contract.
 
 ## 9. UI surface (paper metaphor)
 
@@ -438,6 +438,10 @@ sans.
 - Audio playlist, basmalah preface, speed, ayah/range repeat.
 - rAF ticker → `PreparedTimings` → `ActiveWord` (stopped on pause).
 - CSS `[data-reciting]` + per-ayah recess veil so play/pause stays ≥60 fps.
+  Fade-lead prepares the *next* verse (Upcoming + veil lift) via
+  `readerAyahInkPolicyActive` while karaoke ownership stays on
+  `readerInkAyah` — otherwise the first word's wash runs under the lifting
+  veil and reads as "no ink animation".
 - `InkEngine` → paper-cover directional wash (Arabic) / letterFadeIn mask (English).
 - Repeat orange wash for repeat-aware reciters.
 - Chrome recede while playing (top bar + ayah rail → fully hidden like

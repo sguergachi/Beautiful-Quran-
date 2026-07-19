@@ -103,4 +103,9 @@ export interface ActiveWord {
   isRepeat: boolean
   highWater: number
   repeatStart: number
+  /**
+   * Bumps on a genuine backward seek so the ink wash restarts even when the
+   * same word stays Active (tap the current word to play it from the start).
+   */
+  activation?: number
 }

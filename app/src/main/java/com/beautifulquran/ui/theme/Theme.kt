@@ -56,8 +56,8 @@ data class QuranAccents(
     val bookmarkRibbon: Color,
     /** Freshly laid ink's white-gold sheen — the first-gloss glint a newly
      * read word wears for a breath before drying to plain recited ink
-     * (InkEngine.glinting). Null on themes without the effect; currently a
-     * Nightfall-only signature. */
+     * (InkEngine.glinting). Null on themes without the effect; Nightfall and
+     * Royal Green share the accent. */
     val glintInk: Color? = null,
 )
 
@@ -207,7 +207,9 @@ private val DarkAccents = QuranAccents(
     goldDeep = Color(0xFF9A7B2A),
     embossDark = Color(0x66000000),
     embossLight = Color(0x1FFFFFFF),
-    repeatInk = Color(0xFFE0904E),
+    // Deep saturated orange — reads as warm ink on charcoal/green, not a pale
+    // peach wash. Strength is further tunable via InkEngine.Tuning.repeatInkAlpha.
+    repeatInk = Color(0xFFE06A18),
     // Lighter, less-saturated ruby so it lifts off near-black and deep green
     // instead of muddying into the surface. Shared by Nightfall and Royal Green.
     bookmarkRibbon = Color(0xFFD64358),
@@ -216,9 +218,8 @@ private val DarkAccents = QuranAccents(
     glintInk = Color(0xFFF8E9BE),
 )
 
-/** Royal Green shares Nightfall's accent inks but not its fresh-ink glint —
- * the white-gold first-gloss sheen is a Nightfall-only signature (for now). */
-private val RoyalGreenAccents = DarkAccents.copy(glintInk = null)
+/** Royal Green shares Nightfall's accent inks, including the fresh-ink glint. */
+private val RoyalGreenAccents = DarkAccents
 
 @Composable
 fun themePreviewColors(themeMode: ThemeMode): List<Color> {

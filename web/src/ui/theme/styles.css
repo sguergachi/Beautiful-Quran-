@@ -54,11 +54,12 @@
   --gold-deep: #a8842a;
   --emboss-dark: rgba(0, 0, 0, 0.4);
   --emboss-light: rgba(255, 255, 255, 0.12);
-  --repeat: #e08a4a;
+  /* Deep saturated orange — warm ink on charcoal, not a pale peach wash. */
+  --repeat: #e06a18;
   --bookmark: #d64358;
   /* Fresh-ink glint: white gold a breath brighter and warmer than the
-   * parchment ink, so a newly read word glints on the night page without
-   * shouting. Nightfall-only signature — no other theme defines it. */
+   * parchment ink, so a newly read word glints on dark themes without
+   * shouting. Shared by Nightfall and Royal Green. */
   --glint: #f8e9be;
   color-scheme: dark;
 }
@@ -75,8 +76,9 @@
   --gold-deep: #a8842a;
   --emboss-dark: rgba(0, 0, 0, 0.4);
   --emboss-light: rgba(255, 255, 255, 0.12);
-  --repeat: #e08a4a;
+  --repeat: #e06a18;
   --bookmark: #d64358;
+  --glint: #f8e9be;
   color-scheme: dark;
 }
 
@@ -1752,9 +1754,9 @@ select {
   color: var(--repeat);
 }
 
-/* White-gold first-gloss glint (Nightfall) — same geometry rules as the
-   orange repeat twin. `--glint` only exists on the dark theme; the transparent
-   fallback keeps a mid-fade overlay invisible if the theme flips under it. */
+/* White-gold first-gloss glint (Nightfall + Royal Green) — same geometry
+   rules as the orange repeat twin. `--glint` is defined on those themes; the
+   transparent fallback keeps a mid-fade overlay invisible if the theme flips. */
 .word-glint-overlay {
   position: absolute;
   inset: 0;
@@ -3312,7 +3314,7 @@ select {
   --gold: #d9b44a;
   --gold-bright: #e9cd7a;
   --gold-deep: #a8842a;
-  --repeat: #e08a4a;
+  --repeat: #e06a18;
   --bookmark: #d64358;
   color-scheme: dark;
 
@@ -3370,7 +3372,7 @@ select {
   --gold: #d9b44a;
   --gold-bright: #e9cd7a;
   --gold-deep: #a8842a;
-  --repeat: #e08a4a;
+  --repeat: #e06a18;
   --bookmark: #d64358;
 }
 

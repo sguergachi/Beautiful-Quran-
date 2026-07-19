@@ -192,6 +192,9 @@ HighlightEngine.activeInfo(segments, positionMs)
   true when `repeatStart ≤ word.position ≤ activeWordPosition` (for QCF glyphs,
   when the word's span overlaps that range). Every member holds orange until the
   chain releases together, so a repeated *section* stays highlighted as one unit.
+  When Active advances to the next member, the previous member only dries its
+  glimmer; its completed orange sweep is held and must not restart. Only chain
+  entry or a genuine non-zero seek activation can begin that sweep.
 - **The orange blooms from the read (full-ink) colour, not the dim unread one.**
   A repeated word was already recited, so its members render at **full alpha**
   (`graphicsLayer { alpha = 1f }`) and only their *colour* animates — they do not
@@ -203,10 +206,13 @@ HighlightEngine.activeInfo(segments, positionMs)
   replays the white-gold glimmer over that orange bloom: the repeat is a new
   event even though the word's base ink was already revealed. This includes
   same-word repeats and repeat-chain re-entry; `repeat` deliberately overrides
-  the ordinary `startRevealed` suppression. See
+  the ordinary `startRevealed` suppression. Repeat glimmer uses the same dark
+  terracotta as the orange wash—not white gold—so drying only removes the
+  shimmer and never changes the word's ink colour. See
   [GLIMMER.md](GLIMMER.md) for the lifecycle, layer order, and artifact rules.
 - `repeatInk` is defined per theme in `QuranAccents` — `#B4551E` (light),
-  `#E0904E` (dark).
+  `#E06A18` (Nightfall + Royal Green). Peak overlay strength is
+  `InkEngine.Tuning.repeatInkAlpha` (default 1; Ink Lab **Repeat ink** slider).
 
 Worked example (Al-Baqarah 2:14, `… 7 8 9 10 11 [7 8 9 10 11] 12 …`): the first
 pass 1–11 is normal white karaoke. On the jump back to 7 the chain opens

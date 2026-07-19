@@ -55,7 +55,17 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
           <div>
             <h1>Bookmarks</h1>
           </div>
-          <button type="button" onClick={() => appStore.revealLayer(COVER_LAYER)}>
+          <button
+            type="button"
+            onClick={() => {
+              // Search may still hold focus after the sheet peels away; blur
+              // so the mobile keyboard does not follow to Chapters.
+              if (document.activeElement instanceof HTMLElement) {
+                document.activeElement.blur()
+              }
+              appStore.revealLayer(COVER_LAYER)
+            }}
+          >
             Chapters&nbsp; →
           </button>
         </header>

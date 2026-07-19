@@ -203,18 +203,23 @@ private data class RepeatWash(
 )
 
 @Composable
-private fun rememberRepeatWash(repeat: Boolean, sweepMs: Int?): RepeatWash {
+private fun rememberRepeatWash(
+    repeat: Boolean,
+    sweepMs: Int?,
+    /** Bumps on seek for the active word so replaying it re-runs orange too. */
+    activation: Long = 0L,
+): RepeatWash {
     val progress = remember { Animatable(if (repeat) 0f else 1f) }
     val alpha = remember { Animatable(if (repeat) 1f else 0f) }
-    // Restart only when the word enters or leaves the repeat chain. While a
-    // repeated phrase advances, earlier words remain orange but stop being the
-    // active word, so their sweepMs becomes null; that must not restart the
-    // wash and briefly clear the held orange.
+    // Chain membership owns the normal wash-in and release. Losing Active as
+    // the chain advances must not restart an earlier word's held orange.
     LaunchedEffect(repeat) {
         // The repeat tint uses the same word-paced sweep as the initial ink
         // reveal, then dissolves back to normal ink slowly once the repeated
         // phrase releases.
         if (repeat) {
+            // A non-zero activation is handled by the seek-only effect below.
+            if (activation != 0L) return@LaunchedEffect
             alpha.snapTo(1f)
             progress.snapTo(0f)
             progress.animateTo(
@@ -228,6 +233,18 @@ private fun rememberRepeatWash(repeat: Boolean, sweepMs: Int?): RepeatWash {
                 tween(InkEngine.tuning.repeatFadeOutMs, easing = InkEngine.sweepEasing),
             )
         }
+    }
+    // A genuine seek can replay the same active repeat word. The caller drops
+    // activation to zero when that word merely becomes an earlier chain member;
+    // ignoring zero is what keeps its completed orange wash sustained.
+    LaunchedEffect(activation) {
+        if (!repeat || activation == 0L) return@LaunchedEffect
+        alpha.snapTo(1f)
+        progress.snapTo(0f)
+        progress.animateTo(
+            1f,
+            tween(sweepMs ?: InkEngine.tuning.repeatSweepMs, easing = InkEngine.sweepEasing),
+        )
     }
     return RepeatWash(progress = progress.asState(), alpha = alpha.asState())
 }
@@ -261,11 +278,11 @@ private fun rememberSearchHitWash(active: Boolean): RepeatWash {
 }
 
 /**
- * White-gold glint of freshly laid ink ([InkEngine.glinting] — Nightfall
- * only): full strength while the new word's letters sweep in, then a slow
- * dissolve back to plain recited ink over [InkEngine.Tuning.glintFadeMs] once
- * the voice moves on. The glint has no sweep of its own — it rides the word's
- * existing letter sweep — so this is just the dissolve alpha.
+ * White-gold glint of freshly laid ink ([InkEngine.glinting] — Nightfall and
+ * Royal Green): full strength while the new word's letters sweep in, then a
+ * slow dissolve back to plain recited ink over [InkEngine.Tuning.glintFadeMs]
+ * once the voice moves on. The glint has no sweep of its own — it rides the
+ * word's existing letter sweep — so this is just the dissolve alpha.
  */
 @Composable
 private fun rememberGlintAlpha(glinting: Boolean): State<Float> {
@@ -281,6 +298,14 @@ private fun rememberGlintAlpha(glinting: Boolean): State<Float> {
         }
     }
     return alpha.asState()
+}
+
+/** Holds a repeat glimmer's terracotta identity through its dry-down. */
+@Composable
+private fun rememberGlintRepeat(glinting: Boolean, repeat: Boolean): Boolean {
+    val latched = remember { object { var repeat = repeat } }
+    if (glinting) latched.repeat = repeat
+    return latched.repeat
 }
 
 private fun Modifier.repeatInkLayer(
@@ -301,16 +326,9 @@ private fun Modifier.repeatInkLayer(
  * (karaoke hold until the next word) — so the last letter finishes inking
  * exactly as the voice moves on.
  *
- * When [startRevealed] is true the word begins the sweep already fully inked
- * (progress 1) instead of snapping to the faint "upcoming" floor. That is the
- * case for a word that lights up directly from a full-ink state — after a
- * seek/jump or repeat re-entry — where there is no preceding "upcoming" dim
- * to breathe out of. Snapping such a word to faint made it flash
- * full → faint → sweep; holding it revealed simply skips the reveal for that
- * one already-read word and removes the flicker.
- *
- * [sweepMs] is captured at Active entry only: mid-word retunes (speed, etc.)
- * must not cancel and restart the wash — that is itself a flicker.
+ * [activation] bumps on a genuine seek so replaying the *same* Active word
+ * (tap it again) restarts the wash; mid-word retunes of [sweepMs] alone must
+ * not cancel the animation.
  *
  * With a [pacing] curve (tajweed pacing) the Animatable becomes a *linear
  * clock* and the curve shapes it into letter dwell — the ink stalls on a held
@@ -323,18 +341,21 @@ private fun Modifier.repeatInkLayer(
 private fun rememberLetterSweep(
     active: Boolean,
     sweepMs: Int?,
-    startRevealed: Boolean = false,
     pacing: TajweedPacing.Curve? = null,
+    activation: Long = 0L,
 ): State<Float> {
-    val runSweep = active && sweepMs != null && !startRevealed
-    val sweep = remember(active) { Animatable(if (runSweep) 0f else 1f) }
-    // Key on active + startRevealed only — not sweepMs — so a duration tweak
-    // while the word is lit cannot snap progress back to 0.
-    LaunchedEffect(active, startRevealed) {
-        val ms = sweepMs
-        if (active && ms != null && !startRevealed) {
+    val runSweep = active && sweepMs != null
+    val sweep = remember(active, activation) { Animatable(if (runSweep) 0f else 1f) }
+    // Latest duration/pacing for this activation — not keys, so a mid-word
+    // speed retune cannot cancel and restart the wash.
+    val msState = rememberUpdatedState(sweepMs)
+    val pacingState = rememberUpdatedState(pacing)
+    // Key on active + activation — restarts on word-tap / seek (activation bump).
+    LaunchedEffect(active, activation) {
+        val ms = msState.value
+        if (active && ms != null) {
             sweep.snapTo(0f)
-            val easing = if (pacing != null) LinearEasing else InkEngine.sweepEasing
+            val easing = if (pacingState.value != null) LinearEasing else InkEngine.sweepEasing
             sweep.animateTo(1f, tween(ms, easing = easing))
         } else {
             sweep.snapTo(1f)
@@ -344,9 +365,8 @@ private fun rememberLetterSweep(
     // toggle, the contrast slider) reshape the word already on screen instead
     // of waiting for the next activation. The clock keeps running; only the
     // time → position mapping swaps.
-    val curve = rememberUpdatedState(pacing)
-    return remember(active) {
-        derivedStateOf { curve.value?.at(sweep.value) ?: sweep.value }
+    return remember(active, activation) {
+        derivedStateOf { pacingState.value?.at(sweep.value) ?: sweep.value }
     }
 }
 
@@ -355,19 +375,12 @@ private fun rememberLetterSweep(
  * live there): tracks the word's previous state and captures the decision the
  * moment the word activates, so it stays stable for the whole time the word
  * is lit and is recomputed fresh on the next activation.
- *
- * [position] is the ayah word index (1-based). The first word of a verse always
- * runs its ink reveal — see [InkEngine.startRevealed].
  */
 @Composable
-private fun rememberStartRevealed(state: InkEngine.State, position: Int = -1): Boolean {
+private fun rememberStartRevealed(state: InkEngine.State): Boolean {
     val active = state == InkEngine.State.Active
     val previousState = remember { mutableStateOf(state) }
-    val startRevealed = InkEngine.startRevealed(
-        previous = previousState.value,
-        current = state,
-        position = position,
-    )
+    val startRevealed = InkEngine.startRevealed(previous = previousState.value, current = state)
     SideEffect { previousState.value = state }
     return remember(active) { startRevealed }
 }
@@ -439,6 +452,7 @@ private class WordHighlight(
     private val sweep: State<Float>,
     val repeatWash: RepeatWash,
     private val glintAlpha: State<Float>,
+    val glintIsRepeat: Boolean,
     private val pacing: TajweedPacing.Curve? = null,
 ) {
     /** Modifier for the base text layer: letters sweep in while the word is
@@ -462,6 +476,7 @@ private class WordHighlight(
     /** Whether the white-gold glint overlay still has any sheen to show. */
     val showGlintLayer: Boolean get() = glintAlpha.value > 0f
 
+    /** Repeat glimmer uses terracotta ink rather than the first-pass white gold. */
     /** Modifier for the glint overlay: rides the base layer's own letter
      * sweep (same progress and feather, so the gold edge is the ink edge),
      * then dissolves via [glintAlpha] once the word settles to Recited. */
@@ -515,12 +530,13 @@ private fun rememberWordHighlight(
     ink: InkEngine.Word,
     sweepMs: Int?,
     pacing: TajweedPacing.Curve? = null,
-    /** 1-based ayah word position — first word always ink-reveals. */
-    wordPosition: Int = -1,
+    activation: Long = 0L,
 ): WordHighlight {
     val isActive = ink.state == InkEngine.State.Active
-    val startRevealed = rememberStartRevealed(ink.state, wordPosition)
+    val startRevealed = rememberStartRevealed(ink.state)
     val glintInk = LocalQuranAccents.current.glintInk
+    val glinting = glintInk != null &&
+        InkEngine.glinting(ink.state, ink.repeat, startRevealed)
     return WordHighlight(
         isActive = isActive,
         repeat = ink.repeat,
@@ -528,14 +544,16 @@ private fun rememberWordHighlight(
         sweep = rememberLetterSweep(
             active = isActive,
             sweepMs = sweepMs,
-            startRevealed = startRevealed,
             pacing = if (isActive) pacing else null,
+            activation = activation,
         ),
-        repeatWash = rememberRepeatWash(ink.repeat, sweepMs.takeIf { isActive }),
-        glintAlpha = rememberGlintAlpha(
-            glinting = glintInk != null &&
-                InkEngine.glinting(ink.state, ink.repeat, startRevealed),
+        repeatWash = rememberRepeatWash(
+            repeat = ink.repeat,
+            sweepMs = sweepMs.takeIf { isActive },
+            activation = if (isActive) activation else 0L,
         ),
+        glintAlpha = rememberGlintAlpha(glinting),
+        glintIsRepeat = rememberGlintRepeat(glinting, ink.repeat),
         pacing = if (isActive) pacing else null,
     )
 }
@@ -623,6 +641,7 @@ private fun HighlightLayeredText(
 ) {
     val repeatInk = LocalQuranAccents.current.repeatInk
     val glintInk = LocalQuranAccents.current.glintInk
+    val glimmerInk = if (highlight.glintIsRepeat) repeatInk else glintInk ?: repeatInk
     // Prefer a live repeat chain; otherwise the one-shot search-hit wash.
     val orangeWash = when {
         highlight.showRepeatLayer -> highlight.repeatWash
@@ -636,11 +655,11 @@ private fun HighlightLayeredText(
                 text = text,
                 style = style.copy(
                     shadow = Shadow(
-                        color = glintInk.copy(alpha = InkEngine.tuning.glintGlowAlpha),
+                        color = glimmerInk.copy(alpha = InkEngine.tuning.glintGlowAlpha),
                         blurRadius = InkEngine.tuning.glintGlowRadius,
                     ),
                 ),
-                color = glintInk.copy(alpha = 0.01f),
+                color = glimmerInk.copy(alpha = 0.01f),
                 modifier = highlight.glintHaloLayer(),
             )
         }
@@ -657,16 +676,20 @@ private fun HighlightLayeredText(
             InkOverlayText(
                 text = text,
                 style = style,
-                color = repeatInk,
+                color = repeatInk.copy(alpha = InkEngine.tuning.repeatInkAlpha),
                 modifier = Modifier.repeatInkLayer(orangeWash, rtl),
             )
         }
-        // Nightfall's white-gold sheen sits above both fresh and repeat ink.
+        // First-pass words glimmer white-gold; repeats glimmer terracotta.
         if (glintInk != null && highlight.showGlintLayer) {
             InkOverlayText(
                 text = text,
                 style = style,
-                color = glintInk.copy(alpha = InkEngine.tuning.glintTintAlpha),
+                color = glimmerInk.copy(
+                    alpha = if (highlight.glintIsRepeat) {
+                        InkEngine.tuning.repeatInkAlpha
+                    } else InkEngine.tuning.glintTintAlpha,
+                ),
                 modifier = highlight.glintLayer(rtl),
             )
         }
@@ -691,8 +714,10 @@ fun WordUnit(
     showFlash: Boolean = false,
     /** Tajweed pacing of the active word's sweep — null for the plain sweep. */
     pacing: TajweedPacing.Curve? = null,
+    /** Seek-generation so replaying this Active word restarts the wash. */
+    activation: Long = 0L,
 ) {
-    val highlight = rememberWordHighlight(ink, sweepMs, pacing, word.position)
+    val highlight = rememberWordHighlight(ink, sweepMs, pacing, activation)
     val searchHitWash = rememberSearchHitWash(showFlash)
     val repeatInk = LocalQuranAccents.current.repeatInk
     val glossWeight = if (searchHit) FontWeight.Bold else null
@@ -738,7 +763,7 @@ fun WordUnit(
                         fontSize = 12.sp * fontScale,
                         lineHeight = 15.sp * fontScale,
                         fontWeight = glossWeight,
-                        color = repeatInk,
+                        color = repeatInk.copy(alpha = InkEngine.tuning.repeatInkAlpha),
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .matchParentSize()
@@ -777,8 +802,9 @@ fun ConnectedArabicWordUnit(
     onKeepWordInView: OnKeepWordInView? = null,
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)? = null,
+    activation: Long = 0L,
 ) {
-    val highlight = rememberWordHighlight(ink, sweepMs, wordPosition = word.position)
+    val highlight = rememberWordHighlight(ink, sweepMs, activation = activation)
     HighlightLayeredText(
         text = word.arabic,
         highlight = highlight,
@@ -829,17 +855,17 @@ private fun rememberWordInkPalette(): WordInkPalette {
  * annotated string — so the sweep does not reshape the ayah every frame. */
 @Composable
 private fun rememberLetterSweeps(
-    words: List<Word>,
     inks: List<InkEngine.Word>,
     activeSweepMs: Int?,
     pacing: TajweedPacing.Curve? = null,
-): List<State<Float>> = words.zip(inks).map { (word, ink) ->
+    activation: Long = 0L,
+): List<State<Float>> = inks.map { ink ->
     val active = ink.state == InkEngine.State.Active
     rememberLetterSweep(
         active = active,
         sweepMs = activeSweepMs.takeIf { active },
-        startRevealed = rememberStartRevealed(ink.state, word.position),
         pacing = if (active) pacing else null,
+        activation = if (active) activation else 0L,
     )
 }
 
@@ -848,29 +874,29 @@ private fun rememberLetterSweeps(
 private fun rememberRepeatWashes(
     inks: List<InkEngine.Word>,
     activeSweepMs: Int?,
+    activation: Long = 0L,
 ): List<RepeatWash> = inks.map { ink ->
+    val active = ink.state == InkEngine.State.Active
     rememberRepeatWash(
         repeat = ink.repeat,
-        sweepMs = activeSweepMs.takeIf { ink.state == InkEngine.State.Active },
+        sweepMs = activeSweepMs.takeIf { active },
+        activation = if (active) activation else 0L,
     )
 }
 
-/** White-gold glint alpha per word — same lifecycle as gloss mode's overlay.
+private data class Glint(val alpha: State<Float>, val repeat: Boolean)
+
+/** Glint lifecycle per word, including a repeat colour latched through fade-out.
  * All zeros (and no animation ever starts) on themes without a glint ink. */
 @Composable
-private fun rememberGlintAlphas(
-    words: List<Word>,
-    inks: List<InkEngine.Word>,
-): List<State<Float>> {
+private fun rememberGlints(inks: List<InkEngine.Word>): List<Glint> {
     val glintInk = LocalQuranAccents.current.glintInk
-    return words.zip(inks).map { (word, ink) ->
-        rememberGlintAlpha(
-            glinting = glintInk != null &&
-                InkEngine.glinting(
-                    ink.state,
-                    ink.repeat,
-                    rememberStartRevealed(ink.state, word.position),
-                ),
+    return inks.map { ink ->
+        val glinting = glintInk != null &&
+            InkEngine.glinting(ink.state, ink.repeat, rememberStartRevealed(ink.state))
+        Glint(
+            alpha = rememberGlintAlpha(glinting),
+            repeat = rememberGlintRepeat(glinting, ink.repeat),
         )
     }
 }
@@ -887,6 +913,7 @@ private fun ResponsiveEnglishAyah(
     markAlpha: () -> Float,
     fontScale: Float,
     activeSweepMs: Int?,
+    activation: Long = 0L,
     searchQuery: String?,
     flashWordPosition: Int?,
     keepActiveWordInView: Boolean,
@@ -899,9 +926,9 @@ private fun ResponsiveEnglishAyah(
     val palette = rememberWordInkPalette()
     val gold = LocalQuranAccents.current.gold
     val glintInk = LocalQuranAccents.current.glintInk
-    val sweeps = rememberLetterSweeps(ayah.words, inks, activeSweepMs)
-    val repeatWashes = rememberRepeatWashes(inks, activeSweepMs)
-    val glintAlphas = rememberGlintAlphas(ayah.words, inks)
+    val sweeps = rememberLetterSweeps(inks, activeSweepMs, activation = activation)
+    val repeatWashes = rememberRepeatWashes(inks, activeSweepMs, activation)
+    val glints = rememberGlints(inks)
     val searchHitWash = rememberSearchHitWash(flashWordPosition != null)
     val activeIndex = inks.indexOfFirst { it.state == InkEngine.State.Active }
     val activeIsRepeat = activeIndex >= 0 && inks[activeIndex].repeat
@@ -1013,24 +1040,29 @@ private fun ResponsiveEnglishAyah(
                             color = palette.repeatInkColor,
                             restingAlpha = 0f,
                             layerAlpha = wash.alpha.value,
+                            colorAlpha = InkEngine.tuning.repeatInkAlpha,
                         )
                     }
-                    // Nightfall's white-gold sheen sits above both fresh and
-                    // orange repeat ink, following whichever wash is active.
+                    // White-gold sheen sits above both fresh and orange repeat
+                    // ink, following whichever wash is active.
                     if (glintInk != null) {
-                        glintAlphas.forEachIndexed { index, glint ->
-                            if (glint.value <= 0f) return@forEachIndexed
+                        glints.forEachIndexed { index, glint ->
+                            if (glint.alpha.value <= 0f) return@forEachIndexed
                             blooms += ShapedWordBloom.ColorReveal(
                                 range = rendered.wordRanges[index],
-                                progress = if (inks[index].repeat) {
+                                progress = if (glint.repeat) {
                                     repeatWashes[index].progress.value
                                 } else {
                                     sweeps[index].value
                                 },
-                                color = glintInk,
+                                color = if (glint.repeat) {
+                                    palette.repeatInkColor
+                                } else glintInk,
                                 restingAlpha = 0f,
-                                layerAlpha = glint.value,
-                                colorAlpha = InkEngine.tuning.glintTintAlpha,
+                                layerAlpha = glint.alpha.value,
+                                colorAlpha = if (glint.repeat) {
+                                    InkEngine.tuning.repeatInkAlpha
+                                } else InkEngine.tuning.glintTintAlpha,
                                 glowAlpha = InkEngine.tuning.glintGlowAlpha,
                                 glowRadius = InkEngine.tuning.glintGlowRadius,
                             )
@@ -1044,6 +1076,7 @@ private fun ResponsiveEnglishAyah(
                             color = palette.repeatInkColor,
                             restingAlpha = 0f,
                             layerAlpha = searchHitWash.alpha.value,
+                            colorAlpha = InkEngine.tuning.repeatInkAlpha,
                         )
                     }
                     blooms
@@ -1111,6 +1144,7 @@ private fun ResponsiveHafsAyah(
     activeSweepMs: Int?,
     /** Tajweed pacing of the active word's sweep — null for the plain sweep. */
     pacing: TajweedPacing.Curve? = null,
+    activation: Long = 0L,
     flashWordPosition: Int? = null,
     /** When the verse is taller than the viewport, keep the active word in the
      * reading band so large type does not disappear under the player bar. */
@@ -1124,9 +1158,9 @@ private fun ResponsiveHafsAyah(
     val palette = rememberWordInkPalette()
     val ayahMarkInk = LocalQuranAccents.current.gold
     val glintInk = LocalQuranAccents.current.glintInk
-    val sweeps = rememberLetterSweeps(ayah.words, inks, activeSweepMs, pacing)
-    val repeatWashes = rememberRepeatWashes(inks, activeSweepMs)
-    val glintAlphas = rememberGlintAlphas(ayah.words, inks)
+    val sweeps = rememberLetterSweeps(inks, activeSweepMs, pacing, activation)
+    val repeatWashes = rememberRepeatWashes(inks, activeSweepMs, activation)
+    val glints = rememberGlints(inks)
     val searchHitWash = rememberSearchHitWash(flashWordPosition != null)
     val activeIndex = inks.indexOfFirst { it.state == InkEngine.State.Active }
     val activeIsRepeat = activeIndex >= 0 && inks[activeIndex].repeat
@@ -1266,26 +1300,31 @@ private fun ResponsiveHafsAyah(
                             color = palette.repeatInkColor,
                             restingAlpha = 0f,
                             layerAlpha = wash.alpha.value,
+                            colorAlpha = InkEngine.tuning.repeatInkAlpha,
                         )
                     }
-                    // Nightfall's white-gold sheen sits above both fresh and
-                    // orange repeat ink, following whichever wash is active.
+                    // White-gold sheen sits above both fresh and orange repeat
+                    // ink, following whichever wash is active.
                     if (glintInk != null) {
-                        glintAlphas.forEachIndexed { index, glint ->
-                            if (glint.value <= 0f) return@forEachIndexed
+                        glints.forEachIndexed { index, glint ->
+                            if (glint.alpha.value <= 0f) return@forEachIndexed
                             val range = rendered.wordRanges.getOrNull(index)
                                 ?: return@forEachIndexed
                             blooms += ShapedWordBloom.ColorReveal(
                                 range = range,
-                                progress = if (inks[index].repeat) {
+                                progress = if (glint.repeat) {
                                     repeatWashes[index].progress.value
                                 } else {
                                     sweeps[index].value
                                 },
-                                color = glintInk,
+                                color = if (glint.repeat) {
+                                    palette.repeatInkColor
+                                } else glintInk,
                                 restingAlpha = 0f,
-                                layerAlpha = glint.value,
-                                colorAlpha = InkEngine.tuning.glintTintAlpha,
+                                layerAlpha = glint.alpha.value,
+                                colorAlpha = if (glint.repeat) {
+                                    InkEngine.tuning.repeatInkAlpha
+                                } else InkEngine.tuning.glintTintAlpha,
                                 glowAlpha = InkEngine.tuning.glintGlowAlpha,
                                 glowRadius = InkEngine.tuning.glintGlowRadius,
                                 feather = if (index == activeIndex) {
@@ -1309,6 +1348,7 @@ private fun ResponsiveHafsAyah(
                                 color = palette.repeatInkColor,
                                 restingAlpha = 0f,
                                 layerAlpha = searchHitWash.alpha.value,
+                                colorAlpha = InkEngine.tuning.repeatInkAlpha,
                             )
                         }
                     }
@@ -1451,6 +1491,7 @@ fun AyahBlock(
     // The letter fade paces itself to how long the reciter dwells on the
     // word, corrected for the chosen playback speed.
     val sweepMs = InkEngine.sweepMs(activeWord, playbackSpeed)
+    val activation = activeWord?.activation ?: 0L
 
     // Letter-level tajweed pacing of that sweep (Ink Lab toggle,
     // docs/TAJWEED_PACING.md): null keeps the plain constant-rate wash.
@@ -1512,6 +1553,7 @@ fun AyahBlock(
                     markAlpha = { ayahMarkAlpha.value },
                     fontScale = fontScale,
                     activeSweepMs = sweepMs,
+                    activation = activation,
                     searchQuery = searchQuery,
                     flashWordPosition = flashWordPosition,
                     keepActiveWordInView = keepActiveWordInView,
@@ -1538,6 +1580,7 @@ fun AyahBlock(
                                 fontScale = fontScale,
                                 sweepMs = sweepMs.takeIf { isActiveWord },
                                 pacing = pacing.takeIf { isActiveWord },
+                                activation = if (isActiveWord) activation else 0L,
                                 showGloss = showGloss,
                                 showTransliteration = showTransliteration,
                                 searchHit = hits(word),
@@ -1568,6 +1611,7 @@ fun AyahBlock(
                         fontSize = ArabicWordStyle.fontSize * fontScale * ARABIC_ONLY_HAFS_FONT_MULTIPLIER,
                         activeSweepMs = sweepMs,
                         pacing = pacing,
+                        activation = activation,
                         flashWordPosition = flashWordPosition,
                         keepActiveWordInView = keepActiveWordInView,
                         listCoordinates = listCoordinates,
@@ -2018,9 +2062,12 @@ fun NextChapterFooter(
 }
 
 /**
- * Quiet green stadium control for advancing to the next chapter. Soft accent
- * wash at rest; [fillProgress] paints a left-to-right green fill so bottom
- * overscroll can read as a progress bar. Tap still opens immediately.
+ * Quiet green stadium control for chapter advance. Soft accent wash at rest;
+ * [fillProgress] paints a left-to-right green fill so overscroll can read as a
+ * progress bar. Tap still opens immediately.
+ *
+ * [actionLabel] is the visible verb ("Continue" / "Open"); [chevronDown] flips
+ * the chevron for previous-chapter pull.
  */
 @Composable
 fun NextChapterOpenPill(
@@ -2029,6 +2076,8 @@ fun NextChapterOpenPill(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     fillProgress: Float = 0f,
+    actionLabel: String = "Continue",
+    chevronDown: Boolean = true,
 ) {
     val colors = MaterialTheme.colorScheme
     val label = "Open $chapterName"
@@ -2076,12 +2125,11 @@ fun NextChapterOpenPill(
             },
     ) {
         Text(
-            text = "Continue",
+            text = actionLabel,
             style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 0.6.sp),
             color = contentColor,
         )
         Spacer(Modifier.width(8.dp))
-        // Downward chevron — continue reading further down the page.
         Canvas(Modifier.size(18.dp)) {
             val stroke = Stroke(
                 width = 2.2.dp.toPx(),
@@ -2091,12 +2139,64 @@ fun NextChapterOpenPill(
             val w = size.width
             val h = size.height
             val path = Path().apply {
-                moveTo(w * 0.22f, h * 0.38f)
-                lineTo(w * 0.50f, h * 0.62f)
-                lineTo(w * 0.78f, h * 0.38f)
+                if (chevronDown) {
+                    moveTo(w * 0.22f, h * 0.38f)
+                    lineTo(w * 0.50f, h * 0.62f)
+                    lineTo(w * 0.78f, h * 0.38f)
+                } else {
+                    moveTo(w * 0.22f, h * 0.62f)
+                    lineTo(w * 0.50f, h * 0.38f)
+                    lineTo(w * 0.78f, h * 0.62f)
+                }
             }
             drawPath(path, contentColor, style = stroke)
         }
+    }
+}
+
+/**
+ * Top-of-chapter previous invitation. Hosted in a layout slot above the list
+ * whose height tracks overscroll (not a behind-the-list draw layer).
+ * [pullProgress] fills the Open pill.
+ */
+@Composable
+fun PreviousChapterPullChrome(
+    nameTransliteration: String,
+    pullProgress: Float,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val accents = LocalQuranAccents.current
+    // Compact so the full invitation fits in the ~156.dp rubber band at full pull.
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .padding(top = 10.dp, bottom = 14.dp),
+    ) {
+        Text(
+            text = "PREVIOUS",
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 3.sp),
+            fontSize = 10.sp,
+            color = accents.gold.copy(alpha = 0.55f),
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = nameTransliteration,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+        )
+        Spacer(Modifier.height(12.dp))
+        NextChapterOpenPill(
+            chapterName = nameTransliteration,
+            onClick = onOpen,
+            enabled = enabled,
+            fillProgress = pullProgress.coerceIn(0f, 1f),
+            actionLabel = "Open",
+            chevronDown = false,
+        )
     }
 }
 
