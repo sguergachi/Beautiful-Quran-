@@ -30,6 +30,12 @@ data class BookmarksUiState(
 
 internal const val BOOKMARK_SECTION_PREVIEW_LIMIT = 5
 
+internal fun isBookmarkSectionCollapsed(
+    surahId: Int,
+    collapsedSurahs: Set<Int>,
+    searching: Boolean,
+): Boolean = !searching && surahId in collapsedSurahs
+
 internal fun visibleBookmarkAyahs(
     ayahs: List<BookmarkedAyah>,
     expanded: Boolean,

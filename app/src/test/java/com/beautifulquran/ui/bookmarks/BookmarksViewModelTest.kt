@@ -3,6 +3,7 @@ package com.beautifulquran.ui.bookmarks
 import com.beautifulquran.data.model.BookmarkedAyah
 import com.beautifulquran.data.model.Surah
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -47,6 +48,12 @@ class BookmarksViewModelTest {
         assertEquals(2, hiddenBookmarkCount(many, expanded = false, searching = false))
         assertEquals(7, visibleBookmarkAyahs(many, expanded = true, searching = false).size)
         assertEquals(7, visibleBookmarkAyahs(many, expanded = false, searching = true).size)
+    }
+
+    @Test
+    fun `search reveals matches inside collapsed chapters`() {
+        assertTrue(isBookmarkSectionCollapsed(2, setOf(2), searching = false))
+        assertFalse(isBookmarkSectionCollapsed(2, setOf(2), searching = true))
     }
 
     @Test

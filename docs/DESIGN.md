@@ -647,9 +647,12 @@ breathing room, so no extra spacer sits between translation and metadata.
   may use different primitives, but these measured relationships must match.
 
 Results remain in Quranic order and can be searched by reference, chapter
-name, or verse text. A chapter initially shows five marked verses; its green
-inline disclosure reveals the remainder, while an active search shows every
-match. The section header establishes the chapter once; an individual result
+name, or verse text. Tapping a chapter header folds or unfolds its complete
+section; its quiet green chevron occupies the space between the English and
+Arabic names without moving either alignment rule. A chapter initially shows
+five marked verses; its green inline disclosure reveals the remainder, while
+an active search temporarily unfolds every matching chapter so no result is
+hidden. The section header establishes the chapter once; an individual result
 shows only its ayah number. The small ruby strip beside a result opens an
 inline Keep / Remove confirmation in that ayah line's fixed-height space before
 changing the mark, so the page does not jump. Keep is green, Remove is quiet

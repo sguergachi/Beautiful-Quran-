@@ -9,6 +9,7 @@ import {
   bookmarkDisclosureLabel,
   filterBookmarkSections,
   hiddenBookmarkCount,
+  isBookmarkSectionCollapsed,
   visibleBookmarkVerses,
   type BookmarkedVerse,
 } from './bookmarkSections'
@@ -20,6 +21,7 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
   const [query, setQuery] = useState('')
   const [pendingRemoval, setPendingRemoval] = useState<BookmarkKey | null>(null)
   const [expandedSurahs, setExpandedSurahs] = useState<Set<number>>(new Set())
+  const [collapsedSurahs, setCollapsedSurahs] = useState<Set<number>>(new Set())
   const active = stackLayer === BOOKMARKS_LAYER
   const searching = query.trim().length > 0
   const verses = useMemo<BookmarkedVerse[]>(() => {
@@ -99,6 +101,11 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
             {sections.length === 0 ? <BookmarkEmptyState query={query} /> : null}
 
             {sections.map((section, sectionIndex) => {
+              const collapsed = isBookmarkSectionCollapsed(
+                section.surah.id,
+                collapsedSurahs,
+                searching,
+              )
               const expanded = expandedSurahs.has(section.surah.id)
               const visibleVerses = visibleBookmarkVerses(
                 section.verses,
@@ -113,9 +120,21 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
 
               return (
                 <section className="bookmark-section" key={section.surah.id}>
-                  <header
+                  <button
+                    type="button"
                     className="bookmark-section-header"
                     data-first={sectionIndex === 0}
+                    aria-expanded={!collapsed}
+                    disabled={searching}
+                    onClick={() => {
+                      setCollapsedSurahs((current) => {
+                        const next = new Set(current)
+                        if (collapsed) next.delete(section.surah.id)
+                        else next.add(section.surah.id)
+                        return next
+                      })
+                      setPendingRemoval(null)
+                    }}
                   >
                     <span className="bookmark-section-number">
                       {section.surah.id}
@@ -124,6 +143,9 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
                       <span className="bookmark-section-name">
                         {section.surah.nameTransliteration}
                       </span>
+                      {!searching ? (
+                        <BookmarkSectionChevron expanded={!collapsed} />
+                      ) : null}
                       <span
                         className="bookmark-section-arabic"
                         lang="ar"
@@ -132,9 +154,9 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
                         {section.surah.nameArabic}
                       </span>
                     </span>
-                  </header>
+                  </button>
 
-                  <ul className="bookmark-verses">
+                  <ul className="bookmark-verses" hidden={collapsed}>
                     {visibleVerses.map(({ surah, ayah }) => {
                       const key = `${surah.id}:${ayah.number}` as BookmarkKey
                       return (
@@ -154,7 +176,8 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
                     })}
                   </ul>
 
-                  {!searching &&
+                  {!collapsed &&
+                  !searching &&
                   section.verses.length > BOOKMARK_SECTION_PREVIEW_LIMIT ? (
                     <button
                       type="button"
@@ -179,6 +202,20 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
         </div>
       </div>
     </div>
+  )
+}
+
+function BookmarkSectionChevron({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      className="bookmark-section-chevron"
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      aria-hidden="true"
+    >
+      <path d={expanded ? 'm7 10 5 5 5-5' : 'm10 7 5 5-5 5'} />
+    </svg>
   )
 }
 
