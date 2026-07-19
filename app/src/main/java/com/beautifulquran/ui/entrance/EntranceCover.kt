@@ -134,6 +134,9 @@ private val CoverOpenEasing = CubicBezierEasing(0.24f, 0.02f, 0.12f, 1f)
  */
 private const val ORNAMENT_BUILD_MS = 3_400
 
+/** A slightly broader ceremonial frame without changing its stroke weight. */
+private const val COVER_FRAME_SCALE = 1.10f
+
 /**
  * The entrance ceremony: the closed mushaf. A deep-green leather board,
  * tooled with the star-and-cross weave, framed and cornered in gilt,
@@ -365,7 +368,11 @@ fun EntranceCover(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .padding(horizontal = frameMarginH, vertical = frameMarginV),
+                    .padding(horizontal = frameMarginH, vertical = frameMarginV)
+                    .graphicsLayer {
+                        scaleX = COVER_FRAME_SCALE
+                        scaleY = COVER_FRAME_SCALE
+                    },
             ) {
                 MushafCoverFrame(
                     brightGold = accents.goldBright,
