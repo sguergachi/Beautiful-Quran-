@@ -50,10 +50,10 @@ To create the Play Store app bundle, place the uncommitted signing key at
 scripts/build_release_bundle.sh
 ```
 
-The script builds `app-release.aab` and verifies that it is signed with the
-upload certificate expected by Google Play. In a linked Git worktree it also
-checks the primary checkout for `release.keystore`; set
-`RELEASE_KEYSTORE_FILE` to use a key stored elsewhere.
+The script builds `BeautifulQuran-<versionName>.aab` in the repository root and
+verifies that it is signed with the upload certificate expected by Google Play.
+In a linked Git worktree it also checks the primary checkout for
+`release.keystore`; set `RELEASE_KEYSTORE_FILE` to use a key stored elsewhere.
 
 `tools/build_db.py` downloads the Quran text, word-by-word data, and word-level
 audio timings, validates them against each other, and packs them into a single

@@ -3,7 +3,16 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
-BUNDLE="$REPO_ROOT/app/build/outputs/bundle/release/app-release.aab"
+GRADLE_BUNDLE="$REPO_ROOT/app/build/outputs/bundle/release/app-release.aab"
+VERSION_NAME="$(
+  sed -nE 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' \
+    "$REPO_ROOT/app/build.gradle.kts"
+)"
+if [[ -z "$VERSION_NAME" || "$VERSION_NAME" == *$'\n'* ]]; then
+  printf 'error: expected one versionName in app/build.gradle.kts\n' >&2
+  exit 1
+fi
+BUNDLE="$REPO_ROOT/BeautifulQuran-$VERSION_NAME.aab"
 EXPECTED_SHA1="48:36:68:57:5C:44:6A:BC:D2:AF:E3:3A:63:78:D6:CC:7B:DF:64:18"
 KEYSTORE="${RELEASE_KEYSTORE_FILE:-$REPO_ROOT/release.keystore}"
 
@@ -38,13 +47,13 @@ fi
 
 (cd "$REPO_ROOT" && ./gradlew bundleRelease)
 
-if [[ ! -f "$BUNDLE" ]]; then
-  printf 'error: Gradle completed without producing %s\n' "$BUNDLE" >&2
+if [[ ! -f "$GRADLE_BUNDLE" ]]; then
+  printf 'error: Gradle completed without producing %s\n' "$GRADLE_BUNDLE" >&2
   exit 1
 fi
 
 actual_sha1="$(
-  LC_ALL=C keytool -printcert -jarfile "$BUNDLE" |
+  LC_ALL=C keytool -printcert -jarfile "$GRADLE_BUNDLE" |
     awk '/SHA1:/{print $2; exit}'
 )"
 
@@ -53,6 +62,8 @@ if [[ "$actual_sha1" != "$EXPECTED_SHA1" ]]; then
     "${actual_sha1:-unknown}" "$EXPECTED_SHA1" >&2
   exit 1
 fi
+
+cp "$GRADLE_BUNDLE" "$BUNDLE"
 
 printf 'Release bundle: %s\n' "$BUNDLE"
 printf 'Signing SHA1:   %s\n' "$actual_sha1"
