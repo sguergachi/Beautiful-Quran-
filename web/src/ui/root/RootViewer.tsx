@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { appStore, useAppSelector, type RootViewerState } from '../../store/appStore'
 import { IconClose, IconVolumeUp } from '../icons/PlaybackIcons'
-import { DisclosureChevron } from '../kit/DisclosureChevron'
 import { featureSummary, posLabel, spacedRoot } from './morphologyLabels'
 import {
   initialRootSections,
@@ -158,7 +157,7 @@ function RootViewerBleed({ closing, rv }: { closing: boolean; rv: RootViewerStat
                         <span className="root-chapter-name"><i>{section.surahId}</i>{section.surahName}</span>
                         <span className="root-chapter-meta" aria-hidden="true">
                           <span className="root-chapter-count">{section.occurrences.length}</span>
-                          <DisclosureChevron expanded={open} className="root-chapter-disclosure" />
+                          <span className="root-chapter-disclosure">{open ? '⌄' : '‹'}</span>
                         </span>
                       </button>
                       {open ? (
