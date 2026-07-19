@@ -211,6 +211,59 @@ class InkEngineTest {
         assertFalse(InkEngine.glinting(State.Recited, repeat = false, startRevealed = false))
     }
 
+    @Test
+    fun `same-word repeat reveals with an unchanged activation generation`() {
+        assertEquals(
+            RepeatWashAction.Reveal,
+            repeatWashAction(
+                wasRepeat = false,
+                previousActivation = 4L,
+                repeat = true,
+                activation = 4L,
+            ),
+        )
+    }
+
+    @Test
+    fun `repeat wash holds on chain advance and restarts on seek`() {
+        assertEquals(
+            RepeatWashAction.Hold,
+            repeatWashAction(
+                wasRepeat = true,
+                previousActivation = 4L,
+                repeat = true,
+                activation = 0L,
+            ),
+        )
+        assertEquals(
+            RepeatWashAction.Reveal,
+            repeatWashAction(
+                wasRepeat = true,
+                previousActivation = 4L,
+                repeat = true,
+                activation = 5L,
+            ),
+        )
+    }
+
+    @Test
+    fun `initial glint keeps its identity and recedes behind a same-word repeat`() {
+        val identity = GlintIdentity(repeat = false)
+        assertFalse(identity.update(glinting = true, repeat = false))
+        assertFalse(identity.update(glinting = true, repeat = true))
+        assertTrue(identity.replacedByRepeat)
+        assertEquals(1f, glintCarryAlpha(identity.replacedByRepeat, 0f), 0f)
+        assertEquals(0.5f, glintCarryAlpha(identity.replacedByRepeat, 0.5f), 1e-4f)
+        assertEquals(0f, glintCarryAlpha(identity.replacedByRepeat, 1f), 0f)
+
+        identity.update(glinting = false, repeat = false)
+        assertTrue(identity.replacedByRepeat)
+        assertEquals(0f, glintCarryAlpha(identity.replacedByRepeat, 1f), 0f)
+        assertTrue(identity.update(glinting = true, repeat = true))
+        assertFalse(identity.replacedByRepeat)
+        assertEquals(1f, glintCarryAlpha(identity.replacedByRepeat, 1f), 0f)
+    }
+
     // --- inkAlpha ---
 
     @Test

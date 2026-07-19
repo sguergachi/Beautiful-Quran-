@@ -64,6 +64,8 @@ export function HafsWord({
   const revealedOnEntry = useRef(false)
   const prevRepeat = useRef(false)
   const prevGlint = useRef(false)
+  const prevGlintRepeat = useRef(ink.repeat)
+  const glintReplacedByRepeat = useRef(false)
   /** Orange/glint/search overlays only while needed — not for every idle word. */
   const [repeatMounted, setRepeatMounted] = useState(ink.repeat)
   const [glintMounted, setGlintMounted] = useState(false)
@@ -155,11 +157,21 @@ export function HafsWord({
     const glinting =
       ink.state === InkState.Active && (ink.repeat || !revealedOnEntry.current)
     const was = prevGlint.current
+    const wasRepeat = prevGlintRepeat.current
     prevGlint.current = glinting
+    prevGlintRepeat.current = ink.repeat
 
     if (glinting && !was) {
+      glintReplacedByRepeat.current = false
       const duration = activeSweepMs ?? getTuning().repeatSweepMs
       return runGlintWashIn(null, halo, true, duration)
+    }
+    // Preserve the formed halo at a same-word repeat boundary, then let the
+    // incoming orange wash replace it on the same clock.
+    if (glinting && was && ink.repeat && !wasRepeat) {
+      glintReplacedByRepeat.current = true
+      const duration = activeSweepMs ?? getTuning().repeatSweepMs
+      return runGlintFadeOut(null, halo, undefined, duration)
     }
     // Seek-reactivation while still glinting: re-run the wash-in.
     if (glinting && was && ink.state === InkState.Active) {
@@ -167,6 +179,10 @@ export function HafsWord({
       return runGlintWashIn(null, halo, true, duration)
     }
     if (!glinting && was) {
+      if (glintReplacedByRepeat.current) {
+        setGlintMounted(false)
+        return
+      }
       return runGlintFadeOut(null, halo, () => setGlintMounted(false))
     }
     if (!glinting) {

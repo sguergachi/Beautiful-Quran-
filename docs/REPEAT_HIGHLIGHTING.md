@@ -206,9 +206,12 @@ HighlightEngine.activeInfo(segments, positionMs)
   replays the white-gold glimmer over that orange bloom: the repeat is a new
   event even though the word's base ink was already revealed. This includes
   same-word repeats and repeat-chain re-entry; `repeat` deliberately overrides
-  the ordinary `startRevealed` suppression. Repeat glimmer uses the same dark
-  terracotta as the orange wash—not white gold—so drying only removes the
-  shimmer and never changes the word's ink colour. See
+  the ordinary `startRevealed` suppression. Repeat glimmer normally uses the
+  same dark terracotta as the orange wash. When a single word enters its repeat
+  before the first-pass white-gold glimmer has released, that existing glimmer
+  instead dries away as the directional terracotta wash replaces it—there is
+  no hard colour swap at the repeat boundary, and the old gold stays gone while
+  the orange ink dissolves after handoff to the next word. See
   [GLIMMER.md](GLIMMER.md) for the lifecycle, layer order, and artifact rules.
 - `repeatInk` is defined per theme in `QuranAccents` — `#B4551E` (light),
   `#E06A18` (Nightfall + Royal Green). Peak overlay strength is

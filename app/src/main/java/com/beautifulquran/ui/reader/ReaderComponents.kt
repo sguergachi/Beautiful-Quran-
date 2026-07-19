@@ -203,6 +203,25 @@ private data class RepeatWash(
     val alpha: State<Float>,
 )
 
+internal enum class RepeatWashAction { Hold, Reveal, Release }
+
+internal fun repeatWashAction(
+    wasRepeat: Boolean,
+    previousActivation: Long,
+    repeat: Boolean,
+    activation: Long,
+): RepeatWashAction = when {
+    repeat && (!wasRepeat || activation != 0L && activation != previousActivation) ->
+        RepeatWashAction.Reveal
+    !repeat && wasRepeat -> RepeatWashAction.Release
+    else -> RepeatWashAction.Hold
+}
+
+private class RepeatWashLifecycle(
+    var repeat: Boolean = false,
+    var activation: Long = 0L,
+)
+
 @Composable
 private fun rememberRepeatWash(
     repeat: Boolean,
@@ -212,40 +231,39 @@ private fun rememberRepeatWash(
 ): RepeatWash {
     val progress = remember { Animatable(if (repeat) 0f else 1f) }
     val alpha = remember { Animatable(if (repeat) 1f else 0f) }
-    // Chain membership owns the normal wash-in and release. Losing Active as
-    // the chain advances must not restart an earlier word's held orange.
-    LaunchedEffect(repeat) {
-        // The repeat tint uses the same word-paced sweep as the initial ink
-        // reveal, then dissolves back to normal ink slowly once the repeated
-        // phrase releases.
-        if (repeat) {
-            // A non-zero activation is handled by the seek-only effect below.
-            if (activation != 0L) return@LaunchedEffect
-            alpha.snapTo(1f)
-            progress.snapTo(0f)
-            progress.animateTo(
-                1f,
-                tween(sweepMs ?: InkEngine.tuning.repeatSweepMs, easing = InkEngine.sweepEasing),
-            )
-        } else {
-            progress.snapTo(1f)
-            alpha.animateTo(
-                0f,
-                tween(InkEngine.tuning.repeatFadeOutMs, easing = InkEngine.sweepEasing),
-            )
-        }
-    }
-    // A genuine seek can replay the same active repeat word. The caller drops
-    // activation to zero when that word merely becomes an earlier chain member;
-    // ignoring zero is what keeps its completed orange wash sustained.
-    LaunchedEffect(activation) {
-        if (!repeat || activation == 0L) return@LaunchedEffect
-        alpha.snapTo(1f)
-        progress.snapTo(0f)
-        progress.animateTo(
-            1f,
-            tween(sweepMs ?: InkEngine.tuning.repeatSweepMs, easing = InkEngine.sweepEasing),
+    val lifecycle = remember { RepeatWashLifecycle() }
+    LaunchedEffect(repeat, activation) {
+        val action = repeatWashAction(
+            wasRepeat = lifecycle.repeat,
+            previousActivation = lifecycle.activation,
+            repeat = repeat,
+            activation = activation,
         )
+        lifecycle.repeat = repeat
+        lifecycle.activation = activation
+        when (action) {
+            RepeatWashAction.Reveal -> {
+                // Chain entry always reveals, including a same-word repeat
+                // whose already-non-zero activation generation is unchanged.
+                // A new non-zero generation also replays an active repeat.
+                alpha.snapTo(1f)
+                progress.snapTo(0f)
+                progress.animateTo(
+                    1f,
+                    tween(sweepMs ?: InkEngine.tuning.repeatSweepMs, easing = InkEngine.sweepEasing),
+                )
+            }
+            RepeatWashAction.Release -> {
+                progress.snapTo(1f)
+                alpha.animateTo(
+                    0f,
+                    tween(InkEngine.tuning.repeatFadeOutMs, easing = InkEngine.sweepEasing),
+                )
+            }
+            // Active moving to the next word drops this word's activation to
+            // zero; hold its completed orange instead of restarting the wash.
+            RepeatWashAction.Hold -> Unit
+        }
     }
     return RepeatWash(progress = progress.asState(), alpha = alpha.asState())
 }
@@ -301,13 +319,34 @@ private fun rememberGlintAlpha(glinting: Boolean): State<Float> {
     return alpha.asState()
 }
 
-/** Holds a repeat glimmer's terracotta identity through its dry-down. */
-@Composable
-private fun rememberGlintRepeat(glinting: Boolean, repeat: Boolean): Boolean {
-    val latched = remember { object { var repeat = repeat } }
-    if (glinting) latched.repeat = repeat
-    return latched.repeat
+internal class GlintIdentity(repeat: Boolean) {
+    private var glinting = false
+    private var currentRepeat = repeat
+    var repeat = repeat
+        private set
+    var replacedByRepeat = false
+        private set
+
+    fun update(glinting: Boolean, repeat: Boolean): Boolean {
+        if (glinting && !this.glinting) {
+            this.repeat = repeat
+            replacedByRepeat = false
+        } else if (glinting && repeat && !currentRepeat && !this.repeat) {
+            replacedByRepeat = true
+        }
+        this.glinting = glinting
+        currentRepeat = repeat
+        return this.repeat
+    }
 }
+
+/** Holds a glimmer's original colour through its formation and dry-down. */
+@Composable
+private fun rememberGlintIdentity(glinting: Boolean, repeat: Boolean): GlintIdentity =
+    remember { GlintIdentity(repeat) }.also { it.update(glinting, repeat) }
+
+internal fun glintCarryAlpha(replacedByRepeat: Boolean, repeatProgress: Float): Float =
+    if (replacedByRepeat) 1f - inkSmootherstep(repeatProgress) else 1f
 
 private fun Modifier.repeatInkLayer(
     wash: RepeatWash,
@@ -454,6 +493,7 @@ private class WordHighlight(
     val repeatWash: RepeatWash,
     private val glintAlpha: State<Float>,
     val glintIsRepeat: Boolean,
+    private val glintReplacedByRepeat: Boolean,
     private val pacing: TajweedPacing.Curve? = null,
 ) {
     /** Modifier for the base text layer: letters sweep in while the word is
@@ -484,7 +524,8 @@ private class WordHighlight(
     fun glintLayer(rtl: Boolean): Modifier =
         Modifier
             .drawWithContent {
-                val alpha = glintAlpha.value
+                val alpha = glintAlpha.value *
+                    glintCarryAlpha(glintReplacedByRepeat, repeatWash.progress.value)
                 if (alpha <= 0f) return@drawWithContent
                 val bleed = GlintLayerBleed.toPx()
                 drawIntoCanvas { canvas ->
@@ -497,7 +538,7 @@ private class WordHighlight(
                 drawIntoCanvas { canvas -> canvas.restore() }
             }
             .letterFadeIn(
-                progress = { if (repeat) repeatWash.progress.value else sweep.value },
+                progress = { if (glintIsRepeat) repeatWash.progress.value else sweep.value },
                 rtl = rtl,
                 restingAlpha = 0f,
                 feather = pacing?.let { InkEngine.pacedFeather(it.letterCount) }
@@ -506,8 +547,9 @@ private class WordHighlight(
 
     /** Tight glyph halo: forms with the word and recedes with [glintAlpha]. */
     fun glintHaloLayer(): Modifier = Modifier.drawWithContent {
-        val progress = if (repeat) repeatWash.progress.value else sweep.value
-        val alpha = glintAlpha.value * inkSmootherstep(progress)
+        val progress = if (glintIsRepeat) repeatWash.progress.value else sweep.value
+        val alpha = glintAlpha.value * inkSmootherstep(progress) *
+            glintCarryAlpha(glintReplacedByRepeat, repeatWash.progress.value)
         if (alpha <= 0f) return@drawWithContent
         val bleed = GlintLayerBleed.toPx()
         drawIntoCanvas { canvas ->
@@ -538,6 +580,7 @@ private fun rememberWordHighlight(
     val glintInk = LocalQuranAccents.current.glintInk
     val glinting = glintInk != null &&
         InkEngine.glinting(ink.state, ink.repeat, startRevealed)
+    val glintIdentity = rememberGlintIdentity(glinting, ink.repeat)
     return WordHighlight(
         isActive = isActive,
         repeat = ink.repeat,
@@ -554,7 +597,8 @@ private fun rememberWordHighlight(
             activation = if (isActive) activation else 0L,
         ),
         glintAlpha = rememberGlintAlpha(glinting),
-        glintIsRepeat = rememberGlintRepeat(glinting, ink.repeat),
+        glintIsRepeat = glintIdentity.repeat,
+        glintReplacedByRepeat = glintIdentity.replacedByRepeat,
         pacing = if (isActive) pacing else null,
     )
 }
@@ -885,7 +929,11 @@ private fun rememberRepeatWashes(
     )
 }
 
-private data class Glint(val alpha: State<Float>, val repeat: Boolean)
+private data class Glint(
+    val alpha: State<Float>,
+    val repeat: Boolean,
+    val replacedByRepeat: Boolean,
+)
 
 /** Glint lifecycle per word, including a repeat colour latched through fade-out.
  * All zeros (and no animation ever starts) on themes without a glint ink. */
@@ -895,9 +943,11 @@ private fun rememberGlints(inks: List<InkEngine.Word>): List<Glint> {
     return inks.map { ink ->
         val glinting = glintInk != null &&
             InkEngine.glinting(ink.state, ink.repeat, rememberStartRevealed(ink.state))
+        val identity = rememberGlintIdentity(glinting, ink.repeat)
         Glint(
             alpha = rememberGlintAlpha(glinting),
-            repeat = rememberGlintRepeat(glinting, ink.repeat),
+            repeat = identity.repeat,
+            replacedByRepeat = identity.replacedByRepeat,
         )
     }
 }
@@ -1049,6 +1099,10 @@ private fun ResponsiveEnglishAyah(
                     if (glintInk != null) {
                         glints.forEachIndexed { index, glint ->
                             if (glint.alpha.value <= 0f) return@forEachIndexed
+                            val carryAlpha = glintCarryAlpha(
+                                replacedByRepeat = glint.replacedByRepeat,
+                                repeatProgress = repeatWashes[index].progress.value,
+                            )
                             blooms += ShapedWordBloom.ColorReveal(
                                 range = rendered.wordRanges[index],
                                 progress = if (glint.repeat) {
@@ -1060,7 +1114,7 @@ private fun ResponsiveEnglishAyah(
                                     palette.repeatInkColor
                                 } else glintInk,
                                 restingAlpha = 0f,
-                                layerAlpha = glint.alpha.value,
+                                layerAlpha = glint.alpha.value * carryAlpha,
                                 colorAlpha = if (glint.repeat) {
                                     InkEngine.tuning.repeatInkAlpha
                                 } else InkEngine.tuning.glintTintAlpha,
@@ -1311,6 +1365,10 @@ private fun ResponsiveHafsAyah(
                             if (glint.alpha.value <= 0f) return@forEachIndexed
                             val range = rendered.wordRanges.getOrNull(index)
                                 ?: return@forEachIndexed
+                            val carryAlpha = glintCarryAlpha(
+                                replacedByRepeat = glint.replacedByRepeat,
+                                repeatProgress = repeatWashes[index].progress.value,
+                            )
                             blooms += ShapedWordBloom.ColorReveal(
                                 range = range,
                                 progress = if (glint.repeat) {
@@ -1322,7 +1380,7 @@ private fun ResponsiveHafsAyah(
                                     palette.repeatInkColor
                                 } else glintInk,
                                 restingAlpha = 0f,
-                                layerAlpha = glint.alpha.value,
+                                layerAlpha = glint.alpha.value * carryAlpha,
                                 colorAlpha = if (glint.repeat) {
                                     InkEngine.tuning.repeatInkAlpha
                                 } else InkEngine.tuning.glintTintAlpha,
