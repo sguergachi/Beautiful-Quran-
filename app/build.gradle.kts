@@ -24,8 +24,8 @@ android {
         applicationId = "com.beautifulquran"
         minSdk = 30
         targetSdk = 37
-        versionCode = 4
-        versionName = "0.3"
+        versionCode = 5
+        versionName = "0.4"
     }
 
     signingConfigs {
