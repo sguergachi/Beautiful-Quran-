@@ -253,7 +253,8 @@ horizontal page turn — draggable, fling-able, with page-turn audio
 
 - `bookmarks/BookmarksScreen` — a left-hand index revealed by swiping right
   from Chapters or tapping its exposed ruby ribbon; saved verses are searchable
-  and sectioned by surah, and each result jumps directly back into the reader.
+  and sectioned by collapsible surah headings, and each result jumps directly
+  back into the reader.
 - `home/HomeScreen` — surah list with search (surah names / `surah:ayah`
   references, plus Quran-wide word hits sectioned by surah with truncated
   expand-in-place lists), a continue-listening card, and a floating playback
