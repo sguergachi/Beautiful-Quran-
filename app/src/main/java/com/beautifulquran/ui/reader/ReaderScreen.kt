@@ -267,12 +267,9 @@ fun ReaderScreen(
     // Top overscroll fills the Previous invitation (0..1). Release at full opens.
     var previousChapterPull by remember { mutableFloatStateOf(0f) }
     var previousChapterPullArmed by remember { mutableStateOf(false) }
-    /**
-     * True only when the current pointer gesture *began* already docked at the
-     * chapter top. Inertia flings from mid-chapter must stop on the header and
-     * must not convert leftover velocity into a previous-chapter pull.
-     */
+    /** True when the current pointer gesture began docked at a chapter edge. */
     var gestureBeganAtChapterTop by remember { mutableStateOf(false) }
+    var gestureBeganAtChapterBottom by remember { mutableStateOf(false) }
     /** 0 = idle/settled; 1 = current page fully exited downward (prev advance). */
     val previousPageExit = remember { Animatable(0f) }
     /** Rubber-band lift captured at previous-advance release. */
@@ -1176,9 +1173,9 @@ fun ReaderScreen(
         }
 
         // Bottom/top overscroll → pill progress + elastic rubber-band.
-        // Release at commit threshold continues into the chapter transition
+        // Release while fully filled continues into the chapter transition
         // from the finger's pose (never snaps back first). Retract / release
-        // below threshold animates the bar empty (unfills).
+        // below full animates the bar empty (unfills).
         val pullFillThresholdPx = with(density) { 104.dp.toPx() }
         // Previous needs a longer pull than next — small nubs should not fill.
         val previousPullFillThresholdPx = with(density) { 220.dp.toPx() }
@@ -1186,6 +1183,7 @@ fun ReaderScreen(
         val previousSurahLatest = rememberUpdatedState(uiState.previousSurah)
         val advancingLatest = rememberUpdatedState(chapterAdvancing)
         val beganAtTopLatest = rememberUpdatedState(gestureBeganAtChapterTop)
+        val beganAtBottomLatest = rememberUpdatedState(gestureBeganAtChapterBottom)
         var pullSettling by remember { mutableStateOf(false) }
         fun animatePullUnfill(isNext: Boolean, from: Float) {
             pullSettling = true
@@ -1210,13 +1208,13 @@ fun ReaderScreen(
             val previous = previousSurahLatest.value
             val nextProgress = nextChapterPull
             val prevProgress = previousChapterPull
-            // Commit only while still at threshold — retracting then releasing
+            // Commit only while still completely filled — retracting then releasing
             // unfills the bar instead of advancing (armed is haptic-only).
             when {
-                next != null && nextProgress >= 0.85f -> {
+                next != null && nextProgress >= 1f -> {
                     advanceToNextChapter(next.id)
                 }
-                previous != null && prevProgress >= 0.85f -> {
+                previous != null && prevProgress >= 1f -> {
                     advanceToPreviousChapter(previous.id)
                 }
                 nextProgress > 0f -> animatePullUnfill(isNext = true, from = nextProgress)
@@ -1230,6 +1228,36 @@ fun ReaderScreen(
             previousPullFillThresholdPx,
         ) {
             object : NestedScrollConnection {
+                override fun onPreScroll(
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    // Opposite motion drains the pull before the list can move,
+                    // so even a completely filled invitation can be cancelled.
+                    if (nextChapterPull > 0f && available.y > 0f) {
+                        val previous = nextChapterPull
+                        nextChapterPull =
+                            (previous - available.y / pullFillThresholdPx).coerceIn(0f, 1f)
+                        if (nextChapterPull < 1f) nextChapterPullArmed = false
+                        return Offset(
+                            x = 0f,
+                            y = (previous - nextChapterPull) * pullFillThresholdPx,
+                        )
+                    }
+                    if (previousChapterPull > 0f && available.y < 0f) {
+                        val previous = previousChapterPull
+                        previousChapterPull =
+                            (previous + available.y / previousPullFillThresholdPx)
+                                .coerceIn(0f, 1f)
+                        if (previousChapterPull < 1f) previousChapterPullArmed = false
+                        return Offset(
+                            x = 0f,
+                            y = -(previous - previousChapterPull) * previousPullFillThresholdPx,
+                        )
+                    }
+                    return Offset.Zero
+                }
+
                 override fun onPostScroll(
                     consumed: Offset,
                     available: Offset,
@@ -1240,6 +1268,7 @@ fun ReaderScreen(
                     if (
                         nextSurahLatest.value != null &&
                         previousChapterPull <= 0f &&
+                        beganAtBottomLatest.value &&
                         !listState.canScrollForward &&
                         available.y < 0f
                     ) {
@@ -1251,15 +1280,6 @@ fun ReaderScreen(
                         }
                         nextChapterPull = next
                         return Offset(0f, available.y)
-                    }
-                    if (nextChapterPull > 0f && available.y > 0f) {
-                        val sub = available.y / pullFillThresholdPx
-                        val prev = nextChapterPull
-                        nextChapterPull = (prev - sub).coerceIn(0f, 1f)
-                        // Retracting below threshold disarms so release unfills.
-                        if (nextChapterPull < 0.85f) nextChapterPullArmed = false
-                        val consumedY = (prev - nextChapterPull) * pullFillThresholdPx
-                        return Offset(0f, consumedY)
                     }
                     // Top: previous chapter — only if this gesture *began* already
                     // at the header top. A fling from mid-chapter stops on the
@@ -1283,15 +1303,6 @@ fun ReaderScreen(
                         previousChapterPull = next
                         return Offset(0f, available.y)
                     }
-                    if (previousChapterPull > 0f && available.y < 0f) {
-                        val sub = -available.y / previousPullFillThresholdPx
-                        val prev = previousChapterPull
-                        previousChapterPull = (prev - sub).coerceIn(0f, 1f)
-                        if (previousChapterPull < 0.85f) previousChapterPullArmed = false
-                        val consumedY =
-                            -(prev - previousChapterPull) * previousPullFillThresholdPx
-                        return Offset(0f, consumedY)
-                    }
                     // Soft guard: absorb leftover fling overscroll at the top so
                     // it never jiggles into a previous pull when the gesture
                     // didn't start docked on the header.
@@ -1300,6 +1311,16 @@ fun ReaderScreen(
                         !beganAtTopLatest.value &&
                         !listState.canScrollBackward &&
                         available.y > 0f
+                    ) {
+                        return Offset(0f, available.y)
+                    }
+                    // Symmetric bottom guard: arriving at the footer ends this
+                    // gesture. A fresh pull from the footer is required to open.
+                    if (
+                        nextSurahLatest.value != null &&
+                        !beganAtBottomLatest.value &&
+                        !listState.canScrollForward &&
+                        available.y < 0f
                     ) {
                         return Offset(0f, available.y)
                     }
@@ -1324,6 +1345,19 @@ fun ReaderScreen(
                         }
                         return available
                     }
+                    // Kill residual fling at the footer unless this gesture
+                    // began there, matching the header's soft stop.
+                    if (
+                        !beganAtBottomLatest.value &&
+                        !listState.canScrollForward &&
+                        available.y < 0f
+                    ) {
+                        if (nextChapterPull > 0f) {
+                            nextChapterPull = 0f
+                            nextChapterPullArmed = false
+                        }
+                        return available
+                    }
                     if (nextChapterPull > 0f || previousChapterPull > 0f) {
                         settlePullLatest.value()
                     }
@@ -1337,6 +1371,7 @@ fun ReaderScreen(
             previousChapterPull = 0f
             previousChapterPullArmed = false
             gestureBeganAtChapterTop = false
+            gestureBeganAtChapterBottom = false
             previousPageExit.snapTo(0f)
             previousPageEnter.snapTo(1f)
         }
@@ -1509,9 +1544,10 @@ fun ReaderScreen(
                             val touchSlop = viewConfiguration.touchSlop
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
-                                // Capture dock state for this gesture only. Mid-chapter
-                                // flings that later hit the top must not become a pull.
+                                // Capture dock state for this gesture only. A fling that
+                                // later reaches either edge must stop there, not pull.
                                 gestureBeganAtChapterTop = !listState.canScrollBackward
+                                gestureBeganAtChapterBottom = !listState.canScrollForward
                                 var dragStarted = false
                                 try {
                                     do {
@@ -1541,6 +1577,7 @@ fun ReaderScreen(
                                         settlePullLatest.value()
                                     }
                                     gestureBeganAtChapterTop = false
+                                    gestureBeganAtChapterBottom = false
                                 }
                             }
                         }
