@@ -622,8 +622,26 @@ h3 {
   border-radius: 22px;
 }
 
-.screenshots .phone-frame img {
+.screenshots .phone-frame img,
+.screenshots .phone-frame video {
   border-radius: 16px;
+}
+
+/* The theme row: three live recordings instead of four stills. Narrower grid
+ * so a third of it still frames a phone at roughly the size a quarter did. */
+.themes-kicker {
+  margin-top: 64px;
+}
+
+.themes-heading {
+  font-size: clamp(1.35rem, 2.4vw, 1.7rem);
+  margin-bottom: 6px;
+}
+
+.screenshots--themes {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 78%;
+  margin: 36px auto 0;
 }
 
 .screenshots figcaption {
@@ -653,6 +671,12 @@ h3 {
     flex: 0 0 auto;
     width: 168px;
     scroll-snap-align: start;
+  }
+
+  /* The narrowed theme grid would squeeze the scroller; let it run full width. */
+  .screenshots--themes {
+    max-width: none;
+    margin: 28px 0 0;
   }
 }
 
@@ -868,11 +892,19 @@ body::before {
   pointer-events: none;
 }
 
-/* Narrow screens have no margin to spare: the wash would sit under the text
- * column, and the hero medallion would swamp a phone-sized device shot. */
+/*
+ * A phone has no side margin for the wash to live in — the ellipse above
+ * would clear the middle of the screen and leave nothing anywhere else. So
+ * narrow screens mask it into top and bottom bands instead: the field is
+ * pinned to the edges of the viewport (it is fixed), and the reading band
+ * through the middle stays clean. The hero medallion also shrinks, or it
+ * swamps a phone-sized device shot.
+ */
 @media (max-width: 700px) {
   body::before {
-    display: none;
+    opacity: 0.7;
+    -webkit-mask-image: linear-gradient(#000, transparent 24%, transparent 76%, #000);
+    mask-image: linear-gradient(#000, transparent 24%, transparent 76%, #000);
   }
 
   .hero-stage::before {
