@@ -1721,6 +1721,21 @@ select {
   display: inline-block;
 }
 
+/*
+ * EB Garamond strokes can hang past a word's advance (notably the right arm
+ * of “f”). Give every masked English layer the same layout-neutral canvas so
+ * the temporary paint containment cannot shear that overhang mid-wash.
+ */
+.words[data-lyric='english'] .word-ink-slot > .word-gloss:not(.word-repeat-overlay) {
+  padding-inline: 0.2em;
+  margin-inline: -0.2em;
+}
+
+.words[data-lyric='english'] :is(.word-repeat-overlay, .word-glint-overlay) {
+  inset-inline: -0.2em;
+  padding-inline: 0.2em;
+}
+
 .word-ink-slot > .word-arabic,
 .word-ink-slot > .word-gloss,
 .word-ink-slot > .hafs-glyph {

@@ -311,7 +311,7 @@ technique.
 | Mode | Approach | Hard constraint |
 |---|---|---|
 | Arabic + gloss | Per-word spans; Arabic glyphs stay full opaque ink with paper-cover bloom (`WordUnit` / `ink-paper-cover`); gloss/translit use `secondaryAlpha` | Timed word-by-word ink; **never** CSS opacity / glyph alpha on Arabic (overlapping marks look dirty) |
-| English lyric | Directional `letterFadeIn` via `runLetterWash` + Upcoming floor | Same timings as Arabic; soft faded edge required |
+| English lyric | Directional `letterFadeIn` via `runLetterWash` + Upcoming floor | Same timings as Arabic; soft faded edge required; masked layers retain inline bleed for serif overhangs |
 | Gloss / translit under Arabic | Whole-word opacity via `secondaryAlpha` (tracks sweep; never letter-reveal) | Same as Android `WordHighlight.secondaryAlpha` |
 | Arabic-only (Hafs) | Per-word full-ink glyphs + paper-cover bloom (`HafsWord`) | No per-glyph style runs that break joining; no neighbour bleed; upcoming = opaque paper cover, not alpha |
 

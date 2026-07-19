@@ -103,6 +103,7 @@ import com.beautifulquran.ui.theme.ShapedWordBloom
 import com.beautifulquran.ui.theme.TranslationFontFamily
 import com.beautifulquran.ui.theme.generatedFieldWeave
 import com.beautifulquran.ui.theme.gilded
+import com.beautifulquran.ui.theme.glyphLayerAlpha
 import com.beautifulquran.ui.theme.letterFadeIn
 import com.beautifulquran.ui.theme.ornament.chapterOrnamentSeed
 import com.beautifulquran.ui.theme.ornament.generateChapterOrnament
@@ -165,7 +166,7 @@ private fun Rect.expandToInclude(other: Rect): Rect =
 
 /**
  * Returns the ink alpha as [State] so callers can defer the read to the draw
- * phase (inside a graphicsLayer block): the fade animates every frame without
+ * phase (inside a draw modifier): the fade animates every frame without
  * recomposing or re-laying-out a single word.
  *
  * Upcoming (including recessed non-active ayahs during playback) uses a short
@@ -312,7 +313,7 @@ private fun Modifier.repeatInkLayer(
     wash: RepeatWash,
     rtl: Boolean,
 ): Modifier =
-    graphicsLayer { alpha = wash.alpha.value }
+    glyphLayerAlpha { wash.alpha.value }
         .letterFadeIn(
             progress = { wash.progress.value },
             rtl = rtl,
@@ -467,7 +468,7 @@ private class WordHighlight(
             feather = pacing?.let { InkEngine.pacedFeather(it.letterCount) }
                 ?: InkEngine.tuning.washFeather,
         )
-        else -> Modifier.graphicsLayer { alpha = lyricInk.value }
+        else -> Modifier.glyphLayerAlpha { lyricInk.value }
     }
 
     /** Whether the orange repeat overlay still has any ink to show. */
@@ -755,7 +756,7 @@ fun WordUnit(
                         MaterialTheme.colorScheme.onBackground
                     },
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.graphicsLayer { alpha = highlight.secondaryAlpha() },
+                    modifier = Modifier.glyphLayerAlpha { highlight.secondaryAlpha() },
                 )
                 if (searchHitWash.alpha.value > 0f) {
                     Text(
@@ -779,7 +780,7 @@ fun WordUnit(
                 lineHeight = 14.sp * fontScale,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
                 textAlign = TextAlign.Center,
-                modifier = Modifier.graphicsLayer { alpha = highlight.secondaryAlpha() },
+                modifier = Modifier.glyphLayerAlpha { highlight.secondaryAlpha() },
             )
         }
     }
