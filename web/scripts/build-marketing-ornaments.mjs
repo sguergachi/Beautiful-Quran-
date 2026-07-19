@@ -164,9 +164,11 @@ function rosetteSvg(spec, leaf, { ruleWidth = 2.2, hairWidth = 1, precision = 1 
 }
 
 /**
- * An architectural surround rather than a medallion: the transparent centre
- * is a Moroccan lambrequin opening, while Al-Fatihah's generated weave is
- * confined to the spandrels, cornice and tiled side dados.
+ * An architectural surround rather than a medallion: a pointed multifoil
+ * arch inside a plain double-rule alfiz, with Al-Fatihah's generated weave
+ * confined to the spandrels. The arch is drafted, not drawn freehand —
+ * cusps sit on a compass-swung guide arc and every foil is an exact
+ * circular arc, the way a zellij maallem would set it out.
  */
 function heroArchSvg(field, ink) {
   const cell = 54
@@ -178,22 +180,48 @@ function heroArchSvg(field, ink) {
       return `<path d="${points}${stroke.closed ? ' Z' : ''}"/>`
     })
     .join('')
+
+  const AXIS = 300 // centreline of the 600-wide viewBox
+  const BOTTOM = 724
+  const SPRING_Y = 420 // springline: foils above, straight jambs below
+  const JAMB_X = 95 // opening half-width a = AXIS − JAMB_X
+  const GUIDE_APEX_Y = 60
+  const FOILS = 7 // per side, counting the half-foil that forms the point
+  const FOIL_K = 0.58 // foil radius / chord; 0.5 is a semicircle
+
+  // Two-centre pointed arch guide through springing and apex.
+  const a = AXIS - JAMB_X
+  const h = SPRING_Y - GUIDE_APEX_Y
+  const d = (h * h - a * a) / (2 * a)
+  const R = d + a
+  const cx = AXIS + d
+  const span = Math.atan2(h, d)
+
+  // Cusps divide the guide evenly; the last foil overshoots the guide apex
+  // so the two sides cross in a true point rather than a cleft.
+  const cusps = Array.from({ length: FOILS }, (_, j) => {
+    const t = (j * span) / FOILS
+    return [cx - R * Math.cos(t), SPRING_Y - R * Math.sin(t)]
+  })
+  const apex = [AXIS, GUIDE_APEX_Y - 14]
+
+  const f = (v) => Number(v.toFixed(1))
+  const foil = ([x0, y0], [x1, y1], sweep) => {
+    const rho = f(FOIL_K * Math.hypot(x1 - x0, y1 - y0))
+    return `A${rho} ${rho} 0 0 ${sweep} ${f(x1)} ${f(y1)}`
+  }
+  const left = cusps.slice(1).map((c, j) => foil(cusps[j], c, 0))
+  const mirror = ([x, y]) => [2 * AXIS - x, y]
+  const rightCusps = [...cusps].reverse().map(mirror)
+  const right = rightCusps.map((c, j) => foil(j === 0 ? apex : rightCusps[j - 1], c, 0))
   const archLine =
-    'M126 724V416C114 392 104 367 93 332C110 321 110 304 95 294' +
-    'C80 284 81 264 100 258C119 252 122 237 108 226' +
-    'C120 207 141 191 174 183C158 168 164 145 186 143' +
-    'C210 141 225 125 228 105C232 82 253 80 268 92' +
-    'C285 72 295 34 300 14C305 34 315 72 332 92' +
-    'C347 80 368 82 372 105C375 125 390 141 414 143' +
-    'C436 145 442 168 426 183C459 191 480 207 492 226' +
-    'C478 237 481 252 500 258C519 264 520 284 505 294' +
-    'C490 304 490 321 507 332C496 367 486 392 474 416V724'
-  const opening = `${archLine}Z`
-  const facade = `M30 28H570V724H30Z ${opening}`
-  const diamonds = Array.from({ length: 12 }, (_, i) => {
-    const x = 52 + i * 45
-    return `<path d="M${x} 51l13 -13 13 13-13 13Z"/>`
-  }).join('')
+    `M${JAMB_X} ${BOTTOM}V${SPRING_Y}` +
+    left.join('') +
+    foil(cusps[FOILS - 1], apex, 0) +
+    right.join('') +
+    `V${BOTTOM}`
+
+  const facade = `M30 28H570V${BOTTOM}H30Z ${archLine}Z`
 
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 752">` +
@@ -211,13 +239,14 @@ function heroArchSvg(field, ink) {
     `<path d="${facade}" fill="${ink.ground}" fill-rule="evenodd"/>` +
     `<path d="${facade}" fill="url(#z)" fill-rule="evenodd" opacity=".78"/>` +
     `</g>` +
-    `<g fill="none" stroke-linejoin="round" vector-effect="non-scaling-stroke">` +
-    `<path d="M30 724V28H570V724M42 724V74H558V724" stroke="${ink.rule}" stroke-width="1.4"/>` +
-    `<path d="M30 75H570M42 82H558" stroke="${ink.rule}" stroke-width="1.1"/>` +
-    `<g stroke="${ink.rule}" stroke-width="1">${diamonds}</g>` +
-    `<path d="${archLine}" stroke="${ink.rule}" stroke-width="3.2"/>` +
-    `<path d="M51 706V424M92 706V435M508 706V435M549 706V424" stroke="${ink.rule}" stroke-width="1.2"/>` +
-    `<path d="M42 424H110M490 424H558M42 706H126M474 706H558" stroke="${ink.rule}" stroke-width="1.2"/>` +
+    `<g fill="none" stroke="${ink.rule}" stroke-linejoin="round">` +
+    `<path d="M30 ${BOTTOM}V28H570V${BOTTOM}" stroke-width="1.5"/>` +
+    `<path d="M36 ${BOTTOM}V34H564V${BOTTOM}" stroke-width="1"/>` +
+    `<path d="${archLine}" stroke-width="2.8"/>` +
+    // Imposts the arch springs from, and a fine echo line down each jamb.
+    `<path d="M36 ${SPRING_Y}H${JAMB_X}M${600 - JAMB_X} ${SPRING_Y}H564" stroke-width="1.2"/>` +
+    `<path d="M36 428H88M512 428H564" stroke-width="1.2"/>` +
+    `<path d="M79 428V${BOTTOM}M521 428V${BOTTOM}" stroke-width="1"/>` +
     `</g>` +
     `</svg>`
   )

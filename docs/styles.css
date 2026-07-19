@@ -281,12 +281,13 @@ img {
   display: flex;
   justify-content: center;
   align-items: flex-end;
-  padding-top: 44px;
+  padding-top: 76px;
   min-height: 0;
 }
 
-/* A Moroccan lambrequin opening: geometry belongs to the architecture around
- * the phone, leaving the reader itself calm and unobstructed. */
+/* A pointed multifoil portal: the phone stands before the archway, so the
+ * drafted crest clears its top and the foils peek past its sides, leaving
+ * the reader itself calm and unobstructed. */
 .hero-stage::before {
   content: '';
   position: absolute;
@@ -878,7 +879,7 @@ h3 {
  *
  *   --orn-field       the page wash, ink demo, and CTA panels
  *   --orn-band-h      frieze rules: ink-demo section, footer
- *   --orn-hero-arch   the hero's tiled architectural surround
+ *   --orn-hero-arch   the hero's multifoil portal surround
  *   --orn-seal        corner seals on the CTA cover
  *   --orn-pip         the seal shrunk to a mark, before every gilded label
  *   --orn-tailpiece   the footer colophon (Al-Ikhlas's seed)
