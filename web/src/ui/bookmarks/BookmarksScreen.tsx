@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { QuranRepository } from '../../data/repository'
 import { VerseBookmarkRibbon } from '../../render/VerseBookmarkRibbon'
 import { appStore, useAppSelector } from '../../store/appStore'
+import { DisclosureChevron } from '../kit/DisclosureChevron'
 import { PaperInput } from '../kit/PaperInput'
 import { BOOKMARKS_LAYER, COVER_LAYER, type StackLayer } from '../paper/stack'
 import {
@@ -143,9 +144,6 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
                       <span className="bookmark-section-name">
                         {section.surah.nameTransliteration}
                       </span>
-                      {!searching ? (
-                        <BookmarkSectionChevron expanded={!collapsed} />
-                      ) : null}
                       <span
                         className="bookmark-section-arabic"
                         lang="ar"
@@ -153,6 +151,10 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
                       >
                         {section.surah.nameArabic}
                       </span>
+                      <DisclosureChevron
+                        expanded={!collapsed}
+                        className={`bookmark-section-chevron${searching ? ' bookmark-section-chevron-hidden' : ''}`}
+                      />
                     </span>
                   </button>
 
@@ -202,20 +204,6 @@ export function BookmarksScreen({ stackLayer }: { stackLayer: StackLayer }) {
         </div>
       </div>
     </div>
-  )
-}
-
-function BookmarkSectionChevron({ expanded }: { expanded: boolean }) {
-  return (
-    <svg
-      className="bookmark-section-chevron"
-      viewBox="0 0 24 24"
-      width="20"
-      height="20"
-      aria-hidden="true"
-    >
-      <path d={expanded ? 'm7 10 5 5 5-5' : 'm10 7 5 5-5 5'} />
-    </svg>
   )
 }
 
