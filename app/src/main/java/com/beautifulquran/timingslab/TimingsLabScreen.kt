@@ -275,7 +275,11 @@ private fun LabHeader(
         // The Lab is a sheet that rose over the reader; the chevron lowers it
         // back onto the exact page it came from. onExit runs in the closer.
         IconButton(onClick = onBack) {
-            Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Close")
+            Icon(
+                Icons.Rounded.KeyboardArrowDown,
+                contentDescription = "Close",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -286,6 +290,7 @@ private fun LabHeader(
                 Text(
                     text = "${ui.surahName} · Ayah ${ui.ayah}",
                     style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
                     maxLines = 1,
                 )
                 Stepper("›", onClick = viewModel::nextAyah)
@@ -335,7 +340,11 @@ private fun OverflowMenu(
     var confirmClear by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true; confirmClear = false }) {
-            Icon(Icons.Rounded.MoreHoriz, contentDescription = "More")
+            Icon(
+                Icons.Rounded.MoreHoriz,
+                contentDescription = "More",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
