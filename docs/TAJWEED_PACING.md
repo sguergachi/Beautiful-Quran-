@@ -1,9 +1,15 @@
 # Tajweed-paced ink
 
-**Status: v1 implemented on Android, off by default behind the Ink Lab's
-"Tajweed pacing" toggle (Settings → Developer → Ink Lab overlay). The web
-port and measured letter widths are not yet built — the design for those
-lives below.**
+**Status: implemented on Android, off by default behind the Ink Lab's
+"Tajweed pacing" toggle (Settings → Developer → Ink Lab overlay → Tajweed
+tab). The web port and measured letter widths are not yet built — the design
+for those lives below.**
+
+The shipped model is the **gate / cruise / hold** design in §3. The first
+revision spread every letter by its raw tajweed counts; because word timings
+carry no slack, that made the ordinary letters *faster* than the plain sweep
+and (via a narrowed feather) sharper too — losing the whole-word breath the
+reveal is built on. §3 explains what replaced it and why.
 
 Today the active word's ink wash sweeps across the word at a constant (eased)
 rate: `sweepMs` is the word's dwell time, and progress maps linearly to
@@ -95,17 +101,11 @@ merge into their neighbour's glide (see the curve section). Cross-word rules
 (idghām across a word gap, madd ʿāriḍ at waqf) are out of scope for v1.
 Counts live as named constants in `TajweedPacing`.
 
-**Contrast.** Raw tajweed ratios are dramatic: a madd lazim moves twelve
-times slower than a plain sākin, which means short letters flash by too fast
-for the ink fade to read, and every segment boundary is an abrupt speed
-change. `curve(arabic, spokenFraction, contrast)` raises each letter's counts
-to the `contrast` power **before** normalizing: 1 keeps the raw ratios, 0
-flattens to a uniform sweep, and ≈0.7 (the shipped default,
-`Tuning.pacingContrast`, "Pacing contrast" in the Ink Lab) keeps the madd
-dwell clearly readable (~37 % of `ٱلضَّآلِّينَ` instead of 46 %) while its
-neighbours slow enough to enjoy. Because the redistribution happens inside
-the word's measured dwell, softening can never fall behind the reciter — the
-edge always finishes exactly at handoff.
+**The counts pick the moment, not the tempo.** An earlier revision spread
+every letter by its raw counts and then softened the ratios with a `contrast`
+exponent. Both were wrong, for the same reason: see "No slack" below. The
+counts now decide only *which* letter is worth holding and *how much* of the
+dwell budget it earns relative to other holds in the same word.
 
 **Orthography facts baked into the parser** (verified against every word in
 `quran.db` — this text is the QPC Hafs encoding, and two conventions are
@@ -149,43 +149,71 @@ the measured upgrade is:
   (word, font size). Browsers return correct cluster geometry for shaped
   Arabic where `measureText` on prefixes would not.
 
-### 3. The pacing curve
+### 3. The pacing curve — gate, cruise, hold
 
-Breakpoints `(tᵢ, xᵢ)` — cumulative time fraction → cumulative width
-fraction, **one per pronounced letter** — evaluated as a **monotone
-piecewise-linear** map (a dozen points; binary search per frame,
-allocation-free). Monotonicity is guaranteed by construction: both
-coordinate lists are cumulative sums, so the ink can never move backward.
-Silent letters emit no breakpoint, which is what folds their width into the
-neighbouring glide instead of a same-time position step. The smootherstep
-feather softens the remaining corners spatially and the contrast knob
-compresses the speed ratios between them, so v1 does not need spline
-smoothing; Fritsch–Carlson monotone cubic is a later polish if PWL still
-reads mechanical at low feather.
+**No slack.** Word timings are contiguous: only **0.2 % of segments have any
+breath gap at all** (`end == nextStart` everywhere else). So the time inside a
+word is strictly zero-sum — every count handed to a madd is taken from its
+neighbours, which then run *faster* than the plain sweep. The first revision
+spread all letters by their counts and, at `contrast = 0.7`, left the ordinary
+letters running **~1.3× the plain rate**: the feature made most of each word
+quicker, which is precisely how it read.
+
+The model is therefore a **gated hint**, built from four parts:
+
+- **Gate.** A word is paced only if it holds a genuinely dramatic letter.
+  Otherwise `curve()` returns null and the renderer takes the plain sweep, so
+  the page is untouched almost everywhere. Measured over the corpus, the
+  default (madd only) gates **6.8 % of word tokens** — about one word in
+  fifteen — plus every verse-closing word. Enabling ghunnah roughly doubles it.
+- **Cruise.** Non-hold letters move at one constant speed, never the raw
+  ratios, bounded by `Hold.cruiseCap` as a multiple of the plain rate. **This
+  is the honest dial: hold length and ordinary-letter speed are the same
+  number.** At a cap of 1 the ordinary letters are never hurried, which also
+  means a mid-word madd can buy no dwell — leaving waqf as the only drama.
+- **Hold.** The freed time parks the wash on the held letter, entered at the
+  midpoint of its own width slot (`HOLD_ANCHOR`) so the glyph is caught
+  mid-bloom rather than sustained before or after itself. It creeps through
+  `Hold.creep` of that slot while holding, so the ink breathes instead of
+  freezing dead. Multiple holds in one word split the budget by excess counts.
+- **Waqf.** A verse's closing word is held **2.9× longer** than a mid-ayah word
+  (median 2983 ms vs 1040 ms; `ٱلضَّآلِّينَ` in 1:7 runs 6505 ms). That slack is
+  real rather than borrowed, so it is budgeted separately (`Hold.waqfShare`)
+  and spent on the final letter — the madd ʿāriḍ li-s-sukūn the reciter is
+  actually sustaining. This is the one case that deliberately cruises past
+  `cruiseCap` (up to ~2.2× the word's own uniform rate, still slower in
+  absolute terms than an ordinary word because the word is so much longer).
+
+Breakpoints `(tᵢ, xᵢ)` — time fraction → width fraction, two per hold and one
+per plain letter — are evaluated as a **monotone piecewise-linear** map (a
+dozen points; binary search per frame, allocation-free). Monotonicity holds by
+construction: both lists are cumulative. Silent letters emit no breakpoint,
+which folds their width into the neighbouring glide instead of a same-time
+position step. The smootherstep feather softens the remaining corners
+spatially; Fritsch–Carlson monotone cubic is a later polish if the corners
+ever read mechanical.
 
 Two refinements built into the curve, not the callers:
 
-- **Spoken span vs hold.** `sweepMs` today runs to the karaoke hold
-  (`holdEndMs`), which includes the breath gap before the next word.
-  Distributing letters across silence would make the ink lag the voice, so
-  the curve places the letters over the *spoken* span (`endMs − startMs`) and
-  appends a plateau breakpoint at `(spoken/hold, 1.0)` — the ink settles when
-  the voice stops and rests until handoff. This needs `ActiveWord` to carry
-  the spoken duration alongside the hold duration (both already exist in
-  `HighlightEngine.ActiveInfo`).
+- **Spoken span vs hold.** `sweepMs` runs to the karaoke hold (`holdEndMs`),
+  which would include a breath gap. The curve lays the letters over the
+  *spoken* span (`endMs − startMs`) and appends a plateau at
+  `(spoken/hold, 1.0)`, so the ink settles when the voice stops. With
+  contiguous timings this is almost always a no-op, and correct when it isn't.
 - **End easing.** The global cubic-bezier sweep ease is *dropped* for paced
-  words (composing it with the curve would distort letter timing — the whole
-  point). A soft toe/shoulder comes from the feather profile, which already
-  has zero slope at both ends.
+  words (composing it with the curve would distort the hold — the whole
+  point). The soft toe and shoulder come from the feather profile, which
+  already has zero slope at both ends.
 
 ## Integration — what changed where (Android, implemented)
 
-- **`InkEngine`** — `sweepMs` unchanged. `InkEngine.pacing(arabic, activeWord)`
-  returns the nullable curve (gated on `Tuning.tajweedPacing`, default off);
-  `InkEngine.pacedFeather(letterCount)` narrows the wash edge. Three tuning
-  knobs in the Ink Lab panel: the `tajweedPacing` toggle,
-  `pacedFeatherPerLetter`, and `pacingContrast` (dwell drama vs glide, see
-  the contrast note above).
+- **`InkEngine`** — `sweepMs` unchanged.
+  `InkEngine.pacing(arabic, activeWord, isAyahFinal)` returns the nullable
+  curve (gated on `Tuning.tajweedPacing`, default off) and assembles a
+  `TajweedPacing.Hold` from the tuning; `InkEngine.pacedFeather()` supplies the
+  paced edge. Eight knobs sit on the Ink Lab's **Tajweed** tab: the
+  `tajweedPacing` master toggle, `holdMadd` / `holdGhunnah` / `holdWaqf`, and
+  the `cruiseCap`, `waqfShare`, `holdCreep` and `pacedFeather` sliders.
 - **`ActiveWord`** — carries `spokenMs` (segment end − start) alongside the
   karaoke-hold `durationMs`, so the curve can rest after the voice stops.
 - **Renderer** — `AyahBlock` computes the active word's curve next to
@@ -196,17 +224,20 @@ Two refinements built into the curve, not the callers:
   (it would distort letter timing; the feather profile keeps the soft
   toe/shoulder). Pacing costs one curve lookup per frame, zero extra
   recompositions. The clock is captured at Active entry like `sweepMs`, but
-  the curve itself is tracked live (`rememberUpdatedState`), so Ink Lab
-  edits — the toggle, the contrast slider — reshape the word already on
-  screen instead of waiting for the next activation.
-- **Feather** — the make-or-break visual change. The shipped feather is 1.6×
-  the word width ("a whole-word breath"); at that width letter pacing would be
-  invisible. Paced words use
-  `pacedFeather = clamp(pacedFeatherPerLetter / letterCount, 0.3, 0.8)`
-  (default k = 2.5), tunable live in the Ink Lab. `ShapedWordBloom.InkReveal`
-  grew an optional per-bloom `feather` override so the Arabic-only active word
-  narrows while UpcomingDim/ColorReveal keep the modifier default. Non-paced
-  washes (repeat orange, search flash, basmalah, English) keep 1.6.
+  the curve itself is tracked live (`rememberUpdatedState`), so every Ink Lab
+  knob reshapes the word already on screen instead of waiting for the next
+  activation. `AyahBlock` also passes `isAyahFinal` (the active word's position
+  vs `ayah.words.last()`), which is what arms the waqf hold.
+- **Feather** — the make-or-break visual change, and the one the first
+  revision got wrong. `letterFadeIn`'s wide edge is *what makes the reveal
+  ethereal*: at 1.6× the word width the wash reads "closer to a whole-word
+  breath than a moving edge" (its own comment in `ui/theme/Fade.kt`). Ratio
+  pacing was too subtle to see at that width, so it narrowed the edge to
+  0.3–0.8 — up to 3× sharper — and the softness went with it. A hold does not
+  need a sharp edge: the bloom visibly *stopping* is legible at any feather.
+  So `pacedFeather` now defaults to 1.6, identical to `washFeather`, and stays
+  a slider for auditioning. `ShapedWordBloom.InkReveal` keeps its optional
+  per-bloom `feather` override for that path.
 - **Web renderer (pending)** — `runWash` accepts a `(t: number) => number`
   easing in place of the bezier tuple (Motion supports custom easing
   functions); the active-word wash passes the curve, everything else keeps
@@ -263,22 +294,30 @@ the curve, not the weights, is the module boundary.
 
 ## Testing
 
-- `TajweedPacingTest` (JVM, implemented): golden words with hand-counted
-  weights (`ٱلضَّآلِّينَ`, `صِرَٰطَ`, `أَنۡعَمۡتَ`, `كُنتُمۡ`, `قَالُوٓاْ`)
-  covering silent letters, sun-letter assimilation, iẓhār vs ikhfāʾ noon,
-  dagger-alef madd, madd lazim/munfasil; the silent-slice glide (word start
-  and the trailing plural alif); zero/partial contrast; short-word fallback;
-  monotone bounded curves with exact endpoints across the
-  spoken × contrast grid; the spoken-span plateau; the floored degenerate
-  spoken fraction. Port to Vitest with the web module. **The golden literals
-  must stay byte-identical to the DB** — an editor or tool that NFC-normalizes
-  the file fuses `ا + ٓ` into precomposed `آ` (U+0622) and silently changes
-  the weights (the parser now unfuses U+0622 defensively, but the DB itself
-  is always decomposed).
-- The full-DB sweep (all distinct words × contrast {0, 0.7, 1} × spoken
-  {0.5, 1}: zero monotonicity violations, exact endpoints) was run against
-  the compiled implementation; it is not a committed test (JVM unit tests
-  have no SQLite driver — invariant #5).
+- `TajweedPacingTest` (JVM, implemented) is a spec for the **gate** as much as
+  the hold: `صِرَٰطَ` and `أَنۡعَمۡتَ` carry nothing dramatic and must return
+  null; `ٱلضَّآلِّينَ` must all but stop on its madd while an equal slice of
+  cruising covers real distance; `ٱلنَّاسِ` holds only when ghunnah is enabled;
+  `cruiseCap = 1` refuses a mid-word hold but still allows waqf; the closing
+  letter of a verse-final word swallows over half the sweep; a bigger
+  `waqfShare` buys a measurably longer stillness; no segment anywhere outruns
+  the cap; and every knob combination stays monotone and bounded with exact
+  endpoints. **The golden literals must stay byte-identical to the DB** — an
+  editor or tool that NFC-normalizes the file fuses `ا + ٓ` into precomposed
+  `آ` (U+0622) and silently changes the weights (the parser now unfuses U+0622
+  defensively, but the DB itself is always decomposed).
+- **Full-corpus sweep** — all 21,216 distinct words (77,429 tokens) ×
+  `cruiseCap {1, 1.25, 1.6}` × `isAyahFinal {false, true}` ×
+  `spokenFraction {0.5, 1}`, with ghunnah on: **zero monotonicity violations,
+  zero cap breaches, exact endpoints throughout**; the default gate admits
+  6.8 % of tokens and the waqf rule produces a hold for 81.8 % of words when
+  they close a verse (the rest are too short to pace). Run against the
+  compiled implementation as a temporary test and deleted — JVM unit tests
+  have no SQLite driver (invariant #5).
+- **On-device audition** — playing 1:7 with pacing on and sampling the frame
+  luminance over `ٱلضَّآلِّينَ` at 15 fps gives the intended three-act shape:
+  the wash cruises from 24 % to 68 % ink over 0.87 s, holds between 68 % and
+  70 % for **1.73 s**, then releases to full over the last 0.8 s.
 - Existing `HighlightEngine`/`InkEngine` tests untouched — nothing upstream
   changed.
 
