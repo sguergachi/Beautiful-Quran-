@@ -12,10 +12,17 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Noto+Naskh+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="theme.js"></script>
   <link rel="stylesheet" href="ornaments.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <svg class="svg-defs" aria-hidden="true">
+    <defs>
+      <!-- Exact settled path from web/src/ui/kit/brushCheck.ts, revision 2. -->
+      <path id="marketing-brush-check" d="M2.24 11.80L2.53 12.11L2.76 12.43L2.94 12.77L3.12 13.11L3.29 13.45L3.46 13.79L3.63 14.13L3.81 14.47L3.98 14.80L4.15 15.14L4.32 15.48L4.49 15.82L4.73 16.14L5.03 16.45L5.32 16.76L5.62 17.07L5.91 17.38L6.21 17.69L6.51 17.99L6.81 18.30L7.11 18.61L7.42 18.92L7.72 19.22L9.40 20.57L10.46 19.62L10.78 18.90L11.11 18.19L11.43 17.47L11.75 16.76L12.08 16.05L12.41 15.34L12.74 14.64L13.07 13.94L13.41 13.24L13.75 12.55L14.09 11.87L14.44 11.19L14.79 10.51L15.09 9.77L15.37 8.99L15.65 8.21L15.93 7.43L16.20 6.65L16.47 5.86L16.74 5.06L17.00 4.26L17.28 3.47L17.62 2.78L17.42 2.50L17.08 3.19L16.68 3.78L16.26 4.36L15.85 4.94L15.44 5.53L15.03 6.13L14.63 6.73L14.23 7.33L13.83 7.93L13.45 8.57L13.12 9.27L12.79 9.97L12.45 10.67L12.11 11.36L11.77 12.04L11.42 12.72L11.07 13.40L10.72 14.07L10.37 14.74L10.01 15.41L9.65 16.07L9.30 16.74L8.94 17.40L9.32 17.83L10.42 18.56L10.14 18.24L9.87 17.93L9.59 17.62L9.31 17.31L9.03 16.99L8.75 16.68L8.46 16.37L8.18 16.06L7.89 15.75L7.61 15.44L7.27 15.14L6.86 14.86L6.45 14.58L6.04 14.30L5.63 14.01L5.23 13.73L4.82 13.45L4.41 13.17L4.00 12.89L3.60 12.61L3.20 12.33L2.85 12.03L2.56 11.72Z"/>
+    </defs>
+  </svg>
   <div class="page">
     <nav class="top-nav" aria-label="Primary">
       <a class="nav-brand" href="index.html">
@@ -44,20 +51,17 @@
 
     <header class="hero">
       <div class="hero-copy">
-        <p class="eyebrow">Android &amp; web</p>
         <div class="arabic-title" lang="ar" dir="rtl">القرآن الكريم</div>
         <h1 class="app-title">Beautiful Quran</h1>
         <p class="hero-lead">
-          Every word lights up with the reciter&nbsp;&mdash; like lyrics for the Quran.
-        </p>
-        <p class="hero-sub">
-          No ads. No accounts. No analytics. Just the Quran.
+          <span class="heading-line">Each word lights up with the reciter</span>
+          <span class="heading-line">&mdash; like lyrics for the Quran.</span>
         </p>
         <div class="actions">
           <a href="app/" class="btn">Open web reader</a>
           <a href="https://github.com/sguergachi/Beautiful-Quran-/releases/latest" class="btn-secondary">Get the APK</a>
         </div>
-        <p class="hero-meta">Free · Open source · Offline-first</p>
+        <p class="hero-meta">Free · Open source</p>
       </div>
 
       <div class="hero-stage" aria-hidden="false">
@@ -107,12 +111,12 @@
 
     <section id="features" class="features" aria-labelledby="features-heading">
       <p class="section-kicker">The essentials</p>
-      <h2 id="features-heading">Everything you need to read</h2>
+      <h2 id="features-heading">Everything you need</h2>
       <ul class="feature-grid">
         <li>
           <span class="feature-num">01</span>
           <h3>Word-sync highlight</h3>
-          <p>Seven reciters, each timed word by word. Audio streams and caches.</p>
+          <p>Seven reciters, each timed word by word.</p>
         </li>
         <li>
           <span class="feature-num">02</span>
@@ -136,15 +140,18 @@
         </li>
         <li>
           <span class="feature-num">06</span>
-          <h3>Works offline</h3>
-          <p>Text and timings stay on your device. Audio caches as you listen.</p>
+          <h3>Recitation on demand</h3>
+          <p>Audio downloads as needed, then caches for replay.</p>
         </li>
       </ul>
     </section>
 
     <section id="screens" class="showcase" aria-labelledby="screens-heading">
       <p class="section-kicker">The interface</p>
-      <h2 id="screens-heading">Nothing between you and the page</h2>
+      <h2 id="screens-heading">
+        <span class="heading-line--small">Nothing</span>
+        <span class="heading-line--small">between you and the page</span>
+      </h2>
       <p class="section-lead">
         Four flat sheets: bookmarks, chapters, reader, settings. No cards, chrome, or clutter.
       </p>
@@ -176,7 +183,7 @@
       </div>
 
       <p class="section-kicker themes-kicker">Three themes</p>
-      <h3 class="themes-heading">One page, three moods</h3>
+      <h3 id="themes-heading" class="themes-heading">One page, three moods</h3>
       <p class="section-lead">
         Warm paper, charcoal nightfall, or royal green&nbsp;&mdash; each with its own gilding.
       </p>
@@ -196,7 +203,15 @@
               aria-label="Al-Fatihah reciting in the Paper theme"
             ></video>
           </div>
-          <figcaption>Paper</figcaption>
+          <figcaption>
+            <span>Paper</span>
+            <button type="button" class="theme-select" data-theme-choice="light" data-theme-label="Paper" aria-label="Use Paper theme" aria-pressed="false">
+              <svg class="ink-check-mark" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                <circle class="ink-check-ring" cx="12" cy="12" r="10.5" fill="none"/>
+                <use class="ink-check-stroke" href="#marketing-brush-check"/>
+              </svg>
+            </button>
+          </figcaption>
         </figure>
         <figure>
           <div class="phone-frame">
@@ -213,7 +228,15 @@
               aria-label="Al-Fatihah reciting in the Nightfall theme"
             ></video>
           </div>
-          <figcaption>Nightfall</figcaption>
+          <figcaption>
+            <span>Nightfall</span>
+            <button type="button" class="theme-select" data-theme-choice="dark" data-theme-label="Nightfall" aria-label="Use Nightfall theme" aria-pressed="false">
+              <svg class="ink-check-mark" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                <circle class="ink-check-ring" cx="12" cy="12" r="10.5" fill="none"/>
+                <use class="ink-check-stroke" href="#marketing-brush-check"/>
+              </svg>
+            </button>
+          </figcaption>
         </figure>
         <figure>
           <div class="phone-frame">
@@ -230,7 +253,15 @@
               aria-label="Al-Fatihah reciting in the Royal green theme"
             ></video>
           </div>
-          <figcaption>Royal green</figcaption>
+          <figcaption>
+            <span>Royal green</span>
+            <button type="button" class="theme-select" data-theme-choice="royal_green" data-theme-label="Royal green" aria-label="Use Royal green theme" aria-pressed="false">
+              <svg class="ink-check-mark" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                <circle class="ink-check-ring" cx="12" cy="12" r="10.5" fill="none"/>
+                <use class="ink-check-stroke" href="#marketing-brush-check"/>
+              </svg>
+            </button>
+          </figcaption>
         </figure>
       </div>
     </section>
