@@ -656,10 +656,20 @@ h3 {
   color: var(--ink-muted);
 }
 
+/* ── Read + listen benefits ────────────────────────────── */
+
+.read-listen {
+  padding: var(--section-space) 0 56px;
+}
+
+.read-listen .section-lead {
+  margin-bottom: 32px;
+}
+
 /* ── Features ───────────────────────────────────────────── */
 
 .features {
-  padding: var(--section-space) 0 56px;
+  padding: 80px 0 56px;
 }
 
 .features h2 {
