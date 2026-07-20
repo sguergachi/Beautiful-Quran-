@@ -1,9 +1,8 @@
 # Beautiful Quran
 
-A beautiful, simple Quran reader for Android and the web. Its signature feature is a lyric-style
-**follow-along view**: as the reciter recites, each Arabic word lights up in time
-with the audio — with its English meaning right beneath it — like a karaoke or
-Apple Music lyrics view.
+A beautiful, simple Quran reader for Android and the web. Its signature feature is a
+**word-by-word follow-along view**: as the reciter recites, each Arabic word
+illuminates in time with the audio, with its English meaning beneath it.
 
 - 📖 Full Quran, Uthmani script, in the KFGQPC Hafs typeface
 - ✨ Word-by-word highlighting synced to reciters with bundled timing data
