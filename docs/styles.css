@@ -340,10 +340,10 @@ p {
 .hero-stage::before {
   content: '';
   position: absolute;
-  top: 0;
+  top: -56px;
   left: 50%;
-  width: min(132%, 520px);
-  height: 100%;
+  width: min(148%, 560px);
+  height: calc(100% + 56px);
   transform: translateX(-50%);
   background: var(--orn-hero-arch) center top / contain no-repeat;
   pointer-events: none;
@@ -395,7 +395,7 @@ p {
 
 @media (min-width: 861px) and (max-width: 1100px) {
   .hero-stage::before {
-    width: min(118%, 460px);
+    width: min(138%, 520px);
   }
 }
 
@@ -416,7 +416,9 @@ p {
   }
 
   .hero-stage::before {
-    width: min(112%, 430px);
+    top: -40px;
+    width: min(122%, 460px);
+    height: calc(100% + 40px);
   }
 
   .phone-frame--hero {
