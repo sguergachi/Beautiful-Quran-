@@ -1122,6 +1122,10 @@ body::before {
     padding-top: 56px;
   }
 
+  .hero-stage::before {
+    top: -32px;
+  }
+
   .phone-frame--hero {
     width: clamp(146px, 39vw, 220px);
   }
@@ -1138,7 +1142,7 @@ body::before {
   }
 
   .hero-stage::before {
-    top: -24px;
+    top: -16px;
     height: calc(100% + 24px);
   }
 
