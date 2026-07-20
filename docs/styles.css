@@ -159,6 +159,13 @@ img {
   position: sticky;
   top: 0;
   z-index: 10;
+}
+
+.top-nav::before {
+  content: '';
+  position: absolute;
+  inset: 0 calc(50% - 50vw);
+  z-index: -1;
   background: color-mix(in srgb, var(--paper) 88%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -274,25 +281,28 @@ img {
   display: flex;
   justify-content: center;
   align-items: flex-end;
+  padding-top: 76px;
   min-height: 0;
 }
 
-/* The medallion behind the device — a rose window the phone sits inside. */
+/* A pointed multifoil portal: the phone stands before the archway, so the
+ * drafted crest clears its top and the foils peek past its sides, leaving
+ * the reader itself calm and unobstructed. */
 .hero-stage::before {
   content: '';
   position: absolute;
-  top: 50%;
+  top: 0;
   left: 50%;
-  width: min(158%, 620px);
-  aspect-ratio: 1;
-  transform: translate(-50%, -50%);
-  background: var(--orn-medallion) center / contain no-repeat;
-  opacity: 0.45;
+  width: min(132%, 520px);
+  height: 100%;
+  transform: translateX(-50%);
+  background: var(--orn-hero-arch) center top / contain no-repeat;
   pointer-events: none;
 }
 
 .hero-stage .phone-frame {
   position: relative;
+  z-index: 1;
 }
 
 .phone-frame {
@@ -331,7 +341,7 @@ img {
 
 .phone-frame--hero {
   width: min(100%, 280px);
-  transform: rotate(-1.5deg);
+  transform: translateY(-12px) rotate(-1.5deg);
 }
 
 @media (max-width: 860px) {
@@ -345,9 +355,13 @@ img {
     order: -1;
   }
 
+  .hero-stage::before {
+    width: min(112%, 430px);
+  }
+
   .phone-frame--hero {
     width: min(100%, 220px);
-    transform: none;
+    transform: translateY(-12px);
   }
 
   .hero-lead {
@@ -468,14 +482,12 @@ h3 {
 
 /* ── Ink demo (only place full-page fade remains useful) ── */
 
-/* The one opaque panel on the page, so it carries its own field rather than
- * the body wash it covers — and is closed top and bottom by the frieze. */
+/* The one opaque panel on the page, closed top and bottom by the frieze. */
 .ink-demo-section {
   position: relative;
   padding: 68px 0 76px;
   background:
     radial-gradient(ellipse 80% 70% at 50% 0%, color-mix(in srgb, var(--green) 8%, transparent), transparent 70%),
-    var(--orn-field) 0 0 / var(--orn-field-size),
     var(--paper);
 }
 
@@ -711,16 +723,14 @@ h3 {
 
 /* ── CTA band ───────────────────────────────────────────── */
 
-/* The closing panel is dressed as a tooled binding: field weave inside a
- * gilt rule, with a corner seal pressed over each join. */
+/* The closing panel is dressed as a tooled binding, with a corner seal
+ * pressed over each join. */
 .cta-band {
   position: relative;
   margin: 56px 0 24px;
   padding: 52px 44px;
   text-align: center;
-  background:
-    var(--orn-field) 0 0 / var(--orn-field-size),
-    color-mix(in srgb, var(--green) 7%, var(--paper));
+  background: color-mix(in srgb, var(--green) 7%, var(--paper));
   border-radius: var(--radius-soft);
 }
 
@@ -858,14 +868,12 @@ h3 {
 /*
  * Every piece here is generated, not drawn: `ornaments.css` is written by
  * `web/scripts/build-marketing-ornaments.mjs`, which runs the app's ornament
- * generator on Al-Fatihah's chapter seed. That gives one composition — one
- * medallion, one corner seal, one frieze period, one field cell — so the
- * whole page is gilded from a single cover, and re-seeding it re-gilds
- * everything at once. Pieces are used at:
+ * generator on Al-Fatihah's chapter seed. The seal and frieze grow from that
+ * cover; the hero arch carries its own zellige tilework.
+ * Pieces are used at:
  *
- *   --orn-field       the page wash below, plus the ink demo and CTA panels
  *   --orn-band-h      frieze rules: ink-demo section, footer
- *   --orn-medallion   the rose window behind the hero device
+ *   --orn-hero-arch   the hero's multifoil portal surround
  *   --orn-seal        corner seals on the CTA cover
  *   --orn-pip         the seal shrunk to a mark, before every gilded label
  *   --orn-tailpiece   the footer colophon (Al-Ikhlas's seed)
@@ -875,41 +883,28 @@ h3 {
  */
 
 /*
- * The field, tiled behind everything and masked away from the middle of the
- * viewport — so it reads as the tooled edge of a binding rather than a
- * texture running under the words. Fixed, so scrolling is a page moving
- * across it. Opaque sections (ink demo, CTA) cover it and carry their own.
+ * A pair of broad glazes gives the page depth without placing a repeating
+ * ornament beneath the words. The detailed zellige remains exclusive to the
+ * hero arch, where it has room to read as architecture.
  */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
-  background-image: var(--orn-field);
-  background-size: var(--orn-field-size);
-  -webkit-mask-image: radial-gradient(ellipse 64% 56% at 50% 45%, transparent 42%, #000 100%);
-  mask-image: radial-gradient(ellipse 64% 56% at 50% 45%, transparent 42%, #000 100%);
+  background:
+    radial-gradient(ellipse 44% 34% at 0% 12%, color-mix(in srgb, var(--green) 9%, transparent), transparent 74%),
+    radial-gradient(ellipse 38% 28% at 100% 38%, color-mix(in srgb, var(--gold) 6%, transparent), transparent 76%);
   pointer-events: none;
 }
 
 /*
- * A phone has no side margin for the wash to live in — the ellipse above
- * would clear the middle of the screen and leave nothing anywhere else. So
- * narrow screens mask it into top and bottom bands instead: the field is
- * pinned to the edges of the viewport (it is fixed), and the reading band
- * through the middle stays clean. The hero medallion also shrinks, or it
- * swamps a phone-sized device shot.
+ * The hero marginalia soften on narrow screens so they do not crowd a
+ * phone-sized device shot.
  */
 @media (max-width: 700px) {
-  body::before {
-    opacity: 0.7;
-    -webkit-mask-image: linear-gradient(#000, transparent 24%, transparent 76%, #000);
-    mask-image: linear-gradient(#000, transparent 24%, transparent 76%, #000);
-  }
-
   .hero-stage::before {
-    width: min(130%, 340px);
-    opacity: 0.32;
+    width: min(106%, 380px);
   }
 }
 
