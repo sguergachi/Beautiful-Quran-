@@ -13,10 +13,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -464,11 +461,18 @@ internal val ActiveWordTopMargin = 144.dp
 internal val ActiveWordBottomMargin = 132.dp
 private val GlintLayerBleed = 14.dp
 
-/** Measures the active word as (top, bottom) in LazyColumn viewport pixels. */
-private typealias WordViewportMeasure = () -> Pair<Float, Float>?
+/** Measures a target as (top, bottom) in LazyColumn viewport pixels. */
+private typealias ViewportBoundsMeasure = () -> Pair<Float, Float>?
 
-/** Hands a live [WordViewportMeasure] to the focus controller (may re-call). */
-private typealias OnKeepWordInView = (measure: WordViewportMeasure) -> Unit
+/** Hands live word bounds to the focus controller (may re-call). */
+private typealias OnKeepWordInView = (measure: ViewportBoundsMeasure) -> Unit
+
+/** Routes a live note-field measure through the serialized focus controller. */
+private typealias OnKeepAnnotationInView = suspend (
+    keyboardInsetPx: Float,
+    keyboardPaddingPx: Float,
+    measure: ViewportBoundsMeasure,
+) -> Unit
 
 /**
  * Word-level lyric follow for a single shaped paragraph (Hafs / English).
@@ -1589,13 +1593,8 @@ internal fun verseAnnotationStyle(
     )
 }
 
-/**
- * Annotation prose sits at half the ruby's strength: the *mark* beside it is a
- * full-ink ruby stroke that has to be findable at a glance, but a paragraph at
- * that weight would shout over the scripture it hangs off. Same hue, half the
- * voice.
- */
-internal const val VERSE_ANNOTATION_INK_ALPHA = 0.5f
+/** Pale annotation prose remains clearly legible without reading as scripture. */
+internal const val VERSE_ANNOTATION_INK_ALPHA = 0.85f
 
 /** The ruby mark itself — always full ink, never halved with the prose. */
 private const val ANNOTATION_MARK_ALPHA = 0.92f
@@ -1614,9 +1613,8 @@ private const val ANNOTATION_FADE_MS = 400
 private const val ANNOTATION_EDIT_FADE_MS = 220
 
 /** Paper kept between the line being written and the top of the keyboard.
- * Requested as part of the field's bring-into-view rectangle, so the list
- * actually scrolls the line up rather than merely leaving room below it. */
-private val ANNOTATION_KEYBOARD_CLEARANCE = 140.dp
+ * The focus engine includes it in the field's keyboard-safe landing. */
+private val ANNOTATION_KEYBOARD_CLEARANCE = 32.dp
 
 /**
  * The reader's marginal note for one verse, set in the scribe's hand below the
@@ -1624,7 +1622,6 @@ private val ANNOTATION_KEYBOARD_CLEARANCE = 140.dp
  * the reader writes in place; otherwise the settled note is shown and tapping
  * it reopens the editor. Blank text on commit deletes the note.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun VerseAnnotationField(
     text: String,
@@ -1635,10 +1632,12 @@ internal fun VerseAnnotationField(
     onEditDone: () -> Unit = {},
     onStartEdit: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
+    listCoordinates: () -> LayoutCoordinates? = { null },
+    onKeepInView: OnKeepAnnotationInView? = null,
 ) {
-    // Ruby — the reader's own ink, the same hue as the bookmark ribbon. The
-    // mark keeps full strength; the prose is halved (see the alpha constants).
-    val ink = LocalQuranAccents.current.bookmarkRibbon
+    val accents = LocalQuranAccents.current
+    val markInk = accents.bookmarkRibbon
+    val noteInk = accents.annotationInk
     val noteStyle = verseAnnotationStyle(fontScale = fontScale)
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -1652,21 +1651,22 @@ internal fun VerseAnnotationField(
         if (isEditing) focusRequester.requestFocus()
     }
 
-    // Lift the line being written clear of the keyboard. Extra bottom padding
-    // on the list only creates somewhere to scroll *to*; it never scrolls. The
-    // field asks to be brought into view as a rectangle taller than itself, so
-    // the list lifts it by that much and the reader can see what they wrote.
-    // Re-runs as the IME animates in, so the lift follows the keyboard up.
-    val bringIntoView = remember { BringIntoViewRequester() }
+    // Re-measure as the field grows or the IME animates, then let the focus
+    // engine calculate and serialize the keyboard-safe scroll.
+    var fieldCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var fieldSize by remember { mutableStateOf(IntSize.Zero) }
     val density = LocalDensity.current
     val imeBottom = WindowInsets.ime.getBottom(density)
-    LaunchedEffect(isEditing, imeBottom, fieldSize) {
-        if (!isEditing || fieldSize.height == 0) return@LaunchedEffect
+    LaunchedEffect(isEditing, imeBottom, fieldSize, fieldCoordinates, onKeepInView) {
+        if (!isEditing || fieldSize.height == 0 || onKeepInView == null) return@LaunchedEffect
         val clearance = with(density) { ANNOTATION_KEYBOARD_CLEARANCE.toPx() }
-        bringIntoView.bringIntoView(
-            Rect(0f, 0f, fieldSize.width.toFloat(), fieldSize.height + clearance),
-        )
+        onKeepInView(imeBottom.toFloat(), clearance) {
+            val field = fieldCoordinates?.takeIf { it.isAttached } ?: return@onKeepInView null
+            val list = listCoordinates()?.takeIf { it.isAttached } ?: return@onKeepInView null
+            val listTop = list.boundsInWindow().top
+            val bounds = field.boundsInWindow()
+            (bounds.top - listTop) to (bounds.bottom - listTop)
+        }
     }
 
     // While writing, the margin rule gives its place up to a delete mark: the
@@ -1688,7 +1688,7 @@ internal fun VerseAnnotationField(
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
             .onSizeChanged { fieldSize = it }
-            .bringIntoViewRequester(bringIntoView)
+            .onGloballyPositioned { fieldCoordinates = it }
             .graphicsLayer { if (!isEditing) alpha = translationRecess() },
     ) {
         Box(
@@ -1714,7 +1714,7 @@ internal fun VerseAnnotationField(
                 if (ruleAlpha > 0.01f) {
                     val x = ANNOTATION_RULE_WIDTH.toPx() / 2f
                     drawLine(
-                        color = ink.copy(alpha = ruleAlpha),
+                        color = markInk.copy(alpha = ruleAlpha),
                         start = Offset(x, 0f),
                         end = Offset(x, size.height),
                         strokeWidth = ANNOTATION_RULE_WIDTH.toPx(),
@@ -1728,7 +1728,7 @@ internal fun VerseAnnotationField(
                     val cx = size.width / 2f
                     val cy = noteStyle.lineHeight.toPx() / 2f
                     val stroke = 1.8.dp.toPx()
-                    val color = ink.copy(alpha = editing * ANNOTATION_MARK_ALPHA)
+                    val color = markInk.copy(alpha = editing * ANNOTATION_MARK_ALPHA)
                     drawLine(
                         color,
                         Offset(cx - arm, cy - arm),
@@ -1751,8 +1751,8 @@ internal fun VerseAnnotationField(
             BasicTextField(
                 value = text,
                 onValueChange = { onAnnotationChange?.invoke(it) },
-                textStyle = noteStyle.copy(color = ink.copy(alpha = VERSE_ANNOTATION_INK_ALPHA)),
-                cursorBrush = SolidColor(ink),
+                textStyle = noteStyle.copy(color = noteInk.copy(alpha = VERSE_ANNOTATION_INK_ALPHA)),
+                cursorBrush = SolidColor(markInk),
                 // Notes wrap freely, but the keyboard's Done key is the reader's
                 // way out — the page itself still offers no Save button.
                 keyboardOptions = KeyboardOptions(
@@ -1772,7 +1772,7 @@ internal fun VerseAnnotationField(
                             Text(
                                 "Write a note…",
                                 style = noteStyle,
-                                color = ink.copy(alpha = 0.42f),
+                                color = noteInk.copy(alpha = 0.42f),
                             )
                         }
                         field()
@@ -1783,7 +1783,7 @@ internal fun VerseAnnotationField(
             Text(
                 text = text,
                 style = noteStyle,
-                color = ink.copy(alpha = VERSE_ANNOTATION_INK_ALPHA),
+                color = noteInk.copy(alpha = VERSE_ANNOTATION_INK_ALPHA),
                 modifier = Modifier
                     .fillMaxWidth()
                     .then(
@@ -1827,6 +1827,8 @@ fun AyahBlock(
     listCoordinates: () -> LayoutCoordinates? = { null },
     /** Hands a live word-bounds measure to the focus controller. */
     onKeepWordInView: OnKeepWordInView? = null,
+    /** Hands the editing note's live bounds to the focus controller. */
+    onKeepAnnotationInView: OnKeepAnnotationInView? = null,
     /** Bookmark ribbon lives in this block's outer margin (opposite the
      * ayah selector). Null hides the ribbon entirely. */
     bookmarkSide: AyahSelectorSide? = null,
@@ -2071,6 +2073,8 @@ fun AyahBlock(
                         onEditDone = { onAnnotationEditDone?.invoke() },
                         onStartEdit = onAyahMarkLongClick,
                         onDelete = onAnnotationDelete,
+                        listCoordinates = listCoordinates,
+                        onKeepInView = onKeepAnnotationInView,
                     )
                 }
             }

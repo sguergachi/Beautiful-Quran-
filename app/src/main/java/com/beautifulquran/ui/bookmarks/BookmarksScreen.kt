@@ -385,7 +385,7 @@ private fun BookmarkAyahRow(
                 Text(
                     text = annotationText,
                     style = verseAnnotationStyle(fontSize = 15.sp, lineHeight = 21.sp),
-                    color = LocalQuranAccents.current.bookmarkRibbon.copy(alpha = VERSE_ANNOTATION_INK_ALPHA),
+                    color = LocalQuranAccents.current.annotationInk.copy(alpha = VERSE_ANNOTATION_INK_ALPHA),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )

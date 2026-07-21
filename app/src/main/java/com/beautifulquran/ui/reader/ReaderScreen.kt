@@ -20,6 +20,7 @@ import kotlin.math.PI
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -247,9 +248,9 @@ fun ReaderScreen(
     LaunchedEffect(imeVisible, editingAnnotationAyah) {
         if (!imeVisible && editingAnnotationAyah != 0) focusManager.clearFocus()
     }
-    val listScrolling = listState.isScrollInProgress
-    LaunchedEffect(listScrolling, editingAnnotationAyah) {
-        if (listScrolling && editingAnnotationAyah != 0) focusManager.clearFocus()
+    val listDragged by listState.interactionSource.collectIsDraggedAsState()
+    LaunchedEffect(listDragged, editingAnnotationAyah) {
+        if (listDragged && editingAnnotationAyah != 0) focusManager.clearFocus()
     }
     // Gilding sheen: light catches the header rosette as the page moves.
     // At chapter end (scrolled) sheen is bright (~0.85); cold open at the top
@@ -491,6 +492,16 @@ fun ReaderScreen(
             }
         }
     }
+    val onKeepAnnotationInView:
+        suspend (Float, Float, () -> Pair<Float, Float>?) -> Unit = remember(focusController) {
+            { keyboardInsetPx, keyboardPaddingPx, measure ->
+                focusController.keepAnnotationInView(
+                    keyboardInsetPx = keyboardInsetPx,
+                    keyboardPaddingPx = keyboardPaddingPx,
+                    measureInViewport = measure,
+                )
+            }
+        }
     // The verse at the reading line, and the continuous position through the
     // surah — the single read-out the rail, the return control, and the play
     // target all share.
@@ -596,7 +607,12 @@ fun ReaderScreen(
     // gets the pre-roll slide; boundary-to-boundary tracking after that stays
     // smooth.
     var followWasEnabled by remember { mutableStateOf(followEnabled) }
-    LaunchedEffect(playbackFocusTarget, followEnabled, playerState.isPlaying) {
+    LaunchedEffect(
+        playbackFocusTarget,
+        followEnabled,
+        playerState.isPlaying,
+        editingAnnotationAyah,
+    ) {
         val target = playbackFocusTarget ?: return@LaunchedEffect
         // Continue Listening advances with the recited verse, not scroll focus.
         if (target >= 1 && playerState.isPlaying) {
@@ -606,6 +622,7 @@ fun ReaderScreen(
             followWasEnabled = false
             return@LaunchedEffect
         }
+        if (editingAnnotationAyah != 0) return@LaunchedEffect
         val justEnabled = !followWasEnabled
         followWasEnabled = true
         focusController.focus(target, animate = true, preRoll = justEnabled)
@@ -614,8 +631,8 @@ fun ReaderScreen(
     // A reciter can restart the whole ayah inside one audio item. The ayah key
     // does not change, so observe the sparse word state without making the
     // screen recompose on every word and restore the verse's top anchor once.
-    LaunchedEffect(isThisSurahPlaying, followEnabled) {
-        if (!isThisSurahPlaying) return@LaunchedEffect
+    LaunchedEffect(isThisSurahPlaying, followEnabled, editingAnnotationAyah) {
+        if (!isThisSurahPlaying || editingAnnotationAyah != 0) return@LaunchedEffect
         var wasAtRepeatStart = false
         snapshotFlow { activeWordState.value }.collect { word ->
             val repeatAyah = word?.takeIf {
@@ -994,6 +1011,9 @@ fun ReaderScreen(
         var ayahSelectorDismissRequests by remember { mutableIntStateOf(0) }
         LaunchedEffect(ayahSelectorExpanded) {
             onAyahSelectorExpandedChange(ayahSelectorExpanded)
+        }
+        LaunchedEffect(editingAnnotationAyah) {
+            if (editingAnnotationAyah != 0) ayahSelectorExpanded = false
         }
         // Shared with settle / list rubber-band (defined before advance uses it).
         val pullRubberMaxPx = with(density) { 56.dp.toPx() }
@@ -1772,9 +1792,11 @@ fun ReaderScreen(
                                 // block subscribes.
                                 keepActiveWordInView = followEnabled &&
                                     recitingActive &&
+                                    editingAnnotationAyah == 0 &&
                                     isActive,
                                 listCoordinates = { listCoordinates },
                                 onKeepWordInView = onKeepWordInView,
+                                onKeepAnnotationInView = onKeepAnnotationInView,
                                 bookmarkSide = bookmarkSide,
                                 bookmarked = ayah.number in bookmarkedAyahs,
                                 bookmarkFocused = bookmarkFocused,
@@ -1952,29 +1974,31 @@ fun ReaderScreen(
                         .coerceIn(1f, content.surah.ayahCount.toFloat())
                 }
             }
-            AyahSelectorRail(
-                ayahCount = content.surah.ayahCount,
-                side = selectorSide,
-                currentAyah = railCurrentAyah,
-                currentPosition = railCurrentPosition,
-                bookmarkedAyahs = bookmarkedAyahs,
-                chromeAlpha = { topBarAlpha.value },
-                interactive = !recitingActive,
-                onJumpToAyah = { requestedJumpAyah = it },
-                onExpandedChange = { ayahSelectorExpanded = it },
-                dismissRequests = ayahSelectorDismissRequests,
-                modifier = Modifier
-                    .align(
-                        if (selectorSide == AyahSelectorSide.RIGHT) {
-                            AbsoluteAlignment.CenterRight
-                        } else {
-                            AbsoluteAlignment.CenterLeft
-                        },
-                    )
-                    .fillMaxHeight()
-                    .padding(top = padding.calculateTopPadding())
-                    .zIndex(1f),
-            )
+            if (editingAnnotationAyah == 0) {
+                AyahSelectorRail(
+                    ayahCount = content.surah.ayahCount,
+                    side = selectorSide,
+                    currentAyah = railCurrentAyah,
+                    currentPosition = railCurrentPosition,
+                    bookmarkedAyahs = bookmarkedAyahs,
+                    chromeAlpha = { topBarAlpha.value },
+                    interactive = !recitingActive,
+                    onJumpToAyah = { requestedJumpAyah = it },
+                    onExpandedChange = { ayahSelectorExpanded = it },
+                    dismissRequests = ayahSelectorDismissRequests,
+                    modifier = Modifier
+                        .align(
+                            if (selectorSide == AyahSelectorSide.RIGHT) {
+                                AbsoluteAlignment.CenterRight
+                            } else {
+                                AbsoluteAlignment.CenterLeft
+                            },
+                        )
+                        .fillMaxHeight()
+                        .padding(top = padding.calculateTopPadding())
+                        .zIndex(1f),
+                )
+            }
 
             // Ornamented return-to-ayah — floats above the player bar via the
             // shared FloatingPaperControl host. Yields while MainActivity's

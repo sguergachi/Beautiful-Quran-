@@ -208,6 +208,12 @@ ReaderFocusController ── holds the LazyListState; the sole writer to it
   that chrome. A repeat-aware timing backtrack to word one is a fresh verse
   focus event even though its media item and ayah key did not change, restoring
   the adaptive top anchor before the reciter walks the verse again.
+- Annotation editing uses the same secondary-focus path: the field reports live
+  viewport bounds as it grows and as the IME rises,
+  `annotationFieldDeltaPx` computes the keyboard-safe correction, and
+  `ReaderFocusController.keepAnnotationInView` serializes that glide with every
+  other reader scroll. Playback continues while writing, but lyric auto-follow
+  yields until the editor closes so it cannot pull the field back under the IME.
 
 ## Playback
 
