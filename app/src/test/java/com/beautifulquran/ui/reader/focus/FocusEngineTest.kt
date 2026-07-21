@@ -104,6 +104,78 @@ class FocusEngineTest {
     }
 
     @Test
+    fun `keyboard overlap excludes the window space below the list`() {
+        assertEquals(
+            600f,
+            FocusEngine.keyboardOverlapPx(
+                listBottomInWindowPx = 1_800f,
+                windowHeightPx = 2_000f,
+                keyboardInsetPx = 800f,
+            ),
+        )
+        assertEquals(
+            0f,
+            FocusEngine.keyboardOverlapPx(
+                listBottomInWindowPx = 1_500f,
+                windowHeightPx = 2_000f,
+                keyboardInsetPx = 400f,
+            ),
+        )
+    }
+
+    @Test
+    fun `annotation field lifts above the keyboard with padding`() {
+        assertEquals(
+            136f,
+            FocusEngine.annotationFieldDeltaPx(
+                fieldBottomPx = 660f,
+                viewportHeightPx = 800f,
+                keyboardOverlapPx = 260f,
+                keyboardPaddingPx = 16f,
+            ),
+        )
+    }
+
+    @Test
+    fun `annotation field already clear of the keyboard settles lower for more verse room`() {
+        assertEquals(
+            -44f,
+            FocusEngine.annotationFieldDeltaPx(
+                fieldBottomPx = 480f,
+                viewportHeightPx = 800f,
+                keyboardOverlapPx = 260f,
+                keyboardPaddingPx = 16f,
+            ),
+        )
+    }
+
+    @Test
+    fun `annotation field already on its keyboard-safe landing does not move`() {
+        assertEquals(
+            0f,
+            FocusEngine.annotationFieldDeltaPx(
+                fieldBottomPx = 524f,
+                viewportHeightPx = 800f,
+                keyboardOverlapPx = 260f,
+                keyboardPaddingPx = 16f,
+            ),
+        )
+    }
+
+    @Test
+    fun `annotation keyboard clearance wins when the field is taller than the safe band`() {
+        assertEquals(
+            176f,
+            FocusEngine.annotationFieldDeltaPx(
+                fieldBottomPx = 700f,
+                viewportHeightPx = 800f,
+                keyboardOverlapPx = 260f,
+                keyboardPaddingPx = 16f,
+            ),
+        )
+    }
+
+    @Test
     fun `basmalah list item uses the same adaptive anchor as a short verse`() {
         // The basmalah is its own short LazyColumn item — not the tall header —
         // so it rests on the verse-style reading line (fitsFullyVisible path).

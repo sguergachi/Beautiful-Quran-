@@ -148,26 +148,51 @@ class ReaderFocusController internal constructor(
         bandBottomMarginPx: Float,
         measureInViewport: () -> Pair<Float, Float>?,
     ) {
+        keepBoundsInView(measureInViewport) { bounds, viewportHeight ->
+            FocusEngine.wordBandDeltaPx(
+                wordTopPx = bounds.first,
+                wordBottomPx = bounds.second,
+                viewportHeightPx = viewportHeight.toFloat(),
+                topGuardPx = topGuardPx.toFloat(),
+                bandTopMarginPx = bandTopMarginPx,
+                bandBottomMarginPx = bandBottomMarginPx,
+            )
+        }
+    }
+
+    /** Parks the active note field above the keyboard through the same
+     * serialized focus path used by verse and word following. */
+    suspend fun keepAnnotationInView(
+        keyboardOverlapPx: Float,
+        keyboardPaddingPx: Float,
+        measureInViewport: () -> Pair<Float, Float>?,
+    ) {
+        keepBoundsInView(measureInViewport) { bounds, viewportHeight ->
+            FocusEngine.annotationFieldDeltaPx(
+                fieldBottomPx = bounds.second,
+                viewportHeightPx = viewportHeight.toFloat(),
+                keyboardOverlapPx = keyboardOverlapPx,
+                keyboardPaddingPx = keyboardPaddingPx,
+            )
+        }
+    }
+
+    /** Two measured passes absorb layout settling after the first glide. */
+    private suspend fun keepBoundsInView(
+        measureInViewport: () -> Pair<Float, Float>?,
+        deltaPx: (Pair<Float, Float>, Int) -> Float,
+    ) {
         focusMutex.withLock {
-            // Two passes: the second re-measures after the first glide so a
-            // near-miss (or layout settling mid-scroll) still clears the fold.
             repeat(2) { pass ->
                 val viewportHeight = listState.layoutInfo.viewportSize.height
                 if (viewportHeight <= 0) return
                 val bounds = measureInViewport() ?: return
-                val delta = FocusEngine.wordBandDeltaPx(
-                    wordTopPx = bounds.first,
-                    wordBottomPx = bounds.second,
-                    viewportHeightPx = viewportHeight.toFloat(),
-                    topGuardPx = topGuardPx.toFloat(),
-                    bandTopMarginPx = bandTopMarginPx,
-                    bandBottomMarginPx = bandBottomMarginPx,
-                )
+                val delta = deltaPx(bounds, viewportHeight)
                 if (abs(delta) < 0.5f) return
                 listState.animateScrollBy(
                     delta,
                     animationSpec = tween(
-                        durationMillis = if (pass == 0) WORD_GLIDE_MS else WORD_GLIDE_MS / 2,
+                        durationMillis = if (pass == 0) DETAIL_GLIDE_MS else DETAIL_GLIDE_MS / 2,
                         easing = FastOutSlowInEasing,
                     ),
                 )
@@ -408,9 +433,9 @@ class ReaderFocusController internal constructor(
          *  jumps use [FocusEngine.planJump]'s duration instead. */
         const val GLIDE_MS: Int = 700
 
-        /** Word-band follow duration — short so line changes feel instant but
-         *  still ease (matches the web port's WORD_GLIDE_MS). */
-        const val WORD_GLIDE_MS: Int = 300
+        /** Detail-follow duration — short so line changes feel instant but
+         *  still ease (matches the web port's word glide). */
+        const val DETAIL_GLIDE_MS: Int = 300
     }
 }
 
