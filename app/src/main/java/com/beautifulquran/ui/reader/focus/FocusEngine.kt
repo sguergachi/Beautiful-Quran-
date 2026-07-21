@@ -323,11 +323,21 @@ object FocusEngine {
     fun annotationFieldDeltaPx(
         fieldBottomPx: Float,
         viewportHeightPx: Float,
-        keyboardInsetPx: Float,
+        keyboardOverlapPx: Float,
         keyboardPaddingPx: Float,
     ): Float = fieldBottomPx -
-        (viewportHeightPx - keyboardInsetPx.coerceAtLeast(0f) -
+        (viewportHeightPx - keyboardOverlapPx.coerceAtLeast(0f) -
             keyboardPaddingPx.coerceAtLeast(0f)).coerceAtLeast(0f)
+
+    /** Portion of the list actually covered by the IME. The list can end above
+     * the window bottom (for example above the player bar), so the raw keyboard
+     * inset must not be subtracted from its shorter viewport. */
+    fun keyboardOverlapPx(
+        listBottomInWindowPx: Float,
+        windowHeightPx: Float,
+        keyboardInsetPx: Float,
+    ): Float = (listBottomInWindowPx -
+        (windowHeightPx - keyboardInsetPx.coerceAtLeast(0f))).coerceAtLeast(0f)
 
     /**
      * Where [target] sits relative to where it *should* sit — the answer the

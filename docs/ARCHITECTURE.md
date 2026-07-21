@@ -210,6 +210,7 @@ ReaderFocusController ── holds the LazyListState; the sole writer to it
   the adaptive top anchor before the reciter walks the verse again.
 - Annotation editing uses the same secondary-focus path: the field reports live
   viewport bounds as it grows and as the IME rises,
+  `keyboardOverlapPx` removes any bottom chrome already outside the list before
   `annotationFieldDeltaPx` anchors its bottom on the keyboard-safe line, and
   `ReaderFocusController.keepAnnotationInView` serializes that glide with every
   other reader scroll. Playback continues while writing, but lyric auto-follow

@@ -494,9 +494,9 @@ fun ReaderScreen(
     }
     val onKeepAnnotationInView:
         suspend (Float, Float, () -> Pair<Float, Float>?) -> Unit = remember(focusController) {
-            { keyboardInsetPx, keyboardPaddingPx, measure ->
+            { keyboardOverlapPx, keyboardPaddingPx, measure ->
                 focusController.keepAnnotationInView(
-                    keyboardInsetPx = keyboardInsetPx,
+                    keyboardOverlapPx = keyboardOverlapPx,
                     keyboardPaddingPx = keyboardPaddingPx,
                     measureInViewport = measure,
                 )
