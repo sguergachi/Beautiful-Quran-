@@ -102,7 +102,8 @@ Then, in place:
    engine glides the field above it with 32 dp of paper between field and IME.
 2. The reader writes. The line grows downward; the verse above never moves.
    Playback, if running, is **not** interrupted, but scripture taps cannot
-   start or seek playback while the field owns focus.
+   start or seek playback and bookmark ribbons cannot toggle while the field
+   owns focus.
 3. Tapping anywhere off the note, opening another verse's note, or leaving
    the sheet **commits**. There is no OK, no Save, no Cancel — paper has none
    of them, and an autosaved note cannot be lost to a mis-tap.

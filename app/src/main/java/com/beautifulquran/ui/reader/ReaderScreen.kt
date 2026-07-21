@@ -1801,7 +1801,7 @@ fun ReaderScreen(
                                 bookmarked = ayah.number in bookmarkedAyahs,
                                 bookmarkFocused = bookmarkFocused,
                                 bookmarkChromeAlpha = bookmarkChromeAlpha,
-                                bookmarkInteractive = !recitingActive,
+                                bookmarkInteractive = !recitingActive && editingAnnotationAyah == 0,
                                 onToggleBookmark = { viewModel.toggleBookmark(ayah.number) },
                                 onWordClick = wordClick@{ word ->
                                     if (editingAnnotationAyah != 0) return@wordClick
