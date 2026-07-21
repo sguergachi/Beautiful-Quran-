@@ -33,6 +33,15 @@ export function playbackFocusTarget(
   return activeAyah ?? null
 }
 
+/** True on the first word when repeat-aware timings restart a whole ayah. */
+export function startsFullAyahRepeat(
+  wordPosition: number,
+  isRepeat: boolean,
+  repeatStart: number,
+): boolean {
+  return isRepeat && wordPosition === 1 && repeatStart === 1
+}
+
 /** True when [focusAyah] is the chapter-opening basmalah target. */
 export function isChapterTopFocusTarget(focusAyah: number): boolean {
   return focusAyah === CHAPTER_TOP_FOCUS_AYAH
@@ -224,6 +233,7 @@ export function readoutPosition(readout: ReadoutSnapshot): number {
 export const FocusEngine = {
   CHAPTER_TOP_FOCUS_AYAH,
   playbackFocusTarget,
+  startsFullAyahRepeat,
   isChapterTopFocusTarget,
   planJump,
   jumpDurationMs,

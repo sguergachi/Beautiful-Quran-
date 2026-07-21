@@ -561,6 +561,27 @@ fun ReaderScreen(
         focusController.focus(target, animate = true, preRoll = justEnabled)
     }
 
+    // A reciter can restart the whole ayah inside one audio item. The ayah key
+    // does not change, so observe the sparse word state without making the
+    // screen recompose on every word and restore the verse's top anchor once.
+    LaunchedEffect(isThisSurahPlaying, followEnabled) {
+        if (!isThisSurahPlaying) return@LaunchedEffect
+        var wasAtRepeatStart = false
+        snapshotFlow { activeWordState.value }.collect { word ->
+            val repeatAyah = word?.takeIf {
+                FocusEngine.startsFullAyahRepeat(
+                    wordPosition = it.wordPosition,
+                    isRepeat = it.isRepeat,
+                    repeatStart = it.repeatStart,
+                )
+            }?.ayah
+            if (repeatAyah != null && !wasAtRepeatStart && followEnabled) {
+                focusController.focus(repeatAyah, animate = true)
+            }
+            wasAtRepeatStart = repeatAyah != null
+        }
+    }
+
     // Opening from "Continue listening": settle on the saved ayah once.
     var didInitialScroll by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(uiState.content) {

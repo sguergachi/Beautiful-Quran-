@@ -205,7 +205,9 @@ ReaderFocusController ── holds the LazyListState; the sole writer to it
   player-bar fold / edge fade. Top margin stays 0 so short-verse reading-line
   anchors are not fought. Verse-level `anchorOffsetPx` also takes a bottom
   guard so a near-full-height verse is not parked with its last lines under
-  that chrome.
+  that chrome. A repeat-aware timing backtrack to word one is a fresh verse
+  focus event even though its media item and ayah key did not change, restoring
+  the adaptive top anchor before the reciter walks the verse again.
 
 ## Playback
 
