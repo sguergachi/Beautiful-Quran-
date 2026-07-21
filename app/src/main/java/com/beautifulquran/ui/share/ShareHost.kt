@@ -1,6 +1,8 @@
 package com.beautifulquran.ui.share
 
+import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -35,6 +37,7 @@ fun ShareHost(
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val activity = context as? Activity
     var sendRendered by remember { mutableStateOf(false) }
 
     BackHandler(enabled = ui.sendOpen) { viewModel.closeSend() }
@@ -48,6 +51,24 @@ fun ShareHost(
         }
         context.startActivity(Intent.createChooser(intent, null))
         viewModel.consumePendingShareText()
+    }
+
+    LaunchedEffect(ui.pendingShareImageUri) {
+        val uriString = ui.pendingShareImageUri ?: return@LaunchedEffect
+        val uri = Uri.parse(uriString)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "image/png"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // Some targets (Messages, Drive) also look at clip data.
+            clipData = android.content.ClipData.newUri(
+                context.contentResolver,
+                "Beautiful Quran",
+                uri,
+            )
+        }
+        context.startActivity(Intent.createChooser(intent, null))
+        viewModel.consumePendingShareImage()
     }
 
     LaunchedEffect(sendRendered) {
@@ -70,9 +91,18 @@ fun ShareHost(
                 ShareComposeSheet(
                     verseLines = ui.verseLines,
                     preparingText = ui.preparingText,
+                    preparingImage = ui.preparingImage,
                     error = ui.error,
                     onBack = viewModel::closeSend,
                     onShareText = { viewModel.shareAsText() },
+                    onShareImage = {
+                        if (activity != null) {
+                            viewModel.shareAsImage(activity)
+                        } else {
+                            // Should not happen — ShareHost lives in MainActivity.
+                            viewModel.shareAsText()
+                        }
+                    },
                     onRemove = viewModel::remove,
                 )
             }

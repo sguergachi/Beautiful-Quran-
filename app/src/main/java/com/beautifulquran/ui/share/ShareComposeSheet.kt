@@ -26,6 +26,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -42,7 +43,7 @@ import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.verticalFadingEdges
 
 /**
- * Send page for a gathered selection — text share only in PR1.
+ * Send page for a gathered selection — text + full-ink image.
  * Hosted inside [ShareHost]'s ink bleed; no cards, dialogs, or elevation.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,12 +51,16 @@ import com.beautifulquran.ui.theme.verticalFadingEdges
 fun ShareComposeSheet(
     verseLines: List<ShareVerseLine>,
     preparingText: Boolean,
+    preparingImage: Boolean,
     error: String?,
     onBack: () -> Unit,
     onShareText: () -> Unit,
+    onShareImage: () -> Unit,
     onRemove: (AyahRef) -> Unit,
 ) {
     val gold = LocalQuranAccents.current.gold
+    val busy = preparingText || preparingImage
+    val canShare = !busy && verseLines.isNotEmpty()
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -128,35 +133,56 @@ fun ShareComposeSheet(
                 )
             }
 
-            // Single output for PR1 — quiet text action, not a Material button bar.
-            Text(
-                text = if (preparingText) "Preparing…" else "Share as text",
-                style = MaterialTheme.typography.titleMedium,
-                color = if (preparingText || verseLines.isEmpty()) {
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                } else {
-                    gold
+            ShareActionLine(
+                label = when {
+                    preparingText -> "Preparing text…"
+                    else -> "Share as text"
                 },
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 560.dp)
-                    .padding(horizontal = 28.dp, vertical = 20.dp)
-                    .semantics {
-                        role = Role.Button
-                        contentDescription = "Share as text"
-                    }
-                    .then(
-                        if (preparingText || verseLines.isEmpty()) {
-                            Modifier
-                        } else {
-                            Modifier.quietClickable(onClick = onShareText)
-                        },
-                    ),
+                enabled = canShare,
+                gold = gold,
+                onClick = onShareText,
+                contentDescription = "Share as text",
+            )
+            ShareActionLine(
+                label = when {
+                    preparingImage -> "Rendering image…"
+                    else -> "Share as image"
+                },
+                enabled = canShare,
+                gold = gold,
+                onClick = onShareImage,
+                contentDescription = "Share as image",
             )
             Spacer(Modifier.height(8.dp))
         }
     }
+}
+
+@Composable
+private fun ShareActionLine(
+    label: String,
+    enabled: Boolean,
+    gold: Color,
+    onClick: () -> Unit,
+    contentDescription: String,
+) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.titleMedium,
+        color = if (enabled) gold else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .widthIn(max = 560.dp)
+            .padding(horizontal = 28.dp, vertical = 12.dp)
+            .semantics {
+                role = Role.Button
+                this.contentDescription = contentDescription
+            }
+            .then(
+                if (enabled) Modifier.quietClickable(onClick = onClick) else Modifier,
+            ),
+    )
 }
 
 @Composable
@@ -205,7 +231,6 @@ private fun GatheredVerseLine(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        // Gold × — stronger than a faint "Remove" label (visual QA).
         Text(
             text = "×",
             style = MaterialTheme.typography.headlineSmall,

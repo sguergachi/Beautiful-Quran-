@@ -1,11 +1,15 @@
 package com.beautifulquran.ui.share
 
+import android.app.Activity
+import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.beautifulquran.data.QuranRepository
 import com.beautifulquran.playback.PlayerController
 import com.beautifulquran.share.AyahRef
 import com.beautifulquran.share.SHARE_SELECTION_MAX
+import com.beautifulquran.share.ShareFiles
+import com.beautifulquran.share.ShareImageRenderer
 import com.beautifulquran.share.VerseTextComposer
 import com.beautifulquran.share.gatherOrdinals
 import com.beautifulquran.share.toggleGatheredAyah
@@ -16,7 +20,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** One gathered verse resolved for the Send page list. */
+/** One gathered verse resolved for the Send page list / image card. */
 data class ShareVerseLine(
     val ref: AyahRef,
     val surahName: String,
@@ -31,10 +35,9 @@ data class ShareVerseLine(
 }
 
 /**
- * Gather-mode selection and text-share handoff.
+ * Gather-mode selection, text share, and full-ink image export.
  *
- * Held at activity scope so the ordered list survives chapter turns (and later
- * Bookmarks-sheet gathering). Image / video export is out of scope for PR1.
+ * Held at activity scope so the ordered list survives chapter turns.
  */
 data class ShareUiState(
     val gathering: Boolean = false,
@@ -44,10 +47,13 @@ data class ShareUiState(
     val ordinals: Map<AyahRef, Int> = emptyMap(),
     /** Resolved rows for the Send page (Arabic preview + reference). */
     val verseLines: List<ShareVerseLine> = emptyList(),
-    /** One-shot payload for ACTION_SEND; cleared after the chooser is fired. */
+    /** One-shot payload for ACTION_SEND text; cleared after the chooser is fired. */
     val pendingShareText: String? = null,
+    /** One-shot content:// URI for ACTION_SEND image. */
+    val pendingShareImageUri: String? = null,
     val preparingText: Boolean = false,
-    /** Quiet line on the Send page when load/format fails. */
+    val preparingImage: Boolean = false,
+    /** Quiet line on the Send page when load/format/render fails. */
     val error: String? = null,
 )
 
@@ -64,6 +70,7 @@ class ShareViewModel(
     val surahNames: StateFlow<Map<Int, String>> = _surahNames.asStateFlow()
 
     private var previewJob: Job? = null
+    private var imageJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -97,6 +104,7 @@ class ShareViewModel(
                 sendOpen = false,
                 error = null,
                 pendingShareText = null,
+                pendingShareImageUri = null,
             )
         }
     }
@@ -104,13 +112,19 @@ class ShareViewModel(
     /** Back while gathering (Send closed): drop the list and leave the mode. */
     fun exitGather() {
         previewJob?.cancel()
+        imageJob?.cancel()
         _ui.value = ShareUiState()
     }
 
     fun openSend() {
         if (_ui.value.selection.isEmpty()) return
         _ui.update {
-            it.copy(sendOpen = true, error = null, pendingShareText = null)
+            it.copy(
+                sendOpen = true,
+                error = null,
+                pendingShareText = null,
+                pendingShareImageUri = null,
+            )
         }
         refreshVerseLines()
     }
@@ -118,11 +132,14 @@ class ShareViewModel(
     /** Back on the Send page: return to gather with the list intact. */
     fun closeSend() {
         previewJob?.cancel()
+        imageJob?.cancel()
         _ui.update {
             it.copy(
                 sendOpen = false,
                 preparingText = false,
+                preparingImage = false,
                 pendingShareText = null,
+                pendingShareImageUri = null,
                 error = null,
                 verseLines = emptyList(),
             )
@@ -160,11 +177,13 @@ class ShareViewModel(
 
     /** Load verse text in selection order and stage plain text for the OS chooser. */
     fun shareAsText(includeTranslation: Boolean = true) {
+        val busy = _ui.value.preparingText || _ui.value.preparingImage
         val lines = _ui.value.verseLines
-        if (lines.isEmpty() || _ui.value.preparingText) {
-            // Previews may still be loading — resolve then share.
-            if (_ui.value.selection.isEmpty() || _ui.value.preparingText) return
-            _ui.update { it.copy(preparingText = true, error = null, pendingShareText = null) }
+        if (lines.isEmpty() || busy) {
+            if (_ui.value.selection.isEmpty() || busy) return
+            _ui.update {
+                it.copy(preparingText = true, error = null, pendingShareText = null)
+            }
             viewModelScope.launch {
                 try {
                     val verses = loadComposerVerses(_ui.value.selection)
@@ -174,7 +193,7 @@ class ShareViewModel(
                         }
                         return@launch
                     }
-                    stageShare(verses, includeTranslation)
+                    stageShareText(verses, includeTranslation)
                 } catch (e: Exception) {
                     _ui.update {
                         it.copy(
@@ -187,7 +206,7 @@ class ShareViewModel(
             }
             return
         }
-        if (_ui.value.preparingText) return
+        if (busy) return
         _ui.update { it.copy(preparingText = true, error = null, pendingShareText = null) }
         val verses = lines.map {
             VerseTextComposer.Verse(
@@ -198,14 +217,80 @@ class ShareViewModel(
                 ayah = it.ref.ayah,
             )
         }
-        stageShare(verses, includeTranslation)
+        stageShareText(verses, includeTranslation)
+    }
+
+    /**
+     * Renders a fixed Paper-theme full-ink PNG offscreen and stages a
+     * content:// URI for ACTION_SEND. Needs a live [Activity] for Compose
+     * measure/layout.
+     */
+    fun shareAsImage(activity: Activity, includeTranslation: Boolean = true) {
+        if (_ui.value.preparingText || _ui.value.preparingImage) return
+        if (_ui.value.selection.isEmpty()) return
+        imageJob?.cancel()
+        _ui.update {
+            it.copy(
+                preparingImage = true,
+                error = null,
+                pendingShareImageUri = null,
+            )
+        }
+        imageJob = viewModelScope.launch {
+            var bitmap: Bitmap? = null
+            try {
+                val lines = _ui.value.verseLines.ifEmpty {
+                    loadVerseLines(_ui.value.selection)
+                }
+                if (lines.isEmpty()) {
+                    _ui.update {
+                        it.copy(preparingImage = false, error = "Could not load those verses.")
+                    }
+                    return@launch
+                }
+                bitmap = ShareImageRenderer.render(
+                    activity = activity,
+                    content = {
+                        ShareImageCard(
+                            verses = lines,
+                            includeTranslation = includeTranslation,
+                        )
+                    },
+                )
+                val uri = ShareFiles.writePng(activity.applicationContext, bitmap)
+                _ui.update {
+                    it.copy(
+                        preparingImage = false,
+                        pendingShareImageUri = uri.toString(),
+                        error = null,
+                    )
+                }
+            } catch (e: Exception) {
+                _ui.update {
+                    it.copy(
+                        preparingImage = false,
+                        error = e.message?.takeIf { msg -> msg.isNotBlank() }
+                            ?: "Could not render the image.",
+                    )
+                }
+            } finally {
+                bitmap?.recycle()
+            }
+        }
     }
 
     fun consumePendingShareText() {
         _ui.update { it.copy(pendingShareText = null) }
     }
 
-    private fun stageShare(verses: List<VerseTextComposer.Verse>, includeTranslation: Boolean) {
+    fun consumePendingShareImage() {
+        _ui.update { it.copy(pendingShareImageUri = null) }
+    }
+
+    private fun stageShareText(
+        verses: List<VerseTextComposer.Verse>,
+        includeTranslation: Boolean,
+    ) {
         val text = VerseTextComposer.compose(verses, includeTranslation)
         _ui.update {
             it.copy(preparingText = false, pendingShareText = text, error = null)

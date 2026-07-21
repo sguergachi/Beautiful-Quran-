@@ -1,9 +1,9 @@
 # Sharing verses
 
-**Status: PR1 shipped (gather + text).** Image and video remain proposed.
-This is the design record for *gather mode* — picking one or many verses,
-in any order — and for the three things a gathered selection can become:
-**text**, an **image**, or a **video that carries the ink**.
+**Status: PR1 + PR2 shipped (gather + text + full-ink image).** Video remains
+proposed. This is the design record for *gather mode* — picking one or many
+verses, in any order — and for the three things a gathered selection can
+become: **text**, an **image**, or a **video that carries the ink**.
 
 ## Why it exists
 
@@ -60,23 +60,21 @@ the gesture is free. It loses on discoverability: nothing on the page hints
 that the mark is holdable, and the feature is worth finding. A visible
 control in the transport row is the door.
 
-## The Send page (PR1)
+## The Send page
 
 Committing **ink-bleeds from the Gather control** into the Send page — the
 same `InkRevealOverlay` primitive as the Root Viewer (see [DESIGN.md](DESIGN.md),
 "The ink bleed"). Owned by `ShareHost` so MainActivity does not grow another
 cluster of overlay booleans.
 
-PR1 ships a thin Send page:
+It carries:
 
 1. The gathered verses **in order**, each with ordinal, Arabic preview
    (Hafs), reference, and a gold **×** to remove (no drag-reorder yet).
-2. One output: **Share as text** → `ACTION_SEND` + `EXTRA_TEXT` (no
-   FileProvider, no cache file).
-3. Quiet error line if load/format fails.
+2. Outputs: **Share as text** · **Share as image** (video later).
+3. Quiet error line if load/render fails.
 
-Image / Video tabs, theme / aspect / reciter toggles, and drag-reorder are
-deferred until those outputs exist.
+Theme / aspect / reciter toggles and drag-reorder stay deferred.
 
 The only floating surface in the whole flow is Android's own `ACTION_SEND`
 chooser at the last hop. That is the OS, not our paper.
@@ -91,95 +89,99 @@ with Send closed → drop selection and leave gather mode.
 A pure formatter (`VerseTextComposer`) turns the ordered selection into
 plain text: Arabic line, optional translation, and a reference footer
 (`al-Baqarah 2:255`). Pure in, pure out, JVM-tested — no Android types.
+Handoff is `ACTION_SEND` + `EXTRA_TEXT` (no file).
 
-### Image — not yet
+### Image — shipped (PR2)
 
-One PNG of the paper sheet with the verses at rest in full ink: chapter
-header ornament, the verses, the footer mark. It is the video pipeline minus
-the codecs, and it exists partly to **de-risk the video**: if the wash draws
-wrong offscreen, it is visible in a still before any encoder is written.
+One PNG of a **paper sheet with verses at rest in full ink** — not a
+screenshot of the live reader, not the wash yet:
 
-**PR2 is a feasibility spike first**, not a shipping promise: render one
-representative ayah through the lowest shared scripture path, capture full-ink
-PNG plus fixed-progress wash frames (0.25 / 0.5 / 0.75), verify gloss and
-shaped-Hafs. FileProvider arrives with PNG export, not with text.
+1. Thin `ShareImageCard` composable (Hafs + translation + gold reference
+   footer + faint **Beautiful Quran**). Fixed **Paper** theme so shares stay
+   readable parchment regardless of the reader's night/royal mode.
+2. `ShareImageRenderer` hosts that card offscreen under a temporary
+   invisible decor child, measures at 1080×(≤1920), software-draws to a
+   `Bitmap`. **Not** full `ReaderScreen` (no LazyColumn / playback / gestures).
+3. `ShareFiles` writes PNG under `cacheDir/share/`, exposes a `FileProvider`
+   URI (`${applicationId}.share`), keeps the newest few files.
+4. `ACTION_SEND` `image/png` + `FLAG_GRANT_READ_URI_PERMISSION`.
+
+**Wash fidelity (for PR3):** full-ink stills do not exercise the faded leading
+edge. `WashEdgeProbe` is the pure sampler that will reject hard peels once
+wash frames are rendered offscreen — unit-tested on synthetic gradients now.
 
 ### Video — the ink, exported — not yet
 
-Not a screen recording. Deterministic offscreen export (see original design
-below). **Do not start until the PR2 spike proves wash fidelity.** First
-silent video prototype should stay bounded (e.g. 720×1280 @ 30 fps, capped
-duration) before 1080p or audio mux.
+Not a screen recording. Deterministic offscreen export. Reuse the PR2 attach
+path; add a synthetic clock and codecs only after wash frames pass
+`WashEdgeProbe`. First silent video prototype should stay bounded (e.g.
+720×1280 @ 30 fps, capped duration).
 
 Original pipeline notes (for later PRs):
 
 1. **Timeline.** Word timings from `quran.db`, concatenated in gathered order
    with a breath gap between verses.
-2. **Frames.** Narrow scripture renderer (not full `ReaderScreen`) under a
-   custom `MonotonicFrameClock`.
+2. **Frames.** Narrow scripture renderer under a custom `MonotonicFrameClock`.
 3. **Encode.** `HardwareRenderer` / `RenderNode` → `MediaCodec` surface →
    AVC → `MediaMuxer`.
 4. **Audio.** Separate design spike: stage complete per-ayah files without
    poking `PlaybackService`'s private `SimpleCache`.
-5. **Progress is ink** (throttled; a plain line is enough initially).
+5. **Progress is ink** (throttled; a plain line is sufficient initially).
 
 ## The footer mark
 
-Image and video will carry a quiet footer: the reference in gold with
+Image (and later video) carries a quiet footer: the reference in gold
+(`al-Baqarah 2:255`, or a same-surah range / multi-surah join) with
 **Beautiful Quran** beneath it in faint ink. Text shares carry the reference
 only (no app watermark in the chat body).
 
-## Shape of the code (PR1)
+## Shape of the code
 
 ```text
 share/AyahRef.kt                 AyahRef + toggle/ordinals pure helpers
 share/VerseTextComposer.kt       text formatting — pure, JVM-tested
-ui/share/ShareViewModel.kt       selection + gather/send + text prepare
+share/ShareFiles.kt              cacheDir/share + FileProvider URI
+share/ShareImageRenderer.kt      offscreen ComposeView → Bitmap
+share/WashEdgeProbe.kt           soft-edge assertion (JVM-tested)
+ui/share/ShareImageCard.kt       fixed Paper full-ink card
+ui/share/ShareViewModel.kt       selection + text/image export state
 ui/share/ShareHost.kt            BackHandler + InkRevealOverlay + chooser
-ui/share/ShareComposeSheet.kt    Send page (list + Share as text)
+ui/share/ShareComposeSheet.kt    Send page (list + text + image)
+res/xml/share_paths.xml          FileProvider paths
 ```
 
-Reader integration is deliberately thin:
-
-- `PlayerBar` — Gather control
-- `ReaderScreen` — `gathering`, `gatherOrdinal`, `onToggleGatheredAyah`
-- `AyahBlock` — `gatherOrdinal` reuses the bookmark margin
-
-No FileProvider for text. No second selection state machine.
+Reader integration stays thin (PR1): Gather control, ordinals, tap ownership.
 
 ## Phasing
 
 | Phase | Ships | Status |
 |---|---|---|
 | 1 | Gather mode + text share | **shipped** |
-| 2 | Offscreen-render spike → fixed-theme image if OK | next |
-| 3 | Bounded silent ink video | after PR2 |
+| 2 | Full-ink image export + FileProvider + wash probe | **shipped** |
+| 3 | Bounded silent ink video | next |
 | 4 | Audio staging + mux | after silent video is stable |
 | 5 | Web parity | later |
 
-Each phase ships something usable on its own (or is explicitly a spike).
+Each phase ships something usable on its own.
 
 ## Risks
 
-- **Offscreen fidelity.** The wash is built from `BlendMode` mask layers
-  (`ui/theme/Fade.kt`). They must draw identically on an offscreen hardware
-  canvas. Phase 2 proves this before a codec is touched — including animated
-  wash frames, not only full-ink stills.
+- **Offscreen wash fidelity.** Full-ink PNGs ship without wash masks.
+  PR3 must prove `Fade.kt` blend layers on the same offscreen path and pass
+  `WashEdgeProbe` on 0.25 / 0.5 / 0.75 frames before any codec.
 - **Selection recomposition.** Ordinals are a `Map<AyahRef, Int>` derived once
-  per selection change; ayah blocks read only their own ordinal. Do not pass
-  the full list into every block.
+  per selection change; ayah blocks read only their own ordinal.
 - **Codec / GPU budget.** Start bounded (720p, 30 fps, cap duration) before
   1080×1920 multi-minute exports.
 - **Audio cache is not an export API.** `SimpleCache` is private to
   `PlaybackService`. Audio export needs an explicit staging boundary.
-- **Long selections make long videos.** Cap already applies to gather count;
-  duration estimate lands with video/audio.
+- **Long selections.** Gather cap 20; image height soft-capped at 1920 px.
 
 ## Non-goals
 
-- No accounts, no upload, no link-sharing service. Text is `EXTRA_TEXT`; later
-  exports are files + `ACTION_SEND` (invariant 6: offline-first, no backend).
+- No accounts, no upload, no link-sharing service. Text is `EXTRA_TEXT`; image
+  is a file + `ACTION_SEND` (invariant 6: offline-first, no backend).
 - No editing surface — no font pickers, no colour pickers, no stickers.
 - No range selection. Ordered taps are the model.
-- No drag-reorder, multi-theme matrix, or export queue in PR1.
+- No drag-reorder or multi-theme matrix yet (image is fixed Paper).
 - No hosting full `ReaderScreen` offscreen for image/video.
