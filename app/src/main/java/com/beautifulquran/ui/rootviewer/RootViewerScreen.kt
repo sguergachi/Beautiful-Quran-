@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,7 +44,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -67,6 +70,17 @@ import com.beautifulquran.ui.theme.verticalFadingEdges
 internal const val ROOT_CHAPTER_PREVIEW_LIMIT = 8
 internal const val ROOT_OCCURRENCE_PREVIEW_LIMIT = 5
 internal const val ROOT_RELATED_FORM_PREVIEW_LIMIT = 5
+
+private const val ROOT_HELP =
+    "Usually three consonants shared by a family of related words. A root points to a meaning family, not one fixed translation."
+private const val LEMMA_HELP =
+    "The dictionary headword that groups inflected versions of the same word. It is more specific than a root."
+private const val GRAMMAR_HELP =
+    "How this word functions here: its part of speech and features such as verb form, person, number, gender, case, voice, or mood."
+private const val OCCURRENCES_HELP =
+    "Every Quran word annotated with this root. Shared roots suggest a family resemblance, but context decides the meaning."
+private const val RELATED_FORMS_HELP =
+    "Other dictionary headwords built from the same root. Their meanings may be related, but are not necessarily identical."
 
 internal data class RootOccurrenceSection(
     val surahId: Int,
@@ -115,6 +129,7 @@ fun RootViewerScreen(
     onJumpToOccurrence: (surahId: Int, ayah: Int) -> Unit,
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val uriHandler = LocalUriHandler.current
     val listState = rememberLazyListState()
     val showTopTitle by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
     val morph = ui.morphology
@@ -202,7 +217,7 @@ fun RootViewerScreen(
                     if (!morph?.root.isNullOrBlank() && ui.occurrenceCount > 0) {
                         item(key = "occurrences-heading") {
                             ProseMeasure(Modifier.padding(top = 40.dp)) {
-                                RootSectionTitle("Occurrences")
+                                RootSectionTitle("Occurrences", OCCURRENCES_HELP)
                                 Text(
                                     text = "This root occurs ${times(ui.occurrenceCount)} across " +
                                         "${sections.size} ${if (sections.size == 1) "chapter" else "chapters"}.",
@@ -282,7 +297,7 @@ fun RootViewerScreen(
                     if (relatedForms.isNotEmpty()) {
                         item(key = "related-heading") {
                             Column(Modifier.padding(top = 40.dp)) {
-                                RootSectionTitle("Related forms")
+                                RootSectionTitle("Related forms", RELATED_FORMS_HELP)
                                 Spacer(Modifier.height(16.dp))
                             }
                         }
@@ -307,14 +322,30 @@ fun RootViewerScreen(
                         }
                     }
 
+                    ui.word?.let { word ->
+                        item(key = "online-references") {
+                            OnlineReferences(
+                                references = rootViewerReferences(
+                                    surahId = ui.surahId,
+                                    ayah = ui.ayah,
+                                    position = word.position,
+                                    root = morph?.root.orEmpty(),
+                                ),
+                                onOpen = uriHandler::openUri,
+                                modifier = Modifier.padding(top = 40.dp),
+                            )
+                        }
+                    }
+
                     item(key = "attribution") {
                         Text(
-                            text = "Morphology from the Quranic Arabic Corpus — corpus.quran.com",
+                            text = "Morphology from the Quranic Arabic Corpus v0.4 — corpus.quran.com",
                             style = MaterialTheme.typography.bodyMedium,
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .quietClickable { uriHandler.openUri("https://corpus.quran.com") }
                                 .padding(top = 56.dp, bottom = 32.dp),
                         )
                     }
@@ -358,7 +389,7 @@ private fun WordAnalysis(
     lemmas: List<RootLemmaSummary>,
 ) {
     if (morph.root.isNotBlank()) {
-        RootLabel("Root")
+        RootLabel("Root", ROOT_HELP)
         Text(
             text = MorphologyLabels.spacedRoot(morph.root),
             fontFamily = HafsFontFamily,
@@ -370,8 +401,8 @@ private fun WordAnalysis(
     }
     if (morph.lemma.isNotBlank() || morph.pos.isNotBlank()) {
         Column(Modifier.padding(top = if (morph.root.isBlank()) 0.dp else 24.dp)) {
-            RootLabel("This form")
             if (morph.lemma.isNotBlank()) {
+                RootLabel("Lemma", LEMMA_HELP)
                 Text(
                     text = morph.lemma,
                     fontFamily = HafsFontFamily,
@@ -386,6 +417,11 @@ private fun WordAnalysis(
                 MorphologyLabels.featureSummary(morph.features).takeIf { it.isNotBlank() },
             ).filterNotNull().joinToString(" · ")
             if (grammar.isNotBlank()) {
+                RootLabel(
+                    text = "Grammar",
+                    explanation = GRAMMAR_HELP,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
                 Text(
                     text = grammar,
                     style = MaterialTheme.typography.bodyLarge,
@@ -415,34 +451,136 @@ private fun WordAnalysis(
 }
 
 @Composable
-private fun RootLabel(text: String) {
-    Text(
+private fun RootLabel(
+    text: String,
+    explanation: String? = null,
+    modifier: Modifier = Modifier,
+) {
+    ExplainedHeading(
         text = text.uppercase(),
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-        fontWeight = FontWeight.SemiBold,
-        letterSpacing = 1.56.sp,
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+        explanation = explanation,
+        modifier = modifier,
+        textContent = {
+            Text(
+                text = it,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.56.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+            )
+        },
     )
 }
 
 @Composable
-private fun RootSectionTitle(text: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+private fun RootSectionTitle(text: String, explanation: String? = null) {
+    ExplainedHeading(
+        text = text,
+        explanation = explanation,
+        textContent = {
+            Text(
+                text = it,
+                fontFamily = DisplayFontFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 24.sp,
+                lineHeight = 29.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        },
+        afterTitle = {
+            Spacer(Modifier.width(16.dp))
+            Box(
+                Modifier
+                    .weight(1f)
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.09f)),
+            )
+        },
+    )
+}
+
+@Composable
+private fun ExplainedHeading(
+    text: String,
+    explanation: String?,
+    modifier: Modifier = Modifier,
+    textContent: @Composable (String) -> Unit,
+    afterTitle: @Composable RowScope.() -> Unit = {},
+) {
+    var expanded by remember(text) { mutableStateOf(false) }
+    Column(modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            textContent(text)
+            if (explanation != null) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .quietClickable(role = Role.Button) { expanded = !expanded }
+                        .semantics {
+                            contentDescription = "Explain ${text.lowercase()}"
+                            stateDescription = if (expanded) "Expanded" else "Collapsed"
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "ⓘ",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                    )
+                }
+            }
+            afterTitle()
+        }
+        AnimatedVisibility(
+            visible = expanded && explanation != null,
+            enter = fadeIn(tween(180)),
+            exit = fadeOut(tween(120)),
+        ) {
+            Text(
+                text = explanation.orEmpty(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun OnlineReferences(
+    references: List<RootViewerReference>,
+    onOpen: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier) {
+        RootSectionTitle("Learn more online")
+        Spacer(Modifier.height(12.dp))
+        references.forEach { reference ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .quietClickable(role = Role.Button) { onOpen(reference.url) }
+                    .padding(vertical = 10.dp),
+            ) {
+                Text(
+                    text = "${reference.title}  ↗",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = reference.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
         Text(
-            text = text,
-            fontFamily = DisplayFontFamily,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 24.sp,
-            lineHeight = 29.sp,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(Modifier.width(16.dp))
-        Box(
-            Modifier
-                .weight(1f)
-                .height(1.dp)
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.09f)),
+            text = "Classical dictionary entries describe a broad history of usage; the ayah's context still determines the intended sense.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+            modifier = Modifier.padding(top = 6.dp),
         )
     }
 }
@@ -608,6 +746,8 @@ private fun WordHeader(word: Word, isPlaying: Boolean, onPlay: () -> Unit) {
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Balance the speaker and its gap so the Arabic itself stays centered.
+        Spacer(Modifier.width(32.dp))
         Text(
             text = word.arabic,
             fontFamily = HafsFontFamily,
@@ -648,6 +788,7 @@ private fun WordHeader(word: Word, isPlaying: Boolean, onPlay: () -> Unit) {
 private fun CollapsedWordTitle(word: Word, isPlaying: Boolean, onPlay: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.width(26.dp))
             Text(
                 text = word.arabic,
                 fontFamily = HafsFontFamily,

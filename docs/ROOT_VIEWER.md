@@ -54,11 +54,16 @@ On the pressed word at `(surahId, ayah, wordPosition)`:
 2. **Root** — the radical letters (e.g. ك ت ب), shown large. QAC supplies
    morphology, not licensed prose dictionary definitions, so the viewer does
    not invent a root sense from the word glosses.
-3. **This form** — part of speech and a plain-English morphology line
+3. **Lemma and grammar** — part of speech and a plain-English morphology line
    drawn from the annotation (noun / verb, person, gender, number, case,
    verb form and mood where present), plus the exact QAC lemma and its
    occurrence count beneath this root. Grammar tags stay secondary to readable
-   English; the point is understanding, not a tag dump.
+   English; the point is understanding, not a tag dump. Root, lemma, grammar,
+   occurrences, and related forms each have a quiet info mark that unfolds a
+   short definition inline. These notes are part of the paper flow, not floating
+   tooltips or dialogs. In particular, they explain that a **lemma** is the
+   dictionary headword for inflected versions of one word, while a root is the
+   broader consonantal family.
 4. **Occurrences** — how often this root appears in the Quran, and where.
    This is a first-class part of the surface, not a footnote:
    - A clear **count** ("appears *N* times in the Quran").
@@ -81,6 +86,18 @@ On the pressed word at `(surahId, ayah, wordPosition)`:
    a quiet show-more line; the section disappears when there are no others.
 6. **Attribution** — a quiet line naming the Quranic Arabic Corpus and
    linking to `http://corpus.quran.com` (required by the data terms).
+7. **Learn more online** — location-aware browser shortcuts for readers who
+   want to continue beyond the bundled data:
+   - QAC's segment-by-segment grammar page for the exact `(surah:ayah:word)`.
+   - QAC's Quran dictionary for the exact root (using QAC's Buckwalter query).
+   - Lane's classical Arabic–English lexicon entry for the root, with a reminder
+     that historical dictionary entries are broad and context still determines
+     the intended sense.
+   - The full ayah on Quran.com for translations, recitation, and tafsir.
+
+The viewer does not fetch these pages or depend on them to open. Links are
+optional exits to the browser; all bundled morphology and concordance remain
+offline-first.
 
 Particles and other words with no triliteral root still open the surface:
 show the lemma / POS explanation and omit the root-concordance block
