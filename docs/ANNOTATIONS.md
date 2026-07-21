@@ -113,9 +113,9 @@ happens to be loaded when it lands. Opening a second note commits the first
 *before* switching, and the stale focus-loss that follows is ignored by an
 identity guard — otherwise one verse's text writes itself onto another.
 
-*Not yet built:* the doc's original step 1, recessing the rest of the page to
-upcoming ink while composing. The editor currently opens without dimming its
-neighbours.
+While composing, the other verses recede to upcoming ink and the ayah selector
+rail withdraws. The active verse and its note remain together as the only
+thought on the page.
 
 Deleting an existing note is therefore just: open it, clear it, tap away.
 There is no separate destructive control and no confirmation — the reader
