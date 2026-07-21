@@ -108,10 +108,8 @@ class FocusEngineTest {
         assertEquals(
             152f,
             FocusEngine.annotationFieldDeltaPx(
-                fieldTopPx = 620f,
                 fieldBottomPx = 660f,
                 viewportHeightPx = 800f,
-                topGuardPx = 0f,
                 keyboardInsetPx = 260f,
                 keyboardPaddingPx = 32f,
             ),
@@ -119,29 +117,25 @@ class FocusEngineTest {
     }
 
     @Test
-    fun `annotation field already clear of the keyboard does not move`() {
+    fun `annotation field already clear of the keyboard settles lower for more verse room`() {
+        assertEquals(
+            -28f,
+            FocusEngine.annotationFieldDeltaPx(
+                fieldBottomPx = 480f,
+                viewportHeightPx = 800f,
+                keyboardInsetPx = 260f,
+                keyboardPaddingPx = 32f,
+            ),
+        )
+    }
+
+    @Test
+    fun `annotation field already on its keyboard-safe landing does not move`() {
         assertEquals(
             0f,
             FocusEngine.annotationFieldDeltaPx(
-                fieldTopPx = 420f,
-                fieldBottomPx = 480f,
+                fieldBottomPx = 508f,
                 viewportHeightPx = 800f,
-                topGuardPx = 0f,
-                keyboardInsetPx = 260f,
-                keyboardPaddingPx = 32f,
-            ),
-        )
-    }
-
-    @Test
-    fun `annotation field above the page scrolls back below the top guard`() {
-        assertEquals(
-            -30f,
-            FocusEngine.annotationFieldDeltaPx(
-                fieldTopPx = 20f,
-                fieldBottomPx = 80f,
-                viewportHeightPx = 800f,
-                topGuardPx = 50f,
                 keyboardInsetPx = 260f,
                 keyboardPaddingPx = 32f,
             ),
@@ -153,10 +147,8 @@ class FocusEngineTest {
         assertEquals(
             192f,
             FocusEngine.annotationFieldDeltaPx(
-                fieldTopPx = 20f,
                 fieldBottomPx = 700f,
                 viewportHeightPx = 800f,
-                topGuardPx = 50f,
                 keyboardInsetPx = 260f,
                 keyboardPaddingPx = 32f,
             ),
