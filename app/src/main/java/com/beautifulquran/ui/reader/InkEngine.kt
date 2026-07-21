@@ -110,17 +110,24 @@ object InkEngine {
          *  constant rate. Off by default; auditioned via the Ink Lab.
          *  See docs/TAJWEED_PACING.md. */
         val tajweedPacing: Boolean = false,
-        /** Wash feather per pronounced letter while tajweed pacing is on:
-         *  the whole-word breath of [washFeather] would swamp letter dwell,
-         *  so paced words get an edge that narrows with letter density
-         *  (clamped in [pacedFeather]). */
-        val pacedFeatherPerLetter: Float = 2.5f,
-        /** How strongly the paced sweep honours raw tajweed ratios (0..1).
-         *  At 1 a madd lazim moves twelve times slower than a sākin —
-         *  dramatic, but short letters flash by too fast to enjoy the fade;
-         *  0 flattens to a uniform glide. Time only redistributes inside the
-         *  word, so softening never falls behind the reciter. */
-        val pacingContrast: Float = 0.7f,
+        /** Feather of a paced word. Defaults to [washFeather]'s whole-word
+         *  breath: the hold now reads through the wash *stopping*, so the
+         *  edge no longer has to be sharpened (which is what cost the reveal
+         *  its softness the first time round). */
+        val pacedFeather: Float = 1.6f,
+        /** Which moments earn a hold — see [TajweedPacing.Hold]. */
+        val holdMadd: Boolean = true,
+        val holdGhunnah: Boolean = false,
+        val holdWaqf: Boolean = true,
+        /** Ceiling on ordinary-letter speed while a hold is bought, as a
+         *  multiple of the plain sweep rate. Word timings are contiguous, so
+         *  hold length and this cap are the same dial; 1 means ordinary
+         *  letters are never hurried and only [holdWaqf] can hold. */
+        val cruiseCap: Float = 1.25f,
+        /** Share of a verse-closing word spent sustaining its final letter. */
+        val waqfShare: Float = 0.55f,
+        /** How far the wash still creeps while holding, so it breathes. */
+        val holdCreep: Float = 0.08f,
     )
 
     /**
@@ -201,42 +208,48 @@ object InkEngine {
 
     /**
      * The active word's tajweed pacing curve — how the sweep's linear clock
-     * maps to wash position so the ink dwells on held letters — or null for
-     * the plain constant-rate sweep (toggle off, word too short, or no
-     * recognisable letters). [arabic] is the active word's Hafs Uthmani text;
-     * the voiced share comes from [ActiveWord.spokenMs] vs the karaoke hold,
-     * so letters never smear across the breath gap before the next word.
+     * maps to wash position so the ink sustains the letter the reciter is
+     * sustaining — or null for the plain sweep (toggle off, no dramatic
+     * letter in the word, no dwell affordable, or nothing recognisable).
+     *
+     * [arabic] is the active word's Hafs Uthmani text and [isAyahFinal] marks
+     * the verse-closing word, whose waqf carries the only slack that is not
+     * borrowed from its neighbours. The voiced share comes from
+     * [ActiveWord.spokenMs] vs the karaoke hold, so the ink settles rather
+     * than smearing across a breath gap.
      */
-    fun pacing(arabic: String, activeWord: ActiveWord): TajweedPacing.Curve? {
-        if (!tuning.tajweedPacing) {
-            debugLogPacing("gate=off word=$arabic")
-            return null
-        }
+    fun pacing(
+        arabic: String,
+        activeWord: ActiveWord,
+        isAyahFinal: Boolean,
+    ): TajweedPacing.Curve? {
+        val t = tuning
+        if (!t.tajweedPacing) return null
         val spokenFraction =
             if (activeWord.durationMs <= 0L) 1f
             else activeWord.spokenMs.toFloat() / activeWord.durationMs
-        return TajweedPacing.curve(arabic, spokenFraction, tuning.pacingContrast).also {
-            debugLogPacing("gate=on word=$arabic curve=${it != null}")
-        }
-    }
-
-    // TEMP DEBUG: deduped gate log for the tajweed-pacing toggle repro.
-    private var lastPacingLog: String? = null
-    private fun debugLogPacing(message: String) {
-        if (message == lastPacingLog) return
-        lastPacingLog = message
-        android.util.Log.d("InkLabDbg", message)
+        return TajweedPacing.curve(
+            arabic = arabic,
+            spokenFraction = spokenFraction,
+            hold = TajweedPacing.Hold(
+                madd = t.holdMadd,
+                ghunnah = t.holdGhunnah,
+                waqf = t.holdWaqf,
+                isAyahFinal = isAyahFinal,
+                cruiseCap = t.cruiseCap,
+                waqfShare = t.waqfShare,
+                creep = t.holdCreep,
+            ),
+        )
     }
 
     /**
-     * Feather width for a tajweed-paced wash: [Tuning.washFeather]'s 1.6×
-     * whole-word breath would hide letter dwell entirely, so the paced edge
-     * narrows with the number of pronounced letters — wide enough to stay a
-     * wash, narrow enough that a held madd visibly stalls the edge.
+     * Feather width for a tajweed-paced wash. Paced words keep the whole-word
+     * breath by default: the hold reads as the bloom *stopping*, so sharpening
+     * the edge is no longer the only way to see it — and sharpening is what
+     * cost the reveal its ethereal quality when pacing first shipped.
      */
-    fun pacedFeather(letterCount: Int): Float =
-        (tuning.pacedFeatherPerLetter / letterCount.coerceAtLeast(1))
-            .coerceIn(0.3f, 0.8f)
+    fun pacedFeather(): Float = tuning.pacedFeather
 
     /**
      * Whether the word should wear the fresh-ink glint: the subtle white-gold

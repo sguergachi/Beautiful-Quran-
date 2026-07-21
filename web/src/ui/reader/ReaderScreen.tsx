@@ -3,7 +3,12 @@ import { AyahBlock } from '../../render/AyahBlock'
 import { BasmalahCalligraphy } from '../../render/BasmalahCalligraphy'
 import { getTuning, prefaceState } from './InkEngine'
 import { TRANSLITERATION_COLOR_ALPHA } from './WordHighlight'
-import { isAway, playbackFocusTarget, pointUp } from './focus/FocusEngine'
+import {
+  isAway,
+  playbackFocusTarget,
+  pointUp,
+  startsFullAyahRepeat,
+} from './focus/FocusEngine'
 import { ReturnToAyahButton } from './ReturnToAyahButton'
 import { surahOpensWithBasmalahPreface } from '../../domain/Basmalah'
 import {
@@ -779,6 +784,25 @@ export function ReaderScreen({ stackLayer }: { stackLayer: StackLayer }) {
     isTop,
     content?.surah.id,
   ])
+
+  // A full-ayah repeat backtracks inside the same audio item, so neither the
+  // active ayah nor media key changes. Treat word one as a fresh focus event.
+  const wasAtFullAyahRepeatStart = useRef(false)
+  useEffect(() => {
+    const word = state.activeWord
+    const atRepeatStart =
+      word != null &&
+      startsFullAyahRepeat(word.wordPosition, word.isRepeat, word.repeatStart)
+    if (
+      atRepeatStart &&
+      !wasAtFullAyahRepeatStart.current &&
+      state.followEnabled &&
+      isTop
+    ) {
+      void focusAyah(word.ayah, { animate: true, preRoll: false })
+    }
+    wasAtFullAyahRepeatStart.current = atRepeatStart
+  }, [state.activeWord, state.followEnabled, isTop, focusAyah])
 
   // While reciting, the rail tracks the active ayah (not the scroll readout,
   // which [update] skips during programmatic glides). Sync the ref whenever

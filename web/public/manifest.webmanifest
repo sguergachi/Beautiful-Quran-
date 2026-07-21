@@ -1,7 +1,7 @@
 {
   "name": "Beautiful Quran",
   "short_name": "Beautiful Quran",
-  "description": "A calm, paper-simple Quran reader with lyric-style word highlighting.",
+  "description": "A calm, paper-simple Quran reader with word-by-word recitation highlighting.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

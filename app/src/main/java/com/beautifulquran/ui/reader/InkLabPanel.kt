@@ -48,9 +48,23 @@ import kotlin.math.roundToInt
  * Enabled from Settings → Developer → "Ink Lab overlay" (developer mode
  * itself unlocks by tapping the Settings logo). See docs/INK_ENGINE.md.
  */
+/**
+ * The panel's sections. There are far too many knobs to scroll as one list,
+ * and they cluster naturally by what you are listening for: the resting page,
+ * the wash that reveals a word, the orange repeat chain, and the experimental
+ * tajweed hold.
+ */
+private enum class InkLabTab(val label: String) {
+    Ink("Ink"),
+    Sweep("Sweep"),
+    Repeat("Repeat"),
+    Tajweed("Tajweed"),
+}
+
 @Composable
 fun InkLabPanel(modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
+    var tab by remember { mutableStateOf(InkLabTab.Ink) }
     var copyNote by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     Column(
@@ -81,64 +95,97 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
             modifier = Modifier
                 .clip(RoundedCornerShape(18.dp))
                 .background(MaterialTheme.colorScheme.background.copy(alpha = 0.96f))
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .heightIn(max = 380.dp)
-                .verticalScroll(rememberScrollState()),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
-            val t = InkEngine.tuning
-            TuningSlider("Upcoming ink", t.upcomingAlpha, 0.05f..0.6f) {
-                InkEngine.tuning = t.copy(upcomingAlpha = it)
-            }
-            TuningSlider("Ink fade ms", t.inkFadeMs.toFloat(), 0f..1200f, integer = true) {
-                InkEngine.tuning = t.copy(inkFadeMs = it.roundToInt())
-            }
-            TuningSlider("Mark fade ms", t.ayahMarkFadeMs.toFloat(), 0f..1200f, integer = true) {
-                InkEngine.tuning = t.copy(ayahMarkFadeMs = it.roundToInt())
-            }
-            TuningSlider("Recess ms", t.recessMs.toFloat(), 0f..1400f, integer = true) {
-                InkEngine.tuning = t.copy(recessMs = it.roundToInt())
-            }
-            TuningSlider("Min sweep ms", t.minSweepMs.toFloat(), 40f..600f, integer = true) {
-                InkEngine.tuning = t.copy(minSweepMs = it.roundToInt())
-            }
-            TuningSlider("Max sweep ms", t.maxSweepMs.toFloat(), 1000f..12000f, integer = true) {
-                InkEngine.tuning = t.copy(maxSweepMs = it.roundToInt())
-            }
-            TuningSlider("Repeat sweep ms", t.repeatSweepMs.toFloat(), 100f..1500f, integer = true) {
-                InkEngine.tuning = t.copy(repeatSweepMs = it.roundToInt())
-            }
-            TuningSlider("Repeat fade ms", t.repeatFadeOutMs.toFloat(), 100f..2400f, integer = true) {
-                InkEngine.tuning = t.copy(repeatFadeOutMs = it.roundToInt())
-            }
-            TuningSlider("Repeat ink", t.repeatInkAlpha, 0.2f..1f) {
-                InkEngine.tuning = t.copy(repeatInkAlpha = it)
-            }
-            TuningSlider("Glitter time ms", t.glintFadeMs.toFloat(), 100f..2400f, integer = true) {
-                InkEngine.tuning = t.copy(glintFadeMs = it.roundToInt())
-            }
-            TuningSlider("Glint tint", t.glintTintAlpha, 0f..1f) {
-                InkEngine.tuning = t.copy(glintTintAlpha = it)
-            }
-            TuningSlider("Halo strength", t.glintGlowAlpha, 0f..1f) {
-                InkEngine.tuning = t.copy(glintGlowAlpha = it)
-            }
-            TuningSlider("Halo blur", t.glintGlowRadius, 0f..10f) {
-                InkEngine.tuning = t.copy(glintGlowRadius = it)
-            }
-            TuningSlider("Wash feather", t.washFeather, 0.2f..3f) {
-                InkEngine.tuning = t.copy(washFeather = it)
-            }
-            // Letter-level tajweed pacing of the active sweep — experimental,
-            // auditioned here before it ships on (docs/TAJWEED_PACING.md).
-            TuningToggle("Tajweed pacing", t.tajweedPacing) {
-                Log.d("InkLabDbg", "toggle tap: tajweedPacing $it (was ${t.tajweedPacing})")
-                InkEngine.tuning = t.copy(tajweedPacing = it)
-            }
-            TuningSlider("Paced feather", t.pacedFeatherPerLetter, 0.5f..6f) {
-                InkEngine.tuning = t.copy(pacedFeatherPerLetter = it)
-            }
-            TuningSlider("Pacing contrast", t.pacingContrast, 0f..1f) {
-                InkEngine.tuning = t.copy(pacingContrast = it)
+            InkLabTabs(selected = tab, onSelect = { tab = it })
+            Spacer(Modifier.height(8.dp))
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 320.dp)
+                    .verticalScroll(rememberScrollState(), reverseScrolling = false),
+            ) {
+                val t = InkEngine.tuning
+                when (tab) {
+                    InkLabTab.Ink -> {
+                        TuningSlider("Upcoming ink", t.upcomingAlpha, 0.05f..0.6f) {
+                            InkEngine.tuning = t.copy(upcomingAlpha = it)
+                        }
+                        TuningSlider("Ink fade ms", t.inkFadeMs.toFloat(), 0f..1200f, integer = true) {
+                            InkEngine.tuning = t.copy(inkFadeMs = it.roundToInt())
+                        }
+                        TuningSlider("Mark fade ms", t.ayahMarkFadeMs.toFloat(), 0f..1200f, integer = true) {
+                            InkEngine.tuning = t.copy(ayahMarkFadeMs = it.roundToInt())
+                        }
+                        TuningSlider("Recess ms", t.recessMs.toFloat(), 0f..1400f, integer = true) {
+                            InkEngine.tuning = t.copy(recessMs = it.roundToInt())
+                        }
+                    }
+
+                    InkLabTab.Sweep -> {
+                        TuningSlider("Min sweep ms", t.minSweepMs.toFloat(), 40f..600f, integer = true) {
+                            InkEngine.tuning = t.copy(minSweepMs = it.roundToInt())
+                        }
+                        TuningSlider("Max sweep ms", t.maxSweepMs.toFloat(), 1000f..12000f, integer = true) {
+                            InkEngine.tuning = t.copy(maxSweepMs = it.roundToInt())
+                        }
+                        TuningSlider("Wash feather", t.washFeather, 0.2f..3f) {
+                            InkEngine.tuning = t.copy(washFeather = it)
+                        }
+                        TuningSlider("Glitter time ms", t.glintFadeMs.toFloat(), 100f..2400f, integer = true) {
+                            InkEngine.tuning = t.copy(glintFadeMs = it.roundToInt())
+                        }
+                        TuningSlider("Glint tint", t.glintTintAlpha, 0f..1f) {
+                            InkEngine.tuning = t.copy(glintTintAlpha = it)
+                        }
+                        TuningSlider("Halo strength", t.glintGlowAlpha, 0f..1f) {
+                            InkEngine.tuning = t.copy(glintGlowAlpha = it)
+                        }
+                        TuningSlider("Halo blur", t.glintGlowRadius, 0f..10f) {
+                            InkEngine.tuning = t.copy(glintGlowRadius = it)
+                        }
+                    }
+
+                    InkLabTab.Repeat -> {
+                        TuningSlider("Repeat sweep ms", t.repeatSweepMs.toFloat(), 100f..1500f, integer = true) {
+                            InkEngine.tuning = t.copy(repeatSweepMs = it.roundToInt())
+                        }
+                        TuningSlider("Repeat fade ms", t.repeatFadeOutMs.toFloat(), 100f..2400f, integer = true) {
+                            InkEngine.tuning = t.copy(repeatFadeOutMs = it.roundToInt())
+                        }
+                        TuningSlider("Repeat ink", t.repeatInkAlpha, 0.2f..1f) {
+                            InkEngine.tuning = t.copy(repeatInkAlpha = it)
+                        }
+                    }
+
+                    // Letter-level tajweed hold on the active sweep —
+                    // experimental (docs/TAJWEED_PACING.md).
+                    InkLabTab.Tajweed -> {
+                        TuningToggle("Tajweed pacing", t.tajweedPacing) {
+                            InkEngine.tuning = t.copy(tajweedPacing = it)
+                        }
+                        TuningToggle("Hold: madd", t.holdMadd) {
+                            InkEngine.tuning = t.copy(holdMadd = it)
+                        }
+                        TuningToggle("Hold: ghunnah", t.holdGhunnah) {
+                            InkEngine.tuning = t.copy(holdGhunnah = it)
+                        }
+                        TuningToggle("Hold: waqf", t.holdWaqf) {
+                            InkEngine.tuning = t.copy(holdWaqf = it)
+                        }
+                        TuningSlider("Cruise cap", t.cruiseCap, 1f..2f) {
+                            InkEngine.tuning = t.copy(cruiseCap = it)
+                        }
+                        TuningSlider("Waqf hold", t.waqfShare, 0f..0.8f) {
+                            InkEngine.tuning = t.copy(waqfShare = it)
+                        }
+                        TuningSlider("Hold creep", t.holdCreep, 0f..0.3f) {
+                            InkEngine.tuning = t.copy(holdCreep = it)
+                        }
+                        TuningSlider("Paced feather", t.pacedFeather, 0.3f..3f) {
+                            InkEngine.tuning = t.copy(pacedFeather = it)
+                        }
+                    }
+                }
             }
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -203,6 +250,7 @@ internal fun formatTuningCopy(t: InkEngine.Tuning): String {
         appendLine("    maxSweepMs = ${t.maxSweepMs},")
         appendLine("    repeatSweepMs = ${t.repeatSweepMs},")
         appendLine("    repeatFadeOutMs = ${t.repeatFadeOutMs},")
+        appendLine("    repeatInkAlpha = ${f(t.repeatInkAlpha)},")
         appendLine("    glintFadeMs = ${t.glintFadeMs},")
         appendLine("    glintTintAlpha = ${f(t.glintTintAlpha)},")
         appendLine("    glintGlowAlpha = ${f(t.glintGlowAlpha)},")
@@ -213,9 +261,55 @@ internal fun formatTuningCopy(t: InkEngine.Tuning): String {
         appendLine("    sweepEaseX2 = ${f(t.sweepEaseX2)},")
         appendLine("    sweepEaseY2 = ${f(t.sweepEaseY2)},")
         appendLine("    tajweedPacing = ${t.tajweedPacing},")
-        appendLine("    pacedFeatherPerLetter = ${f(t.pacedFeatherPerLetter)},")
-        appendLine("    pacingContrast = ${f(t.pacingContrast)},")
+        appendLine("    pacedFeather = ${f(t.pacedFeather)},")
+        appendLine("    holdMadd = ${t.holdMadd},")
+        appendLine("    holdGhunnah = ${t.holdGhunnah},")
+        appendLine("    holdWaqf = ${t.holdWaqf},")
+        appendLine("    cruiseCap = ${f(t.cruiseCap)},")
+        appendLine("    waqfShare = ${f(t.waqfShare)},")
+        appendLine("    holdCreep = ${f(t.holdCreep)},")
         append(")")
+    }
+}
+
+/**
+ * Section picker in the panel's quiet-ink idiom: names in a row, the current
+ * one inked and underlined. No tab bar chrome, no ripple — the same paper
+ * treatment as the rest of the lab (docs/DESIGN.md).
+ */
+@Composable
+private fun InkLabTabs(selected: InkLabTab, onSelect: (InkLabTab) -> Unit) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        InkLabTab.entries.forEach { entry ->
+            val active = entry == selected
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = entry.label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (active) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier
+                        .quietClickable { onSelect(entry) }
+                        .padding(vertical = 4.dp),
+                )
+                // A hairline of ink under the live section, drawn at zero
+                // height when idle so the row never reflows on selection.
+                Spacer(
+                    Modifier
+                        .padding(top = 2.dp)
+                        .width(if (active) 18.dp else 0.dp)
+                        .height(1.dp)
+                        .background(MaterialTheme.colorScheme.primary),
+                )
+            }
+        }
     }
 }
 

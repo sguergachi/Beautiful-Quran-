@@ -25,6 +25,13 @@ describe('FocusEngine', () => {
     expect(FocusEngine.isChapterTopFocusTarget(1)).toBe(false)
   })
 
+  it('full ayah repeat starts a fresh focus pass', () => {
+    expect(FocusEngine.startsFullAyahRepeat(1, true, 1)).toBe(true)
+    expect(FocusEngine.startsFullAyahRepeat(2, true, 1)).toBe(false)
+    expect(FocusEngine.startsFullAyahRepeat(1, false, 1)).toBe(false)
+    expect(FocusEngine.startsFullAyahRepeat(4, true, 4)).toBe(false)
+  })
+
   it('basmalah list item uses the same adaptive anchor as a short verse', () => {
     const basmalahHeight = 120
     const anchor = FocusEngine.anchorOffsetPx(viewport, guard, basmalahHeight)

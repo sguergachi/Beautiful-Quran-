@@ -1,18 +1,33 @@
 package com.beautifulquran.domain
 
-import kotlin.math.pow
-
 /**
  * Letter-level pacing of the active word's ink sweep, derived from tajweed
  * rules (docs/TAJWEED_PACING.md).
  *
- * The word-level timing already measures how long the reciter dwelled on the
- * word; tajweed prescribes how that time is spread across its letters — a
- * madd lazim is six counts, a ghunnah two, a plain harakah one. This object
+ * The word-level timing measures how long the reciter dwelled on the word;
+ * tajweed says *where inside that word* the time is being spent. This object
  * turns a word's Hafs Uthmani text (which carries every needed mark: shadda,
  * maddah, dagger alef, sukūn, hamzat wasl, quiescent zero) into a monotone
- * time → wash-position [Curve], so the ink edge dwells on the letter the
- * reciter is actually holding instead of sweeping at a constant rate.
+ * time → wash-position [Curve].
+ *
+ * **The model is a gated hint, not a redistribution.** Word timings are
+ * contiguous — 99.8 % of segments end exactly where the next begins — so there
+ * is no slack inside a word: every count handed to a madd is taken from its
+ * neighbours, which then run *faster* than the plain sweep. Spreading every
+ * letter by its raw counts therefore made most of each word quicker and
+ * sharper, losing the whole-word breath the reveal is built around. Instead:
+ *
+ * - **Gate** — a word is paced only if it holds a genuinely dramatic letter
+ *   ([Hold]). Everything else returns null and takes the plain sweep, so the
+ *   page reads exactly as it does today almost everywhere.
+ * - **Cruise** — ordinary letters move at one constant speed, capped at
+ *   [Hold.cruiseCap] times the plain rate. At a cap of 1 they are untouched.
+ * - **Hold** — the freed time parks the wash on the held letter, creeping
+ *   ([Hold.creep]) rather than freezing so the bloom stays alive.
+ * - **Waqf** — an ayah's final word is held about 2.9× longer than a mid-ayah
+ *   word (median 2983 ms vs 1040 ms). That slack is real rather than
+ *   borrowed, so it is budgeted separately ([Hold.waqfShare]) and spent on the
+ *   closing letter — the madd ʿāriḍ the reciter is actually sustaining.
  *
  * Pure Kotlin over immutable data, like [HighlightEngine] — no Android or
  * Compose dependencies, unit-tested on the JVM. The counts are murattal
@@ -20,6 +35,32 @@ import kotlin.math.pow
  * per letter in v1, which the wide feathered wash edge absorbs.
  */
 object TajweedPacing {
+
+    /**
+     * Which moments deserve a hold, and what the hold may cost.
+     *
+     * [cruiseCap] is the honest trade: with no slack inside a word, hold
+     * length and ordinary-letter speed are the same dial. 1.0 means ordinary
+     * letters never speed up, which also means a mid-word madd can buy no
+     * dwell at all — leaving [waqf] as the only drama.
+     */
+    data class Hold(
+        /** 4–6 count madds (a maddah mark) trigger a hold. */
+        val madd: Boolean = true,
+        /** 2-count nasal hum on a mushaddad ن/م triggers a hold. */
+        val ghunnah: Boolean = false,
+        /** An ayah's closing word parks the wash on its final letter. */
+        val waqf: Boolean = true,
+        /** Whether this word closes its verse (drives [waqf]). */
+        val isAyahFinal: Boolean = false,
+        /** Ceiling on ordinary-letter speed, as a multiple of the plain rate. */
+        val cruiseCap: Float = 1.25f,
+        /** Share of an ayah-final word's dwell spent on the closing letter. */
+        val waqfShare: Float = 0.55f,
+        /** Fraction of its own slot the wash still crosses while holding, so
+         *  the ink breathes instead of freezing dead. */
+        val creep: Float = 0.08f,
+    )
 
     /**
      * Monotone piecewise-linear map from normalized sweep time (0..1 of the
@@ -51,60 +92,116 @@ object TajweedPacing {
     }
 
     /**
-     * Build the pacing curve for one word of Hafs Uthmani [arabic] text.
+     * Build the pacing curve for one word of Hafs Uthmani [arabic] text, or
+     * null when the word should take the plain sweep untouched.
      *
      * [spokenFraction] is the voiced share of the sweep (spoken span ÷
-     * karaoke hold): letters are distributed across it and the curve rests at
+     * karaoke hold). The letters are laid out across it and the curve rests at
      * 1 for the remainder, so the ink settles as the voice stops rather than
-     * smearing letters across the breath gap.
+     * smearing across a breath gap. (Only ~0.2 % of segments have any gap at
+     * all, but the tail costs nothing and is right when one exists.)
      *
-     * [contrast] softens the tajweed ratios without changing the word's total
-     * time: each letter's counts are raised to this power before normalizing,
-     * so 1 keeps the raw ratios (a madd lazim moves twelve times slower than
-     * a sākin — dramatic but abrupt), 0 flattens to a uniform sweep, and the
-     * values between trade dwell drama for glide. Because the redistribution
-     * happens inside the word, the edge always finishes exactly with the
-     * measured dwell — softening can never fall behind the reciter.
-     *
-     * Returns null when the word is too short to pace (fewer than three
-     * pronounced letters) or nothing tokenizes — callers fall back to the
-     * plain constant-rate sweep.
+     * Returns null — meaning "plain sweep, exactly as before" — when the word
+     * holds no dramatic letter under [hold], when the hold can afford no dwell
+     * (`cruiseCap` of 1 on a non-final word), when the word is too short to
+     * pace, or when nothing tokenizes.
      */
-    fun curve(arabic: String, spokenFraction: Float = 1f, contrast: Float = 1f): Curve? {
+    fun curve(arabic: String, spokenFraction: Float = 1f, hold: Hold = Hold()): Curve? {
         val events = tokenize(arabic)
         if (events.isEmpty()) return null
-        val exponent = contrast.coerceIn(0f, 1f)
-        val weights = FloatArray(events.size) {
-            val w = weight(events, it)
-            if (w > 0f) w.pow(exponent) else 0f
-        }
-        val letters = weights.count { it > 0f }
+        val counts = FloatArray(events.size) { weight(events, it) }
+        val letters = counts.count { it > 0f }
         if (letters < MIN_LETTERS) return null
-        val total = weights.sum()
-        val spoken = spokenFraction.coerceIn(MIN_SPOKEN_FRACTION, 1f)
         val n = events.size
-        // One breakpoint per pronounced letter. Silent letters get no
-        // breakpoint of their own, so their width slice is swept during the
-        // adjacent letter's glide (leading silents ride the letter after
-        // them, trailing silents the letter before) — continuous motion
-        // instead of an instantaneous step.
-        val lastPronounced = weights.indexOfLast { it > 0f }
-        val times = FloatArray(letters + 2)
-        val positions = FloatArray(letters + 2)
-        var cum = 0f
-        var k = 0
-        for (i in 0 until n) {
-            if (weights[i] <= 0f) continue
-            cum += weights[i]
-            k++
-            times[k] = (cum / total) * spoken
-            positions[k] = if (i == lastPronounced) 1f else (i + 1f) / n
+        val lastPronounced = counts.indexOfLast { it > 0f }
+
+        // A verse-closing word is sustained on its final letter (madd ʿāriḍ
+        // li-s-sukūn, 2/4/6 counts), whatever that letter's mid-flow value.
+        val isWaqf = hold.waqf && hold.isAyahFinal
+        if (isWaqf) counts[lastPronounced] = maxOf(counts[lastPronounced], MADD_LAZIM)
+
+        val held = BooleanArray(n) { i ->
+            counts[i] > 0f && when {
+                isWaqf && i == lastPronounced -> true
+                hold.madd && counts[i] >= MADD_MUTTASIL -> true
+                hold.ghunnah && counts[i] >= GHUNNAH && isGhunnah(events[i]) -> true
+                else -> false
+            }
         }
+        // The gate: nothing dramatic here, so nothing to say about it.
+        if (held.none { it }) return null
+
+        val dwellShare = (
+            if (isWaqf) hold.waqfShare else 1f - 1f / hold.cruiseCap.coerceAtLeast(1f)
+            ).coerceIn(0f, MAX_DWELL_SHARE)
+        if (dwellShare <= 0f) return null
+
+        // Time each hold gets, in proportion to how far past a plain harakah
+        // it reaches. Width each hold still creeps through while holding.
+        val excess = FloatArray(n) { if (held[it]) (counts[it] - 1f).coerceAtLeast(0.5f) else 0f }
+        val excessTotal = excess.sum()
+        val creep = hold.creep.coerceIn(0f, MAX_CREEP)
+        var creepWidth = 0f
+        for (i in 0 until n) if (held[i]) creepWidth += creep * slotWidth(i, n, counts, lastPronounced)
+        // Constant cruise rate: the width left over after the creeps, spread
+        // across the time left over after the dwells.
+        val cruiseRate = (1f - creepWidth) / (1f - dwellShare)
+
+        val spoken = spokenFraction.coerceIn(MIN_SPOKEN_FRACTION, 1f)
+        // Two breakpoints per hold (arrive, release), one per plain letter,
+        // plus the origin, the final glide and the settle tail. Silent letters
+        // get none of their own: their width is crossed on a neighbour's glide.
+        val times = ArrayList<Float>(letters + held.size + 3)
+        val positions = ArrayList<Float>(letters + held.size + 3)
+        times += 0f
+        positions += 0f
+        var t = 0f
+        var x = 0f
+        fun glideTo(target: Float) {
+            t += (target - x) / cruiseRate
+            x = target
+            times += t * spoken
+            positions += x
+        }
+        for (i in 0 until n) {
+            if (counts[i] <= 0f) continue
+            val slotEnd = if (i == lastPronounced) 1f else (i + 1f) / n
+            if (!held[i]) {
+                glideTo(slotEnd)
+                continue
+            }
+            // Park mid-letter: the glyph is caught half-bloomed, visibly being
+            // sustained, rather than held before or after itself.
+            val slotStart = slotEnd - slotWidth(i, n, counts, lastPronounced)
+            glideTo(slotStart + HOLD_ANCHOR * (slotEnd - slotStart))
+            t += dwellShare * excess[i] / excessTotal
+            x += creep * (slotEnd - slotStart)
+            times += t * spoken
+            positions += x
+        }
+        // A held final letter still has the tail of its own slot to cross.
+        if (x < 1f) glideTo(1f)
         // Voice stops at the spoken span; ink holds settled until handoff.
-        times[letters + 1] = 1f
-        positions[letters + 1] = 1f
-        return Curve(times, positions, letters)
+        times[times.lastIndex] = spoken
+        positions[positions.lastIndex] = 1f
+        times += 1f
+        positions += 1f
+        return Curve(times.toFloatArray(), positions.toFloatArray(), letters)
     }
+
+    /** Width slice of the pronounced event at [i]: its own slot plus any
+     *  silent letters folded into it (leading silents ride the letter after
+     *  them, trailing silents the letter before). */
+    private fun slotWidth(i: Int, n: Int, counts: FloatArray, lastPronounced: Int): Float {
+        var start = i
+        while (start > 0 && counts[start - 1] <= 0f) start--
+        val end = if (i == lastPronounced) n else i + 1
+        return (end - start).toFloat() / n
+    }
+
+    /** A mushaddad ن/م — the nasal hum that can be leaned on. */
+    private fun isGhunnah(e: Event): Boolean =
+        e.shadda && (e.base == NOON || e.base == MEEM)
 
     /** One base letter plus the combining marks that ride on it. */
     private class Event(val base: Char) {
@@ -213,6 +310,13 @@ object TajweedPacing {
     /** Floor on the voiced share so degenerate timing data cannot compress
      * the whole word into a blink followed by a long rest. */
     private const val MIN_SPOKEN_FRACTION = 0.25f
+    /** Ceiling on the dwell budget: past this the rest of the word has to
+     * sprint, which is the very problem the gate exists to avoid. */
+    private const val MAX_DWELL_SHARE = 0.85f
+    private const val MAX_CREEP = 0.5f
+    /** Where inside its own slot the wash parks: half-way, so the held letter
+     * is caught mid-bloom rather than sustained before or after itself. */
+    private const val HOLD_ANCHOR = 0.5f
 
     private const val ALEF_WASLA = 'ٱ'
     private const val ALEF = 'ا'
