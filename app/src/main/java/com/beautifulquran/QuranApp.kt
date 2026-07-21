@@ -4,6 +4,7 @@ import android.app.Application
 import com.beautifulquran.assistant.AssistantAction
 import com.beautifulquran.assistant.VoiceShortcuts
 import com.beautifulquran.data.BookmarkRepository
+import com.beautifulquran.data.NoteRepository
 import com.beautifulquran.data.QuranDatabase
 import com.beautifulquran.data.QuranRepository
 import com.beautifulquran.data.SettingsRepository
@@ -23,6 +24,8 @@ class QuranApp : Application() {
         private set
     lateinit var bookmarks: BookmarkRepository
         private set
+    lateinit var notes: NoteRepository
+        private set
     lateinit var player: PlayerController
         private set
     lateinit var timingOverrides: TimingOverrides
@@ -37,6 +40,7 @@ class QuranApp : Application() {
         repository = QuranRepository(QuranDatabase(this), overrides)
         settings = SettingsRepository(this)
         bookmarks = BookmarkRepository(this)
+        notes = NoteRepository(this)
         player = PlayerController(this)
         timingOverrides = overrides
         ornamentSeeds = OrnamentSeedStore(this)

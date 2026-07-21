@@ -199,6 +199,12 @@ fun ReaderScreen(
     val activeWordState = viewModel.activeWord.collectAsStateWithLifecycle()
     val settings by viewModel.settings.settings.collectAsStateWithLifecycle()
     val bookmarkedAyahs by viewModel.bookmarkedAyahs.collectAsStateWithLifecycle()
+    // Like bookmarkedAyahs: read per-ayah in derivedStateOf so a note change
+    // recomposes only that one block.
+    val notesForSurah = viewModel.notesForSurah.collectAsStateWithLifecycle()
+    var editingNoteAyah by remember { mutableStateOf<Int?>(null) }
+    var editingNoteText by remember { mutableStateOf("") }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     val listState = rememberLazyListState()
     // Gilding sheen: light catches the header rosette as the page moves.
@@ -1746,6 +1752,21 @@ fun ReaderScreen(
                                     // the branch — see docs/ROOT_VIEWER.md.
                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                     onOpenRootViewer(ayah.surahId, ayah.number, word.position)
+                                },
+                                noteText = run {
+                                    val saved = notesForSurah.value[ayah.number]
+                                    if (editingNoteAyah == ayah.number) editingNoteText else saved
+                                },
+                                isEditingNote = editingNoteAyah == ayah.number,
+                                onNoteChange = { editingNoteText = it },
+                                onNoteEditDone = {
+                                    viewModel.writeNote(ayah.number, editingNoteText)
+                                    editingNoteAyah = null
+                                },
+                                onAyahMarkLongClick = {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    editingNoteText = notesForSurah.value[ayah.number] ?: ""
+                                    editingNoteAyah = ayah.number
                                 },
                             )
                             }

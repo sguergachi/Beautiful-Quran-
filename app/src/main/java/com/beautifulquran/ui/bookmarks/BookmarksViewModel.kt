@@ -3,6 +3,7 @@ package com.beautifulquran.ui.bookmarks
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.beautifulquran.data.BookmarkRepository
+import com.beautifulquran.data.NoteRepository
 import com.beautifulquran.data.QuranRepository
 import com.beautifulquran.data.model.BookmarkedAyah
 import com.beautifulquran.data.model.Surah
@@ -25,6 +26,8 @@ data class BookmarksUiState(
     val query: String = "",
     val totalCount: Int = 0,
     val sections: List<BookmarkSection> = emptyList(),
+    /** Note text keyed by "surahId:ayah" for quick lookup in the index. */
+    val notes: Map<String, String> = emptyMap(),
     val loading: Boolean = true,
 )
 
@@ -85,6 +88,7 @@ internal fun bookmarkSections(
 class BookmarksViewModel(
     private val repository: QuranRepository,
     private val bookmarks: BookmarkRepository,
+    private val notes: NoteRepository,
 ) : ViewModel() {
 
     private val query = MutableStateFlow("")
@@ -101,11 +105,12 @@ class BookmarksViewModel(
             bookmarks.bookmarks.value.size,
         )
 
-    val uiState = combine(query, resolved) { search, (saved, ayahs) ->
+    val uiState = combine(query, resolved, notes.notes) { search, (saved, ayahs), noteList ->
         BookmarksUiState(
             query = search,
             totalCount = saved.size,
             sections = bookmarkSections(ayahs, search),
+            notes = noteList.associate { "${it.surahId}:${it.ayah}" to it.text },
             loading = false,
         )
     }.stateIn(

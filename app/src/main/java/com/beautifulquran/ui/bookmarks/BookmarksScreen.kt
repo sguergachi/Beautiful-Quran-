@@ -146,6 +146,7 @@ fun BookmarksScreen(
                         val key = BookmarkKey(bookmark.surah.id, bookmark.ayahNumber)
                         BookmarkAyahRow(
                             bookmark = bookmark,
+                            noteText = uiState.notes["${bookmark.surah.id}:${bookmark.ayahNumber}"],
                             confirming = pendingRemoval == key,
                             onOpen = { onOpenAyah(bookmark.surah.id, bookmark.ayahNumber) },
                             onRequestRemove = { pendingRemoval = key },
@@ -339,6 +340,7 @@ private fun BookmarkSectionHeader(
 @Composable
 private fun BookmarkAyahRow(
     bookmark: BookmarkedAyah,
+    noteText: String?,
     confirming: Boolean,
     onOpen: () -> Unit,
     onRequestRemove: () -> Unit,
@@ -376,6 +378,21 @@ private fun BookmarkAyahRow(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (noteText != null) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = noteText,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontFamily = com.beautifulquran.ui.theme.TranslationFontFamily,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.66f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             BookmarkReferenceOrConfirmation(
                 bookmark = bookmark,
                 confirming = confirming,

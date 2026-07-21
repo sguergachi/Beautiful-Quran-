@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -39,6 +40,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1475,6 +1481,7 @@ fun AyahNumberMark(
 private fun ArabicAyahNumberUnit(
     number: Int,
     fontScale: Float,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val density = LocalDensity.current
     val arabicLineHeight = with(density) {
@@ -1483,10 +1490,83 @@ private fun ArabicAyahNumberUnit(
     Box(
         modifier = Modifier
             .padding(horizontal = 6.dp)
-            .requiredHeight(arabicLineHeight),
+            .requiredHeight(arabicLineHeight)
+            .then(
+                if (onLongClick != null) {
+                    Modifier.pointerInput(onLongClick) {
+                        detectTapGestures(onLongPress = { onLongClick() })
+                    }
+                } else Modifier,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         AyahNumberMark(number, fontScale)
+    }
+}
+
+/**
+ * The reader's marginal note for one verse: italic EB Garamond below the
+ * translation. When [isEditing], a chromeless [BasicTextField] takes focus so
+ * the reader writes in place. Tap away to commit; empty text = no note.
+ */
+/**
+ * The reader's marginal note for one verse: italic EB Garamond below the
+ * translation. When [isEditing], a chromeless [BasicTextField] takes focus so
+ * the reader writes in place. Losing focus commits; empty text = delete note.
+ */
+@Composable
+internal fun VerseNoteField(
+    text: String,
+    isEditing: Boolean,
+    translationRecess: () -> Float,
+    onNoteChange: ((String) -> Unit)?,
+    onEditDone: () -> Unit = {},
+) {
+    val ink = MaterialTheme.colorScheme.onSurface
+    val noteStyle = MaterialTheme.typography.bodyMedium.copy(
+        fontFamily = TranslationFontFamily,
+        fontStyle = FontStyle.Italic,
+        fontSize = 15.sp,
+        lineHeight = 22.sp,
+    )
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(isEditing) {
+        if (isEditing) focusRequester.requestFocus()
+    }
+
+    if (isEditing) {
+        val accent = MaterialTheme.colorScheme.primary
+        BasicTextField(
+            value = text,
+            onValueChange = { onNoteChange?.invoke(it) },
+            textStyle = noteStyle.copy(color = ink.copy(alpha = 0.72f)),
+            cursorBrush = SolidColor(accent),
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(focusRequester)
+                .onFocusChanged { if (!it.isFocused) onEditDone() },
+            decorationBox = { field ->
+                Box {
+                    if (text.isEmpty()) {
+                        Text(
+                            "Write a note…",
+                            style = noteStyle,
+                            color = ink.copy(alpha = 0.28f),
+                        )
+                    }
+                    field()
+                }
+            },
+        )
+    } else {
+        Text(
+            text = text,
+            style = noteStyle,
+            color = ink.copy(alpha = 0.72f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer { alpha = translationRecess() },
+        )
     }
 }
 
@@ -1530,6 +1610,16 @@ fun AyahBlock(
     onWordClick: ((Word) -> Unit)?,
     onWordLongClick: ((Word) -> Unit)? = null,
     onAyahClick: () -> Unit,
+    /** Text to display: the saved note when idle, the in-progress draft while editing. */
+    noteText: String? = null,
+    /** True while the reader is composing a note on this specific verse. */
+    isEditingNote: Boolean = false,
+    /** Called with each keystroke to update the draft in the caller. */
+    onNoteChange: ((String) -> Unit)? = null,
+    /** Called when the editor loses focus — caller should commit and clear edit state. */
+    onNoteEditDone: (() -> Unit)? = null,
+    /** Called when the reader long-presses the gold ayah mark to open the editor. */
+    onAyahMarkLongClick: (() -> Unit)? = null,
 ) {
     fun hits(word: Word) =
         searchQuery != null && word.translation.contains(searchQuery, ignoreCase = true)
@@ -1661,7 +1751,7 @@ fun AyahBlock(
                         Box(
                             modifier = Modifier.graphicsLayer { alpha = ayahMarkAlpha.value },
                         ) {
-                            ArabicAyahNumberUnit(ayah.number, fontScale)
+                            ArabicAyahNumberUnit(ayah.number, fontScale, onLongClick = onAyahMarkLongClick)
                         }
                     }
                 }
@@ -1708,6 +1798,16 @@ fun AyahBlock(
                         .fillMaxWidth()
                         .graphicsLayer { alpha = translationRecess.value }
                         .quietClickable(onClick = onAyahClick),
+                )
+            }
+            if (isEditingNote || noteText != null) {
+                Spacer(Modifier.height(8.dp))
+                VerseNoteField(
+                    text = noteText ?: "",
+                    isEditing = isEditingNote,
+                    translationRecess = { translationRecess.value },
+                    onNoteChange = onNoteChange,
+                    onEditDone = { onNoteEditDone?.invoke() },
                 )
             }
             // Whitespace is the divider.
