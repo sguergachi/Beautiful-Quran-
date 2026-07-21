@@ -160,7 +160,7 @@ class ReaderFocusController internal constructor(
         }
     }
 
-    /** Keeps the active note field above the keyboard through the same
+    /** Parks the active note field above the keyboard through the same
      * serialized focus path used by verse and word following. */
     suspend fun keepAnnotationInView(
         keyboardInsetPx: Float,
@@ -169,10 +169,8 @@ class ReaderFocusController internal constructor(
     ) {
         keepBoundsInView(measureInViewport) { bounds, viewportHeight ->
             FocusEngine.annotationFieldDeltaPx(
-                fieldTopPx = bounds.first,
                 fieldBottomPx = bounds.second,
                 viewportHeightPx = viewportHeight.toFloat(),
-                topGuardPx = topGuardPx.toFloat(),
                 keyboardInsetPx = keyboardInsetPx,
                 keyboardPaddingPx = keyboardPaddingPx,
             )

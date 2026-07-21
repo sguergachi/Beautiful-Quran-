@@ -748,7 +748,17 @@ fun ReaderScreen(
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
+        topBar = topBar@{
+            if (editingAnnotationAyah != 0) {
+                // Reclaim the app bar while writing, but keep ink below a
+                // visible system status bar. Recitation already hides it.
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(if (recitingActive) 0.dp else statusBarTop),
+                )
+                return@topBar
+            }
             // Unread-style chrome: quiet marks that recede behind the text.
             // Once the opening header scrolls off, the surah name reappears
             // here between gilded flourishes. In search, the bar becomes the
@@ -1801,9 +1811,10 @@ fun ReaderScreen(
                                 bookmarked = ayah.number in bookmarkedAyahs,
                                 bookmarkFocused = bookmarkFocused,
                                 bookmarkChromeAlpha = bookmarkChromeAlpha,
-                                bookmarkInteractive = !recitingActive,
+                                bookmarkInteractive = !recitingActive && editingAnnotationAyah == 0,
                                 onToggleBookmark = { viewModel.toggleBookmark(ayah.number) },
-                                onWordClick = { word ->
+                                onWordClick = wordClick@{ word ->
+                                    if (editingAnnotationAyah != 0) return@wordClick
                                     val segment = viewModel.segmentsFor(ayah.number)
                                         ?.firstOrNull { it.position == word.position }
                                     notifPermission.request {
@@ -1815,7 +1826,8 @@ fun ReaderScreen(
                                         }
                                     }
                                 },
-                                onAyahClick = {
+                                onAyahClick = ayahClick@{
+                                    if (editingAnnotationAyah != 0) return@ayahClick
                                     notifPermission.request {
                                         followEnabled = true
                                         viewModel.playFromAyah(ayah.number)

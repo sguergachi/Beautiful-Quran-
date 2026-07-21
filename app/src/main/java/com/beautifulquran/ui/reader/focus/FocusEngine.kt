@@ -316,25 +316,18 @@ object FocusEngine {
     }
 
     /**
-     * Scroll needed to keep an annotation field above the on-screen keyboard,
-     * with [keyboardPaddingPx] of paper left between them. Keyboard clearance
-     * wins when a tall field cannot fit inside the whole safe band, so the line
-     * being written never sits behind the IME.
+     * Scroll needed to park an annotation field directly above the on-screen
+     * keyboard, with [keyboardPaddingPx] of paper between them. Anchoring the
+     * field as low as safely possible leaves the most room for its verse above.
      */
     fun annotationFieldDeltaPx(
-        fieldTopPx: Float,
         fieldBottomPx: Float,
         viewportHeightPx: Float,
-        topGuardPx: Float,
         keyboardInsetPx: Float,
         keyboardPaddingPx: Float,
-    ): Float {
-        val safeBottom = (viewportHeightPx - keyboardInsetPx.coerceAtLeast(0f) -
-            keyboardPaddingPx.coerceAtLeast(0f)).coerceAtLeast(topGuardPx)
-        if (fieldBottomPx > safeBottom) return fieldBottomPx - safeBottom
-        if (fieldTopPx < topGuardPx) return fieldTopPx - topGuardPx
-        return 0f
-    }
+    ): Float = fieldBottomPx -
+        (viewportHeightPx - keyboardInsetPx.coerceAtLeast(0f) -
+            keyboardPaddingPx.coerceAtLeast(0f)).coerceAtLeast(0f)
 
     /**
      * Where [target] sits relative to where it *should* sit — the answer the

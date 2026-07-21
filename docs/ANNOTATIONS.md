@@ -99,9 +99,12 @@ Then, in place:
 
 1. A caret appears on the note line beneath the verse, at exactly the
    position the finished note will occupy, and the keyboard rises. The focus
-   engine glides the field above it with 32 dp of paper between field and IME.
+   engine parks the field 32 dp above the IME, as low as safely possible so the
+   page shows the largest available portion of the verse above it.
 2. The reader writes. The line grows downward; the verse above never moves.
-   Playback, if running, is **not** interrupted.
+   Playback, if running, is **not** interrupted, but scripture taps cannot
+   start or seek playback and bookmark ribbons cannot toggle while the field
+   owns focus.
 3. Tapping anywhere off the note, opening another verse's note, or leaving
    the sheet **commits**. There is no OK, no Save, no Cancel — paper has none
    of them, and an autosaved note cannot be lost to a mis-tap.
@@ -115,8 +118,9 @@ happens to be loaded when it lands. Opening a second note commits the first
 identity guard — otherwise one verse's text writes itself onto another.
 
 While composing, the other verses recede to upcoming ink and the ayah selector
-rail withdraws. The active verse and its note remain together as the only
-thought on the page.
+rail and top app bar withdraw. The visible system status-bar inset remains, but
+the active verse gains the rest of that vertical space and stays together with
+its note as the only thought on the page.
 
 Deleting an existing note is therefore just: open it, clear it, tap away.
 There is no separate destructive control and no confirmation — the reader
