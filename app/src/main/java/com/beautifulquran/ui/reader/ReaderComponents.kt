@@ -1,22 +1,35 @@
 package com.beautifulquran.ui.reader
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -73,6 +86,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -91,6 +105,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -1557,7 +1572,7 @@ private fun ArabicAyahNumberUnit(
  * the page instead of staying pinned at one size when the reader sizes type up.
  */
 @Composable
-internal fun verseNoteStyle(
+internal fun verseAnnotationStyle(
     fontSize: TextUnit = 16.sp,
     lineHeight: TextUnit = 23.sp,
     fontScale: Float = 1f,
@@ -1575,11 +1590,33 @@ internal fun verseNoteStyle(
 }
 
 /**
- * Ink for the reader's note. Deliberately **below** the translation's 66 % so
- * an annotation can never out-ink the scripture it hangs off — the reader's
- * hand is the quietest voice on the sheet, not the loudest.
+ * Annotation prose sits at half the ruby's strength: the *mark* beside it is a
+ * full-ink ruby stroke that has to be findable at a glance, but a paragraph at
+ * that weight would shout over the scripture it hangs off. Same hue, half the
+ * voice.
  */
-internal const val VERSE_NOTE_INK_ALPHA = 0.62f
+internal const val VERSE_ANNOTATION_INK_ALPHA = 0.5f
+
+/** The ruby mark itself — always full ink, never halved with the prose. */
+private const val ANNOTATION_MARK_ALPHA = 0.92f
+
+/** The rule marking an annotation's left edge, and the wider lane it opens into
+ * while editing so a delete mark can stand where the rule was. */
+private val ANNOTATION_RULE_WIDTH = 2.dp
+private val ANNOTATION_RULE_GAP = 12.dp
+private val ANNOTATION_DELETE_LANE = 20.dp
+
+/** Annotations leaving / returning to the page when recitation starts and stops.
+ * Matches the verse ink recess so the whole sheet settles as one move. */
+private const val ANNOTATION_FADE_MS = 400
+
+/** Rule ⇄ delete-mark crossfade when the editor opens and closes. */
+private const val ANNOTATION_EDIT_FADE_MS = 220
+
+/** Paper kept between the line being written and the top of the keyboard.
+ * Requested as part of the field's bring-into-view rectangle, so the list
+ * actually scrolls the line up rather than merely leaving room below it. */
+private val ANNOTATION_KEYBOARD_CLEARANCE = 140.dp
 
 /**
  * The reader's marginal note for one verse, set in the scribe's hand below the
@@ -1587,18 +1624,22 @@ internal const val VERSE_NOTE_INK_ALPHA = 0.62f
  * the reader writes in place; otherwise the settled note is shown and tapping
  * it reopens the editor. Blank text on commit deletes the note.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun VerseNoteField(
+internal fun VerseAnnotationField(
     text: String,
     isEditing: Boolean,
     fontScale: Float,
     translationRecess: () -> Float,
-    onNoteChange: ((String) -> Unit)?,
+    onAnnotationChange: ((String) -> Unit)?,
     onEditDone: () -> Unit = {},
     onStartEdit: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
 ) {
-    val ink = MaterialTheme.colorScheme.onSurface
-    val noteStyle = verseNoteStyle(fontScale = fontScale)
+    // Ruby — the reader's own ink, the same hue as the bookmark ribbon. The
+    // mark keeps full strength; the prose is halved (see the alpha constants).
+    val ink = LocalQuranAccents.current.bookmarkRibbon
+    val noteStyle = verseAnnotationStyle(fontScale = fontScale)
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     // `onFocusChanged` delivers an initial callback the moment the field
@@ -1611,58 +1652,149 @@ internal fun VerseNoteField(
         if (isEditing) focusRequester.requestFocus()
     }
 
-    if (isEditing) {
-        val accent = MaterialTheme.colorScheme.primary
-        BasicTextField(
-            value = text,
-            onValueChange = { onNoteChange?.invoke(it) },
-            textStyle = noteStyle.copy(color = ink.copy(alpha = VERSE_NOTE_INK_ALPHA)),
-            cursorBrush = SolidColor(accent),
-            // Notes wrap freely, but the keyboard's Done key is the reader's
-            // way out — the page itself still offers no Save button.
-            keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.Sentences,
-                imeAction = ImeAction.Done,
-            ),
-            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-            modifier = Modifier
-                .fillMaxWidth()
-                .focusRequester(focusRequester)
-                .onFocusChanged { state ->
-                    if (state.isFocused) everFocused = true else if (everFocused) onEditDone()
-                },
-            decorationBox = { field ->
-                Box {
-                    if (text.isEmpty()) {
-                        Text(
-                            "Write a note…",
-                            style = noteStyle,
-                            // Faint enough to read as an invitation, not so
-                            // faint it becomes a smudge — "quiet is still
-                            // legible" (DESIGN.md).
-                            color = ink.copy(alpha = 0.34f),
-                        )
-                    }
-                    field()
-                }
-            },
+    // Lift the line being written clear of the keyboard. Extra bottom padding
+    // on the list only creates somewhere to scroll *to*; it never scrolls. The
+    // field asks to be brought into view as a rectangle taller than itself, so
+    // the list lifts it by that much and the reader can see what they wrote.
+    // Re-runs as the IME animates in, so the lift follows the keyboard up.
+    val bringIntoView = remember { BringIntoViewRequester() }
+    var fieldSize by remember { mutableStateOf(IntSize.Zero) }
+    val density = LocalDensity.current
+    val imeBottom = WindowInsets.ime.getBottom(density)
+    LaunchedEffect(isEditing, imeBottom, fieldSize) {
+        if (!isEditing || fieldSize.height == 0) return@LaunchedEffect
+        val clearance = with(density) { ANNOTATION_KEYBOARD_CLEARANCE.toPx() }
+        bringIntoView.bringIntoView(
+            Rect(0f, 0f, fieldSize.width.toFloat(), fieldSize.height + clearance),
         )
-    } else {
-        Text(
-            text = text,
-            style = noteStyle,
-            color = ink.copy(alpha = VERSE_NOTE_INK_ALPHA),
+    }
+
+    // While writing, the margin rule gives its place up to a delete mark: the
+    // one destructive action lives exactly where the annotation's own mark was,
+    // so it can never be mistaken for anything on the verse itself.
+    val editing by animateFloatAsState(
+        targetValue = if (isEditing) 1f else 0f,
+        animationSpec = tween(ANNOTATION_EDIT_FADE_MS),
+        label = "annotationEditMark",
+    )
+    val laneWidth by animateDpAsState(
+        targetValue = if (isEditing) ANNOTATION_DELETE_LANE else ANNOTATION_RULE_WIDTH,
+        animationSpec = tween(ANNOTATION_EDIT_FADE_MS),
+        label = "annotationLane",
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .onSizeChanged { fieldSize = it }
+            .bringIntoViewRequester(bringIntoView)
+            .graphicsLayer { if (!isEditing) alpha = translationRecess() },
+    ) {
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .graphicsLayer { alpha = translationRecess() }
+                .width(laneWidth)
+                .fillMaxHeight()
                 .then(
-                    if (onStartEdit != null) {
-                        Modifier.quietClickable(onClick = onStartEdit)
+                    if (isEditing && onDelete != null) {
+                        Modifier.quietClickable(
+                            role = Role.Button,
+                            onClick = onDelete,
+                        )
                     } else {
                         Modifier
                     },
+                )
+                .semantics { if (isEditing) contentDescription = "Delete this annotation" },
+        ) {
+            // The rule: a stroke down the annotation's left edge, marking the
+            // block the way a scribe rules the margin beside a gloss.
+            Canvas(Modifier.fillMaxSize()) {
+                val ruleAlpha = (1f - editing) * ANNOTATION_MARK_ALPHA
+                if (ruleAlpha > 0.01f) {
+                    val x = ANNOTATION_RULE_WIDTH.toPx() / 2f
+                    drawLine(
+                        color = ink.copy(alpha = ruleAlpha),
+                        start = Offset(x, 0f),
+                        end = Offset(x, size.height),
+                        strokeWidth = ANNOTATION_RULE_WIDTH.toPx(),
+                        cap = StrokeCap.Round,
+                    )
+                }
+                // The delete mark: a drawn ruby cross on the first line, never
+                // an icon in a container.
+                if (editing > 0.01f) {
+                    val arm = 5.dp.toPx()
+                    val cx = size.width / 2f
+                    val cy = noteStyle.lineHeight.toPx() / 2f
+                    val stroke = 1.8.dp.toPx()
+                    val color = ink.copy(alpha = editing * ANNOTATION_MARK_ALPHA)
+                    drawLine(
+                        color,
+                        Offset(cx - arm, cy - arm),
+                        Offset(cx + arm, cy + arm),
+                        stroke,
+                        StrokeCap.Round,
+                    )
+                    drawLine(
+                        color,
+                        Offset(cx + arm, cy - arm),
+                        Offset(cx - arm, cy + arm),
+                        stroke,
+                        StrokeCap.Round,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.width(ANNOTATION_RULE_GAP))
+        if (isEditing) {
+            BasicTextField(
+                value = text,
+                onValueChange = { onAnnotationChange?.invoke(it) },
+                textStyle = noteStyle.copy(color = ink.copy(alpha = VERSE_ANNOTATION_INK_ALPHA)),
+                cursorBrush = SolidColor(ink),
+                // Notes wrap freely, but the keyboard's Done key is the reader's
+                // way out — the page itself still offers no Save button.
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Sentences,
+                    imeAction = ImeAction.Done,
                 ),
-        )
+                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { state ->
+                        if (state.isFocused) everFocused = true else if (everFocused) onEditDone()
+                    },
+                decorationBox = { field ->
+                    Box {
+                        if (text.isEmpty()) {
+                            Text(
+                                "Write a note…",
+                                style = noteStyle,
+                                color = ink.copy(alpha = 0.42f),
+                            )
+                        }
+                        field()
+                    }
+                },
+            )
+        } else {
+            Text(
+                text = text,
+                style = noteStyle,
+                color = ink.copy(alpha = VERSE_ANNOTATION_INK_ALPHA),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (onStartEdit != null) {
+                            Modifier.quietClickable(onClick = onStartEdit)
+                        } else {
+                            Modifier
+                        },
+                    ),
+            )
+        }
     }
 }
 
@@ -1707,16 +1839,24 @@ fun AyahBlock(
     onWordLongClick: ((Word) -> Unit)? = null,
     onAyahClick: () -> Unit,
     /** Text to display: the saved note when idle, the in-progress draft while editing. */
-    noteText: String? = null,
+    annotationText: String? = null,
     /** True while the reader is composing a note on this specific verse. */
-    isEditingNote: Boolean = false,
+    isEditingAnnotation: Boolean = false,
     /** Called with each keystroke to update the draft in the caller. */
-    onNoteChange: ((String) -> Unit)? = null,
+    onAnnotationChange: ((String) -> Unit)? = null,
     /** Called when the editor loses focus — caller should commit and clear edit state. */
-    onNoteEditDone: (() -> Unit)? = null,
+    onAnnotationEditDone: (() -> Unit)? = null,
     /** Opens the editor: long-press on the gold ayah mark, or a tap on a
      * settled note to revise it. */
     onAyahMarkLongClick: (() -> Unit)? = null,
+    /** True while recitation is running: annotations leave the page entirely, the
+     * same rule the ribbon and rail marks follow. */
+    annotationsHidden: Boolean = false,
+    /** Clears this verse's annotation from the delete mark in the editor. */
+    onAnnotationDelete: (() -> Unit)? = null,
+    /** True while *another* verse is being annotated: this one recedes so the
+     * page holds only the verse being written on. */
+    recededForAnnotationEdit: Boolean = false,
 ) {
     fun hits(word: Word) =
         searchQuery != null && word.translation.contains(searchQuery, ignoreCase = true)
@@ -1726,10 +1866,17 @@ fun AyahBlock(
     // when the selector obscures the page. Soft tween when receding; snap
     // when becoming the lyric line.
     val blockAlpha = animateFloatAsState(
-        targetValue = if (obscuredBySelector) 0.07f else 1f,
+        targetValue = when {
+            obscuredBySelector -> 0.07f
+            // Writing on a verse quiets the rest of the sheet so the page is
+            // only the verse being annotated and the hand writing on it.
+            recededForAnnotationEdit -> 0.14f
+            else -> 1f
+        },
         animationSpec = when {
             obscuredBySelector -> tween(600)
-            else -> snap()
+            recededForAnnotationEdit -> tween(ANNOTATION_FADE_MS)
+            else -> tween(ANNOTATION_FADE_MS)
         },
         label = "ayahAlpha",
     )
@@ -1899,44 +2046,43 @@ fun AyahBlock(
                         .quietClickable(onClick = onAyahClick),
                 )
             }
-            if (isEditingNote || noteText != null) {
-                // The note is a different voice, so it earns at least the air
-                // the translation takes from the Arabic above it.
-                Spacer(Modifier.height(12.dp))
-                VerseNoteField(
-                    text = noteText ?: "",
-                    isEditing = isEditingNote,
-                    fontScale = fontScale,
-                    translationRecess = { translationRecess.value },
-                    onNoteChange = onNoteChange,
-                    onEditDone = { onNoteEditDone?.invoke() },
-                    onStartEdit = onAyahMarkLongClick,
-                )
+            // Reciting clears annotation off the sheet so only scripture is
+            // left under the voice; it grows back when the voice stops.
+            // Editing always wins — writing in progress never vanishes because
+            // playback happened to start.
+            AnimatedVisibility(
+                visible = (isEditingAnnotation || annotationText != null) &&
+                    (isEditingAnnotation || !annotationsHidden),
+                enter = fadeIn(tween(ANNOTATION_FADE_MS)) +
+                    expandVertically(tween(ANNOTATION_FADE_MS)),
+                exit = fadeOut(tween(ANNOTATION_FADE_MS)) +
+                    shrinkVertically(tween(ANNOTATION_FADE_MS)),
+            ) {
+                Column {
+                    // The note is a different voice, so it earns at least the
+                    // air the translation takes from the Arabic above it.
+                    Spacer(Modifier.height(12.dp))
+                    VerseAnnotationField(
+                        text = annotationText ?: "",
+                        isEditing = isEditingAnnotation,
+                        fontScale = fontScale,
+                        translationRecess = { translationRecess.value },
+                        onAnnotationChange = onAnnotationChange,
+                        onEditDone = { onAnnotationEditDone?.invoke() },
+                        onStartEdit = onAyahMarkLongClick,
+                        onDelete = onAnnotationDelete,
+                    )
+                }
             }
             // Whitespace is the divider.
             Spacer(Modifier.height(if (readingMode == ReadingMode.ENGLISH_ONLY) 18.dp else 26.dp))
         }
 
         if (bookmarkSide != null && onToggleBookmark != null) {
-            val laneAlignment = if (bookmarkSide == AyahSelectorSide.RIGHT) {
-                AbsoluteAlignment.TopRight
-            } else {
-                AbsoluteAlignment.TopLeft
-            }
             // matchParentSize (not fillMaxHeight): the ayah Box is wrap-content,
             // so fillMaxHeight would measure to 0 and the ribbon would vanish.
             // This sizes to the Column after layout, keeping the ribbon in-block.
             Box(Modifier.matchParentSize()) {
-                // The reader's own ink shares one lane: ribbon (what I marked)
-                // above, ḥāshiya tick (what I wrote) below it. Both obey the
-                // same chrome rules and vanish while reciting.
-                if (noteText != null && !isEditingNote) {
-                    VerseNoteTick(
-                        side = bookmarkSide,
-                        chromeAlpha = bookmarkChromeAlpha,
-                        modifier = Modifier.align(laneAlignment).matchParentSize(),
-                    )
-                }
                 VerseBookmarkRibbon(
                     bookmarked = bookmarked,
                     focused = bookmarkFocused,

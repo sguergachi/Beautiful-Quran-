@@ -20,11 +20,11 @@ object AppViewModelFactory : ViewModelProvider.Factory {
         val app = extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as QuranApp
         return when {
             modelClass.isAssignableFrom(BookmarksViewModel::class.java) ->
-                BookmarksViewModel(app.repository, app.bookmarks, app.notes) as T
+                BookmarksViewModel(app.repository, app.bookmarks, app.annotations) as T
             modelClass.isAssignableFrom(HomeViewModel::class.java) ->
                 HomeViewModel(app.repository, app.settings, app.player) as T
             modelClass.isAssignableFrom(ReaderViewModel::class.java) ->
-                ReaderViewModel(app.repository, app.settings, app.bookmarks, app.player, app.notes) as T
+                ReaderViewModel(app.repository, app.settings, app.bookmarks, app.player, app.annotations) as T
             modelClass.isAssignableFrom(SettingsViewModel::class.java) ->
                 SettingsViewModel(app.repository, app.settings) as T
             modelClass.isAssignableFrom(TimingsLabViewModel::class.java) ->

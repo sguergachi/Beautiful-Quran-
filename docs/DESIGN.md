@@ -200,7 +200,7 @@ not the app's.
   second person writing on the page. This is a narrow, recorded exception to
   Cormorant's display-only rule; the 500 weight plus the note's 62 % ink keep
   the fine strokes from going wispy at note size. The roman Cormorant stays
-  display-only. See [NOTES.md](NOTES.md).
+  display-only. See [ANNOTATIONS.md](ANNOTATIONS.md).
 - **English lyric mode**: EB Garamond regular, 22 sp with 1.5 em leading.
   It is one flush-left, ragged-right inline paragraph — never a flex/flow row
   of padded word tiles. Natural font spaces, kerning, common ligatures, and

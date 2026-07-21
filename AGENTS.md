@@ -121,7 +121,7 @@ Requires **JDK 21**. No Android device/emulator is needed for tests.
 | `docs/PERFORMANCE.md` | Anything touching the reader, scrolling, or the highlight loop |
 | `docs/REPEAT_HIGHLIGHTING.md` | Repeat-aware timings and the orange second fade |
 | `docs/GLIMMER.md` | Nightfall glimmer lifecycle, repeat retriggering, halo rendering, tuning, and visual checks |
-| `docs/NOTES.md` | Verse notes (marginal ḥawāshī) — **design only, not built** |
+| `docs/ANNOTATIONS.md` | Verse annotations (ḥawāshī) — reader's notes now, scholars' glosses later |
 | `docs/ROOT_VIEWER.md` | Hold-to-reveal root lexicon — concordance counts, ayah jumps, QAC data |
 | `docs/TIMINGS_LAB.md` | The in-app timing editor and its patch workflow (developer mode) |
 | `tools/timing_overrides/README.md` | Committed timing-correction patch format |

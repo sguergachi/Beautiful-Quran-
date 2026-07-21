@@ -22,7 +22,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -76,52 +75,6 @@ private val UnfurlEasing = CubicBezierEasing(0.45f, 0.02f, 0.22f, 1f)
 
 /** Gathering roll-up: starts quick, then softens into the tip. */
 private val RetractEasing = CubicBezierEasing(0.55f, 0.05f, 0.35f, 1f)
-
-/**
- * Where the ḥāshiya tick sits, measured from the sheet edge: **inboard of the
- * ribbon**, in the lane's inner air. A saved verse's cloth fills
- * `EDGE_INSET .. EDGE_INSET + RIBBON_WIDTH` for nearly the block's whole
- * height, and both marks are ruby — so a tick sharing the ribbon's centre line
- * would be invisible on exactly the verses that carry both.
- */
-private const val NOTE_TICK_X_DP = EDGE_INSET_DP + RIBBON_WIDTH_DP + 7f
-private const val NOTE_TICK_LENGTH_DP = 13f
-private const val NOTE_TICK_STROKE_DP = 2f
-
-/**
- * The reader's ḥāshiya tick: a short ruby stroke in the same margin lane as the
- * bookmark ribbon, marking a verse that carries a note. It shares the lane
- * because that edge of the sheet is *the reader's own ink* — ribbon and tick
- * both — while the opposite edge stays navigation (docs/NOTES.md).
- *
- * It starts on the verse's first line of ink, like the ribbon tip, so the two
- * marks read as a pair in the margin rather than one drifting below the other.
- *
- * Drawing only: it is never a control. Note editing is entered from the verse's
- * gold ﴿N﴾ mark, so the tick cannot be mistaken for a second bookmark target.
- */
-@Composable
-internal fun VerseNoteTick(
-    side: AyahSelectorSide,
-    chromeAlpha: () -> Float,
-    modifier: Modifier = Modifier,
-) {
-    val ruby = LocalQuranAccents.current.bookmarkRibbon
-    Canvas(modifier) {
-        val alpha = chromeAlpha().coerceIn(0f, 1f)
-        if (alpha <= 0.01f) return@Canvas
-        val inset = NOTE_TICK_X_DP.dp.toPx()
-        val x = if (side == AyahSelectorSide.RIGHT) size.width - inset else inset
-        val top = (TOP_INSET_DP + 2f).dp.toPx()
-        drawLine(
-            color = ruby.copy(alpha = SOLID_ALPHA * alpha),
-            start = Offset(x, top),
-            end = Offset(x, top + NOTE_TICK_LENGTH_DP.dp.toPx()),
-            strokeWidth = NOTE_TICK_STROKE_DP.dp.toPx(),
-            cap = StrokeCap.Round,
-        )
-    }
-}
 
 /**
  * The bookmark ribbon drawn inside a single [AyahBlock]. [side] is the edge

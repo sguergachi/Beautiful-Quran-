@@ -1,10 +1,14 @@
-# Verse notes (ḥawāshī)
+# Verse annotations (ḥawāshī)
+
+An **annotation** is a paragraph of commentary attached to one verse. Today the
+only source is the reader's own hand; the model is built so a scholar's voice —
+a tafsir, a lexical gloss — can join it later without reshaping storage or UI.
 
 A reader's own writing on the page: a short note attached to one verse, kept
 in the margin of the sheet it belongs to. This is the app's third piece of
 user data, after settings and bookmarks.
 
-**Status: built on Android; web port pending.** Sections marked *Not yet built*
+**Status: built on Android (reader-written annotations only); web port pending.** Sections marked *Not yet built*
 are spec, not description — everything else describes shipped behaviour.
 
 ## Why it exists, and what it is not
@@ -158,7 +162,7 @@ The header stays title + return only; no counts.
 
 ## Data
 
-`data/NoteRepository.kt`, mirroring `BookmarkRepository`'s shape: a single
+`data/AnnotationRepository.kt`, mirroring `BookmarkRepository`'s shape: a single
 `StateFlow` the UI observes, its own `SharedPreferences` store, never
 `quran.db` (which is read-only and versioned — invariant #1).
 
@@ -173,12 +177,21 @@ value: the note text, verbatim
 
 Keys are enumerated from `prefs.all` on load and parsed tolerantly — one
 malformed key must never crash the reader (same rule as `Bookmark.decode`,
-and covered by `NoteRepositoryTest`). No JSON, no Room, no serialization
+and covered by `AnnotationRepositoryTest`). No JSON, no Room, no serialization
 dependency (invariant #5).
 
-`Note(surahId, ayah, text)` is the model. The repository exposes
-`notes: StateFlow<List<Note>>` in reading order, `noteFor(surahId, ayah)`,
+`Annotation(surahId, ayah, text, source)` is the model. The repository exposes
+`annotations: StateFlow<List<Annotation>>` in reading order, `annotationFor(surahId, ayah, source)`,
 and `write(surahId, ayah, text)` where blank text removes the entry.
+
+Every annotation carries an [AnnotationSource]. Today only `READER` exists and
+it is the only writable one; a bundled tafsir would be read-only and belong in
+`quran.db`, with this store staying the writable half. The source travels in the
+key as a **stable string** (`reader`), never an ordinal, so inserting or
+reordering enum entries can never silently reattribute a reader's own writing to
+a scholar. Unknown sources are dropped on read rather than guessed. Keys written
+before the source dimension existed (`note:<surah>:<ayah>`) still load as
+`READER`.
 
 There is deliberately **no** `updatedAt`. Bookmarks carry one because a future
 recents view was specified for them; nothing orders notes by time, and an
@@ -188,6 +201,14 @@ unused timestamp is a field that has to be kept correct forever for no reader.
 access. A few thousand short notes is well inside that budget; if the store
 ever needs to grow past that, it becomes a small writable SQLite file of its
 own and never a table inside the bundled asset.
+
+## Switching it off
+
+Settings → **Verse annotations** hides every annotation and disables the entry
+gesture, so the ayah mark goes back to being only a mark. Stored writing is
+never deleted — switching it back on brings it all back. It exists because a
+reader who only wants the mushaf should be able to have exactly that, and
+because a future scholar's gloss must be refusable too.
 
 ## Export *(not yet built)*
 
@@ -241,11 +262,11 @@ resize handle.
 
 - [DESIGN.md](DESIGN.md) — the paper metaphor, the ruby rule, the bookmark
   ribbon and its margin lane, the bookmark index's alignment anchors.
-- `data/NoteRepository.kt` — the store, mirroring `BookmarkRepository`'s shape.
+- `data/AnnotationRepository.kt` — the store, mirroring `BookmarkRepository`'s shape.
 - `ui/reader/VerseBookmarkRibbon.kt` — the margin lane: ribbon *and*
   `VerseNoteTick`, which shares its geometry constants.
-- `ui/reader/ReaderComponents.kt` — `verseNoteStyle` (the reader's hand, shared
-  with the Bookmarks index), `VerseNoteField`, and the `wordTapTarget`
+- `ui/reader/ReaderComponents.kt` — `verseAnnotationStyle` (the reader's hand, shared
+  with the Bookmarks index), `VerseAnnotationField`, and the `wordTapTarget`
   mark-before-word long-press resolution.
 - `ui/theme/Type.kt` — `ScribeFontFamily`, and why it is not the EB italic.
   The face is OFL (same licence as every other bundled font); the Android cut

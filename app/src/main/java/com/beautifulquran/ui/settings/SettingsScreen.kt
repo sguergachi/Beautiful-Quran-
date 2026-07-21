@@ -285,6 +285,14 @@ fun SettingsScreen(
                 )
             }
 
+            ToggleRow(
+                label = "Verse annotations",
+                checked = settings.annotationsEnabled,
+                onChange = { v -> viewModel.settings.update { it.copy(annotationsEnabled = v) } },
+                checkParams = checkParams,
+                checkPaintToken = checkPaintToken,
+            )
+
             Section("Ayah selector")
             InlineChoiceRow(
                 entries = AyahSelectorSide.entries,
