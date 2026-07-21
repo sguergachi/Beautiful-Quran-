@@ -1,6 +1,12 @@
 package com.beautifulquran.ui.reader
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -12,6 +18,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
+import androidx.compose.material.icons.rounded.FormatListNumbered
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Repeat
@@ -24,13 +31,18 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
 import com.beautifulquran.playback.PlayerUiState
+import com.beautifulquran.ui.theme.LocalQuranAccents
 
 /**
  * Flat playback controls that sit on the same sheet of paper as the text —
@@ -52,7 +64,12 @@ fun PlayerBar(
     onRepeatClick: () -> Unit,
     onSpeed: () -> Unit,
     onReciterClick: () -> Unit,
+    /** Gather mode — ordered verse selection for sharing (docs/SHARE.md). */
+    gathering: Boolean = false,
+    gatherCount: Int = 0,
+    onGatherClick: () -> Unit = {},
 ) {
+    val gold = LocalQuranAccents.current.gold
     Surface(color = MaterialTheme.colorScheme.background) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -73,16 +90,39 @@ fun PlayerBar(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            // Mode signal: quiet gold line so gather is never "invisible mode".
+            if (gathering) {
+                Text(
+                    text = if (gatherCount > 0) {
+                        "Gathering · $gatherCount"
+                    } else {
+                        "Gathering — tap verses"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = gold.copy(alpha = 0.9f),
+                    maxLines = 1,
+                    modifier = Modifier
+                        .graphicsLayer { alpha = chromeAlpha() }
+                        .padding(bottom = 2.dp),
+                )
+            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                 modifier = Modifier
                     .widthIn(max = 680.dp)
                     .fillMaxWidth()
-                    .padding(start = 12.dp, end = 12.dp, bottom = 4.dp),
+                    .padding(start = 8.dp, end = 8.dp, bottom = 4.dp),
             ) {
                 val rangeActive = state.repeatRange != null
                 val singleAyahRange = state.repeatRange?.let { it.first == it.last } == true
+                GatherControl(
+                    gathering = gathering,
+                    gatherCount = gatherCount,
+                    chromeAlpha = chromeAlpha,
+                    gold = gold,
+                    onClick = onGatherClick,
+                )
                 IconButton(
                     onClick = onRepeatClick,
                     modifier = Modifier
@@ -162,6 +202,68 @@ fun PlayerBar(
                         },
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Gather control states (visual QA):
+ * - idle: full transport ink (discoverable door, not 0.45 chrome)
+ * - gathering empty: gold + soft pulse
+ * - ready to send: gold + count badge
+ */
+@Composable
+private fun GatherControl(
+    gathering: Boolean,
+    gatherCount: Int,
+    chromeAlpha: () -> Float,
+    gold: Color,
+    onClick: () -> Unit,
+) {
+    val pulseAlpha by rememberInfiniteTransition(label = "gatherPulse").animateFloat(
+        initialValue = 0.55f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1100),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "gatherPulseAlpha",
+    )
+    val iconTint = when {
+        gathering && gatherCount > 0 -> gold
+        gathering -> gold.copy(alpha = pulseAlpha)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(48.dp)
+            .graphicsLayer { alpha = chromeAlpha() },
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = Icons.Rounded.FormatListNumbered,
+                contentDescription = when {
+                    gathering && gatherCount > 0 -> "Send $gatherCount gathered verses"
+                    gathering -> "Leave gather mode"
+                    else -> "Gather verses to share"
+                },
+                tint = iconTint,
+            )
+            if (gatherCount > 0) {
+                Text(
+                    text = gatherCount.toString(),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 10.sp,
+                        lineHeight = 10.sp,
+                    ),
+                    color = gold,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 2.dp, bottom = 2.dp),
+                )
             }
         }
     }

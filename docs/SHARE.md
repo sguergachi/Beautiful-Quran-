@@ -1,9 +1,9 @@
 # Sharing verses
 
-**Status: proposed.** No code exists yet. This is the design record for
-*gather mode* — picking one or many verses, in any order — and for the three
-things a gathered selection can become: **text**, an **image**, or a **video
-that carries the ink**.
+**Status: PR1 shipped (gather + text).** Image and video remain proposed.
+This is the design record for *gather mode* — picking one or many verses,
+in any order — and for the three things a gathered selection can become:
+**text**, an **image**, or a **video that carries the ink**.
 
 ## Why it exists
 
@@ -26,152 +26,160 @@ The second is why selection is an ordered list and not a range.
 Gathering is a **mode of the reader sheet**, not a new sheet. The page keeps
 its layout; it grows ordinals in the margin.
 
-- **Enter** from the **Gather control in the player bar**. It joins the flat
-  transport row (no elevation, no card — `PlayerBar.kt` rules apply), and
-  toggling it puts the reader into gather mode.
-- **Pick** by tapping a verse. Its ordinal is written in the outer margin in
-  gold Arabic-Indic numerals (١ ٢ ٣) — the same margin the bookmark ribbon
-  lives in, on the ayah-mark side. Tap again to drop it; the rest renumber.
+- **Enter** from the **Gather control in the player bar**
+  (`FormatListNumbered` in the transport row). Toggling it puts the reader
+  into gather mode and **pauses recitation** (the mode owns the tap).
+- **Pick** by tapping a verse (word or ayah). Its ordinal is written in the
+  outer margin in gold Arabic-Indic numerals (١ ٢ ٣) — the same margin the
+  bookmark ribbon lives in. The ribbon is hidden while gathering. Tap again
+  to drop it; the rest renumber.
 - **Order is tap order.** Tapping 2:255, then 112:1, then 2:1 gathers exactly
-  that sequence. This is the whole point: no ranges, no sorting, no "from /
-  to" pickers.
-- **Selection outlives the page.** It is a `List<AyahRef(surah, ayah)>` held
-  above the reader, so turning to another chapter — or crossing to the
-  Bookmarks sheet and gathering saved verses — keeps the list intact.
-- **Leave** with back (drops the selection) or commit with the Gather control
-  (opens the Send page).
+  that sequence. No ranges, no sorting, no "from / to" pickers. Cap:
+  `SHARE_SELECTION_MAX` (20).
+- **Selection outlives the page.** `List<AyahRef>` is held in
+  `ShareViewModel` (activity scope), so turning to another chapter keeps the
+  list intact.
+- **Leave** with system back (drops the selection) or press Gather with an
+  empty list. **Commit** with Gather when the list is non-empty (opens Send).
 
-While gathering, word taps do not seek and word long-press does not open the
-Root Viewer. The mode owns the tap.
+While gathering, word taps do not seek, word long-press does not open the
+Root Viewer, ayah-mark long-press does not open annotations, and the bookmark
+ribbon is inactive. The mode owns the tap — interactions are *replaced*, not
+stacked.
+
+**Mode chrome (visual QA):** idle Gather matches full transport ink (not
+muted chrome); empty gather shows a gold pulse plus a quiet
+“Gathering — tap verses” line under the reciter; with a selection the line
+reads “Gathering · N”, the icon is solid gold with a count badge, and margin
+ordinals use `headlineSmall` full gold.
 
 ### Why not long-press the ﴿N﴾ mark
 
 It was the other candidate — the ayah mark is the verse's own identity and
 the gesture is free. It loses on discoverability: nothing on the page hints
 that the mark is holdable, and the feature is worth finding. A visible
-control in the transport row can be added later as an accelerator, not the
-only door.
+control in the transport row is the door.
 
-## The Send page
+## The Send page (PR1)
 
 Committing **ink-bleeds from the Gather control** into the Send page — the
-same `InkRevealOverlay` primitive as the Root Viewer and the notification
-prompt (see [DESIGN.md](DESIGN.md), "The ink bleed"). No dialog, no bottom
-sheet, no card. The reader sheet becomes the page.
+same `InkRevealOverlay` primitive as the Root Viewer (see [DESIGN.md](DESIGN.md),
+"The ink bleed"). Owned by `ShareHost` so MainActivity does not grow another
+cluster of overlay booleans.
 
-It carries:
+PR1 ships a thin Send page:
 
-1. The gathered verses **in order**, one line each, draggable to reorder.
-2. Three outputs: **Text · Image · Video**.
-3. Quiet toggles: translation on/off, reference on/off, reciter, theme
-   (paper / nightfall / royal), aspect (9:16 or 1:1).
+1. The gathered verses **in order**, each with ordinal, Arabic preview
+   (Hafs), reference, and a gold **×** to remove (no drag-reorder yet).
+2. One output: **Share as text** → `ACTION_SEND` + `EXTRA_TEXT` (no
+   FileProvider, no cache file).
+3. Quiet error line if load/format fails.
+
+Image / Video tabs, theme / aspect / reciter toggles, and drag-reorder are
+deferred until those outputs exist.
 
 The only floating surface in the whole flow is Android's own `ACTION_SEND`
 chooser at the last hop. That is the OS, not our paper.
 
+**Back:** Send open → close Send (selection kept, still gathering). Gathering
+with Send closed → drop selection and leave gather mode.
+
 ## The three outputs
 
-### Text
+### Text — shipped (PR1)
 
 A pure formatter (`VerseTextComposer`) turns the ordered selection into
-plain text: Arabic line, optional translation, and a reference footer. Pure
-in, pure out, JVM-tested — no Android types.
+plain text: Arabic line, optional translation, and a reference footer
+(`al-Baqarah 2:255`). Pure in, pure out, JVM-tested — no Android types.
 
-### Image
+### Image — not yet
 
 One PNG of the paper sheet with the verses at rest in full ink: chapter
 header ornament, the verses, the footer mark. It is the video pipeline minus
 the codecs, and it exists partly to **de-risk the video**: if the wash draws
 wrong offscreen, it is visible in a still before any encoder is written.
 
-### Video — the ink, exported
+**PR2 is a feasibility spike first**, not a shipping promise: render one
+representative ayah through the lowest shared scripture path, capture full-ink
+PNG plus fixed-progress wash frames (0.25 / 0.5 / 0.75), verify gloss and
+shaped-Hafs. FileProvider arrives with PNG export, not with text.
 
-Not a screen recording. Screen capture needs a permission prompt, runs in
-realtime, drops frames under load, and would hand us whatever the device
-happened to composite. The export is rendered **deterministically offscreen**
-instead:
+### Video — the ink, exported — not yet
 
-1. **Timeline.** Each selected verse's word timings come from `quran.db`,
-   concatenated in gathered order with a breath gap between verses.
-2. **Frames.** The *real reader composables* are hosted offscreen under a
-   custom `MonotonicFrameClock`, so frame *N* renders at exactly `N / fps`.
-   Reusing the live renderer is deliberate: it is the only way the exported
-   wash cannot silently drift from the on-screen one (invariant 7 in
-   [AGENTS.md](../AGENTS.md)).
-3. **Encode.** The composition draws into a `RenderNode` through a
-   `HardwareRenderer` pointed at `MediaCodec`'s input Surface (API 29+;
-   `minSdk` is 30), one `setVsyncTime` per frame → AVC 1080×1920 →
-   `MediaMuxer`.
-4. **Audio.** Recitation is already one MP3 per ayah. Each selected verse is
-   pulled through the existing `CacheDataSource` — cached verses need no
-   network — then `MediaExtractor` → PCM → concatenate → AAC → the same
-   muxer.
-5. **Progress is ink.** The verses on the Send page re-ink left to right as
-   encoding advances. No spinner, no progress dialog.
+Not a screen recording. Deterministic offscreen export (see original design
+below). **Do not start until the PR2 spike proves wash fidelity.** First
+silent video prototype should stay bounded (e.g. 720×1280 @ 30 fps, capped
+duration) before 1080p or audio mux.
 
-Rendering off the vsync clock means the export can run faster than realtime
-and is frame-exact regardless of device load.
+Original pipeline notes (for later PRs):
+
+1. **Timeline.** Word timings from `quran.db`, concatenated in gathered order
+   with a breath gap between verses.
+2. **Frames.** Narrow scripture renderer (not full `ReaderScreen`) under a
+   custom `MonotonicFrameClock`.
+3. **Encode.** `HardwareRenderer` / `RenderNode` → `MediaCodec` surface →
+   AVC → `MediaMuxer`.
+4. **Audio.** Separate design spike: stage complete per-ayah files without
+   poking `PlaybackService`'s private `SimpleCache`.
+5. **Progress is ink** (throttled; a plain line is enough initially).
 
 ## The footer mark
 
-Image and video carry a quiet footer: the reference in gold
-(`al-Baqarah 2:255`) with **Beautiful Quran** beneath it in faint ink. Small
-enough that the verse is unambiguously the subject; present enough that the
-share is attributable. Text shares carry the reference only.
+Image and video will carry a quiet footer: the reference in gold with
+**Beautiful Quran** beneath it in faint ink. Text shares carry the reference
+only (no app watermark in the chat body).
 
-## Shape of the code
+## Shape of the code (PR1)
 
 ```text
-ui/share/ShareSelection.kt      ordered selection — pure, JVM-tested
-ui/share/ShareComposeSheet.kt   the ink-bleed Send page
-ui/share/ShareViewModel.kt      selection + export state
-share/VerseTextComposer.kt      text formatting — pure, JVM-tested
-share/InkFrameRenderer.kt       offscreen Compose → Surface, synthetic clock
-share/VideoEncoder.kt           MediaCodec + MediaMuxer video track
-share/AudioTrackAssembler.kt    per-ayah MP3 → PCM → AAC
-share/ShareFiles.kt             cache dir + FileProvider handoff
+share/AyahRef.kt                 AyahRef + toggle/ordinals pure helpers
+share/VerseTextComposer.kt       text formatting — pure, JVM-tested
+ui/share/ShareViewModel.kt       selection + gather/send + text prepare
+ui/share/ShareHost.kt            BackHandler + InkRevealOverlay + chooser
+ui/share/ShareComposeSheet.kt    Send page (list + Share as text)
 ```
 
-Plus a `FileProvider` and `xml/share_paths.xml` in the manifest, writing to
-`cacheDir/share/`. Nothing here needs a new framework dependency (invariant
-5): the encoders are platform APIs and the audio already flows through
-media3.
+Reader integration is deliberately thin:
 
-The two pure files carry the unit tests. The renderer stays reviewable by
-staying thin — it drives existing composables, it does not reimplement them.
+- `PlayerBar` — Gather control
+- `ReaderScreen` — `gathering`, `gatherOrdinal`, `onToggleGatheredAyah`
+- `AyahBlock` — `gatherOrdinal` reuses the bookmark margin
+
+No FileProvider for text. No second selection state machine.
 
 ## Phasing
 
-| Phase | Ships | Rough cost |
+| Phase | Ships | Status |
 |---|---|---|
-| 1 | Gather mode + text share | half a day |
-| 2 | Image share (offscreen render, no codecs) | half a day |
-| 3 | Silent video with ink | 1–2 days |
-| 4 | Recitation audio muxed in | ~1 day |
+| 1 | Gather mode + text share | **shipped** |
+| 2 | Offscreen-render spike → fixed-theme image if OK | next |
+| 3 | Bounded silent ink video | after PR2 |
+| 4 | Audio staging + mux | after silent video is stable |
 | 5 | Web parity | later |
 
-Each phase ships something usable on its own.
+Each phase ships something usable on its own (or is explicitly a spike).
 
 ## Risks
 
 - **Offscreen fidelity.** The wash is built from `BlendMode` mask layers
   (`ui/theme/Fade.kt`). They must draw identically on an offscreen hardware
-  canvas. Phase 2 proves this before a codec is touched, and the export needs
-  a test asserting the leading edge is a gradient rather than a hard cut —
-  a soft-peel regression here would violate invariant 7 invisibly.
-- **Codec limits.** 1080×1920 AVC is safe on essentially every device at
-  `minSdk` 30, but encoder setup must fail to a readable line on the page
-  (never a dialog) rather than crash.
-- **Audio needs the network** for verses not already in the 1 GB cache. The
-  Send page should say so before it starts, not after.
-- **Long selections make long videos.** Ten ayahs of Al-Baqarah is minutes of
-  audio and a large file. The Send page should show the running duration as
-  verses are gathered.
+  canvas. Phase 2 proves this before a codec is touched — including animated
+  wash frames, not only full-ink stills.
+- **Selection recomposition.** Ordinals are a `Map<AyahRef, Int>` derived once
+  per selection change; ayah blocks read only their own ordinal. Do not pass
+  the full list into every block.
+- **Codec / GPU budget.** Start bounded (720p, 30 fps, cap duration) before
+  1080×1920 multi-minute exports.
+- **Audio cache is not an export API.** `SimpleCache` is private to
+  `PlaybackService`. Audio export needs an explicit staging boundary.
+- **Long selections make long videos.** Cap already applies to gather count;
+  duration estimate lands with video/audio.
 
 ## Non-goals
 
-- No accounts, no upload, no link-sharing service. The export is a file, the
-  handoff is `ACTION_SEND` (invariant 6: offline-first, no backend).
-- No editing surface — no font pickers, no colour pickers, no stickers. The
-  themes the app already has are the choices.
+- No accounts, no upload, no link-sharing service. Text is `EXTRA_TEXT`; later
+  exports are files + `ACTION_SEND` (invariant 6: offline-first, no backend).
+- No editing surface — no font pickers, no colour pickers, no stickers.
 - No range selection. Ordered taps are the model.
+- No drag-reorder, multi-theme matrix, or export queue in PR1.
+- No hosting full `ReaderScreen` offscreen for image/video.
