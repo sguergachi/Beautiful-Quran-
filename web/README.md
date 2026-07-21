@@ -1,7 +1,7 @@
 # Beautiful Quran — Web
 
 Browser port of Beautiful Quran: the same Focus / Highlight / Ink engines,
-the same paper metaphor, and lyric-style word highlighting synced to
+the same paper metaphor, and word-by-word highlighting synced to
 recitation audio.
 
 ## Live

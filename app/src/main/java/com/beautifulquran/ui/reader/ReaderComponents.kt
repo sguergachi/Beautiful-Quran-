@@ -505,7 +505,7 @@ private class WordHighlight(
             progress = { sweep.value },
             rtl = rtl,
             restingAlpha = InkEngine.State.Upcoming.inkAlpha(),
-            feather = pacing?.let { InkEngine.pacedFeather(it.letterCount) }
+            feather = pacing?.let { InkEngine.pacedFeather() }
                 ?: InkEngine.tuning.washFeather,
         )
         else -> Modifier.glyphLayerAlpha { lyricInk.value }
@@ -541,7 +541,7 @@ private class WordHighlight(
                 progress = { if (glintIsRepeat) repeatWash.progress.value else sweep.value },
                 rtl = rtl,
                 restingAlpha = 0f,
-                feather = pacing?.let { InkEngine.pacedFeather(it.letterCount) }
+                feather = pacing?.let { InkEngine.pacedFeather() }
                     ?: InkEngine.tuning.washFeather,
             )
 
@@ -1337,7 +1337,7 @@ private fun ResponsiveHafsAyah(
                                 paper = palette.paperColor,
                                 restingAlpha = InkEngine.State.Upcoming.inkAlpha(),
                                 feather = pacing?.let {
-                                    InkEngine.pacedFeather(it.letterCount)
+                                    InkEngine.pacedFeather()
                                 },
                             )
                         }
@@ -1387,7 +1387,7 @@ private fun ResponsiveHafsAyah(
                                 glowAlpha = InkEngine.tuning.glintGlowAlpha,
                                 glowRadius = InkEngine.tuning.glintGlowRadius,
                                 feather = if (index == activeIndex) {
-                                    pacing?.let { InkEngine.pacedFeather(it.letterCount) }
+                                    pacing?.let { InkEngine.pacedFeather() }
                                 } else {
                                     null
                                 },
@@ -1554,11 +1554,18 @@ fun AyahBlock(
 
     // Letter-level tajweed pacing of that sweep (Ink Lab toggle,
     // docs/TAJWEED_PACING.md): null keeps the plain constant-rate wash.
+    // The verse-closing word is flagged so its waqf can be sustained.
     val pacing = activeWord
         ?.takeIf { isActiveAyah }
         ?.let { aw ->
             ayah.words.firstOrNull { it.position == aw.wordPosition }
-                ?.let { word -> InkEngine.pacing(word.arabic, aw) }
+                ?.let { word ->
+                    InkEngine.pacing(
+                        arabic = word.arabic,
+                        activeWord = aw,
+                        isAyahFinal = word.position == ayah.words.lastOrNull()?.position,
+                    )
+                }
         }
 
     // Each word's ink behaviour, derived once for the whole ayah. All the

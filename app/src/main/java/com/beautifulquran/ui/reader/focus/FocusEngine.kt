@@ -51,6 +51,10 @@ object FocusEngine {
     fun playbackFocusTarget(activeAyah: Int?, activeBasmalah: Boolean): Int? =
         if (activeBasmalah) CHAPTER_TOP_FOCUS_AYAH else activeAyah
 
+    /** True on the first word when repeat-aware timings restart a whole ayah. */
+    fun startsFullAyahRepeat(wordPosition: Int, isRepeat: Boolean, repeatStart: Int): Boolean =
+        isRepeat && wordPosition == 1 && repeatStart == 1
+
     /** True when [focusAyah] is the chapter-opening basmalah target. */
     fun isChapterTopFocusTarget(focusAyah: Int): Boolean =
         focusAyah == CHAPTER_TOP_FOCUS_AYAH
