@@ -1542,18 +1542,31 @@ private fun ArabicAyahNumberUnit(
  * The reader's own hand. Italic is the whole distinction: the app's prose is
  * roman, so a slanted line on the sheet can only be something the reader wrote.
  * Shared by the reader's verse note and the Bookmarks index (docs/NOTES.md).
+ *
+ * [fontScale] mirrors the translation's damped scaling so the note grows with
+ * the page instead of staying pinned at one size when the reader sizes type up.
  */
 @Composable
 internal fun verseNoteStyle(
     fontSize: TextUnit = 15.sp,
     lineHeight: TextUnit = 22.sp,
-): TextStyle =
-    MaterialTheme.typography.bodyMedium.copy(
+    fontScale: Float = 1f,
+): TextStyle {
+    val damped = 0.9f + 0.1f * fontScale
+    return MaterialTheme.typography.bodyMedium.copy(
         fontFamily = TranslationFontFamily,
         fontStyle = FontStyle.Italic,
-        fontSize = fontSize,
-        lineHeight = lineHeight,
+        fontSize = fontSize * damped,
+        lineHeight = lineHeight * damped,
     )
+}
+
+/**
+ * Ink for the reader's note. Deliberately **below** the translation's 66 % so
+ * an annotation can never out-ink the scripture it hangs off — the reader's
+ * hand is the quietest voice on the sheet, not the loudest.
+ */
+internal const val VERSE_NOTE_INK_ALPHA = 0.62f
 
 /**
  * The reader's marginal note for one verse: italic EB Garamond below the
@@ -1564,12 +1577,13 @@ internal fun verseNoteStyle(
 internal fun VerseNoteField(
     text: String,
     isEditing: Boolean,
+    fontScale: Float,
     translationRecess: () -> Float,
     onNoteChange: ((String) -> Unit)?,
     onEditDone: () -> Unit = {},
 ) {
     val ink = MaterialTheme.colorScheme.onSurface
-    val noteStyle = verseNoteStyle()
+    val noteStyle = verseNoteStyle(fontScale = fontScale)
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(isEditing) {
         if (isEditing) focusRequester.requestFocus()
@@ -1580,7 +1594,7 @@ internal fun VerseNoteField(
         BasicTextField(
             value = text,
             onValueChange = { onNoteChange?.invoke(it) },
-            textStyle = noteStyle.copy(color = ink.copy(alpha = 0.72f)),
+            textStyle = noteStyle.copy(color = ink.copy(alpha = VERSE_NOTE_INK_ALPHA)),
             cursorBrush = SolidColor(accent),
             modifier = Modifier
                 .fillMaxWidth()
@@ -1592,7 +1606,10 @@ internal fun VerseNoteField(
                         Text(
                             "Write a note…",
                             style = noteStyle,
-                            color = ink.copy(alpha = 0.28f),
+                            // Faint enough to read as an invitation, not so
+                            // faint it becomes a smudge — "quiet is still
+                            // legible" (DESIGN.md).
+                            color = ink.copy(alpha = 0.34f),
                         )
                     }
                     field()
@@ -1603,7 +1620,7 @@ internal fun VerseNoteField(
         Text(
             text = text,
             style = noteStyle,
-            color = ink.copy(alpha = 0.72f),
+            color = ink.copy(alpha = VERSE_NOTE_INK_ALPHA),
             modifier = Modifier
                 .fillMaxWidth()
                 .graphicsLayer { alpha = translationRecess() },
@@ -1844,10 +1861,13 @@ fun AyahBlock(
                 )
             }
             if (isEditingNote || noteText != null) {
-                Spacer(Modifier.height(8.dp))
+                // The note is a different voice, so it earns at least the air
+                // the translation takes from the Arabic above it.
+                Spacer(Modifier.height(12.dp))
                 VerseNoteField(
                     text = noteText ?: "",
                     isEditing = isEditingNote,
+                    fontScale = fontScale,
                     translationRecess = { translationRecess.value },
                     onNoteChange = onNoteChange,
                     onEditDone = { onNoteEditDone?.invoke() },
