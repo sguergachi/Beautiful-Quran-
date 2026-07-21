@@ -748,7 +748,17 @@ fun ReaderScreen(
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
+        topBar = topBar@{
+            if (editingAnnotationAyah != 0) {
+                // Reclaim the app bar while writing, but keep ink below a
+                // visible system status bar. Recitation already hides it.
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(if (recitingActive) 0.dp else statusBarTop),
+                )
+                return@topBar
+            }
             // Unread-style chrome: quiet marks that recede behind the text.
             // Once the opening header scrolls off, the surah name reappears
             // here between gilded flourishes. In search, the bar becomes the

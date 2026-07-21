@@ -118,8 +118,9 @@ happens to be loaded when it lands. Opening a second note commits the first
 identity guard — otherwise one verse's text writes itself onto another.
 
 While composing, the other verses recede to upcoming ink and the ayah selector
-rail withdraws. The active verse and its note remain together as the only
-thought on the page.
+rail and top app bar withdraw. The visible system status-bar inset remains, but
+the active verse gains the rest of that vertical space and stays together with
+its note as the only thought on the page.
 
 Deleting an existing note is therefore just: open it, clear it, tap away.
 There is no separate destructive control and no confirmation — the reader
