@@ -1803,7 +1803,8 @@ fun ReaderScreen(
                                 bookmarkChromeAlpha = bookmarkChromeAlpha,
                                 bookmarkInteractive = !recitingActive,
                                 onToggleBookmark = { viewModel.toggleBookmark(ayah.number) },
-                                onWordClick = { word ->
+                                onWordClick = wordClick@{ word ->
+                                    if (editingAnnotationAyah != 0) return@wordClick
                                     val segment = viewModel.segmentsFor(ayah.number)
                                         ?.firstOrNull { it.position == word.position }
                                     notifPermission.request {
@@ -1815,7 +1816,8 @@ fun ReaderScreen(
                                         }
                                     }
                                 },
-                                onAyahClick = {
+                                onAyahClick = ayahClick@{
+                                    if (editingAnnotationAyah != 0) return@ayahClick
                                     notifPermission.request {
                                         followEnabled = true
                                         viewModel.playFromAyah(ayah.number)
