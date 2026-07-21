@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -44,7 +46,10 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1577,9 +1582,10 @@ internal fun verseNoteStyle(
 internal const val VERSE_NOTE_INK_ALPHA = 0.62f
 
 /**
- * The reader's marginal note for one verse: italic EB Garamond below the
+ * The reader's marginal note for one verse, set in the scribe's hand below the
  * translation. When [isEditing], a chromeless [BasicTextField] takes focus so
- * the reader writes in place. Losing focus commits; empty text = delete note.
+ * the reader writes in place; otherwise the settled note is shown and tapping
+ * it reopens the editor. Blank text on commit deletes the note.
  */
 @Composable
 internal fun VerseNoteField(
@@ -1589,10 +1595,18 @@ internal fun VerseNoteField(
     translationRecess: () -> Float,
     onNoteChange: ((String) -> Unit)?,
     onEditDone: () -> Unit = {},
+    onStartEdit: (() -> Unit)? = null,
 ) {
     val ink = MaterialTheme.colorScheme.onSurface
     val noteStyle = verseNoteStyle(fontScale = fontScale)
     val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    // `onFocusChanged` delivers an initial callback the moment the field
+    // attaches, with isFocused = false — *before* the LaunchedEffect below can
+    // request focus. Treating that as "the reader tapped away" committed an
+    // empty note and closed the editor in the frame it opened, so the field
+    // flashed and vanished. Only a loss that follows a real gain ends the edit.
+    var everFocused by remember(isEditing) { mutableStateOf(false) }
     LaunchedEffect(isEditing) {
         if (isEditing) focusRequester.requestFocus()
     }
@@ -1604,10 +1618,19 @@ internal fun VerseNoteField(
             onValueChange = { onNoteChange?.invoke(it) },
             textStyle = noteStyle.copy(color = ink.copy(alpha = VERSE_NOTE_INK_ALPHA)),
             cursorBrush = SolidColor(accent),
+            // Notes wrap freely, but the keyboard's Done key is the reader's
+            // way out — the page itself still offers no Save button.
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Sentences,
+                imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
             modifier = Modifier
                 .fillMaxWidth()
                 .focusRequester(focusRequester)
-                .onFocusChanged { if (!it.isFocused) onEditDone() },
+                .onFocusChanged { state ->
+                    if (state.isFocused) everFocused = true else if (everFocused) onEditDone()
+                },
             decorationBox = { field ->
                 Box {
                     if (text.isEmpty()) {
@@ -1631,7 +1654,14 @@ internal fun VerseNoteField(
             color = ink.copy(alpha = VERSE_NOTE_INK_ALPHA),
             modifier = Modifier
                 .fillMaxWidth()
-                .graphicsLayer { alpha = translationRecess() },
+                .graphicsLayer { alpha = translationRecess() }
+                .then(
+                    if (onStartEdit != null) {
+                        Modifier.quietClickable(onClick = onStartEdit)
+                    } else {
+                        Modifier
+                    },
+                ),
         )
     }
 }
@@ -1684,7 +1714,8 @@ fun AyahBlock(
     onNoteChange: ((String) -> Unit)? = null,
     /** Called when the editor loses focus — caller should commit and clear edit state. */
     onNoteEditDone: (() -> Unit)? = null,
-    /** Called when the reader long-presses the gold ayah mark to open the editor. */
+    /** Opens the editor: long-press on the gold ayah mark, or a tap on a
+     * settled note to revise it. */
     onAyahMarkLongClick: (() -> Unit)? = null,
 ) {
     fun hits(word: Word) =
@@ -1879,6 +1910,7 @@ fun AyahBlock(
                     translationRecess = { translationRecess.value },
                     onNoteChange = onNoteChange,
                     onEditDone = { onNoteEditDone?.invoke() },
+                    onStartEdit = onAyahMarkLongClick,
                 )
             }
             // Whitespace is the divider.
