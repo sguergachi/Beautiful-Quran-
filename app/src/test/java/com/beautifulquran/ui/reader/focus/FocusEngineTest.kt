@@ -35,6 +35,14 @@ class FocusEngineTest {
     }
 
     @Test
+    fun `full ayah repeat starts a fresh focus pass`() {
+        assertTrue(FocusEngine.startsFullAyahRepeat(1, isRepeat = true, repeatStart = 1))
+        assertFalse(FocusEngine.startsFullAyahRepeat(2, isRepeat = true, repeatStart = 1))
+        assertFalse(FocusEngine.startsFullAyahRepeat(1, isRepeat = false, repeatStart = 1))
+        assertFalse(FocusEngine.startsFullAyahRepeat(4, isRepeat = true, repeatStart = 4))
+    }
+
+    @Test
     fun `word band delta is zero when the word is already inside the band`() {
         assertEquals(
             0f,
