@@ -189,6 +189,13 @@ fun ReaderScreen(
     /** Reports reader-owned ink surfaces to the paper stack so a horizontal
      * page turn cannot begin while the surface is entering, open, or closing. */
     onInkOverlayVisibilityChange: (Boolean) -> Unit = {},
+    /** Gather mode — ordered verse selection for text share (docs/SHARE.md). */
+    gathering: Boolean = false,
+    /** 1-based ordinal for a gathered verse, or null when not selected. */
+    gatherOrdinal: (surahId: Int, ayah: Int) -> Int? = { _, _ -> null },
+    onToggleGatheredAyah: (surahId: Int, ayah: Int) -> Unit = { _, _ -> },
+    gatherCount: Int = 0,
+    onGatherControlClick: () -> Unit = {},
 ) {
     LaunchedEffect(surahId) { viewModel.load(surahId) }
     DisposableEffect(onAyahSelectorExpandedChange) {
@@ -980,6 +987,9 @@ fun ReaderScreen(
                     onRepeatClick = { showRepeatDialog = true },
                     onSpeed = viewModel::cycleSpeed,
                     onReciterClick = onOpenSettings,
+                    gathering = gathering,
+                    gatherCount = gatherCount,
+                    onGatherClick = onGatherControlClick,
                 )
             }
         },
@@ -1811,46 +1821,74 @@ fun ReaderScreen(
                                 bookmarked = ayah.number in bookmarkedAyahs,
                                 bookmarkFocused = bookmarkFocused,
                                 bookmarkChromeAlpha = bookmarkChromeAlpha,
-                                bookmarkInteractive = !recitingActive && editingAnnotationAyah == 0,
-                                onToggleBookmark = { viewModel.toggleBookmark(ayah.number) },
-                                onWordClick = wordClick@{ word ->
-                                    if (editingAnnotationAyah != 0) return@wordClick
-                                    val segment = viewModel.segmentsFor(ayah.number)
-                                        ?.firstOrNull { it.position == word.position }
-                                    notifPermission.request {
-                                        followEnabled = true
-                                        if (segment != null) {
-                                            viewModel.playFromWord(ayah.number, segment.startMs)
-                                        } else {
+                                // Gather mode and open note editors both own taps /
+                                // the margin; disable the ribbon while either is live.
+                                bookmarkInteractive = !recitingActive &&
+                                    !gathering &&
+                                    editingAnnotationAyah == 0,
+                                // Gather mode owns the outer margin (ordinals)
+                                // and verse taps; hide the ribbon while gathering.
+                                onToggleBookmark = if (gathering) {
+                                    null
+                                } else {
+                                    { viewModel.toggleBookmark(ayah.number) }
+                                },
+                                gatherOrdinal = if (gathering) {
+                                    gatherOrdinal(ayah.surahId, ayah.number)
+                                } else {
+                                    null
+                                },
+                                onWordClick = if (gathering) {
+                                    { onToggleGatheredAyah(ayah.surahId, ayah.number) }
+                                } else {
+                                    wordClick@{ word ->
+                                        if (editingAnnotationAyah != 0) return@wordClick
+                                        val segment = viewModel.segmentsFor(ayah.number)
+                                            ?.firstOrNull { it.position == word.position }
+                                        notifPermission.request {
+                                            followEnabled = true
+                                            if (segment != null) {
+                                                viewModel.playFromWord(ayah.number, segment.startMs)
+                                            } else {
+                                                viewModel.playFromAyah(ayah.number)
+                                            }
+                                        }
+                                    }
+                                },
+                                onAyahClick = if (gathering) {
+                                    { onToggleGatheredAyah(ayah.surahId, ayah.number) }
+                                } else {
+                                    ayahClick@{
+                                        if (editingAnnotationAyah != 0) return@ayahClick
+                                        notifPermission.request {
+                                            followEnabled = true
                                             viewModel.playFromAyah(ayah.number)
                                         }
                                     }
                                 },
-                                onAyahClick = ayahClick@{
-                                    if (editingAnnotationAyah != 0) return@ayahClick
-                                    notifPermission.request {
-                                        followEnabled = true
-                                        viewModel.playFromAyah(ayah.number)
+                                onWordLongClick = if (gathering) {
+                                    null
+                                } else {
+                                    { word ->
+                                        // Hold opens the Root Word Viewer (or, in
+                                        // developer mode, a chooser that can also
+                                        // open the Timings Lab). MainActivity owns
+                                        // the branch — see docs/ROOT_VIEWER.md.
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onOpenRootViewer(ayah.surahId, ayah.number, word.position)
                                     }
-                                },
-                                onWordLongClick = { word ->
-                                    // Hold opens the Root Word Viewer (or, in
-                                    // developer mode, a chooser that can also
-                                    // open the Timings Lab). MainActivity owns
-                                    // the branch — see docs/ROOT_VIEWER.md.
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onOpenRootViewer(ayah.surahId, ayah.number, word.position)
                                 },
                                 // Switched off, annotations are simply not part
                                 // of the page: nothing renders and the ayah mark
                                 // goes back to being only a mark. Stored writing
                                 // is untouched and returns when it is switched on.
                                 annotationText = when {
-                                    !settings.annotationsEnabled -> null
+                                    gathering || !settings.annotationsEnabled -> null
                                     editingAnnotationAyah == ayah.number -> editingAnnotationText
                                     else -> annotationsForSurah.value[ayah.number]
                                 },
-                                isEditingAnnotation = settings.annotationsEnabled &&
+                                isEditingAnnotation = !gathering &&
+                                    settings.annotationsEnabled &&
                                     editingAnnotationAyah == ayah.number,
                                 onAnnotationChange = { editingAnnotationText = it },
                                 // Guarded by identity: switching verses makes the
@@ -1860,7 +1898,7 @@ fun ReaderScreen(
                                 onAnnotationEditDone = {
                                     if (editingAnnotationAyah == ayah.number) commitOpenAnnotation()
                                 },
-                                onAyahMarkLongClick = if (!settings.annotationsEnabled) {
+                                onAyahMarkLongClick = if (gathering || !settings.annotationsEnabled) {
                                     null
                                 } else {
                                     {

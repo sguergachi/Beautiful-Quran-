@@ -1842,13 +1842,19 @@ fun AyahBlock(
     /** Hands the editing note's live bounds to the focus controller. */
     onKeepAnnotationInView: OnKeepAnnotationInView? = null,
     /** Bookmark ribbon lives in this block's outer margin (opposite the
-     * ayah selector). Null hides the ribbon entirely. */
+     * ayah selector). Null hides the ribbon entirely. While gathering,
+     * [gatherOrdinal] reuses this margin instead of the ribbon. */
     bookmarkSide: AyahSelectorSide? = null,
     bookmarked: Boolean = false,
     bookmarkFocused: Boolean = false,
     bookmarkChromeAlpha: () -> Float = { 1f },
     bookmarkInteractive: Boolean = true,
     onToggleBookmark: (() -> Boolean)? = null,
+    /**
+     * 1-based gather ordinal drawn in the outer margin (gold Arabic-Indic).
+     * Non-null only while gather mode has this verse selected.
+     */
+    gatherOrdinal: Int? = null,
     onWordClick: ((Word) -> Unit)?,
     onWordLongClick: ((Word) -> Unit)? = null,
     onAyahClick: () -> Unit,
@@ -2094,7 +2100,25 @@ fun AyahBlock(
             Spacer(Modifier.height(if (readingMode == ReadingMode.ENGLISH_ONLY) 18.dp else 26.dp))
         }
 
-        if (bookmarkSide != null && onToggleBookmark != null) {
+        if (gatherOrdinal != null && bookmarkSide != null) {
+            Box(Modifier.matchParentSize()) {
+                GatherOrdinalMark(
+                    ordinal = gatherOrdinal,
+                    side = bookmarkSide,
+                    chromeAlpha = bookmarkChromeAlpha,
+                    modifier = Modifier
+                        .align(
+                            if (bookmarkSide == AyahSelectorSide.RIGHT) {
+                                AbsoluteAlignment.TopRight
+                            } else {
+                                AbsoluteAlignment.TopLeft
+                            },
+                        )
+                        // Align with first ink line (ribbon tip uses ~24 dp).
+                        .padding(top = 22.dp),
+                )
+            }
+        } else if (bookmarkSide != null && onToggleBookmark != null) {
             // matchParentSize (not fillMaxHeight): the ayah Box is wrap-content,
             // so fillMaxHeight would measure to 0 and the ribbon would vanish.
             // This sizes to the Column after layout, keeping the ribbon in-block.
@@ -2119,6 +2143,31 @@ fun AyahBlock(
             }
         }
     }
+}
+
+/**
+ * Gold Arabic-Indic ordinal in the verse's outer margin while gather mode is
+ * active. Replaces the bookmark ribbon for the duration of the mode so the
+ * margin never carries two marks. Sized to read as a mark, not decoration.
+ */
+@Composable
+private fun GatherOrdinalMark(
+    ordinal: Int,
+    side: AyahSelectorSide,
+    chromeAlpha: () -> Float,
+    modifier: Modifier = Modifier,
+) {
+    val gold = LocalQuranAccents.current.gold
+    Text(
+        text = ordinal.toArabicIndic(),
+        style = MaterialTheme.typography.headlineSmall,
+        color = gold,
+        textAlign = if (side == AyahSelectorSide.RIGHT) TextAlign.End else TextAlign.Start,
+        modifier = modifier
+            .width(44.dp)
+            .graphicsLayer { alpha = chromeAlpha() }
+            .padding(horizontal = 6.dp),
+    )
 }
 
 /**

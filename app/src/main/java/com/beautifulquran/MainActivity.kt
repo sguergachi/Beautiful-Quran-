@@ -81,6 +81,9 @@ import com.beautifulquran.ui.rootviewer.RootViewerViewModel
 import com.beautifulquran.ui.rootviewer.WordHoldChooser
 import com.beautifulquran.ui.settings.SettingsScreen
 import com.beautifulquran.ui.settings.SettingsViewModel
+import com.beautifulquran.ui.share.ShareHost
+import com.beautifulquran.ui.share.ShareViewModel
+import com.beautifulquran.share.AyahRef
 import com.beautifulquran.timingslab.TimingsLabScreen
 import com.beautifulquran.timingslab.TimingsLabViewModel
 import com.beautifulquran.ui.theme.BeautifulQuranTheme
@@ -220,8 +223,10 @@ private fun PaperStackApp(
     val timingsLabViewModel: TimingsLabViewModel = viewModel(factory = AppViewModelFactory)
     val ornamentsLabViewModel: OrnamentsLabViewModel = viewModel(factory = AppViewModelFactory)
     val rootViewerViewModel: RootViewerViewModel = viewModel(factory = AppViewModelFactory)
+    val shareViewModel: ShareViewModel = viewModel(factory = AppViewModelFactory)
     val settings by app.settings.settings.collectAsStateWithLifecycle()
     val bookmarkCount by bookmarksViewModel.bookmarkCount.collectAsStateWithLifecycle()
+    val shareUi by shareViewModel.ui.collectAsStateWithLifecycle()
 
     var selectedSurahId by rememberSaveable { mutableIntStateOf(0) }
     var selectedStartAyah by rememberSaveable { mutableIntStateOf(0) }
@@ -252,6 +257,8 @@ private fun PaperStackApp(
     var labRendered by remember { mutableStateOf(false) }
     var ornamentsLabRendered by remember { mutableStateOf(false) }
     var readerInkOverlayVisible by remember { mutableStateOf(false) }
+    /** Send page (share) rendered lifetime — ShareHost reports this. */
+    var shareSendRendered by remember { mutableStateOf(false) }
     var rootPlaybackSnapshot by remember { mutableStateOf<ReaderPlaybackSnapshot?>(null) }
     var pendingWord by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
     /** Bumped on every concordance jump so the reader remounts even when the
@@ -278,7 +285,8 @@ private fun PaperStackApp(
     val scope = rememberCoroutineScope()
     val settingsLayer = if (selectedSurahId == 0) AYAH_LAYER else SETTINGS_LAYER
     val overlayBlocking = labVisible || rootVisible || chooserVisible || ornamentsLabVisible ||
-        labRendered || rootRendered || chooserRendered || ornamentsLabRendered || readerInkOverlayVisible
+        labRendered || rootRendered || chooserRendered || ornamentsLabRendered ||
+        readerInkOverlayVisible || shareUi.sendOpen || shareSendRendered
     val stackGesturesBlocked = rememberUpdatedState(
         ayahSelectorExpanded || overlayBlocking || entranceVisible,
     )
@@ -637,7 +645,7 @@ private fun PaperStackApp(
             // While the root lexicon (or hold chooser) is open, lift this sheet
             // above the cover so the ink wash stays on the paper it soaks —
             // not trapped under the off-screen cover's higher stack z-index.
-            val readerBleedOpen = rootVisible || chooserVisible
+            val readerBleedOpen = rootVisible || chooserVisible || shareUi.sendOpen || shareSendRendered
             PaperPage(
                 layer = PaperLayer.Ayah,
                 stackPosition = stackPositionProvider,
@@ -670,8 +678,20 @@ private fun PaperStackApp(
                         rootReturnVisible = rootReturnVisible,
                         keepStatusBarVisible = overlayBlocking,
                         onInkOverlayVisibilityChange = { readerInkOverlayVisible = it },
+                        gathering = shareUi.gathering,
+                        gatherOrdinal = { sid, a -> shareUi.ordinals[AyahRef(sid, a)] },
+                        onToggleGatheredAyah = shareViewModel::toggle,
+                        gatherCount = shareUi.selection.size,
+                        onGatherControlClick = shareViewModel::onGatherControlClick,
                     )
                 }
+
+                // Gather/Send: back handling + Send ink-bleed (text share PR1).
+                ShareHost(
+                    viewModel = shareViewModel,
+                    themeMode = themeMode,
+                    onOverlayRenderedChange = { shareSendRendered = it },
+                )
 
                 // Root lexicon + hold chooser live ON this sheet — ink soaks
                 // the reader paper, not a full-screen layer above the stack.
