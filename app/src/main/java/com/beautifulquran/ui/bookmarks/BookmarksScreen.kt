@@ -62,6 +62,8 @@ import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.model.BookmarkedAyah
 import com.beautifulquran.data.model.Surah
 import com.beautifulquran.ui.reader.VerseBookmarkRibbon
+import com.beautifulquran.ui.reader.VERSE_ANNOTATION_INK_ALPHA
+import com.beautifulquran.ui.reader.verseAnnotationStyle
 import com.beautifulquran.ui.theme.ArabicTitleStyle
 import com.beautifulquran.ui.theme.DisclosureChevron
 import com.beautifulquran.ui.theme.LocalQuranAccents
@@ -146,6 +148,7 @@ fun BookmarksScreen(
                         val key = BookmarkKey(bookmark.surah.id, bookmark.ayahNumber)
                         BookmarkAyahRow(
                             bookmark = bookmark,
+                            annotationText = uiState.annotations["${bookmark.surah.id}:${bookmark.ayahNumber}"],
                             confirming = pendingRemoval == key,
                             onOpen = { onOpenAyah(bookmark.surah.id, bookmark.ayahNumber) },
                             onRequestRemove = { pendingRemoval = key },
@@ -339,6 +342,7 @@ private fun BookmarkSectionHeader(
 @Composable
 private fun BookmarkAyahRow(
     bookmark: BookmarkedAyah,
+    annotationText: String?,
     confirming: Boolean,
     onOpen: () -> Unit,
     onRequestRemove: () -> Unit,
@@ -376,6 +380,16 @@ private fun BookmarkAyahRow(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (annotationText != null) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = annotationText,
+                    style = verseAnnotationStyle(fontSize = 15.sp, lineHeight = 21.sp),
+                    color = LocalQuranAccents.current.bookmarkRibbon.copy(alpha = VERSE_ANNOTATION_INK_ALPHA),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             BookmarkReferenceOrConfirmation(
                 bookmark = bookmark,
                 confirming = confirming,

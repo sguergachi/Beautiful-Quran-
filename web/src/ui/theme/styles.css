@@ -20,6 +20,9 @@
   --font-display: 'Cormorant Garamond', 'Times New Roman', serif;
   --font-body: 'EB Garamond', 'Times New Roman', serif;
   --font-arabic: 'Hafs Uthmanic', 'Noto Naskh Arabic', serif;
+  /* The reader's hand: chancery italic, a different hand from --font-body's
+     roman rather than that same voice leaning. Verse notes only. */
+  --font-scribe: 'Cormorant Garamond', 'Times New Roman', serif;
   --sheet-pad: clamp(1.1rem, 4.5vw, 2.75rem);
   --reader-max: 40rem;
   --home-max: 40rem;

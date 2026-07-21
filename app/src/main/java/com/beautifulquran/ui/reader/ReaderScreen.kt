@@ -27,6 +27,8 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -93,6 +95,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
@@ -199,8 +202,55 @@ fun ReaderScreen(
     val activeWordState = viewModel.activeWord.collectAsStateWithLifecycle()
     val settings by viewModel.settings.settings.collectAsStateWithLifecycle()
     val bookmarkedAyahs by viewModel.bookmarkedAyahs.collectAsStateWithLifecycle()
+    // Like bookmarkedAyahs: read per-ayah so a note change recomposes only
+    // that one block.
+    val annotationsForSurah = viewModel.annotationsForSurah.collectAsStateWithLifecycle()
+    // Saveable: an in-progress note must survive rotation and process death —
+    // it is the one piece of user data with no other copy anywhere. The draft
+    // carries its own (surah, ayah) so a chapter advance mid-edit can never
+    // land it on the verse that happens to be loaded when it commits.
+    var editingAnnotationSurah by rememberSaveable { mutableStateOf(0) }
+    var editingAnnotationAyah by rememberSaveable { mutableStateOf(0) }
+    var editingAnnotationText by rememberSaveable { mutableStateOf("") }
+    /**
+     * Commits the open draft and closes the editor. Called when the field loses
+     * focus, *before* opening another verse's note (so a draft is never carried
+     * across verses), and when the reader leaves the sheet.
+     */
+    fun commitOpenAnnotation() {
+        if (editingAnnotationAyah == 0) return
+        viewModel.writeAnnotation(editingAnnotationSurah, editingAnnotationAyah, editingAnnotationText)
+        editingAnnotationSurah = 0
+        editingAnnotationAyah = 0
+        editingAnnotationText = ""
+    }
+    // Turning the sheet commits — paper has no Save button (docs/ANNOTATIONS.md).
+    val openAnnotation = rememberUpdatedState(
+        Triple(editingAnnotationSurah, editingAnnotationAyah, editingAnnotationText),
+    )
+    DisposableEffect(Unit) {
+        onDispose {
+            val (surah, ayah, text) = openAnnotation.value
+            if (ayah != 0) viewModel.writeAnnotation(surah, ayah, text)
+        }
+    }
+    val focusManager = LocalFocusManager.current
 
     val listState = rememberLazyListState()
+    // Two ways out of the editor besides Done, both meaning "I've stopped
+    // writing": dismissing the keyboard, and moving the page. Without the
+    // first the field keeps focus and its caret blinks on a page with no
+    // keyboard; without the second the keyboard rides over the verses the
+    // reader is trying to scroll to. Clearing focus commits through the
+    // field's own focus-loss path.
+    val imeVisible = WindowInsets.isImeVisible
+    LaunchedEffect(imeVisible, editingAnnotationAyah) {
+        if (!imeVisible && editingAnnotationAyah != 0) focusManager.clearFocus()
+    }
+    val listScrolling = listState.isScrollInProgress
+    LaunchedEffect(listScrolling, editingAnnotationAyah) {
+        if (listScrolling && editingAnnotationAyah != 0) focusManager.clearFocus()
+    }
     // Gilding sheen: light catches the header rosette as the page moves.
     // At chapter end (scrolled) sheen is bright (~0.85); cold open at the top
     // rests dimmer (~0.15). Next-chapter advance pins the bright value for the
@@ -1422,7 +1472,17 @@ fun ReaderScreen(
             // can lift the last lines clear of the dissolve above the player bar.
             val listFadeTop = 32.dp
             val listFadeBottom = 64.dp
-            val listBottomPad = 132.dp // matches ActiveWordBottomMargin in ReaderComponents
+            // The sheet is edge-to-edge, so the window never resizes for the
+            // keyboard — the reader would be writing on the last visible line
+            // with the IME right under the caret. While a note is open, clear
+            // the keyboard's own height plus a hand's-width of paper so the
+            // line being written sits well above it.
+            val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+            val listBottomPad = if (editingAnnotationAyah != 0) {
+                132.dp + imeBottom + 96.dp
+            } else {
+                132.dp // matches ActiveWordBottomMargin in ReaderComponents
+            }
             // Read Animatable in this composition so morph frames recompose the list.
             val headerMorphNow = headerMorph.value
             val footerMorph = maxOf(headerMorphNow, nextChapterPull * 0.4f)
@@ -1747,6 +1807,47 @@ fun ReaderScreen(
                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                     onOpenRootViewer(ayah.surahId, ayah.number, word.position)
                                 },
+                                // Switched off, annotations are simply not part
+                                // of the page: nothing renders and the ayah mark
+                                // goes back to being only a mark. Stored writing
+                                // is untouched and returns when it is switched on.
+                                annotationText = when {
+                                    !settings.annotationsEnabled -> null
+                                    editingAnnotationAyah == ayah.number -> editingAnnotationText
+                                    else -> annotationsForSurah.value[ayah.number]
+                                },
+                                isEditingAnnotation = settings.annotationsEnabled &&
+                                    editingAnnotationAyah == ayah.number,
+                                onAnnotationChange = { editingAnnotationText = it },
+                                // Guarded by identity: switching verses makes the
+                                // old field lose focus *after* the new one opened,
+                                // and that stale callback must not close the new
+                                // editor or write the new draft to the old verse.
+                                onAnnotationEditDone = {
+                                    if (editingAnnotationAyah == ayah.number) commitOpenAnnotation()
+                                },
+                                onAyahMarkLongClick = if (!settings.annotationsEnabled) {
+                                    null
+                                } else {
+                                    {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        commitOpenAnnotation()
+                                        editingAnnotationText =
+                                            annotationsForSurah.value[ayah.number] ?: ""
+                                        editingAnnotationSurah = ayah.surahId
+                                        editingAnnotationAyah = ayah.number
+                                    }
+                                },
+                                annotationsHidden = recitingActive,
+                                onAnnotationDelete = {
+                                    editingAnnotationText = ""
+                                    commitOpenAnnotation()
+                                    focusManager.clearFocus()
+                                },
+                                // Writing on one verse quiets every other verse
+                                // on the sheet.
+                                recededForAnnotationEdit = editingAnnotationAyah != 0 &&
+                                    editingAnnotationAyah != ayah.number,
                             )
                             }
                         }

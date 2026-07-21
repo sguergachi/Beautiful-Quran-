@@ -192,6 +192,15 @@ not the app's.
   figures on in running text (`'kern', 'liga', 'onum'`).
 - **Display face**: Cormorant Garamond semibold for surah titles and
   headlines, where its tall fine-stroked capitals can breathe.
+- **The reader's hand**: Cormorant Garamond *Italic* at weight 500 for verse
+  notes, and nothing else — the chancery cursive Renaissance scribes wrote
+  marginal glosses in, and the hand italic type was cut from. It is
+  deliberately not EB Garamond Italic: the app's prose is EB Garamond, so its
+  own italic reads as **emphasis** — the same voice leaning — instead of a
+  second person writing on the page. This is a narrow, recorded exception to
+  Cormorant's display-only rule; the 500 weight plus the note's 62 % ink keep
+  the fine strokes from going wispy at note size. The roman Cormorant stays
+  display-only. See [ANNOTATIONS.md](ANNOTATIONS.md).
 - **English lyric mode**: EB Garamond regular, 22 sp with 1.5 em leading.
   It is one flush-left, ragged-right inline paragraph — never a flex/flow row
   of padded word tiles. Natural font spaces, kerning, common ligatures, and

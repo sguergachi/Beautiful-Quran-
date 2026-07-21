@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
 import com.beautifulquran.data.BookmarkRepository
+import com.beautifulquran.data.AnnotationRepository
 import com.beautifulquran.data.QuranRepository
 import com.beautifulquran.data.SettingsRepository
 import com.beautifulquran.data.model.Reciter
@@ -98,6 +99,7 @@ class ReaderViewModel(
     val settings: SettingsRepository,
     private val bookmarks: BookmarkRepository,
     val player: PlayerController,
+    private val annotations: AnnotationRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ReaderUiState())
@@ -126,6 +128,12 @@ class ReaderViewModel(
         combine(bookmarks.bookmarks, loadedSurah) { all, surah ->
             all.filter { it.surahId == surah }.map { it.ayah }.toSet()
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(1_000), emptySet())
+
+    /** Annotation text keyed by ayah number for the surah on screen. */
+    val annotationsForSurah: StateFlow<Map<Int, String>> =
+        combine(annotations.annotations, loadedSurah) { all, surah ->
+            all.filter { it.surahId == surah }.associate { it.ayah to it.text }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(1_000), emptyMap())
     /** Raw segments for seek / Timings Lab; prepared tables power the poll. */
     private var timings: Map<Int, List<Segment>> = emptyMap()
     /** Per-ayah repeat/high-water tables built once at load — hot-path lookups
@@ -448,6 +456,14 @@ class ReaderViewModel(
     fun toggleBookmark(ayah: Int): Boolean {
         val surah = surahId.takeIf { it != 0 } ?: return false
         return bookmarks.toggle(surah, ayah)
+    }
+
+    /** Writes (or, on blank [text], clears) the reader's note on a verse. The
+     * surah is passed in rather than read from the loaded chapter so a draft
+     * committed during a chapter advance still lands on the verse it was
+     * written for. */
+    fun writeAnnotation(surahId: Int, ayah: Int, text: String) {
+        annotations.write(surahId, ayah, text)
     }
 
     fun fastForward() {
