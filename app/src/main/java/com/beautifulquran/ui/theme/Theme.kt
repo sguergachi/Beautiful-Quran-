@@ -54,6 +54,8 @@ data class QuranAccents(
      * third hue, distinct from [gold] (selection/ornament) and [repeatInk]
      * (recitation), so "my marks" never reads as navigation or playback. */
     val bookmarkRibbon: Color,
+    /** Pale red used for the reader's annotation prose. */
+    val annotationInk: Color,
     /** Freshly laid ink's white-gold sheen — the first-gloss glint a newly
      * read word wears for a breath before drying to plain recited ink
      * (InkEngine.glinting). Null on themes without the effect; Nightfall and
@@ -70,6 +72,7 @@ val LocalQuranAccents = staticCompositionLocalOf {
         embossLight = Color(0x59FFFFFF),
         repeatInk = Color(0xFFC2622A),
         bookmarkRibbon = Color(0xFFB3122F),
+        annotationInk = Color(0xFFD47D8C),
     )
 }
 
@@ -199,6 +202,7 @@ private val LightAccents = QuranAccents(
     repeatInk = Color(0xFFB4551E),
     // Deep ruby: saturated enough to sit as ink on warm paper without glowing.
     bookmarkRibbon = Color(0xFFB3122F),
+    annotationInk = Color(0xFFD47D8C),
 )
 
 private val DarkAccents = QuranAccents(
@@ -213,6 +217,7 @@ private val DarkAccents = QuranAccents(
     // Lighter, less-saturated ruby so it lifts off near-black and deep green
     // instead of muddying into the surface. Shared by Nightfall and Royal Green.
     bookmarkRibbon = Color(0xFFD64358),
+    annotationInk = Color(0xFFF0A5B1),
     // White gold: a breath brighter and warmer than Parchment, so fresh ink
     // glints on the night page without shouting.
     glintInk = Color(0xFFF8E9BE),

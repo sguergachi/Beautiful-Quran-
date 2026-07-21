@@ -104,6 +104,66 @@ class FocusEngineTest {
     }
 
     @Test
+    fun `annotation field lifts above the keyboard with padding`() {
+        assertEquals(
+            152f,
+            FocusEngine.annotationFieldDeltaPx(
+                fieldTopPx = 620f,
+                fieldBottomPx = 660f,
+                viewportHeightPx = 800f,
+                topGuardPx = 0f,
+                keyboardInsetPx = 260f,
+                keyboardPaddingPx = 32f,
+            ),
+        )
+    }
+
+    @Test
+    fun `annotation field already clear of the keyboard does not move`() {
+        assertEquals(
+            0f,
+            FocusEngine.annotationFieldDeltaPx(
+                fieldTopPx = 420f,
+                fieldBottomPx = 480f,
+                viewportHeightPx = 800f,
+                topGuardPx = 0f,
+                keyboardInsetPx = 260f,
+                keyboardPaddingPx = 32f,
+            ),
+        )
+    }
+
+    @Test
+    fun `annotation field above the page scrolls back below the top guard`() {
+        assertEquals(
+            -30f,
+            FocusEngine.annotationFieldDeltaPx(
+                fieldTopPx = 20f,
+                fieldBottomPx = 80f,
+                viewportHeightPx = 800f,
+                topGuardPx = 50f,
+                keyboardInsetPx = 260f,
+                keyboardPaddingPx = 32f,
+            ),
+        )
+    }
+
+    @Test
+    fun `annotation keyboard clearance wins when the field is taller than the safe band`() {
+        assertEquals(
+            192f,
+            FocusEngine.annotationFieldDeltaPx(
+                fieldTopPx = 20f,
+                fieldBottomPx = 700f,
+                viewportHeightPx = 800f,
+                topGuardPx = 50f,
+                keyboardInsetPx = 260f,
+                keyboardPaddingPx = 32f,
+            ),
+        )
+    }
+
+    @Test
     fun `basmalah list item uses the same adaptive anchor as a short verse`() {
         // The basmalah is its own short LazyColumn item — not the tall header —
         // so it rests on the verse-style reading line (fitsFullyVisible path).
