@@ -87,6 +87,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -115,6 +116,7 @@ import com.beautifulquran.data.model.Ayah
 import com.beautifulquran.data.model.Word
 import com.beautifulquran.domain.EnglishTypography
 import com.beautifulquran.domain.TajweedPacing
+import com.beautifulquran.ui.reader.focus.FocusEngine
 import com.beautifulquran.ui.theme.ArabicTitleStyle
 import com.beautifulquran.ui.theme.ArabicWordStyle
 import com.beautifulquran.ui.theme.GeneratedChapterRosette
@@ -469,7 +471,7 @@ private typealias OnKeepWordInView = (measure: ViewportBoundsMeasure) -> Unit
 
 /** Routes a live note-field measure through the serialized focus controller. */
 private typealias OnKeepAnnotationInView = suspend (
-    keyboardInsetPx: Float,
+    keyboardOverlapPx: Float,
     keyboardPaddingPx: Float,
     measure: ViewportBoundsMeasure,
 ) -> Unit
@@ -1614,7 +1616,7 @@ private const val ANNOTATION_EDIT_FADE_MS = 220
 
 /** Paper kept between the line being written and the top of the keyboard.
  * The focus engine includes it in the field's keyboard-safe landing. */
-private val ANNOTATION_KEYBOARD_CLEARANCE = 32.dp
+private val ANNOTATION_KEYBOARD_CLEARANCE = 16.dp
 
 /**
  * The reader's marginal note for one verse, set in the scribe's hand below the
@@ -1656,16 +1658,23 @@ internal fun VerseAnnotationField(
     var fieldCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var fieldSize by remember { mutableStateOf(IntSize.Zero) }
     val density = LocalDensity.current
+    val view = LocalView.current
     val imeBottom = WindowInsets.ime.getBottom(density)
     LaunchedEffect(isEditing, imeBottom, fieldSize, fieldCoordinates, onKeepInView) {
         if (!isEditing || fieldSize.height == 0 || onKeepInView == null) return@LaunchedEffect
         val clearance = with(density) { ANNOTATION_KEYBOARD_CLEARANCE.toPx() }
-        onKeepInView(imeBottom.toFloat(), clearance) {
+        val list = listCoordinates()?.takeIf { it.isAttached } ?: return@LaunchedEffect
+        val listTop = list.localToWindow(Offset.Zero).y
+        val listBottom = list.localToWindow(Offset(0f, list.size.height.toFloat())).y
+        val keyboardOverlap = FocusEngine.keyboardOverlapPx(
+            listBottomInWindowPx = listBottom,
+            windowHeightPx = view.height.toFloat(),
+            keyboardInsetPx = imeBottom.toFloat(),
+        )
+        onKeepInView(keyboardOverlap, clearance) {
             val field = fieldCoordinates?.takeIf { it.isAttached } ?: return@onKeepInView null
-            val list = listCoordinates()?.takeIf { it.isAttached } ?: return@onKeepInView null
             // boundsInWindow clips off-screen descendants, underestimating how
             // far a note below a long verse must travel. Transform both edges.
-            val listTop = list.localToWindow(Offset.Zero).y
             val top = field.localToWindow(Offset.Zero).y - listTop
             val bottom = field.localToWindow(Offset(0f, field.size.height.toFloat())).y - listTop
             top to bottom
