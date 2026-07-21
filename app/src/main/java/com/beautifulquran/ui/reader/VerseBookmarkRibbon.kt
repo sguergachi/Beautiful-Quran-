@@ -22,6 +22,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -75,6 +76,43 @@ private val UnfurlEasing = CubicBezierEasing(0.45f, 0.02f, 0.22f, 1f)
 
 /** Gathering roll-up: starts quick, then softens into the tip. */
 private val RetractEasing = CubicBezierEasing(0.55f, 0.05f, 0.35f, 1f)
+
+/** Where the ḥāshiya tick sits: clear of the ribbon tip (inset + nub), plus air. */
+private const val NOTE_TICK_TOP_DP = TOP_INSET_DP + NUB_LENGTH_DP + 10f
+private const val NOTE_TICK_LENGTH_DP = 13f
+private const val NOTE_TICK_STROKE_DP = 2f
+
+/**
+ * The reader's ḥāshiya tick: a short ruby stroke in the same margin lane as the
+ * bookmark ribbon, marking a verse that carries a note. It shares the lane
+ * because that edge of the sheet is *the reader's own ink* — ribbon and tick
+ * both — while the opposite edge stays navigation (docs/NOTES.md).
+ *
+ * Drawing only: it is never a control. Note editing is entered from the verse's
+ * gold ﴿N﴾ mark, so the tick cannot be mistaken for a second bookmark target.
+ */
+@Composable
+internal fun VerseNoteTick(
+    side: AyahSelectorSide,
+    chromeAlpha: () -> Float,
+    modifier: Modifier = Modifier,
+) {
+    val ruby = LocalQuranAccents.current.bookmarkRibbon
+    Canvas(modifier.width(STRIP_WIDTH).fillMaxSize()) {
+        val alpha = chromeAlpha().coerceIn(0f, 1f)
+        if (alpha <= 0.01f) return@Canvas
+        val inset = (EDGE_INSET_DP + RIBBON_WIDTH_DP / 2f).dp.toPx()
+        val x = if (side == AyahSelectorSide.RIGHT) size.width - inset else inset
+        val top = NOTE_TICK_TOP_DP.dp.toPx()
+        drawLine(
+            color = ruby.copy(alpha = SOLID_ALPHA * alpha),
+            start = Offset(x, top),
+            end = Offset(x, top + NOTE_TICK_LENGTH_DP.dp.toPx()),
+            strokeWidth = NOTE_TICK_STROKE_DP.dp.toPx(),
+            cap = StrokeCap.Round,
+        )
+    }
+}
 
 /**
  * The bookmark ribbon drawn inside a single [AyahBlock]. [side] is the edge

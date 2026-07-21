@@ -4,8 +4,8 @@ A reader's own writing on the page: a short note attached to one verse, kept
 in the margin of the sheet it belongs to. This is the app's third piece of
 user data, after settings and bookmarks.
 
-**Status: design.** Nothing here is built yet. This document is the spec; it
-is written to be implemented on Android first and mirrored on web.
+**Status: built on Android; web port pending.** Sections marked *Not yet built*
+are spec, not description — everything else describes shipped behaviour.
 
 ## Why it exists, and what it is not
 
@@ -56,10 +56,10 @@ ribbon tip. Ruby because a note is the reader's mark, the same family as the
 bookmark ribbon, and ruby is walled off from gold (ornament) and green
 (action) precisely so "my marks" reads as neither. (DESIGN.md, "Color".)
 
-**Arrival.** A note that has just been written fades in word by word with the
-lyric fade — the ink literally arrives on the page. A note already on the
-page when the verse scrolls into view is simply there; the fade is for the
-moment of writing, not for every appearance.
+**Arrival** *(not yet built)*. A note that has just been written should fade in
+word by word with the lyric fade — the ink literally arriving on the page. A
+note already on the page when the verse scrolls into view is simply there; the
+fade is for the moment of writing, not for every appearance.
 
 ## Writing a note
 
@@ -69,19 +69,33 @@ is unclaimed: word tap seeks, word long-press opens the [Root
 Viewer](ROOT_VIEWER.md), a margin tap toggles the bookmark. Long-pressing an
 existing note's text opens the same editor on that note.
 
+The mark is not a separate control in any reading mode: it is part of the shaped
+ayah line in Arabic-only and English modes, so the shared `wordTapTarget`
+resolves a long-press against the mark's glyph range **before** falling through
+to the word under the finger (which opens the Root Viewer). In gloss mode the
+mark is its own `ArabicAyahNumberUnit`, which takes the gesture directly.
+
 Then, in place:
 
-1. The rest of the page recesses to upcoming ink over ~400 ms — the same
-   verse-recess motion recitation already uses. The held verse stays at full
-   ink. Playback, if running, is **not** interrupted.
-2. A caret appears on the note line beneath the verse, at exactly the
+1. A caret appears on the note line beneath the verse, at exactly the
    position the finished note will occupy, and the keyboard rises.
-3. The reader writes. The line grows downward; the verse above never moves.
-4. Tapping anywhere off the note, dismissing the keyboard, or turning the
-   sheet **commits**. There is no OK, no Save, no Cancel — paper has none of
-   them, and an autosaved note cannot be lost to a mis-tap.
-5. Committing an empty (or whitespace-only) note deletes it; its tick
+2. The reader writes. The line grows downward; the verse above never moves.
+   Playback, if running, is **not** interrupted.
+3. Tapping anywhere off the note, opening another verse's note, or leaving
+   the sheet **commits**. There is no OK, no Save, no Cancel — paper has none
+   of them, and an autosaved note cannot be lost to a mis-tap.
+4. Committing an empty (or whitespace-only) note deletes it; its tick
    retracts and the line closes.
+
+The draft is `rememberSaveable` and carries its own `(surah, ayah)`, so it
+survives rotation and process death and can never commit onto whichever verse
+happens to be loaded when it lands. Opening a second note commits the first
+*before* switching, and the stale focus-loss that follows is ignored by an
+identity guard — otherwise one verse's text writes itself onto another.
+
+*Not yet built:* the doc's original step 1, recessing the rest of the page to
+upcoming ink while composing. The editor currently opens without dimming its
+neighbours.
 
 Deleting an existing note is therefore just: open it, clear it, tap away.
 There is no separate destructive control and no confirmation — the reader
@@ -114,12 +128,15 @@ already the app's answer to "what did I mark".
 - A bookmarked verse that also carries a note shows the note as one italic
   line beneath its translation, truncated to two lines, on the index's inner
   40 dp/px spine.
-- A verse with a note but **no** bookmark still appears in its chapter
-  section, keyed by its ruby tick instead of the ribbon strip. This is the
-  one place the index shows something the reader did not explicitly file.
-- Search in the index matches note text as well as reference, chapter name,
-  and verse text.
 - Tapping the entry returns to the verse in the reader, as it does today.
+
+*Not yet built:*
+
+- A verse with a note but **no** bookmark does not yet appear in the index, so
+  an unbookmarked note is currently reachable only in the reader. This is the
+  most important remaining gap.
+- Index search does not match note text (only reference, chapter name, and
+  verse text).
 
 The header stays title + return only; no counts.
 
@@ -138,26 +155,29 @@ key:   "note:<surahId>:<ayah>"
 value: the note text, verbatim
 ```
 
-Plus `"updated:<surahId>:<ayah>"` → epoch millis, for ordering a future
-recents view. Keys are enumerated from `prefs.all` on load and parsed
-tolerantly — one malformed key must never crash the reader (same rule as
-`Bookmark.decode`). No JSON, no Room, no serialization dependency
-(invariant #5).
+Keys are enumerated from `prefs.all` on load and parsed tolerantly — one
+malformed key must never crash the reader (same rule as `Bookmark.decode`,
+and covered by `NoteRepositoryTest`). No JSON, no Room, no serialization
+dependency (invariant #5).
 
-`Note(surahId, ayah, text, updatedAt)` is the model. The repository exposes
+`Note(surahId, ayah, text)` is the model. The repository exposes
 `notes: StateFlow<List<Note>>` in reading order, `noteFor(surahId, ayah)`,
 and `write(surahId, ayah, text)` where blank text removes the entry.
+
+There is deliberately **no** `updatedAt`. Bookmarks carry one because a future
+recents view was specified for them; nothing orders notes by time, and an
+unused timestamp is a field that has to be kept correct forever for no reader.
 
 **Scale.** SharedPreferences loads the whole file into memory at first
 access. A few thousand short notes is well inside that budget; if the store
 ever needs to grow past that, it becomes a small writable SQLite file of its
 own and never a table inside the bundled asset.
 
-## Export
+## Export *(not yet built)*
 
 Notes are the only user data with no recovery path: the app is offline-first
 with no accounts and no backend (invariant #6), so a lost device is a lost
-hand. **Export ships with v1, not after.**
+hand. This is the highest-priority follow-up.
 
 Settings → a quiet *Export notes* line writes a plain-text file through the
 system document picker (SAF — no storage permission, no share sheet
@@ -175,10 +195,10 @@ Plain text, reading order, human-readable first and machine-parseable
 second. Import is deliberately out of scope for v1; restoring is a manual
 read, which is honest about what the format is.
 
-## Web parity
+## Web parity *(not yet built)*
 
-Both platforms ship this or neither does (invariant #7's spirit: the two must
-feel like one product). The web port stores notes in the same shape under
+Android shipped first; the web port is outstanding and the two must end up
+feeling like one product (invariant #7's spirit). The web port stores notes in the same shape under
 `localStorage`, keyed identically, alongside `web/src/data/settings.ts`. The
 margin tick reuses the web `VerseBookmarkRibbon` lane, and the note line uses
 the same italic EB Garamond at the reader's measure. The in-place editor is a
@@ -187,22 +207,27 @@ resize handle.
 
 ## Open questions
 
-1. **Entry gesture.** Long-pressing the ayah mark is unclaimed and semantically
-   right, but it is undiscoverable. The alternative is a ruby qalam nib that
-   appears in the margin lane on the focused verse — discoverable, but it adds
-   a second permanent affordance to a lane that is meant to stay quiet.
+1. **Entry gesture discoverability.** Long-pressing the ayah mark is unclaimed
+   and semantically right, but nothing on the page advertises it. The
+   alternative is a ruby qalam nib on the focused verse's margin lane —
+   discoverable, but a second permanent affordance in a lane meant to stay
+   quiet. Unresolved; the current build ships the hidden gesture.
 2. **Long notes on a phone.** In-place composition is the truest reading of the
    metaphor, but a 400-word note pushes the verse off-screen while writing.
    If that proves bad in the hand, the fallback is an ink bleed from the ayah
    mark onto a writing sheet (the [Root Viewer](ROOT_VIEWER.md) primitive) —
    proven code, one step further from the margin.
-3. **Notes during recitation.** Currently specified to recess with the verse.
-   Whether a reader wants to write *while* listening — and whether entering the
-   editor should pause playback — needs testing with real use.
+3. **Notes during recitation.** The note line recesses with its verse, and
+   entering the editor does not pause playback. Whether a reader actually wants
+   to write *while* listening needs testing with real use.
 
 ## Related
 
 - [DESIGN.md](DESIGN.md) — the paper metaphor, the ruby rule, the bookmark
   ribbon and its margin lane, the bookmark index's alignment anchors.
-- `data/BookmarkRepository.kt` — the store shape this one mirrors.
-- `ui/reader/VerseBookmarkRibbon.kt` — the margin lane's existing tenant.
+- `data/NoteRepository.kt` — the store, mirroring `BookmarkRepository`'s shape.
+- `ui/reader/VerseBookmarkRibbon.kt` — the margin lane: ribbon *and*
+  `VerseNoteTick`, which shares its geometry constants.
+- `ui/reader/ReaderComponents.kt` — `verseNoteStyle` (the reader's hand, shared
+  with the Bookmarks index), `VerseNoteField`, and the `wordTapTarget`
+  mark-before-word long-press resolution.

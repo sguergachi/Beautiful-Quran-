@@ -149,18 +149,23 @@ private fun rememberAyahMarkAlpha(focused: Boolean): State<Float> =
         label = "ayahMarkAlpha",
     )
 
+/** True when [tap] falls inside the glyph bounds of [range], inflated by [hitSlopPx]. */
+private fun TextLayoutResult.rangeContains(
+    tap: Offset,
+    range: IntRange,
+    hitSlopPx: Float,
+): Boolean =
+    range
+        .map { offset -> getBoundingBox(offset) }
+        .reduceOrNull { acc, rect -> acc.expandToInclude(rect) }
+        ?.inflate(hitSlopPx)
+        ?.contains(tap) == true
+
 private fun TextLayoutResult.wordIndexAt(
     tap: Offset,
     ranges: List<IntRange>,
     hitSlopPx: Float,
-): Int =
-    ranges.indexOfFirst { range ->
-        range
-            .map { offset -> getBoundingBox(offset) }
-            .reduceOrNull { acc, rect -> acc.expandToInclude(rect) }
-            ?.inflate(hitSlopPx)
-            ?.contains(tap) == true
-    }
+): Int = ranges.indexOfFirst { rangeContains(tap, it, hitSlopPx) }
 
 private fun Rect.expandToInclude(other: Rect): Rect =
     Rect(
@@ -979,6 +984,8 @@ private fun ResponsiveEnglishAyah(
     onAyahClick: () -> Unit,
     onWordClick: ((Word) -> Unit)?,
     onWordLongClick: ((Word) -> Unit)?,
+    /** Hold the trailing ﴿N﴾ mark to write this verse's note. */
+    onMarkLongClick: (() -> Unit)? = null,
 ) {
     val palette = rememberWordInkPalette()
     val gold = LocalQuranAccents.current.gold
@@ -1158,6 +1165,8 @@ private fun ResponsiveEnglishAyah(
                         onWordClick = onWordClick,
                         onWordLongClick = onWordLongClick,
                         onMiss = onAyahClick,
+                        markRange = rendered.markRange,
+                        onMarkLongClick = onMarkLongClick,
                     )
                 },
             ),
@@ -1169,6 +1178,10 @@ private fun ResponsiveEnglishAyah(
  * Resolves taps on an annotated ayah line to the word whose glyph bounds
  * (inflated by [hitSlopPx]) contain the tap; taps that miss every word go to
  * [onMiss] (null = ignored).
+ *
+ * A long-press is checked against the trailing ﴿N﴾ [markRange] *first*: the mark
+ * is the verse's own identity on the page, so holding it opens the verse note
+ * rather than a word's lexicon (docs/NOTES.md).
  */
 private fun Modifier.wordTapTarget(
     words: List<Word>,
@@ -1178,15 +1191,27 @@ private fun Modifier.wordTapTarget(
     onWordClick: (Word) -> Unit,
     onWordLongClick: ((Word) -> Unit)? = null,
     onMiss: (() -> Unit)? = null,
-): Modifier = pointerInput(ranges, words, layoutResult, onWordLongClick) {
+    markRange: IntRange = IntRange.EMPTY,
+    onMarkLongClick: (() -> Unit)? = null,
+): Modifier = pointerInput(ranges, words, layoutResult, onWordLongClick, onMarkLongClick) {
     detectTapGestures(
         onTap = { tap ->
             val wordIndex = layoutResult?.wordIndexAt(tap, ranges, hitSlopPx) ?: -1
             if (wordIndex >= 0) onWordClick(words[wordIndex]) else onMiss?.invoke()
         },
-        onLongPress = if (onWordLongClick == null) null else { pos ->
-            val wordIndex = layoutResult?.wordIndexAt(pos, ranges, hitSlopPx) ?: -1
-            if (wordIndex >= 0) onWordLongClick(words[wordIndex])
+        onLongPress = if (onWordLongClick == null && onMarkLongClick == null) {
+            null
+        } else {
+            { pos ->
+                val onMark = onMarkLongClick != null &&
+                    layoutResult?.rangeContains(pos, markRange, hitSlopPx) == true
+                if (onMark) {
+                    onMarkLongClick!!()
+                } else if (onWordLongClick != null) {
+                    val wordIndex = layoutResult?.wordIndexAt(pos, ranges, hitSlopPx) ?: -1
+                    if (wordIndex >= 0) onWordLongClick(words[wordIndex])
+                }
+            }
         },
     )
 }
@@ -1215,6 +1240,8 @@ private fun ResponsiveHafsAyah(
     onAyahClick: () -> Unit,
     onWordClick: ((Word) -> Unit)?,
     onWordLongClick: ((Word) -> Unit)? = null,
+    /** Hold the trailing ﴿N﴾ mark to write this verse's note. */
+    onMarkLongClick: (() -> Unit)? = null,
 ) {
     val palette = rememberWordInkPalette()
     val ayahMarkInk = LocalQuranAccents.current.gold
@@ -1435,6 +1462,8 @@ private fun ResponsiveHafsAyah(
                         onWordClick = onWordClick,
                         onWordLongClick = onWordLongClick,
                         onMiss = onAyahClick,
+                        markRange = rendered.markRange,
+                        onMarkLongClick = onMarkLongClick,
                     )
                 },
             ),
@@ -1510,6 +1539,23 @@ private fun ArabicAyahNumberUnit(
  * the reader writes in place. Tap away to commit; empty text = no note.
  */
 /**
+ * The reader's own hand. Italic is the whole distinction: the app's prose is
+ * roman, so a slanted line on the sheet can only be something the reader wrote.
+ * Shared by the reader's verse note and the Bookmarks index (docs/NOTES.md).
+ */
+@Composable
+internal fun verseNoteStyle(
+    fontSize: TextUnit = 15.sp,
+    lineHeight: TextUnit = 22.sp,
+): TextStyle =
+    MaterialTheme.typography.bodyMedium.copy(
+        fontFamily = TranslationFontFamily,
+        fontStyle = FontStyle.Italic,
+        fontSize = fontSize,
+        lineHeight = lineHeight,
+    )
+
+/**
  * The reader's marginal note for one verse: italic EB Garamond below the
  * translation. When [isEditing], a chromeless [BasicTextField] takes focus so
  * the reader writes in place. Losing focus commits; empty text = delete note.
@@ -1523,12 +1569,7 @@ internal fun VerseNoteField(
     onEditDone: () -> Unit = {},
 ) {
     val ink = MaterialTheme.colorScheme.onSurface
-    val noteStyle = MaterialTheme.typography.bodyMedium.copy(
-        fontFamily = TranslationFontFamily,
-        fontStyle = FontStyle.Italic,
-        fontSize = 15.sp,
-        lineHeight = 22.sp,
-    )
+    val noteStyle = verseNoteStyle()
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(isEditing) {
         if (isEditing) focusRequester.requestFocus()
@@ -1718,6 +1759,7 @@ fun AyahBlock(
                     onAyahClick = onAyahClick,
                     onWordClick = onWordClick,
                     onWordLongClick = onWordLongClick,
+                    onMarkLongClick = onAyahMarkLongClick,
                 )
             } else if (showGloss) {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -1775,6 +1817,7 @@ fun AyahBlock(
                         onAyahClick = onAyahClick,
                         onWordClick = onWordClick?.let { handler -> { word -> handler(word) } },
                         onWordLongClick = onWordLongClick?.let { handler -> { word -> handler(word) } },
+                        onMarkLongClick = onAyahMarkLongClick,
                     )
                 }
             }
@@ -1815,10 +1858,25 @@ fun AyahBlock(
         }
 
         if (bookmarkSide != null && onToggleBookmark != null) {
+            val laneAlignment = if (bookmarkSide == AyahSelectorSide.RIGHT) {
+                AbsoluteAlignment.TopRight
+            } else {
+                AbsoluteAlignment.TopLeft
+            }
             // matchParentSize (not fillMaxHeight): the ayah Box is wrap-content,
             // so fillMaxHeight would measure to 0 and the ribbon would vanish.
             // This sizes to the Column after layout, keeping the ribbon in-block.
             Box(Modifier.matchParentSize()) {
+                // The reader's own ink shares one lane: ribbon (what I marked)
+                // above, ḥāshiya tick (what I wrote) below it. Both obey the
+                // same chrome rules and vanish while reciting.
+                if (noteText != null && !isEditingNote) {
+                    VerseNoteTick(
+                        side = bookmarkSide,
+                        chromeAlpha = bookmarkChromeAlpha,
+                        modifier = Modifier.align(laneAlignment).matchParentSize(),
+                    )
+                }
                 VerseBookmarkRibbon(
                     bookmarked = bookmarked,
                     focused = bookmarkFocused,

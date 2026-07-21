@@ -62,6 +62,7 @@ import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.model.BookmarkedAyah
 import com.beautifulquran.data.model.Surah
 import com.beautifulquran.ui.reader.VerseBookmarkRibbon
+import com.beautifulquran.ui.reader.verseNoteStyle
 import com.beautifulquran.ui.theme.ArabicTitleStyle
 import com.beautifulquran.ui.theme.DisclosureChevron
 import com.beautifulquran.ui.theme.LocalQuranAccents
@@ -382,12 +383,7 @@ private fun BookmarkAyahRow(
                 Spacer(Modifier.height(6.dp))
                 Text(
                     text = noteText,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontFamily = com.beautifulquran.ui.theme.TranslationFontFamily,
-                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp,
-                    ),
+                    style = verseNoteStyle(fontSize = 14.sp, lineHeight = 20.sp),
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.66f),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,

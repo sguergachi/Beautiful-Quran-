@@ -458,9 +458,12 @@ class ReaderViewModel(
         return bookmarks.toggle(surah, ayah)
     }
 
-    fun writeNote(ayah: Int, text: String) {
-        val surah = surahId.takeIf { it != 0 } ?: return
-        notes.write(surah, ayah, text)
+    /** Writes (or, on blank [text], clears) the reader's note on a verse. The
+     * surah is passed in rather than read from the loaded chapter so a draft
+     * committed during a chapter advance still lands on the verse it was
+     * written for. */
+    fun writeNote(surahId: Int, ayah: Int, text: String) {
+        notes.write(surahId, ayah, text)
     }
 
     fun fastForward() {

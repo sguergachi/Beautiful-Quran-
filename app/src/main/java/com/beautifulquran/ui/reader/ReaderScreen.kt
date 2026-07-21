@@ -199,12 +199,38 @@ fun ReaderScreen(
     val activeWordState = viewModel.activeWord.collectAsStateWithLifecycle()
     val settings by viewModel.settings.settings.collectAsStateWithLifecycle()
     val bookmarkedAyahs by viewModel.bookmarkedAyahs.collectAsStateWithLifecycle()
-    // Like bookmarkedAyahs: read per-ayah in derivedStateOf so a note change
-    // recomposes only that one block.
+    // Like bookmarkedAyahs: read per-ayah so a note change recomposes only
+    // that one block.
     val notesForSurah = viewModel.notesForSurah.collectAsStateWithLifecycle()
-    var editingNoteAyah by remember { mutableStateOf<Int?>(null) }
-    var editingNoteText by remember { mutableStateOf("") }
-    val keyboardController = LocalSoftwareKeyboardController.current
+    // Saveable: an in-progress note must survive rotation and process death —
+    // it is the one piece of user data with no other copy anywhere. The draft
+    // carries its own (surah, ayah) so a chapter advance mid-edit can never
+    // land it on the verse that happens to be loaded when it commits.
+    var editingNoteSurah by rememberSaveable { mutableStateOf(0) }
+    var editingNoteAyah by rememberSaveable { mutableStateOf(0) }
+    var editingNoteText by rememberSaveable { mutableStateOf("") }
+    /**
+     * Commits the open draft and closes the editor. Called when the field loses
+     * focus, *before* opening another verse's note (so a draft is never carried
+     * across verses), and when the reader leaves the sheet.
+     */
+    fun commitOpenNote() {
+        if (editingNoteAyah == 0) return
+        viewModel.writeNote(editingNoteSurah, editingNoteAyah, editingNoteText)
+        editingNoteSurah = 0
+        editingNoteAyah = 0
+        editingNoteText = ""
+    }
+    // Turning the sheet commits — paper has no Save button (docs/NOTES.md).
+    val openNote = rememberUpdatedState(
+        Triple(editingNoteSurah, editingNoteAyah, editingNoteText),
+    )
+    DisposableEffect(Unit) {
+        onDispose {
+            val (surah, ayah, text) = openNote.value
+            if (ayah != 0) viewModel.writeNote(surah, ayah, text)
+        }
+    }
 
     val listState = rememberLazyListState()
     // Gilding sheen: light catches the header rosette as the page moves.
@@ -1753,19 +1779,25 @@ fun ReaderScreen(
                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                     onOpenRootViewer(ayah.surahId, ayah.number, word.position)
                                 },
-                                noteText = run {
-                                    val saved = notesForSurah.value[ayah.number]
-                                    if (editingNoteAyah == ayah.number) editingNoteText else saved
+                                noteText = if (editingNoteAyah == ayah.number) {
+                                    editingNoteText
+                                } else {
+                                    notesForSurah.value[ayah.number]
                                 },
                                 isEditingNote = editingNoteAyah == ayah.number,
                                 onNoteChange = { editingNoteText = it },
+                                // Guarded by identity: switching verses makes the
+                                // old field lose focus *after* the new one opened,
+                                // and that stale callback must not close the new
+                                // editor or write the new draft to the old verse.
                                 onNoteEditDone = {
-                                    viewModel.writeNote(ayah.number, editingNoteText)
-                                    editingNoteAyah = null
+                                    if (editingNoteAyah == ayah.number) commitOpenNote()
                                 },
                                 onAyahMarkLongClick = {
                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    commitOpenNote()
                                     editingNoteText = notesForSurah.value[ayah.number] ?: ""
+                                    editingNoteSurah = ayah.surahId
                                     editingNoteAyah = ayah.number
                                 },
                             )
