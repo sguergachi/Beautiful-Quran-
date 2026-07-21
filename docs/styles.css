@@ -572,6 +572,10 @@ h3 {
   display: block;
 }
 
+.heading-phrase {
+  white-space: nowrap;
+}
+
 @media (max-width: 560px) {
   .heading-line--small {
     display: block;
