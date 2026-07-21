@@ -1663,9 +1663,12 @@ internal fun VerseAnnotationField(
         onKeepInView(imeBottom.toFloat(), clearance) {
             val field = fieldCoordinates?.takeIf { it.isAttached } ?: return@onKeepInView null
             val list = listCoordinates()?.takeIf { it.isAttached } ?: return@onKeepInView null
-            val listTop = list.boundsInWindow().top
-            val bounds = field.boundsInWindow()
-            (bounds.top - listTop) to (bounds.bottom - listTop)
+            // boundsInWindow clips off-screen descendants, underestimating how
+            // far a note below a long verse must travel. Transform both edges.
+            val listTop = list.localToWindow(Offset.Zero).y
+            val top = field.localToWindow(Offset.Zero).y - listTop
+            val bottom = field.localToWindow(Offset(0f, field.size.height.toFloat())).y - listTop
+            top to bottom
         }
     }
 
