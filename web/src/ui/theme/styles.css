@@ -1141,8 +1141,8 @@ select {
  * column — so it cannot steal flex width or shift ayah centering.
  *
  * Starts below the reader chrome (and ends above the player bar) so the
- * full-height hit target cannot cover back / settings / transport —
- * same idea as Android's Scaffold top/bottom padding around the rail.
+ * canvas cannot cover back / settings / transport. The actual hit target
+ * (.ayah-rail-hit) is only the centered dash stack when collapsed.
  */
 .ayah-rail {
   position: absolute;
@@ -1151,11 +1151,10 @@ select {
   width: 5.5rem;
   z-index: 6;
   transition: opacity var(--chrome-recede-ms) var(--recede-ease);
-  cursor: ns-resize;
-  touch-action: none;
   -webkit-user-select: none;
   user-select: none;
-  pointer-events: auto;
+  /* Canvas paints the full edge; only .ayah-rail-hit receives pointers. */
+  pointer-events: none;
 }
 
 .ayah-rail[data-side='left'] {
@@ -1169,8 +1168,6 @@ select {
 /* Same as reader-top: Android passes topBarAlpha (→ 0), not chromeAlpha. */
 .ayah-rail[data-receded='true'] {
   opacity: 0;
-  pointer-events: none;
-  cursor: default;
 }
 
 .ayah-rail-canvas {
@@ -1178,6 +1175,38 @@ select {
   width: 100%;
   height: 100%;
   pointer-events: none;
+}
+
+/*
+ * Collapsed: only the centered dash stack (height via --rail-hit-h).
+ * Expanded: full rail height for scrub. Parent is pointer-events:none so
+ * page taps above/below the stack pass through when minimized.
+ */
+.ayah-rail-hit {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: auto;
+  cursor: ns-resize;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.ayah-rail[data-expanded='true'] .ayah-rail-hit {
+  top: 0;
+  bottom: 0;
+}
+
+.ayah-rail[data-expanded='false'] .ayah-rail-hit {
+  top: 50%;
+  height: var(--rail-hit-h, 4rem);
+  transform: translateY(-50%);
+}
+
+.ayah-rail[data-receded='true'] .ayah-rail-hit {
+  pointer-events: none;
+  cursor: default;
 }
 
 .surah-header {

@@ -76,6 +76,26 @@ internal fun symbolicAyahBarCount(ayahCount: Int): Int {
     return ceil(sqrt(ayahCount.toFloat())).roundToInt().coerceIn(4, 18)
 }
 
+/**
+ * Vertical span (dp) of the collapsed dash stack drawn by [AyahSelectorRail].
+ * Matches the Canvas layout: bar height 1.5dp, spacing 72/count clamped 4–8.
+ */
+internal fun collapsedStackSpanDp(ayahCount: Int): Float {
+    val count = symbolicAyahBarCount(ayahCount)
+    val barH = 1.5f
+    val spacing = (72f / count).coerceIn(4f, 8f)
+    return (count - 1) * (barH + spacing) + barH
+}
+
+/**
+ * Collapsed touch-target height (dp): the visual stack plus a little pad, with
+ * a 48dp floor so short surahs stay easy to hit. Keeps the hit zone on the
+ * vertical center of the edge — not the full screen height.
+ */
+internal fun collapsedRailHitHeightDp(ayahCount: Int, padDp: Float = 24f): Float {
+    return max(48f, collapsedStackSpanDp(ayahCount) + padDp)
+}
+
 private suspend fun settleDialWheel(
     start: Float,
     velocity: Float,
@@ -248,7 +268,8 @@ internal fun AyahSelectorRail(
             // Fixed drawing width: the old expand/collapse width animation
             // re-laid the rail out every frame. Touch handling is split into
             // a child below so the collapsed hit target is only the visible
-            // edge strip, letting nearby ayah text receive taps.
+            // dash stack (vertically centered), not the full edge strip —
+            // letting ayah text above/below and beside the stack receive taps.
             .width(92.dp)
             .graphicsLayer { alpha = chromeAlpha() },
     ) {
@@ -464,10 +485,16 @@ internal fun AyahSelectorRail(
         }
 
         if (expanded || interactive) {
+            // Collapsed: hit only the visual dash stack (vertically centered on
+            // the edge). Expanded: full height so the scrub wheel stays under
+            // the finger after the bloom.
+            val collapsedHitHeight = collapsedRailHitHeightDp(ayahCount).dp
             Box(
                 Modifier
                     .align(if (mirrored) AbsoluteAlignment.CenterRight else AbsoluteAlignment.CenterLeft)
-                    .fillMaxHeight()
+                    .then(
+                        if (expanded) Modifier.fillMaxHeight() else Modifier.height(collapsedHitHeight),
+                    )
                     .width(if (expanded) 92.dp else 44.dp)
                     .pointerInput(ayahCount) {
                         awaitEachGesture {
