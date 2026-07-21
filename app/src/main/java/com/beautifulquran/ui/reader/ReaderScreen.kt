@@ -995,6 +995,9 @@ fun ReaderScreen(
         LaunchedEffect(ayahSelectorExpanded) {
             onAyahSelectorExpandedChange(ayahSelectorExpanded)
         }
+        LaunchedEffect(editingAnnotationAyah) {
+            if (editingAnnotationAyah != 0) ayahSelectorExpanded = false
+        }
         // Shared with settle / list rubber-band (defined before advance uses it).
         val pullRubberMaxPx = with(density) { 56.dp.toPx() }
         // Previous pull shoves the list down by this much at full fill — matches
@@ -1952,29 +1955,31 @@ fun ReaderScreen(
                         .coerceIn(1f, content.surah.ayahCount.toFloat())
                 }
             }
-            AyahSelectorRail(
-                ayahCount = content.surah.ayahCount,
-                side = selectorSide,
-                currentAyah = railCurrentAyah,
-                currentPosition = railCurrentPosition,
-                bookmarkedAyahs = bookmarkedAyahs,
-                chromeAlpha = { topBarAlpha.value },
-                interactive = !recitingActive,
-                onJumpToAyah = { requestedJumpAyah = it },
-                onExpandedChange = { ayahSelectorExpanded = it },
-                dismissRequests = ayahSelectorDismissRequests,
-                modifier = Modifier
-                    .align(
-                        if (selectorSide == AyahSelectorSide.RIGHT) {
-                            AbsoluteAlignment.CenterRight
-                        } else {
-                            AbsoluteAlignment.CenterLeft
-                        },
-                    )
-                    .fillMaxHeight()
-                    .padding(top = padding.calculateTopPadding())
-                    .zIndex(1f),
-            )
+            if (editingAnnotationAyah == 0) {
+                AyahSelectorRail(
+                    ayahCount = content.surah.ayahCount,
+                    side = selectorSide,
+                    currentAyah = railCurrentAyah,
+                    currentPosition = railCurrentPosition,
+                    bookmarkedAyahs = bookmarkedAyahs,
+                    chromeAlpha = { topBarAlpha.value },
+                    interactive = !recitingActive,
+                    onJumpToAyah = { requestedJumpAyah = it },
+                    onExpandedChange = { ayahSelectorExpanded = it },
+                    dismissRequests = ayahSelectorDismissRequests,
+                    modifier = Modifier
+                        .align(
+                            if (selectorSide == AyahSelectorSide.RIGHT) {
+                                AbsoluteAlignment.CenterRight
+                            } else {
+                                AbsoluteAlignment.CenterLeft
+                            },
+                        )
+                        .fillMaxHeight()
+                        .padding(top = padding.calculateTopPadding())
+                        .zIndex(1f),
+                )
+            }
 
             // Ornamented return-to-ayah — floats above the player bar via the
             // shared FloatingPaperControl host. Yields while MainActivity's
