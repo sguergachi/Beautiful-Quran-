@@ -3470,10 +3470,11 @@ select {
 }
 
 .root-word-title {
-  display: flex;
+  position: relative;
+  display: block;
+  width: fit-content;
+  margin-inline: auto;
   align-items: center;
-  justify-content: center;
-  gap: 0.625rem;
 }
 
 .root-word-arabic {
@@ -3486,6 +3487,9 @@ select {
 
 /* Quiet speaker — plays only this word (timing clip). No chrome. */
 .root-word-speak {
+  position: absolute;
+  inset-inline-start: calc(100% + 0.625rem);
+  top: 50%;
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
@@ -3498,6 +3502,7 @@ select {
   background: transparent;
   color: color-mix(in srgb, var(--accent) 65%, transparent);
   cursor: pointer;
+  transform: translateY(-50%);
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -3529,6 +3534,9 @@ select {
 }
 
 .root-label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
   margin: 0;
   color: color-mix(in srgb, var(--ink) 72%, transparent);
   font-family: var(--font-body);
@@ -3537,6 +3545,33 @@ select {
   letter-spacing: 0.13em;
   line-height: 1.35;
   text-transform: uppercase;
+}
+
+.root-info-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  margin: -0.65rem;
+  padding: 0.65rem;
+  border: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--accent) 80%, transparent);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.root-explanation {
+  max-width: 32rem;
+  margin-top: var(--root-space-1) !important;
+  color: color-mix(in srgb, var(--ink) 70%, transparent);
+  font-size: 0.9375rem;
+  line-height: 1.55;
 }
 
 .root-radicals {
@@ -3566,6 +3601,10 @@ select {
   line-height: 1.47;
 }
 
+.root-grammar {
+  margin-top: var(--root-space-4);
+}
+
 .root-form-frequency,
 .root-no-root,
 .root-section-summary {
@@ -3586,7 +3625,7 @@ select {
 .root-section-title {
   display: flex;
   align-items: center;
-  gap: var(--root-space-4);
+  gap: var(--root-space-2);
   margin: 0;
   color: var(--ink);
   font-family: var(--font-display);
@@ -3608,7 +3647,8 @@ select {
 }
 
 .root-occurrences,
-.root-related {
+.root-related,
+.root-references {
   max-width: 34rem;
   margin-inline: auto;
 }
@@ -3760,6 +3800,44 @@ select {
   line-height: 1.5;
 }
 
+.root-reference-list {
+  margin-top: var(--root-space-4);
+}
+
+.root-reference {
+  display: block;
+  padding: var(--root-space-3) 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.root-reference-title,
+.root-reference-description {
+  display: block;
+}
+
+.root-reference-title {
+  color: var(--accent);
+  font-size: 1.0625rem;
+  line-height: 1.4;
+}
+
+.root-reference-description,
+.root-reference-caution {
+  color: color-mix(in srgb, var(--ink) 68%, transparent);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.root-reference-description {
+  margin-top: 0.125rem;
+}
+
+.root-reference-caution {
+  margin-top: var(--root-space-2) !important;
+  color: color-mix(in srgb, var(--ink) 62%, transparent);
+}
+
 .ink-bleed-attribution {
   margin: var(--root-space-8) 0 0;
   color: var(--ink-muted);
@@ -3787,9 +3865,11 @@ select {
 @media (hover: hover) {
   .ink-bleed .close:hover,
   .root-word-speak:hover,
+  .root-info-button:hover,
   .root-chapter-heading:hover,
   .root-occurrence:hover,
-  .root-text-action:hover {
+  .root-text-action:hover,
+  .root-reference:hover {
     opacity: 0.76;
   }
 }

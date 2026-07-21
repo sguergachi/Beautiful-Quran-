@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { appStore, useAppSelector, type RootViewerState } from '../../store/appStore'
 import { IconClose, IconVolumeUp } from '../icons/PlaybackIcons'
 import { featureSummary, posLabel, spacedRoot } from './morphologyLabels'
+import { rootViewerReferences } from './rootViewerReferences'
 import {
   initialRootSections,
   relatedRootForms,
@@ -13,12 +14,52 @@ import {
 
 /** Exit hole duration — keep in sync with `.ink-bleed[data-closing]`. */
 const BLEED_OUT_MS = 420
+const HELP = {
+  root: 'Usually three consonants shared by a family of related words. A root points to a meaning family, not one fixed translation.',
+  lemma: 'The dictionary headword that groups inflected versions of the same word. It is more specific than a root.',
+  grammar: 'How this word functions here: its part of speech and features such as verb form, person, number, gender, case, voice, or mood.',
+  occurrences: 'Every Quran word annotated with this root. Shared roots suggest a family resemblance, but context decides the meaning.',
+  related: 'Other dictionary headwords built from the same root. Their meanings may be related, but are not necessarily identical.',
+} as const
 function times(count: number) {
   return count === 1 ? 'once' : `${count} times`
 }
 
 function occurrences(count: number) {
   return `${count} ${count === 1 ? 'occurrence' : 'occurrences'}`
+}
+
+function ExplainedHeading({
+  label,
+  explanation,
+  kind = 'label',
+  id,
+}: {
+  label: string
+  explanation: string
+  kind?: 'label' | 'section'
+  id?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const helpId = useId()
+  return (
+    <div className="root-explained">
+      <h2 id={id} className={kind === 'section' ? 'root-section-title' : 'root-label'}>
+        <span>{label}</span>
+        <button
+          type="button"
+          className="root-info-button"
+          aria-label={`Explain ${label.toLowerCase()}`}
+          aria-expanded={open}
+          aria-controls={helpId}
+          onClick={() => setOpen((value) => !value)}
+        >
+          ⓘ
+        </button>
+      </h2>
+      {open ? <p className="root-explanation" id={helpId}>{explanation}</p> : null}
+    </div>
+  )
 }
 
 /** Root lexicon ink bleed hosted inside the reader sheet. */
@@ -62,6 +103,10 @@ function RootViewerBleed({ closing, rv }: { closing: boolean; rv: RootViewerStat
   const visibleForms = showAllForms
     ? relatedForms
     : relatedForms.slice(0, ROOT_RELATED_FORM_PREVIEW_LIMIT)
+  const references = useMemo(
+    () => rootViewerReferences(rv.surahId, rv.ayah, rv.position, rv.root),
+    [rv.ayah, rv.position, rv.root, rv.surahId],
+  )
 
   return (
     <div
@@ -103,18 +148,25 @@ function RootViewerBleed({ closing, rv }: { closing: boolean; rv: RootViewerStat
             <section className="root-analysis root-prose-measure" aria-label="Word analysis">
               {rv.root ? (
                 <div className="root-analysis-group">
-                  <h2 className="root-label">Root</h2>
+                  <ExplainedHeading label="Root" explanation={HELP.root} />
                   <p className="root-radicals" lang="ar" dir="rtl">{spacedRoot(rv.root)}</p>
                 </div>
               ) : null}
               {(rv.lemma || rv.pos) ? (
                 <div className="root-analysis-group root-form">
-                  <h2 className="root-label">This form</h2>
-                  {rv.lemma ? <p className="root-form-lemma" lang="ar" dir="rtl">{rv.lemma}</p> : null}
+                  {rv.lemma ? (
+                    <>
+                      <ExplainedHeading label="Lemma" explanation={HELP.lemma} />
+                      <p className="root-form-lemma" lang="ar" dir="rtl">{rv.lemma}</p>
+                    </>
+                  ) : null}
                   {(rv.pos || featureSummary(rv.features)) ? (
-                    <p className="root-form-grammar">
-                      {[rv.pos ? posLabel(rv.pos) : '', featureSummary(rv.features)].filter(Boolean).join(' · ')}
-                    </p>
+                    <div className="root-grammar">
+                      <ExplainedHeading label="Grammar" explanation={HELP.grammar} />
+                      <p className="root-form-grammar">
+                        {[rv.pos ? posLabel(rv.pos) : '', featureSummary(rv.features)].filter(Boolean).join(' · ')}
+                      </p>
+                    </div>
                   ) : null}
                   {lemmaCount > 0 ? <p className="root-form-frequency">This lemma occurs {times(lemmaCount)}.</p> : null}
                 </div>
@@ -126,7 +178,12 @@ function RootViewerBleed({ closing, rv }: { closing: boolean; rv: RootViewerStat
           {rv.root && rv.occurrenceCount > 0 ? (
             <section className="root-section root-occurrences" aria-labelledby="root-occurrences-title">
               <div className="root-prose-measure">
-                <h2 id="root-occurrences-title" className="root-section-title">Occurrences</h2>
+                <ExplainedHeading
+                  id="root-occurrences-title"
+                  kind="section"
+                  label="Occurrences"
+                  explanation={HELP.occurrences}
+                />
                 <p className="root-section-summary">
                   This root occurs {times(rv.occurrenceCount)} across {sections.length}{' '}
                   {sections.length === 1 ? 'chapter' : 'chapters'}.
@@ -205,7 +262,12 @@ function RootViewerBleed({ closing, rv }: { closing: boolean; rv: RootViewerStat
 
           {relatedForms.length > 0 ? (
             <section className="root-section root-related" aria-labelledby="root-related-title">
-              <h2 id="root-related-title" className="root-section-title">Related forms</h2>
+              <ExplainedHeading
+                id="root-related-title"
+                kind="section"
+                label="Related forms"
+                explanation={HELP.related}
+              />
               <div className="root-related-list">
                 {visibleForms.map((entry) => (
                   <div className="root-related-row" key={`${entry.lemma}:${entry.pos}`}>
@@ -224,10 +286,25 @@ function RootViewerBleed({ closing, rv }: { closing: boolean; rv: RootViewerStat
               ) : null}
             </section>
           ) : null}
+
+          <section className="root-section root-references" aria-labelledby="root-references-title">
+            <h2 id="root-references-title" className="root-section-title">Learn more online</h2>
+            <div className="root-reference-list">
+              {references.map((reference) => (
+                <a key={reference.url} className="root-reference" href={reference.url} target="_blank" rel="noreferrer">
+                  <span className="root-reference-title">{reference.title} <span aria-hidden="true">↗</span></span>
+                  <span className="root-reference-description">{reference.description}</span>
+                </a>
+              ))}
+            </div>
+            <p className="root-reference-caution">
+              Classical dictionary entries describe a broad history of usage; the ayah&apos;s context still determines the intended sense.
+            </p>
+          </section>
         </main>
 
         <p className="ink-bleed-attribution">
-          Morphology from the Quranic Arabic Corpus —{' '}
+          Morphology from the Quranic Arabic Corpus v0.4 —{' '}
           <a href="https://corpus.quran.com" target="_blank" rel="noreferrer">corpus.quran.com</a>
         </p>
       </div>
