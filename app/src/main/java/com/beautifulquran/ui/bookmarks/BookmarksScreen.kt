@@ -383,7 +383,7 @@ private fun BookmarkAyahRow(
                 Spacer(Modifier.height(6.dp))
                 Text(
                     text = noteText,
-                    style = verseNoteStyle(fontSize = 14.sp, lineHeight = 20.sp),
+                    style = verseNoteStyle(fontSize = 15.sp, lineHeight = 21.sp),
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.66f),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,

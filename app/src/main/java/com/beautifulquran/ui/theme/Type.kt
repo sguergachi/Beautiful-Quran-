@@ -37,6 +37,27 @@ val DisplayFontFamily = FontFamily(
 val TranslationFontFamily = SerifFontFamily
 
 /**
+ * **The reader's hand.** Cormorant Garamond Italic, instanced at weight 500 —
+ * the chancery cursive that Renaissance scribes actually wrote marginal glosses
+ * in, and the hand italic type was cut from in the first place.
+ *
+ * It is deliberately *not* EB Garamond Italic. The app's prose is EB Garamond,
+ * so its own italic reads as **emphasis** — the same voice leaning — rather
+ * than as a second person writing on the page. Cormorant's italic is a
+ * different, more pen-driven hand: looser 'a' and 'e', calligraphic 'f' and
+ * 'y', a wider stroke contrast. At note size the reader sees someone else's
+ * writing, not the app raising its voice.
+ *
+ * This is the one narrow exception to Cormorant's display-only rule
+ * (docs/DESIGN.md, "Break a rule narrowly and record why"): the 500 weight and
+ * the note's 62 % ink keep the fine strokes from going wispy at 15 sp. Do not
+ * generalise it into body copy — the roman Cormorant stays display-only.
+ */
+val ScribeFontFamily = FontFamily(
+    Font(R.font.cormorant_garamond_italic, FontWeight.Medium, FontStyle.Italic),
+)
+
+/**
  * Discretionary refinements applied to running serif text: kerning and
  * ligatures on, old-style (text) figures so ayah counts sit inside prose
  * without shouting. Fonts that lack a feature simply ignore it.

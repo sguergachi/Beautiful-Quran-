@@ -41,3 +41,11 @@
   font-weight: 600;
   font-display: swap;
 }
+/* The reader's hand — chancery italic for verse notes. See docs/NOTES.md. */
+@font-face {
+  font-family: 'Cormorant Garamond';
+  src: url('./fonts/cormorant_garamond_italic.ttf') format('truetype');
+  font-weight: 500;
+  font-style: italic;
+  font-display: swap;
+}

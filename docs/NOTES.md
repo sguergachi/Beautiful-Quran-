@@ -45,10 +45,26 @@ voice, and the two must never be confusable.
 | Note is long | The text truncates to three lines with a quiet ink ellipsis; tapping the note opens it in place (see "Writing"). |
 | Another ayah is reciting | The tick vanishes with the rest of the chrome; the text recesses to upcoming ink with its verse, exactly like the translation. |
 
-**Type.** EB Garamond *italic*, 15 sp, 72 % ink, on the inner spine, with the
-same 8 dp/px gap the translation keeps from the Arabic. Italic is the whole
-distinction: the app's own prose is roman, the reader's hand slants. No
-quotation marks, no "Note:" label, no attribution — the slant says it.
+**Type.** **Cormorant Garamond Italic at weight 500**, 16 sp / 23 sp, 62 % ink,
+on the inner spine, 12 dp/px below the translation. No quotation marks, no
+"Note:" label, no attribution — the hand says it.
+
+The face is the point. Italic alone is not enough: setting the note in the
+app's *own* EB Garamond italic reads as **emphasis**, the same voice leaning,
+because it is literally the same typeface as the translation above it.
+Cormorant's italic is a genuinely different hand — looser `a` and `e`,
+calligraphic `f` and `y`, higher stroke contrast, a wider pen — so the eye
+reads a second person on the page rather than the app raising its voice. It is
+also the historically right one: chancery cursive is what scribes actually
+wrote ḥawāshī in, and what italic type was first cut from.
+
+Two constraints make it work at reading size. Cormorant is a display face and
+goes wispy small, so the note uses **weight 500** (a static instance cut from
+the variable font, subset to latin + latin-ext at 132 KB) and sits a step
+larger than the old EB italic at 16 sp with 0.15 sp letterspacing. Ink stays
+**below** the translation's 66 % so the reader's own hand can never out-ink the
+scripture it hangs off. This is a narrow, recorded exception to Cormorant's
+display-only rule in [DESIGN.md](DESIGN.md) — do not generalise it to body copy.
 
 **The tick.** A short ruby stroke in the margin lane, optically inside the
 ribbon's 44 dp/px target lane but never widening it, sitting below the
@@ -231,3 +247,7 @@ resize handle.
 - `ui/reader/ReaderComponents.kt` — `verseNoteStyle` (the reader's hand, shared
   with the Bookmarks index), `VerseNoteField`, and the `wordTapTarget`
   mark-before-word long-press resolution.
+- `ui/theme/Type.kt` — `ScribeFontFamily`, and why it is not the EB italic.
+  The face is OFL (same licence as every other bundled font); the Android cut
+  is `res/font/cormorant_garamond_italic.ttf`, mirrored for web in
+  `web/public/fonts/` with a `--font-scribe` variable already wired.

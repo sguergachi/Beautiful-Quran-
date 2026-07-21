@@ -106,6 +106,7 @@ import com.beautifulquran.ui.theme.HafsFontFamily
 import com.beautifulquran.ui.theme.IslamicBackToOriginCapsule
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.ShapedWordBloom
+import com.beautifulquran.ui.theme.ScribeFontFamily
 import com.beautifulquran.ui.theme.TranslationFontFamily
 import com.beautifulquran.ui.theme.generatedFieldWeave
 import com.beautifulquran.ui.theme.gilded
@@ -1539,25 +1540,32 @@ private fun ArabicAyahNumberUnit(
  * the reader writes in place. Tap away to commit; empty text = no note.
  */
 /**
- * The reader's own hand. Italic is the whole distinction: the app's prose is
- * roman, so a slanted line on the sheet can only be something the reader wrote.
- * Shared by the reader's verse note and the Bookmarks index (docs/NOTES.md).
+ * The reader's own hand: Cormorant Garamond Italic, a chancery cursive that is
+ * a genuinely *different* hand from the app's EB Garamond prose — not the same
+ * voice leaning into emphasis. See [ScribeFontFamily] for why.
+ *
+ * Set a touch larger than the old EB italic (16 sp) because Cormorant runs
+ * small on the body, and with slightly open letterspacing so the fine strokes
+ * keep their air. Shared by the reader's verse note and the Bookmarks index.
  *
  * [fontScale] mirrors the translation's damped scaling so the note grows with
  * the page instead of staying pinned at one size when the reader sizes type up.
  */
 @Composable
 internal fun verseNoteStyle(
-    fontSize: TextUnit = 15.sp,
-    lineHeight: TextUnit = 22.sp,
+    fontSize: TextUnit = 16.sp,
+    lineHeight: TextUnit = 23.sp,
     fontScale: Float = 1f,
 ): TextStyle {
     val damped = 0.9f + 0.1f * fontScale
     return MaterialTheme.typography.bodyMedium.copy(
-        fontFamily = TranslationFontFamily,
+        fontFamily = ScribeFontFamily,
+        fontWeight = FontWeight.Medium,
         fontStyle = FontStyle.Italic,
         fontSize = fontSize * damped,
         lineHeight = lineHeight * damped,
+        letterSpacing = 0.15.sp,
+        fontFeatureSettings = "'kern' 1, 'liga' 1, 'onum' 1",
     )
 }
 
