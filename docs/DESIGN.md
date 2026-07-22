@@ -94,7 +94,7 @@ surfaces use it today / by design:
 | [Root Word Viewer](ROOT_VIEWER.md) | Long-pressed word | Root, form, and concordance for that word |
 | [Timings Lab](TIMINGS_LAB.md) | Long-pressed word (developer mode only) | The timing workbench |
 | Ornaments Lab | Settings → Developer (developer mode only) | The procedural ornament generator workbench — explore/design/save seeds |
-| [Share Send page](SHARE.md) | Gather control in the player bar | Ordered selection + text share (image/video later) |
+| [Share Send page](SHARE.md) | Share host / gather mode (not on player bar) | Ordered selection + text/image share (video later) |
 
 For the notification prompt specifically:
 
