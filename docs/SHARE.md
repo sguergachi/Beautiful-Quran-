@@ -1,9 +1,10 @@
 # Sharing verses
 
 **Status: PR1 + PR2 shipped (gather + text + full-ink image).** Video remains
-proposed. This is the design record for *gather mode* — picking one or many
-verses, in any order — and for the three things a gathered selection can
-become: **text**, an **image**, or a **video that carries the ink**.
+proposed. **Interaction rework** (verse-first share, gold wash, no dual-purpose
+bar control) is designed in [VERSE_ACTIONS.md](VERSE_ACTIONS.md) — not yet
+implemented. This file is the design record for *gather mode* and the export
+pipeline: **text**, **image**, and later **video that carries the ink**.
 
 ## Why it exists
 
@@ -26,9 +27,11 @@ The second is why selection is an ordered list and not a range.
 Gathering is a **mode of the reader sheet**, not a new sheet. The page keeps
 its layout; it grows ordinals in the margin.
 
-- **Enter** via `ShareViewModel.enterGather()` / `onGatherControlClick()`
-  (pauses recitation — the mode owns the tap). The player bar no longer
-  hosts a Gather control; entry UI is separate from transport.
+- **Enter** via `ShareViewModel.enterGather()` (pauses recitation — the mode
+  owns the tap). The player bar does **not** host a Gather control
+  ([#519](https://github.com/sguergachi/Beautiful-Quran-/pull/519)). Entry
+  UX is redesigned in [VERSE_ACTIONS.md](VERSE_ACTIONS.md) (not yet
+  implemented): verse-first, multi-select as an extension.
 - **Pick** by tapping a verse (word or ayah). Its ordinal is written in the
   outer margin in gold Arabic-Indic numerals (١ ٢ ٣) — the same margin the
   bookmark ribbon lives in. The ribbon is hidden while gathering. Tap again
@@ -49,20 +52,21 @@ ribbon is inactive. The mode owns the tap — interactions are *replaced*, not
 stacked.
 
 **Mode chrome (visual QA):** margin ordinals use `headlineSmall` full gold.
+Selection wash and gather-bar takeover are planned — see
+[VERSE_ACTIONS.md](VERSE_ACTIONS.md).
 
-### Why not long-press the ﴿N﴾ mark
+### Entry redesign
 
-It was the other candidate — the ayah mark is the verse's own identity and
-the gesture is free. It loses on discoverability: nothing on the page hints
-that the mark is holdable, and the feature is worth finding. A visible
-control in the transport row is the door.
+Player-bar Gather was removed as a dual-purpose control. The product plan is
+**verse-first share** (one verse checked on enter; multi-select extends the
+same mode), documented in [VERSE_ACTIONS.md](VERSE_ACTIONS.md).
 
 ## The Send page
 
-Committing **ink-bleeds from the Gather control** into the Send page — the
-same `InkRevealOverlay` primitive as the Root Viewer (see [DESIGN.md](DESIGN.md),
-"The ink bleed"). Owned by `ShareHost` so MainActivity does not grow another
-cluster of overlay booleans.
+Committing **ink-bleeds into the Send page** — the same `InkRevealOverlay`
+primitive as the Root Viewer (see [DESIGN.md](DESIGN.md), "The ink bleed").
+Owned by `ShareHost` so MainActivity does not grow another cluster of overlay
+booleans. (G1 may skip Send for the happy path — [VERSE_ACTIONS.md](VERSE_ACTIONS.md).)
 
 It carries:
 
@@ -147,7 +151,8 @@ ui/share/ShareComposeSheet.kt    Send page (list + text + image)
 res/xml/share_paths.xml          FileProvider paths
 ```
 
-Reader integration stays thin (PR1): Gather control, ordinals, tap ownership.
+Reader integration: ordinals + tap ownership while gathering; player bar no
+longer hosts Gather (#519). Entry/chrome rework: [VERSE_ACTIONS.md](VERSE_ACTIONS.md).
 
 ## Phasing
 
@@ -155,7 +160,8 @@ Reader integration stays thin (PR1): Gather control, ordinals, tap ownership.
 |---|---|---|
 | 1 | Gather mode + text share | **shipped** |
 | 2 | Full-ink image export + FileProvider + wash probe | **shipped** |
-| 3 | Bounded silent ink video | next |
+| 2b | Verse-first share UX (G1) — wash, share ribbon, no dual button | **designed** ([VERSE_ACTIONS.md](VERSE_ACTIONS.md)) |
+| 3 | Bounded silent ink video | after 2b (or parallel once entry exists) |
 | 4 | Audio staging + mux | after silent video is stable |
 | 5 | Web parity | later |
 
