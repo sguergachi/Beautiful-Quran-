@@ -527,16 +527,19 @@ class ReaderViewModel(
         val np = playerState.value.nowPlaying?.takeIf { it.surahId == surahId } ?: return
         // During the basmalah lead-in, skip ahead into ayah 1.
         if (np.ayah == BASMALAH_PLAYLIST_AYAH) {
+            noteInkRestart(1, seekMs = 0L)
             player.seekToAyah(1)
             return
         }
         val midpointMs = midpointForLongAyah(np.ayah)
         if (midpointMs != null && player.positionMs < midpointMs - MIDPOINT_SEEK_GRACE_MS) {
+            noteInkRestart(np.ayah, seekMs = midpointMs)
             player.seekToWord(np.ayah, midpointMs)
             return
         }
 
         if (np.ayah < content.surah.ayahCount) {
+            noteInkRestart(np.ayah + 1, seekMs = 0L)
             player.seekToAyah(np.ayah + 1)
         }
     }
@@ -544,15 +547,21 @@ class ReaderViewModel(
     fun fastBackward() {
         val np = playerState.value.nowPlaying?.takeIf { it.surahId == surahId } ?: return
         if (np.ayah == BASMALAH_PLAYLIST_AYAH) {
+            noteInkRestart(BASMALAH_PLAYLIST_AYAH, seekMs = 0L)
             player.seekToBasmalah()
             return
         }
         if (player.positionMs > START_SEEK_GRACE_MS) {
+            // Restart this ayah: pin ink at 0 and arm the clock settle window
+            // so post-seek position corrections cannot bounce word 2/3 and
+            // re-run the (tajweed) wash mid-hold.
+            noteInkRestart(np.ayah, seekMs = 0L)
             player.seekToAyah(np.ayah)
             return
         }
 
         if (np.ayah > 1) {
+            noteInkRestart(np.ayah - 1, seekMs = 0L)
             player.seekToAyah(np.ayah - 1)
         } else if (np.ayah == 1) {
             // Restart from the basmalah lead-in when present.
