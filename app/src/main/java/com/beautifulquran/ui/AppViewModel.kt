@@ -10,6 +10,7 @@ import com.beautifulquran.ui.home.HomeViewModel
 import com.beautifulquran.ui.reader.ReaderViewModel
 import com.beautifulquran.ui.rootviewer.RootViewerViewModel
 import com.beautifulquran.ui.settings.SettingsViewModel
+import com.beautifulquran.ui.share.ShareViewModel
 import com.beautifulquran.timingslab.TimingsLabViewModel
 
 /** Tiny hand-rolled DI: ViewModel factory backed by the Application singletons. */
@@ -31,6 +32,8 @@ object AppViewModelFactory : ViewModelProvider.Factory {
                 TimingsLabViewModel(app.repository, app.settings, app.player, app.timingOverrides) as T
             modelClass.isAssignableFrom(RootViewerViewModel::class.java) ->
                 RootViewerViewModel(app.repository, app.settings, app.player) as T
+            modelClass.isAssignableFrom(ShareViewModel::class.java) ->
+                ShareViewModel(app.repository, app.player) as T
             modelClass.isAssignableFrom(OrnamentsLabViewModel::class.java) ->
                 OrnamentsLabViewModel(app.ornamentSeeds) as T
             else -> throw IllegalArgumentException("Unknown ViewModel: $modelClass")

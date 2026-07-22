@@ -49,9 +49,9 @@ voice, and the two must never be confusable.
 | Note is long | The text truncates to three lines with a quiet ink ellipsis; tapping the note opens it in place (see "Writing"). |
 | Another ayah is reciting | The tick vanishes with the rest of the chrome; the text recesses to upcoming ink with its verse, exactly like the translation. |
 
-**Type.** **Cormorant Garamond Italic at weight 500**, 16 sp / 23 sp, 62 % ink,
-on the inner spine, 12 dp/px below the translation. No quotation marks, no
-"Note:" label, no attribution — the hand says it.
+**Type.** **Cormorant Garamond Italic at weight 500**, 16 sp / 23 sp, a very
+light red at 85 % opacity, on the inner spine, 12 dp/px below the translation.
+No quotation marks, no "Note:" label, no attribution — the hand says it.
 
 The face is the point. Italic alone is not enough: setting the note in the
 app's *own* EB Garamond italic reads as **emphasis**, the same voice leaning,
@@ -65,10 +65,10 @@ wrote ḥawāshī in, and what italic type was first cut from.
 Two constraints make it work at reading size. Cormorant is a display face and
 goes wispy small, so the note uses **weight 500** (a static instance cut from
 the variable font, subset to latin + latin-ext at 132 KB) and sits a step
-larger than the old EB italic at 16 sp with 0.15 sp letterspacing. Ink stays
-**below** the translation's 66 % so the reader's own hand can never out-ink the
-scripture it hangs off. This is a narrow, recorded exception to Cormorant's
-display-only rule in [DESIGN.md](DESIGN.md) — do not generalise it to body copy.
+larger than the old EB italic at 16 sp with 0.15 sp letterspacing. Its pale red
+hue keeps the reader's own hand distinct from the scripture even at 85 %
+opacity. This is a narrow, recorded exception to Cormorant's display-only rule
+in [DESIGN.md](DESIGN.md) — do not generalise it to body copy.
 
 **The tick.** A short ruby stroke in the margin lane, optically inside the
 ribbon's 44 dp/px target lane but never widening it, sitting below the
@@ -98,9 +98,13 @@ mark is its own `ArabicAyahNumberUnit`, which takes the gesture directly.
 Then, in place:
 
 1. A caret appears on the note line beneath the verse, at exactly the
-   position the finished note will occupy, and the keyboard rises.
+   position the finished note will occupy, and the keyboard rises. The focus
+   engine parks the field 16 dp above the IME, as low as safely possible so the
+   page shows the largest available portion of the verse above it.
 2. The reader writes. The line grows downward; the verse above never moves.
-   Playback, if running, is **not** interrupted.
+   Playback, if running, is **not** interrupted, but scripture taps cannot
+   start or seek playback and bookmark ribbons cannot toggle while the field
+   owns focus.
 3. Tapping anywhere off the note, opening another verse's note, or leaving
    the sheet **commits**. There is no OK, no Save, no Cancel — paper has none
    of them, and an autosaved note cannot be lost to a mis-tap.
@@ -113,9 +117,10 @@ happens to be loaded when it lands. Opening a second note commits the first
 *before* switching, and the stale focus-loss that follows is ignored by an
 identity guard — otherwise one verse's text writes itself onto another.
 
-*Not yet built:* the doc's original step 1, recessing the rest of the page to
-upcoming ink while composing. The editor currently opens without dimming its
-neighbours.
+While composing, the other verses recede to upcoming ink and the ayah selector
+rail and top app bar withdraw. The visible system status-bar inset remains, but
+the active verse gains the rest of that vertical space and stays together with
+its note as the only thought on the page.
 
 Deleting an existing note is therefore just: open it, clear it, tap away.
 There is no separate destructive control and no confirmation — the reader

@@ -5,11 +5,13 @@ import {
   useImperativeHandle,
   useRef,
   useState,
+  type CSSProperties,
   type MutableRefObject,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { animate, type AnimationPlaybackControls } from 'motion'
 import {
+  collapsedRailHitHeightPx,
   dialDeltaFromPointerDy,
   dialFromTickY,
   dialFromTrackY,
@@ -157,6 +159,9 @@ export const AyahSelectorRail = forwardRef<AyahSelectorRailHandle, Props>(
     const expandTargetRef = useRef(0)
     const expandControlsRef = useRef<AnimationPlaybackControls | null>(null)
     const [ariaAyah, setAriaAyah] = useState(currentAyah)
+    /** Full-height hit zone while open; shrinks to the dash stack when closed. */
+    const [hitExpanded, setHitExpanded] = useState(false)
+    const collapsedHitHeight = collapsedRailHitHeightPx(ayahCount)
 
     const readingPos = () => currentPositionRef?.current ?? currentAyah
 
@@ -369,6 +374,9 @@ export const AyahSelectorRail = forwardRef<AyahSelectorRailHandle, Props>(
     expandTargetRef.current = target
     expandControlsRef.current?.stop()
     expandControlsRef.current = null
+    // Grow the hit zone immediately on open so drag can continue; shrink only
+    // after collapse finishes so the wheel does not lose the pointer mid-fade.
+    if (open) setHitExpanded(true)
 
     const reducedMotion =
       typeof window !== 'undefined' &&
@@ -377,6 +385,7 @@ export const AyahSelectorRail = forwardRef<AyahSelectorRailHandle, Props>(
 
     if (reducedMotion || Math.abs(expandRef.current - target) < 0.001) {
       expandRef.current = target
+      if (!open) setHitExpanded(false)
       schedulePaint()
       return
     }
@@ -392,6 +401,7 @@ export const AyahSelectorRail = forwardRef<AyahSelectorRailHandle, Props>(
       onComplete: () => {
         expandRef.current = target
         expandControlsRef.current = null
+        if (!open) setHitExpanded(false)
         schedulePaint()
       },
     })
@@ -529,21 +539,35 @@ export const AyahSelectorRail = forwardRef<AyahSelectorRailHandle, Props>(
       className="ayah-rail"
       data-side={side}
       data-receded={receded}
-      onPointerEnter={onPointerEnter}
-      onPointerLeave={onPointerLeave}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
-      title="Jump to ayah"
-      role="slider"
-      aria-valuemin={1}
-      aria-valuemax={ayahCount}
-      aria-valuenow={ariaAyah}
-      aria-label="Ayah position"
-      aria-disabled={receded}
+      data-expanded={hitExpanded ? 'true' : 'false'}
+      style={
+        {
+          '--rail-hit-h': `${collapsedHitHeight}px`,
+        } as CSSProperties
+      }
     >
       <canvas ref={canvasRef} className="ayah-rail-canvas" aria-hidden="true" />
+      {/*
+        Collapsed hit zone is only the visual dash stack (vertical center).
+        Expanded grows full-height so the scrub wheel stays under the finger.
+        Root is pointer-events:none so page taps above/below the stack pass through.
+      */}
+      <div
+        className="ayah-rail-hit"
+        onPointerEnter={onPointerEnter}
+        onPointerLeave={onPointerLeave}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        title="Jump to ayah"
+        role="slider"
+        aria-valuemin={1}
+        aria-valuemax={ayahCount}
+        aria-valuenow={ariaAyah}
+        aria-label="Ayah position"
+        aria-disabled={receded}
+      />
     </div>
   )
   }

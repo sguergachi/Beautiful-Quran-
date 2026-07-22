@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   ayahFromTrackY,
+  collapsedRailHitHeightPx,
+  collapsedStackSpanPx,
   dialDeltaFromPointerDy,
   dialFromTickY,
   dialFromTrackY,
@@ -23,6 +25,22 @@ describe('symbolicAyahBarCount', () => {
     expect(symbolicAyahBarCount(7)).toBe(4)
     expect(symbolicAyahBarCount(286)).toBe(17)
     expect(symbolicAyahBarCount(10_000)).toBe(18)
+  })
+})
+
+describe('collapsed stack hit height', () => {
+  it('matches the drawn dash stack span (Android parity)', () => {
+    // count=4 → spacing 8, step 9.5, span = 3*9.5 + 1.5 = 30
+    expect(collapsedStackSpanPx(1)).toBeCloseTo(30, 5)
+    expect(collapsedStackSpanPx(286)).toBeGreaterThan(30)
+    expect(collapsedStackSpanPx(286)).toBeLessThan(120)
+  })
+
+  it('pads the stack and floors at 48px so short surahs stay tappable', () => {
+    expect(collapsedRailHitHeightPx(1)).toBeCloseTo(54, 5)
+    expect(collapsedRailHitHeightPx(1, 0)).toBe(48)
+    expect(collapsedRailHitHeightPx(286)).toBeLessThan(200)
+    expect(collapsedRailHitHeightPx(286)).toBeGreaterThan(collapsedRailHitHeightPx(1))
   })
 })
 

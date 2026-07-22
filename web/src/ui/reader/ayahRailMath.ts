@@ -13,6 +13,27 @@ export function symbolicAyahBarCount(ayahCount: number): number {
   return Math.min(18, Math.max(4, Math.round(Math.ceil(Math.sqrt(ayahCount)))))
 }
 
+/** Collapsed dash height (px) — matches Android 1.5.dp and paint constants. */
+export const COLLAPSED_BAR_H_PX = 1.5
+
+/**
+ * Vertical span (px) of the collapsed dash stack.
+ * Spacing is 72/count clamped 4–8 — same as Android / the paint path.
+ */
+export function collapsedStackSpanPx(ayahCount: number): number {
+  const count = symbolicAyahBarCount(ayahCount)
+  const spacing = Math.min(8, Math.max(4, 72 / count))
+  return (count - 1) * (COLLAPSED_BAR_H_PX + spacing) + COLLAPSED_BAR_H_PX
+}
+
+/**
+ * Collapsed hit-target height (px): visual stack + pad, min 48px.
+ * Keeps expand-on-touch on the vertical center of the edge, not full height.
+ */
+export function collapsedRailHitHeightPx(ayahCount: number, padPx = 24): number {
+  return Math.max(48, collapsedStackSpanPx(ayahCount) + padPx)
+}
+
 /** Soft overscroll past either end of the dial. */
 export function rubberBandDialPosition(value: number, min: number, max: number): number {
   if (value >= min && value <= max) return value

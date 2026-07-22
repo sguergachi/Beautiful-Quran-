@@ -316,6 +316,30 @@ object FocusEngine {
     }
 
     /**
+     * Scroll needed to park an annotation field directly above the on-screen
+     * keyboard, with [keyboardPaddingPx] of paper between them. Anchoring the
+     * field as low as safely possible leaves the most room for its verse above.
+     */
+    fun annotationFieldDeltaPx(
+        fieldBottomPx: Float,
+        viewportHeightPx: Float,
+        keyboardOverlapPx: Float,
+        keyboardPaddingPx: Float,
+    ): Float = fieldBottomPx -
+        (viewportHeightPx - keyboardOverlapPx.coerceAtLeast(0f) -
+            keyboardPaddingPx.coerceAtLeast(0f)).coerceAtLeast(0f)
+
+    /** Portion of the list actually covered by the IME. The list can end above
+     * the window bottom (for example above the player bar), so the raw keyboard
+     * inset must not be subtracted from its shorter viewport. */
+    fun keyboardOverlapPx(
+        listBottomInWindowPx: Float,
+        windowHeightPx: Float,
+        keyboardInsetPx: Float,
+    ): Float = (listBottomInWindowPx -
+        (windowHeightPx - keyboardInsetPx.coerceAtLeast(0f))).coerceAtLeast(0f)
+
+    /**
      * Where [target] sits relative to where it *should* sit — the answer the
      * return-to-verse control and the rail need. When the verse is not currently
      * laid out, [TargetGeometry.isAboveWhenOffscreen] decides the direction.

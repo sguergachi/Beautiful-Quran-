@@ -20,6 +20,7 @@ import kotlin.math.PI
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -188,6 +189,11 @@ fun ReaderScreen(
     /** Reports reader-owned ink surfaces to the paper stack so a horizontal
      * page turn cannot begin while the surface is entering, open, or closing. */
     onInkOverlayVisibilityChange: (Boolean) -> Unit = {},
+    /** Gather mode — ordered verse selection for text share (docs/SHARE.md). */
+    gathering: Boolean = false,
+    /** 1-based ordinal for a gathered verse, or null when not selected. */
+    gatherOrdinal: (surahId: Int, ayah: Int) -> Int? = { _, _ -> null },
+    onToggleGatheredAyah: (surahId: Int, ayah: Int) -> Unit = { _, _ -> },
 ) {
     LaunchedEffect(surahId) { viewModel.load(surahId) }
     DisposableEffect(onAyahSelectorExpandedChange) {
@@ -247,9 +253,9 @@ fun ReaderScreen(
     LaunchedEffect(imeVisible, editingAnnotationAyah) {
         if (!imeVisible && editingAnnotationAyah != 0) focusManager.clearFocus()
     }
-    val listScrolling = listState.isScrollInProgress
-    LaunchedEffect(listScrolling, editingAnnotationAyah) {
-        if (listScrolling && editingAnnotationAyah != 0) focusManager.clearFocus()
+    val listDragged by listState.interactionSource.collectIsDraggedAsState()
+    LaunchedEffect(listDragged, editingAnnotationAyah) {
+        if (listDragged && editingAnnotationAyah != 0) focusManager.clearFocus()
     }
     // Gilding sheen: light catches the header rosette as the page moves.
     // At chapter end (scrolled) sheen is bright (~0.85); cold open at the top
@@ -491,6 +497,16 @@ fun ReaderScreen(
             }
         }
     }
+    val onKeepAnnotationInView:
+        suspend (Float, Float, () -> Pair<Float, Float>?) -> Unit = remember(focusController) {
+            { keyboardOverlapPx, keyboardPaddingPx, measure ->
+                focusController.keepAnnotationInView(
+                    keyboardOverlapPx = keyboardOverlapPx,
+                    keyboardPaddingPx = keyboardPaddingPx,
+                    measureInViewport = measure,
+                )
+            }
+        }
     // The verse at the reading line, and the continuous position through the
     // surah — the single read-out the rail, the return control, and the play
     // target all share.
@@ -596,7 +612,12 @@ fun ReaderScreen(
     // gets the pre-roll slide; boundary-to-boundary tracking after that stays
     // smooth.
     var followWasEnabled by remember { mutableStateOf(followEnabled) }
-    LaunchedEffect(playbackFocusTarget, followEnabled, playerState.isPlaying) {
+    LaunchedEffect(
+        playbackFocusTarget,
+        followEnabled,
+        playerState.isPlaying,
+        editingAnnotationAyah,
+    ) {
         val target = playbackFocusTarget ?: return@LaunchedEffect
         // Continue Listening advances with the recited verse, not scroll focus.
         if (target >= 1 && playerState.isPlaying) {
@@ -606,6 +627,7 @@ fun ReaderScreen(
             followWasEnabled = false
             return@LaunchedEffect
         }
+        if (editingAnnotationAyah != 0) return@LaunchedEffect
         val justEnabled = !followWasEnabled
         followWasEnabled = true
         focusController.focus(target, animate = true, preRoll = justEnabled)
@@ -614,8 +636,8 @@ fun ReaderScreen(
     // A reciter can restart the whole ayah inside one audio item. The ayah key
     // does not change, so observe the sparse word state without making the
     // screen recompose on every word and restore the verse's top anchor once.
-    LaunchedEffect(isThisSurahPlaying, followEnabled) {
-        if (!isThisSurahPlaying) return@LaunchedEffect
+    LaunchedEffect(isThisSurahPlaying, followEnabled, editingAnnotationAyah) {
+        if (!isThisSurahPlaying || editingAnnotationAyah != 0) return@LaunchedEffect
         var wasAtRepeatStart = false
         snapshotFlow { activeWordState.value }.collect { word ->
             val repeatAyah = word?.takeIf {
@@ -731,7 +753,17 @@ fun ReaderScreen(
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
+        topBar = topBar@{
+            if (editingAnnotationAyah != 0) {
+                // Reclaim the app bar while writing, but keep ink below a
+                // visible system status bar. Recitation already hides it.
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(if (recitingActive) 0.dp else statusBarTop),
+                )
+                return@topBar
+            }
             // Unread-style chrome: quiet marks that recede behind the text.
             // Once the opening header scrolls off, the surah name reappears
             // here between gilded flourishes. In search, the bar becomes the
@@ -994,6 +1026,9 @@ fun ReaderScreen(
         var ayahSelectorDismissRequests by remember { mutableIntStateOf(0) }
         LaunchedEffect(ayahSelectorExpanded) {
             onAyahSelectorExpandedChange(ayahSelectorExpanded)
+        }
+        LaunchedEffect(editingAnnotationAyah) {
+            if (editingAnnotationAyah != 0) ayahSelectorExpanded = false
         }
         // Shared with settle / list rubber-band (defined before advance uses it).
         val pullRubberMaxPx = with(density) { 56.dp.toPx() }
@@ -1772,51 +1807,83 @@ fun ReaderScreen(
                                 // block subscribes.
                                 keepActiveWordInView = followEnabled &&
                                     recitingActive &&
+                                    editingAnnotationAyah == 0 &&
                                     isActive,
                                 listCoordinates = { listCoordinates },
                                 onKeepWordInView = onKeepWordInView,
+                                onKeepAnnotationInView = onKeepAnnotationInView,
                                 bookmarkSide = bookmarkSide,
                                 bookmarked = ayah.number in bookmarkedAyahs,
                                 bookmarkFocused = bookmarkFocused,
                                 bookmarkChromeAlpha = bookmarkChromeAlpha,
-                                bookmarkInteractive = !recitingActive,
-                                onToggleBookmark = { viewModel.toggleBookmark(ayah.number) },
-                                onWordClick = { word ->
-                                    val segment = viewModel.segmentsFor(ayah.number)
-                                        ?.firstOrNull { it.position == word.position }
-                                    notifPermission.request {
-                                        followEnabled = true
-                                        if (segment != null) {
-                                            viewModel.playFromWord(ayah.number, segment.startMs)
-                                        } else {
+                                // Gather mode and open note editors both own taps /
+                                // the margin; disable the ribbon while either is live.
+                                bookmarkInteractive = !recitingActive &&
+                                    !gathering &&
+                                    editingAnnotationAyah == 0,
+                                // Gather mode owns the outer margin (ordinals)
+                                // and verse taps; hide the ribbon while gathering.
+                                onToggleBookmark = if (gathering) {
+                                    null
+                                } else {
+                                    { viewModel.toggleBookmark(ayah.number) }
+                                },
+                                gatherOrdinal = if (gathering) {
+                                    gatherOrdinal(ayah.surahId, ayah.number)
+                                } else {
+                                    null
+                                },
+                                onWordClick = if (gathering) {
+                                    { onToggleGatheredAyah(ayah.surahId, ayah.number) }
+                                } else {
+                                    wordClick@{ word ->
+                                        if (editingAnnotationAyah != 0) return@wordClick
+                                        val segment = viewModel.segmentsFor(ayah.number)
+                                            ?.firstOrNull { it.position == word.position }
+                                        notifPermission.request {
+                                            followEnabled = true
+                                            if (segment != null) {
+                                                viewModel.playFromWord(ayah.number, segment.startMs)
+                                            } else {
+                                                viewModel.playFromAyah(ayah.number)
+                                            }
+                                        }
+                                    }
+                                },
+                                onAyahClick = if (gathering) {
+                                    { onToggleGatheredAyah(ayah.surahId, ayah.number) }
+                                } else {
+                                    ayahClick@{
+                                        if (editingAnnotationAyah != 0) return@ayahClick
+                                        notifPermission.request {
+                                            followEnabled = true
                                             viewModel.playFromAyah(ayah.number)
                                         }
                                     }
                                 },
-                                onAyahClick = {
-                                    notifPermission.request {
-                                        followEnabled = true
-                                        viewModel.playFromAyah(ayah.number)
+                                onWordLongClick = if (gathering) {
+                                    null
+                                } else {
+                                    { word ->
+                                        // Hold opens the Root Word Viewer (or, in
+                                        // developer mode, a chooser that can also
+                                        // open the Timings Lab). MainActivity owns
+                                        // the branch — see docs/ROOT_VIEWER.md.
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onOpenRootViewer(ayah.surahId, ayah.number, word.position)
                                     }
-                                },
-                                onWordLongClick = { word ->
-                                    // Hold opens the Root Word Viewer (or, in
-                                    // developer mode, a chooser that can also
-                                    // open the Timings Lab). MainActivity owns
-                                    // the branch — see docs/ROOT_VIEWER.md.
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onOpenRootViewer(ayah.surahId, ayah.number, word.position)
                                 },
                                 // Switched off, annotations are simply not part
                                 // of the page: nothing renders and the ayah mark
                                 // goes back to being only a mark. Stored writing
                                 // is untouched and returns when it is switched on.
                                 annotationText = when {
-                                    !settings.annotationsEnabled -> null
+                                    gathering || !settings.annotationsEnabled -> null
                                     editingAnnotationAyah == ayah.number -> editingAnnotationText
                                     else -> annotationsForSurah.value[ayah.number]
                                 },
-                                isEditingAnnotation = settings.annotationsEnabled &&
+                                isEditingAnnotation = !gathering &&
+                                    settings.annotationsEnabled &&
                                     editingAnnotationAyah == ayah.number,
                                 onAnnotationChange = { editingAnnotationText = it },
                                 // Guarded by identity: switching verses makes the
@@ -1826,7 +1893,7 @@ fun ReaderScreen(
                                 onAnnotationEditDone = {
                                     if (editingAnnotationAyah == ayah.number) commitOpenAnnotation()
                                 },
-                                onAyahMarkLongClick = if (!settings.annotationsEnabled) {
+                                onAyahMarkLongClick = if (gathering || !settings.annotationsEnabled) {
                                     null
                                 } else {
                                     {
@@ -1952,29 +2019,31 @@ fun ReaderScreen(
                         .coerceIn(1f, content.surah.ayahCount.toFloat())
                 }
             }
-            AyahSelectorRail(
-                ayahCount = content.surah.ayahCount,
-                side = selectorSide,
-                currentAyah = railCurrentAyah,
-                currentPosition = railCurrentPosition,
-                bookmarkedAyahs = bookmarkedAyahs,
-                chromeAlpha = { topBarAlpha.value },
-                interactive = !recitingActive,
-                onJumpToAyah = { requestedJumpAyah = it },
-                onExpandedChange = { ayahSelectorExpanded = it },
-                dismissRequests = ayahSelectorDismissRequests,
-                modifier = Modifier
-                    .align(
-                        if (selectorSide == AyahSelectorSide.RIGHT) {
-                            AbsoluteAlignment.CenterRight
-                        } else {
-                            AbsoluteAlignment.CenterLeft
-                        },
-                    )
-                    .fillMaxHeight()
-                    .padding(top = padding.calculateTopPadding())
-                    .zIndex(1f),
-            )
+            if (editingAnnotationAyah == 0) {
+                AyahSelectorRail(
+                    ayahCount = content.surah.ayahCount,
+                    side = selectorSide,
+                    currentAyah = railCurrentAyah,
+                    currentPosition = railCurrentPosition,
+                    bookmarkedAyahs = bookmarkedAyahs,
+                    chromeAlpha = { topBarAlpha.value },
+                    interactive = !recitingActive,
+                    onJumpToAyah = { requestedJumpAyah = it },
+                    onExpandedChange = { ayahSelectorExpanded = it },
+                    dismissRequests = ayahSelectorDismissRequests,
+                    modifier = Modifier
+                        .align(
+                            if (selectorSide == AyahSelectorSide.RIGHT) {
+                                AbsoluteAlignment.CenterRight
+                            } else {
+                                AbsoluteAlignment.CenterLeft
+                            },
+                        )
+                        .fillMaxHeight()
+                        .padding(top = padding.calculateTopPadding())
+                        .zIndex(1f),
+                )
+            }
 
             // Ornamented return-to-ayah — floats above the player bar via the
             // shared FloatingPaperControl host. Yields while MainActivity's
