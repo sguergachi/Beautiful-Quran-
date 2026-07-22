@@ -279,9 +279,14 @@ fun ReaderScreen(
         sheenAnim.snapTo(scrollSheenValue())
     }
     val sheen = remember { derivedStateOf { sheenAnim.value } }
-    var followEnabled by remember { mutableStateOf(true) }
+    // Follow / jump / annotation precedence — pure rules in ReaderInteraction.
+    var interaction by remember { mutableStateOf(ReaderInteractionState()) }
+    fun dispatch(event: ReaderInteractionEvent) {
+        interaction = ReaderInteraction.reduce(interaction, event)
+    }
+    val followEnabled = interaction.followEnabled
+    val requestedJumpAyah = interaction.pendingJumpAyah
     var showRepeatDialog by remember { mutableStateOf(false) }
-    var requestedJumpAyah by remember { mutableIntStateOf(0) }
     val haptics = LocalHapticFeedback.current
     val onRootReturnUserMovedLatest = rememberUpdatedState(onRootReturnUserMoved)
     // Continuous next-chapter advance: fly the opening from footer → header.
@@ -570,7 +575,7 @@ fun ReaderScreen(
     // …and the sheet glides to whichever match is current.
     LaunchedEffect(searchMatches, currentMatch) {
         val target = searchMatches.getOrNull(currentMatch) ?: return@LaunchedEffect
-        followEnabled = false
+        dispatch(ReaderInteractionEvent.SearchNavigated)
         focusController.focus(target, animate = true, preRoll = true)
     }
 
@@ -580,27 +585,31 @@ fun ReaderScreen(
             .takeIf { it > 0 }
             ?.coerceIn(1, content.surah.ayahCount)
             ?: return@LaunchedEffect
-        // Do NOT clear requestedJumpAyah before focus() finishes: this effect is
-        // keyed on it, so writing 0 here cancels the coroutine mid-slide and the
+        // Do NOT clear pendingJump before focus() finishes: this effect is
+        // keyed on it, so settling early cancels the coroutine mid-slide and the
         // jump reads as a pop. Clear in finally once the approach has landed (or
-        // a newer jump has superseded this one).
-        followEnabled = isThisSurahPlaying
+        // a newer jump has superseded this one). Follow was already set by
+        // JumpRequested via the arbiter.
         // Focus only — Continue Listening updates when audio plays this verse.
         viewModel.onAyahBecameActive(target)
         if (isThisSurahPlaying) viewModel.player.seekToAyah(target)
         try {
             focusController.focus(target, animate = true, preRoll = true)
         } finally {
-            if (requestedJumpAyah == target) requestedJumpAyah = 0
+            dispatch(ReaderInteractionEvent.JumpSettled(target))
         }
     }
 
     fun selectedPlaybackAyah(): Int {
         val ayahCount = uiState.content?.surah?.ayahCount ?: return startAyah ?: 1
-        val relyOnScroll = requestedJumpAyah > 0 || !isThisSurahPlaying || !followEnabled
-        val position = if (relyOnScroll) scrolledAyah.value else activeAyah
-        return (requestedJumpAyah.takeIf { it > 0 } ?: position ?: scrolledAyah.value)
-            .coerceIn(1, ayahCount)
+        return ReaderInteraction.selectedPlaybackAyah(
+            state = interaction,
+            isThisSurahPlaying = isThisSurahPlaying,
+            activeAyah = activeAyah,
+            scrolledAyah = scrolledAyah.value,
+            fallbackAyah = startAyah ?: 1,
+            ayahCount = ayahCount,
+        )
     }
 
     // Lyric-style auto scroll: the focus engine keeps the active target
@@ -610,24 +619,22 @@ fun ReaderScreen(
     // verse. The very first scroll after follow turns back on (return-to-verse,
     // or pressing play from a scrolled-away spot) is a deliberate jump, so it
     // gets the pre-roll slide; boundary-to-boundary tracking after that stays
-    // smooth.
+    // smooth. Playback follow is gated by [ReaderInteraction.shouldFollowPlayback].
     var followWasEnabled by remember { mutableStateOf(followEnabled) }
     LaunchedEffect(
         playbackFocusTarget,
-        followEnabled,
+        interaction,
         playerState.isPlaying,
-        editingAnnotationAyah,
     ) {
         val target = playbackFocusTarget ?: return@LaunchedEffect
         // Continue Listening advances with the recited verse, not scroll focus.
         if (target >= 1 && playerState.isPlaying) {
             viewModel.onListenedAyah(target)
         }
-        if (!followEnabled) {
+        if (!ReaderInteraction.shouldFollowPlayback(interaction)) {
             followWasEnabled = false
             return@LaunchedEffect
         }
-        if (editingAnnotationAyah != 0) return@LaunchedEffect
         val justEnabled = !followWasEnabled
         followWasEnabled = true
         focusController.focus(target, animate = true, preRoll = justEnabled)
@@ -636,10 +643,13 @@ fun ReaderScreen(
     // A reciter can restart the whole ayah inside one audio item. The ayah key
     // does not change, so observe the sparse word state without making the
     // screen recompose on every word and restore the verse's top anchor once.
-    LaunchedEffect(isThisSurahPlaying, followEnabled, editingAnnotationAyah) {
-        if (!isThisSurahPlaying || editingAnnotationAyah != 0) return@LaunchedEffect
+    LaunchedEffect(isThisSurahPlaying, interaction) {
+        if (!isThisSurahPlaying || !ReaderInteraction.shouldFollowPlayback(interaction)) {
+            return@LaunchedEffect
+        }
         var wasAtRepeatStart = false
         snapshotFlow { activeWordState.value }.collect { word ->
+            if (!ReaderInteraction.shouldFollowPlayback(interaction)) return@collect
             val repeatAyah = word?.takeIf {
                 FocusEngine.startsFullAyahRepeat(
                     wordPosition = it.wordPosition,
@@ -647,7 +657,7 @@ fun ReaderScreen(
                     repeatStart = it.repeatStart,
                 )
             }?.ayah
-            if (repeatAyah != null && !wasAtRepeatStart && followEnabled) {
+            if (repeatAyah != null && !wasAtRepeatStart) {
                 focusController.focus(repeatAyah, animate = true)
             }
             wasAtRepeatStart = repeatAyah != null
@@ -710,7 +720,8 @@ fun ReaderScreen(
     SideEffect {
         if (layoutSignature == lastLayoutSignature) {
             stickyAyah = when {
-                followEnabled && playbackFocusTarget != null &&
+                ReaderInteraction.shouldFollowPlayback(interaction) &&
+                    playbackFocusTarget != null &&
                     !FocusEngine.isChapterTopFocusTarget(playbackFocusTarget) -> playbackFocusTarget
                 else -> scrolledAyah.value
             }.coerceIn(1, lastAyahNumber)
@@ -724,7 +735,8 @@ fun ReaderScreen(
             return@LaunchedEffect
         }
         val pin = when {
-            followEnabled && playbackFocusTarget != null -> playbackFocusTarget
+            ReaderInteraction.shouldFollowPlayback(interaction) &&
+                playbackFocusTarget != null -> playbackFocusTarget
             else -> stickyAyah.coerceIn(1, lastAyahNumber)
         }
         // Two frames + a short beat so sibling ayahs finish remasuring before
@@ -964,7 +976,7 @@ fun ReaderScreen(
                                 viewModel.player.togglePlayPause()
                             } else {
                                 notifPermission.request {
-                                    followEnabled = true
+                                    dispatch(ReaderInteractionEvent.EnableFollow)
                                     if (requestedJumpAyah > 0) {
                                         val selectedAyah = selectedPlaybackAyah()
                                         viewModel.playLoadedFromAyah(selectedAyah)
@@ -975,7 +987,7 @@ fun ReaderScreen(
                             }
                         } else {
                             notifPermission.request {
-                                followEnabled = true
+                                dispatch(ReaderInteractionEvent.EnableFollow)
                                 viewModel.playFromAyah(selectedPlaybackAyah())
                             }
                         }
@@ -1029,6 +1041,7 @@ fun ReaderScreen(
         }
         LaunchedEffect(editingAnnotationAyah) {
             if (editingAnnotationAyah != 0) ayahSelectorExpanded = false
+            dispatch(ReaderInteractionEvent.SetAnnotating(editingAnnotationAyah != 0))
         }
         // Shared with settle / list rubber-band (defined before advance uses it).
         val pullRubberMaxPx = with(density) { 56.dp.toPx() }
@@ -1049,7 +1062,7 @@ fun ReaderScreen(
 
                 chapterAdvancing = true
                 previousChapterPullArmed = false
-                followEnabled = false
+                dispatch(ReaderInteractionEvent.ChapterAdvanceStarted)
                 previousExitStartRubberPx = rubberAtRelease
                 previousPageExit.snapTo(0f)
                 previousPageEnter.snapTo(1f)
@@ -1146,7 +1159,7 @@ fun ReaderScreen(
                 // Keep pull at release for one more frame so the list doesn't
                 // drop; fly takes over translation via startLiftPx.
                 nextChapterPullArmed = false
-                followEnabled = false
+                dispatch(ReaderInteractionEvent.ChapterAdvanceStarted)
                 // Hold the bright end-of-chapter sheen for the whole fly +
                 // handoff so the medallion doesn't dim when we scrollToItem(0).
                 sheenFollowScroll = false
@@ -1681,7 +1694,7 @@ fun ReaderScreen(
                                                     val dx = change.position.x - down.position.x
                                                     val dy = change.position.y - down.position.y
                                                     if (abs(dy) > abs(dx)) {
-                                                        followEnabled = false
+                                                        dispatch(ReaderInteractionEvent.UserMovedPage)
                                                     }
                                                 }
                                             }
@@ -1745,7 +1758,7 @@ fun ReaderScreen(
                                     washProgress = viewModel.basmalahWashProgress,
                                     onClick = {
                                         notifPermission.request {
-                                            followEnabled = true
+                                            dispatch(ReaderInteractionEvent.EnableFollow)
                                             viewModel.playFromAyah(1)
                                         }
                                     },
@@ -1841,7 +1854,7 @@ fun ReaderScreen(
                                         val segment = viewModel.segmentsFor(ayah.number)
                                             ?.firstOrNull { it.position == word.position }
                                         notifPermission.request {
-                                            followEnabled = true
+                                            dispatch(ReaderInteractionEvent.EnableFollow)
                                             if (segment != null) {
                                                 viewModel.playFromWord(ayah.number, segment.startMs)
                                             } else {
@@ -1856,7 +1869,7 @@ fun ReaderScreen(
                                     ayahClick@{
                                         if (editingAnnotationAyah != 0) return@ayahClick
                                         notifPermission.request {
-                                            followEnabled = true
+                                            dispatch(ReaderInteractionEvent.EnableFollow)
                                             viewModel.playFromAyah(ayah.number)
                                         }
                                     }
@@ -2028,7 +2041,14 @@ fun ReaderScreen(
                     bookmarkedAyahs = bookmarkedAyahs,
                     chromeAlpha = { topBarAlpha.value },
                     interactive = !recitingActive,
-                    onJumpToAyah = { requestedJumpAyah = it },
+                    onJumpToAyah = { ayah ->
+                        dispatch(
+                            ReaderInteractionEvent.JumpRequested(
+                                ayah = ayah,
+                                resumeFollowIfPlaying = isThisSurahPlaying,
+                            ),
+                        )
+                    },
                     onExpandedChange = { ayahSelectorExpanded = it },
                     dismissRequests = ayahSelectorDismissRequests,
                     modifier = Modifier
@@ -2062,7 +2082,7 @@ fun ReaderScreen(
                 FloatingPaperControl(visible = showReturnToAyah) {
                     IslamicReturnToAyahButton(
                         pointUp = activeAyahPlacement.value.pointUp,
-                        onClick = { followEnabled = true },
+                        onClick = { dispatch(ReaderInteractionEvent.EnableFollow) },
                     )
                 }
             }
@@ -2127,7 +2147,7 @@ fun ReaderScreen(
             onRepeatMode = viewModel::setRepeatMode,
             onRepeatRange = { from, to ->
                 notifPermission.request {
-                    followEnabled = true
+                    dispatch(ReaderInteractionEvent.EnableFollow)
                     viewModel.setRepeatRange(from, to)
                 }
             },
