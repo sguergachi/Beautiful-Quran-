@@ -19,6 +19,7 @@ import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicLong
 
 /** Which ayah the player is on, parsed from the current MediaItem.
  * [ayah] is 0 while the chapter-opening basmalah lead-in is playing. */
@@ -43,11 +44,16 @@ data class PlayerUiState(
 /**
  * UI-process handle on the playback session. Wraps a [MediaController]
  * connected to [PlaybackService] and mirrors its state into [state].
+ *
+ * All controller mutations run through [PlayerCommandGate]: they are
+ * serialised, and [stop] (plus a new [playSurah]) bumps an epoch so a
+ * pending connect/play abandoned by a later intent never mutates the player.
  */
 class PlayerController(private val context: Context) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val connectMutex = Mutex()
+    private val commands = PlayerCommandGate()
     private var controller: MediaController? = null
 
     private val _state = MutableStateFlow(PlayerUiState())
@@ -272,7 +278,10 @@ class PlayerController(private val context: Context) {
         )
         basmalahLeadIn = queue.hasBasmalahLeadIn
 
-        withController { c ->
+        // Latest load wins: abandon any in-flight connect/play from an earlier
+        // chapter so rapid navigation cannot start the superseded surah first.
+        val epoch = commands.invalidate()
+        withController(epoch) { c ->
             val startPos = if (queue.startIndex == 0 && queue.hasBasmalahLeadIn) 0L
             else startPositionMs
             c.setMediaItems(queue.items, queue.startIndex, startPos)
@@ -282,10 +291,24 @@ class PlayerController(private val context: Context) {
         }
     }
 
-    /** Runs [block] on the main scope with a connected controller —
-     * the shape of every one-shot command below. */
-    private fun withController(block: suspend (MediaController) -> Unit) {
-        scope.launch { block(ensureController()) }
+    /**
+     * Runs [block] on the main scope with a connected controller, serialised
+     * with every other command. [epoch] is the gate snapshot at issue time —
+     * if [PlayerCommandGate.invalidate] ran since then, the body is skipped.
+     */
+    private fun withController(
+        epoch: Long = commands.epoch,
+        block: suspend (MediaController) -> Unit,
+    ) {
+        scope.launch {
+            commands.runIfCurrent(epoch) {
+                val c = ensureController()
+                // Re-check after connect: stop/playSurah may have invalidated
+                // while we were awaiting the MediaController.
+                if (!commands.isCurrent(epoch)) return@runIfCurrent
+                block(c)
+            }
+        }
     }
 
     fun togglePlayPause() = withController { c ->
@@ -343,13 +366,22 @@ class PlayerController(private val context: Context) {
 
     fun setSpeed(speed: Float) = withController { it.setPlaybackSpeed(speed) }
 
+    /**
+     * Stops playback and clears the queue. Invalidates every in-flight command
+     * first so a [playSurah] still awaiting [MediaController] connection cannot
+     * start audio after this returns.
+     */
     fun stop() {
         resetRepeatState()
         basmalahLeadIn = false
+        val epoch = commands.invalidate()
         scope.launch {
-            controller?.let {
-                it.stop()
-                it.clearMediaItems()
+            commands.runIfCurrent(epoch) {
+                // Do not connect solely to stop — only clear an existing session.
+                controller?.let {
+                    it.stop()
+                    it.clearMediaItems()
+                }
             }
         }
     }
@@ -423,4 +455,38 @@ class PlayerController(private val context: Context) {
             )
         }
     }
+}
+
+/**
+ * Serialises player commands and lets a later [invalidate] abandon work that
+ * was issued under an older epoch (play→stop during connect, rapid chapter
+ * switches). Pure of Media3 so JVM tests can cover the contract without a
+ * session service.
+ */
+internal class PlayerCommandGate {
+    private val epochCounter = AtomicLong(0L)
+    private val mutex = Mutex()
+
+    /** Live epoch; safe to read from any thread. */
+    val epoch: Long get() = epochCounter.get()
+
+    /**
+     * Bumps the epoch so every earlier snapshot becomes stale.
+     * Atomic so concurrent UI + Assistant callers never share a generation.
+     */
+    fun invalidate(): Long = epochCounter.incrementAndGet()
+
+    fun isCurrent(snapshot: Long): Boolean = snapshot == epochCounter.get()
+
+    /**
+     * Runs [block] only if [snapshot] is still the live epoch, holding the
+     * mutex for the whole call so commands never interleave on the controller.
+     * Returns whether the body ran.
+     */
+    suspend fun runIfCurrent(snapshot: Long, block: suspend () -> Unit): Boolean =
+        mutex.withLock {
+            if (snapshot != epochCounter.get()) return@withLock false
+            block()
+            true
+        }
 }

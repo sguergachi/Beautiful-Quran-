@@ -6,6 +6,13 @@ repository after the bookmark, Assistant/AppFunctions, profiling, settings,
 ornament-lab, and search work that followed. This document describes the
 current code rather than a future architecture.*
 
+> **Quality follow-up (2026-07-22):** multi-agent Android *quality* reviews
+> (correctness, lifecycle, tests—not only LOC) live under
+> [`docs/quality-reviews/`](./quality-reviews/ANDROID_QUALITY_SUMMARY.md).
+> Reader/share sizes and test counts there supersede the July 16 numbers for
+> Android production quality prioritisation. This complexity map remains the
+> cross-platform simplification guide until a full re-audit.
+
 ## Why this document exists
 
 Beautiful Quran has two kinds of complexity:

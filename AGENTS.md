@@ -116,6 +116,7 @@ Requires **JDK 21**. No Android device/emulator is needed for tests.
 | `docs/ARCHITECTURE.md` | First stop for any change — pipeline, sync engine, modules, conventions |
 | `docs/ASSISTANT.md` | Android voice work — media hooks, App Actions, Gemini AppFunctions, testing, and release gates |
 | `docs/COMPLEXITY.md` | Complexity hotspots, subsystem ownership, and safe simplification roadmap |
+| `docs/quality-reviews/` | Multi-agent Android quality audits (summary + Grok/Codex; Claude when available) |
 | `docs/HIGHLIGHT_ENGINE.md` | The pure word-sync engine — karaoke model, binary search, repeat/high-water logic |
 | `docs/DESIGN.md` | Any UI/visual change — the paper metaphor and its hard rules |
 | `docs/PERFORMANCE.md` | Anything touching the reader, scrolling, or the highlight loop |

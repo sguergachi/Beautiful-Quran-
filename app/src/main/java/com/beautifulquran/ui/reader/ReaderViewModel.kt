@@ -82,6 +82,12 @@ data class PreparedSurah(
     val reciters: List<Reciter>,
     val reciter: Reciter,
     val timings: Map<Int, List<Segment>>,
+    /**
+     * [ReaderSessionGate.generation] when [materialize] started. [installPrepared]
+     * no-ops if navigation has advanced since then, so a late continuous-scroll
+     * install cannot cancel and override a newer [load].
+     */
+    val originGeneration: Long = 0L,
 )
 
 /** Reading-session state temporarily displaced by an in-page surface such as
@@ -113,10 +119,13 @@ class ReaderViewModel(
 
     val playerState: StateFlow<PlayerUiState> = player.state
 
-    private var surahId: Int = 0
-
-    /** After [load] finishes, start recitation from this ayah (Assistant/media intent). */
-    private var pendingPlayAyah: Int? = null
+    /**
+     * Versioned navigation: every [load] / [installPrepared] bumps a generation
+     * so a slower older materialize cannot install content, timings, or autoplay
+     * after a newer intent. [surahId] is the chapter owned by the live generation.
+     */
+    private val sessions = ReaderSessionGate()
+    private val surahId: Int get() = sessions.surahId
 
     /** Drives [bookmarkedAyahs]: the surah currently loaded into the reader, so
      * each verse ribbon only ever renders marks for the verses on screen. */
@@ -327,10 +336,12 @@ class ReaderViewModel(
         // follows the edit the moment the Lab sheet is lowered.
         viewModelScope.launch {
             repository.timingOverridesChanged?.drop(1)?.collect {
-                val id = surahId.takeIf { it != 0 } ?: return@collect
+                val gen = sessions.generation
+                val id = sessions.surahId.takeIf { it != 0 } ?: return@collect
                 val reciter = _uiState.value.currentReciter ?: return@collect
                 val refreshed = timingsWithBasmalahLeadIn(reciter.id, id)
-                if (surahId != id) return@collect
+                // Drop if navigation moved on while the DB re-read ran.
+                if (!sessions.isCurrent(gen, id)) return@collect
                 installTimings(refreshed)
                 _uiState.value = _uiState.value.copy(hasTimings = refreshed.isNotEmpty())
             }
@@ -350,15 +361,16 @@ class ReaderViewModel(
                 if (_uiState.value.content != null) {
                     playFromAyah(startPlaybackAtAyah)
                 } else {
-                    pendingPlayAyah = startPlaybackAtAyah
+                    // Same in-flight chapter: update autoplay without a new gen.
+                    sessions.setPendingPlay(startPlaybackAtAyah)
+                    focusedAyah = startPlaybackAtAyah.coerceAtLeast(1)
                 }
             }
             return
         }
-        this.surahId = surahId
+        val gen = sessions.begin(surahId, startPlaybackAtAyah)
         loadedSurah.value = surahId
         focusedAyah = startPlaybackAtAyah?.coerceAtLeast(1) ?: 1
-        pendingPlayAyah = startPlaybackAtAyah
         installTimings(emptyMap())
         _uiState.value = ReaderUiState(
             reciters = _uiState.value.reciters,
@@ -368,10 +380,9 @@ class ReaderViewModel(
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             val prepared = materialize(surahId) ?: return@launch
-            if (this@ReaderViewModel.surahId != surahId) return@launch
-            installPrepared(prepared)
-            val playAyah = pendingPlayAyah
-            pendingPlayAyah = null
+            if (!sessions.isCurrent(gen, surahId)) return@launch
+            commitPrepared(prepared)
+            val playAyah = sessions.takePendingPlay(gen)
             if (playAyah != null) {
                 playFromAyah(playAyah)
             }
@@ -384,6 +395,9 @@ class ReaderViewModel(
      * commits at the mid-transition apex.
      */
     suspend fun materialize(surahId: Int): PreparedSurah? {
+        // Snapshot before any suspend: a concurrent load()/install must make
+        // this payload stale so installPrepared can reject it.
+        val originGeneration = sessions.generation
         val reciters = repository.reciters()
         val reciter = currentReciter(reciters)
         val loadedTimings = timingsWithBasmalahLeadIn(reciter.id, surahId)
@@ -398,13 +412,28 @@ class ReaderViewModel(
             reciters = reciters,
             reciter = reciter,
             timings = loadedTimings,
+            originGeneration = originGeneration,
         )
     }
 
-    /** Publish a [materialize]d chapter as the live reader page. */
+    /**
+     * Publish a [materialize]d chapter as the live reader page.
+     * No-ops when a newer [load]/installPrepared] began after this payload was
+     * materialised — continuous advance must not override a fresher intent.
+     * When still current, cancels any in-flight [load] for the same session
+     * window and starts a new generation for the committed chapter.
+     */
     fun installPrepared(prepared: PreparedSurah) {
-        surahId = prepared.content.surah.id
-        loadedSurah.value = surahId
+        if (!sessions.isCurrent(prepared.originGeneration)) return
+        loadJob?.cancel()
+        loadJob = null
+        sessions.begin(prepared.content.surah.id, pendingPlayAyah = null)
+        commitPrepared(prepared)
+    }
+
+    /** Applies [prepared] to UI + timings. Caller must already own the live session. */
+    private fun commitPrepared(prepared: PreparedSurah) {
+        loadedSurah.value = prepared.content.surah.id
         focusedAyah = 1
         installTimings(prepared.timings)
         _uiState.value = ReaderUiState(
@@ -419,16 +448,20 @@ class ReaderViewModel(
     }
 
     private suspend fun onReciterChanged() {
-        if (surahId == 0) return
+        val gen = sessions.generation
+        val id = sessions.surahId
+        if (id == 0) return
         val reciters = _uiState.value.reciters.ifEmpty { repository.reciters() }
         val reciter = currentReciter(reciters)
-        installTimings(timingsWithBasmalahLeadIn(reciter.id, surahId))
+        val refreshed = timingsWithBasmalahLeadIn(reciter.id, id)
+        if (!sessions.isCurrent(gen, id)) return
+        installTimings(refreshed)
         _uiState.value = _uiState.value.copy(
             currentReciter = reciter,
             hasTimings = timings.isNotEmpty(),
         )
         val np = player.state.value.nowPlaying
-        if (np != null && np.surahId == surahId && np.reciterId != reciter.id) {
+        if (np != null && np.surahId == id && np.reciterId != reciter.id) {
             val preservedRange = player.state.value.repeatRange
             // Basmalah lead-in (ayah 0) restarts as a chapter opening.
             val resumeAyah = np.ayah.coerceAtLeast(1)
