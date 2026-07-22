@@ -60,9 +60,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1642,6 +1644,12 @@ internal fun VerseAnnotationField(
     val noteStyle = verseAnnotationStyle(fontScale = fontScale)
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
+    // Own the field as TextFieldValue so the caret opens at the end of any
+    // existing note. A plain String value lands the caret at 0, which forces
+    // the reader to arrow through text they already wrote.
+    var fieldValue by remember(isEditing) {
+        mutableStateOf(TextFieldValue(text, selection = TextRange(text.length)))
+    }
     // `onFocusChanged` delivers an initial callback the moment the field
     // attaches, with isFocused = false — *before* the LaunchedEffect below can
     // request focus. Treating that as "the reader tapped away" committed an
@@ -1749,8 +1757,11 @@ internal fun VerseAnnotationField(
         Spacer(Modifier.width(ANNOTATION_RULE_GAP))
         if (isEditing) {
             BasicTextField(
-                value = text,
-                onValueChange = { onAnnotationChange?.invoke(it) },
+                value = fieldValue,
+                onValueChange = {
+                    fieldValue = it
+                    onAnnotationChange?.invoke(it.text)
+                },
                 textStyle = noteStyle.copy(color = ink.copy(alpha = VERSE_ANNOTATION_INK_ALPHA)),
                 cursorBrush = SolidColor(ink),
                 // Notes wrap freely, but the keyboard's Done key is the reader's
@@ -1764,11 +1775,21 @@ internal fun VerseAnnotationField(
                     .fillMaxWidth()
                     .focusRequester(focusRequester)
                     .onFocusChanged { state ->
-                        if (state.isFocused) everFocused = true else if (everFocused) onEditDone()
+                        if (state.isFocused) {
+                            everFocused = true
+                            // Re-assert end caret on focus: the IME can reset
+                            // selection when it attaches after requestFocus().
+                            val end = fieldValue.text.length
+                            if (fieldValue.selection != TextRange(end)) {
+                                fieldValue = fieldValue.copy(selection = TextRange(end))
+                            }
+                        } else if (everFocused) {
+                            onEditDone()
+                        }
                     },
                 decorationBox = { field ->
                     Box {
-                        if (text.isEmpty()) {
+                        if (fieldValue.text.isEmpty()) {
                             Text(
                                 "Write a note…",
                                 style = noteStyle,
