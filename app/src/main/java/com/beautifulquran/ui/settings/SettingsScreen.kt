@@ -95,6 +95,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel,
     onBack: () -> Unit,
     onOpenTimingsLab: () -> Unit = {},
+    onOpenOrnamentsLab: () -> Unit = {},
     onRecordSystemTrace: () -> Unit = {},
 ) {
     val settings by viewModel.settings.settings.collectAsStateWithLifecycle()
@@ -215,6 +216,7 @@ fun SettingsScreen(
                     viewModel = viewModel,
                     settings = settings,
                     onOpenTimingsLab = onOpenTimingsLab,
+                    onOpenOrnamentsLab = onOpenOrnamentsLab,
                     onRecordSystemTrace = onRecordSystemTrace,
                 )
             }
@@ -255,6 +257,7 @@ private fun DeveloperSection(
     viewModel: SettingsViewModel,
     settings: Settings,
     onOpenTimingsLab: () -> Unit,
+    onOpenOrnamentsLab: () -> Unit,
     onRecordSystemTrace: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -294,6 +297,18 @@ private fun DeveloperSection(
         color = MaterialTheme.colorScheme.primary,
     )
     Caption("Edit word-level timing marks; also opens from a word long-press.")
+
+    Spacer(Modifier.height(20.dp))
+    Text(
+        text = "Ornaments Lab",
+        style = MaterialTheme.typography.bodyLarge,
+        modifier = Modifier
+            .fillMaxWidth()
+            .quietClickable(onClick = onOpenOrnamentsLab)
+            .padding(vertical = 6.dp),
+        color = MaterialTheme.colorScheme.primary,
+    )
+    Caption("Explore, design, and save seeds for the procedural star-and-cross ornament generator.")
 
     Spacer(Modifier.height(18.dp))
     ToggleRow(
