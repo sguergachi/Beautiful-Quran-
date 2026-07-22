@@ -145,12 +145,20 @@ object InkEngine {
     /**
      * The ink state of the word at [position].
      *
-     * While another ayah is playing, every word sits at Upcoming ink so the
-     * verse is already faint before handoff; idle (not reciting) stays Plain
-     * at full ink. Within the active ayah, words up to the high-water mark
-     * were already recited on an earlier pass, so they hold full ink rather
-     * than dimming back to Upcoming when the recitation jumps backward for a
-     * repeat.
+     * [activeWord] is non-null **only for the ayah that owns the reciting
+     * word** (the caller passes it filtered by `it.ayah == this ayah`), and it
+     * tracks the true audio position. [isActiveAyah] is the *fade-led* focus
+     * bit, which flips to the next ayah [FADE_LEAD_MS] before the audio
+     * boundary so the next verse can begin fading in early. The two disagree
+     * during that lead — most visibly across a waqf, where the closing word is
+     * still being held while focus has already moved on.
+     *
+     * So the reciting word's own state follows [activeWord], not the fade-led
+     * focus: while this ayah owns the active word, its words light and hold
+     * (Active / Recited by high-water) regardless of [isActiveAyah] — otherwise
+     * a sustained final letter drops out of its paced hold 500 ms early. Only
+     * once [activeWord] is null (this ayah is not the one reciting) does the
+     * focus bit decide between the faint Upcoming wait and resting Plain ink.
      */
     fun wordState(
         position: Int,
@@ -158,8 +166,7 @@ object InkEngine {
         isActiveAyah: Boolean,
         dimmed: Boolean,
     ): State = when {
-        !isActiveAyah -> if (dimmed) State.Upcoming else State.Plain
-        activeWord == null -> State.Upcoming
+        activeWord == null -> if (isActiveAyah || dimmed) State.Upcoming else State.Plain
         position == activeWord.wordPosition -> State.Active
         position < activeWord.wordPosition -> State.Recited
         position <= activeWord.highWater -> State.Recited
@@ -178,7 +185,10 @@ object InkEngine {
             activeWord.isRepeat &&
             position in activeWord.repeatStart..activeWord.wordPosition
 
-    /** [wordState] + [inRepeatChain] bundled for the renderers. */
+    /** [wordState] + [inRepeatChain] bundled for the renderers. [activeWord]
+     *  is already filtered to this ayah, so its presence — not the fade-led
+     *  [isActiveAyah] — gates the repeat wash, keeping the orange alive through
+     *  the same waqf lead that [wordState] guards. */
     fun word(
         position: Int,
         activeWord: ActiveWord?,
@@ -187,7 +197,7 @@ object InkEngine {
     ): Word =
         Word(
             state = wordState(position, activeWord, isActiveAyah, dimmed),
-            repeat = isActiveAyah && inRepeatChain(position, activeWord),
+            repeat = inRepeatChain(position, activeWord),
         )
 
     /**
