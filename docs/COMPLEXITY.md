@@ -229,7 +229,7 @@ than it removes.
 ### Pure domain policy
 
 **Files:** `domain/ArabicNormalize.kt`, `Basmalah.kt`, `EnglishTypography.kt`,
-`HighlightClock.kt`, `HighlightEngine.kt`, `WordSearch.kt`.
+`HighlightClock.kt`, `HighlightEngine.kt`, `OutputLatency.kt`, `WordSearch.kt`.
 
 **Current responsibility.** Text normalization, basmalah playlist rules,
 English token alignment, stable playback clock selection, binary-search word

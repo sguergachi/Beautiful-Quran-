@@ -14,8 +14,10 @@ import com.beautifulquran.data.model.SurahContent
 import com.beautifulquran.domain.BASMALAH_PLAYLIST_AYAH
 import com.beautifulquran.domain.HighlightClock
 import com.beautifulquran.domain.HighlightEngine
+import com.beautifulquran.domain.OutputLatency
 import com.beautifulquran.domain.SURAH_FATIHA
 import com.beautifulquran.domain.surahOpensWithBasmalahPreface
+import com.beautifulquran.playback.AudioOutputLatency
 import com.beautifulquran.playback.NowPlaying
 import com.beautifulquran.playback.PlayerController
 import com.beautifulquran.playback.PlayerUiState
@@ -100,6 +102,7 @@ class ReaderViewModel(
     private val bookmarks: BookmarkRepository,
     val player: PlayerController,
     private val annotations: AnnotationRepository,
+    private val outputLatency: AudioOutputLatency,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ReaderUiState())
@@ -211,6 +214,8 @@ class ReaderViewModel(
     private var inkActivation = 0L
     private var lastInkSampleKey: Any? = null
     private var lastInkClockMs = -1L
+    /** Last applied [OutputLatency] so a route change can reset the clock. */
+    private var lastOutputLatencyMs = -1L
     /**
      * User seek target (ayah → ms) applied on the next poll once that ayah is
      * the media item — so ink jumps to the tapped word without waiting for
@@ -218,18 +223,36 @@ class ReaderViewModel(
      */
     private var forcedHighlight: Pair<Int, Long>? = null
 
+    /**
+     * Media playhead adjusted for the current audio route so ink tracks the
+     * ear (Bluetooth A2DP lag, etc.). Forced word seeks stay on the media
+     * timeline so a tap lights the word that was just sought.
+     */
+    private fun highlightPositionMs(forcedMediaMs: Long?): Long {
+        val latencyMs = outputLatency.latencyMs.value
+        if (latencyMs != lastOutputLatencyMs) {
+            lastOutputLatencyMs = latencyMs
+            // Route flip (speaker ↔ BT) jumps heard time by ~preset ms; accept
+            // it as a real step so HighlightClock does not hold it as jitter.
+            highlightClock.acceptNextSample()
+        }
+        if (forcedMediaMs != null) return forcedMediaMs
+        return OutputLatency.heardMs(player.positionMs, latencyMs)
+    }
+
     /** Emits the active word ~30x/sec while this surah is playing, but only
      * publishes on change, so the UI recomposes once per word. The highlight
      * holds while paused (like a lyrics player); it only clears when this
      * surah stops being the loaded one. */
     val activeWord: StateFlow<ActiveWord?> = pollingWhileLoaded(key = { it }) { np ->
         val forced = forcedHighlight
-        val rawMs = if (forced != null && forced.first == np.ayah) {
+        val forcedMs = if (forced != null && forced.first == np.ayah) {
             forcedHighlight = null
             forced.second
         } else {
-            player.positionMs
+            null
         }
+        val rawMs = highlightPositionMs(forcedMs)
         val clockMs = highlightClock.sample(np, rawMs)
         if (lastInkSampleKey != np) {
             lastInkSampleKey = np
@@ -294,7 +317,7 @@ class ReaderViewModel(
             timed != null -> timed.last().endMs
             else -> 0L
         }
-        InkEngine.prefaceWashProgress(player.positionMs, endMs)
+        InkEngine.prefaceWashProgress(highlightPositionMs(forcedMediaMs = null), endMs)
     }
 
     /** Advances the lit ayah to the next one during the final [FADE_LEAD_MS] of

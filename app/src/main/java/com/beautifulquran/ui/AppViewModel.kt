@@ -25,7 +25,14 @@ object AppViewModelFactory : ViewModelProvider.Factory {
             modelClass.isAssignableFrom(HomeViewModel::class.java) ->
                 HomeViewModel(app.repository, app.settings, app.player) as T
             modelClass.isAssignableFrom(ReaderViewModel::class.java) ->
-                ReaderViewModel(app.repository, app.settings, app.bookmarks, app.player, app.annotations) as T
+                ReaderViewModel(
+                    app.repository,
+                    app.settings,
+                    app.bookmarks,
+                    app.player,
+                    app.annotations,
+                    app.outputLatency,
+                ) as T
             modelClass.isAssignableFrom(SettingsViewModel::class.java) ->
                 SettingsViewModel(app.repository, app.settings) as T
             modelClass.isAssignableFrom(TimingsLabViewModel::class.java) ->
