@@ -9,6 +9,7 @@ import com.beautifulquran.data.QuranDatabase
 import com.beautifulquran.data.QuranRepository
 import com.beautifulquran.data.SettingsRepository
 import com.beautifulquran.ornamentslab.OrnamentSeedStore
+import com.beautifulquran.playback.AudioOutputLatency
 import com.beautifulquran.playback.PlayerController
 import com.beautifulquran.timingslab.TimingOverrides
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -28,6 +29,9 @@ class QuranApp : Application() {
         private set
     lateinit var player: PlayerController
         private set
+    /** Route-based output delay for the karaoke clock (BT A2DP / LE presets). */
+    lateinit var outputLatency: AudioOutputLatency
+        private set
     lateinit var timingOverrides: TimingOverrides
         private set
     lateinit var ornamentSeeds: OrnamentSeedStore
@@ -42,6 +46,7 @@ class QuranApp : Application() {
         bookmarks = BookmarkRepository(this)
         annotations = AnnotationRepository(this)
         player = PlayerController(this)
+        outputLatency = AudioOutputLatency(this)
         timingOverrides = overrides
         ornamentSeeds = OrnamentSeedStore(this)
         // Long-press app icon → Continue / Bookmarks (works without App Actions review).
