@@ -133,10 +133,27 @@ class InkEngineTest {
 
     @Test
     fun `inactive ayah words never wear the repeat wash`() {
-        val repeating = active(wordPosition = 2, isRepeat = true, highWater = 4, repeatStart = 2)
-        val word = InkEngine.word(2, repeating, isActiveAyah = false, dimmed = true)
+        // An ayah is inactive when it does not own the reciting word — the
+        // caller passes activeWord = null for it.
+        val word = InkEngine.word(2, activeWord = null, isActiveAyah = false, dimmed = true)
         assertEquals(State.Upcoming, word.state)
         assertFalse(word.repeat)
+    }
+
+    @Test
+    fun `the ayah that owns the active word keeps it lit through the fade lead`() {
+        // The fade-led focus bit moves to the next ayah FADE_LEAD_MS before the
+        // audio boundary — during a waqf, while the closing word is still held.
+        // The owning ayah's words must follow the audio (activeWord), not the
+        // focus bit, or the sustained letter drops out of its paced hold early.
+        val holding = active(wordPosition = 3, highWater = 3)
+        assertEquals(
+            listOf(State.Recited, State.Recited, State.Active),
+            (1..3).map { InkEngine.wordState(it, holding, isActiveAyah = false, dimmed = true) },
+        )
+        // And a repeat chain keeps its orange through the same lead.
+        val repeating = active(wordPosition = 2, isRepeat = true, highWater = 4, repeatStart = 2)
+        assertTrue(InkEngine.word(2, repeating, isActiveAyah = false, dimmed = true).repeat)
     }
 
     // --- sweepMs ---

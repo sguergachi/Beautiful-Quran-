@@ -1929,9 +1929,11 @@ fun AyahBlock(
 
     // Letter-level tajweed pacing of that sweep (Ink Lab toggle,
     // docs/TAJWEED_PACING.md): null keeps the plain constant-rate wash.
-    // The verse-closing word is flagged so its waqf can be sustained.
+    // Gated on this ayah owning the active word — not the fade-led
+    // isActiveAyah — so a waqf hold is not dropped 500 ms before the audio
+    // boundary (see InkEngine.wordState). The verse-closing word is flagged
+    // so its waqf can be sustained.
     val pacing = activeWord
-        ?.takeIf { isActiveAyah }
         ?.let { aw ->
             ayah.words.firstOrNull { it.position == aw.wordPosition }
                 ?.let { word ->
