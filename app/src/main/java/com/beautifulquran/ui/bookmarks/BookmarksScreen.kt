@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
@@ -39,18 +38,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -62,10 +58,7 @@ import com.beautifulquran.data.AyahSelectorSide
 import com.beautifulquran.data.model.BookmarkedAyah
 import com.beautifulquran.data.model.Surah
 import com.beautifulquran.ui.reader.VerseBookmarkRibbon
-import com.beautifulquran.ui.reader.VERSE_ANNOTATION_INK_ALPHA
-import com.beautifulquran.ui.reader.verseAnnotationStyle
 import com.beautifulquran.ui.theme.ArabicTitleStyle
-import com.beautifulquran.ui.theme.DisclosureChevron
 import com.beautifulquran.ui.theme.LocalQuranAccents
 import com.beautifulquran.ui.theme.quietClickable
 import com.beautifulquran.ui.theme.verticalFadingEdges
@@ -81,7 +74,6 @@ fun BookmarksScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var pendingRemoval by remember { mutableStateOf<BookmarkKey?>(null) }
     var expandedSurahs by remember { mutableStateOf<Set<Int>>(emptySet()) }
-    var collapsedSurahs by remember { mutableStateOf<Set<Int>>(emptySet()) }
     val searching = uiState.query.isNotBlank()
 
     LaunchedEffect(uiState.query) { pendingRemoval = null }
@@ -94,12 +86,8 @@ fun BookmarksScreen(
                     .fillMaxHeight()
                     .widthIn(max = 560.dp)
                     .fillMaxWidth()
-                    .verticalFadingEdges(
-                        color = MaterialTheme.colorScheme.background,
-                        top = 24.dp,
-                        bottom = 48.dp,
-                    ),
-                contentPadding = PaddingValues(top = 24.dp, bottom = 48.dp),
+                    .verticalFadingEdges(MaterialTheme.colorScheme.background, top = 24.dp),
+                contentPadding = PaddingValues(bottom = 48.dp),
             ) {
                 item(key = "title") {
                     BookmarksHeader(onClose)
@@ -115,40 +103,17 @@ fun BookmarksScreen(
                 }
 
                 uiState.sections.forEachIndexed { index, section ->
-                    val collapsed = isBookmarkSectionCollapsed(
-                        section.surah.id,
-                        collapsedSurahs,
-                        searching,
-                    )
                     item(key = "surah-${section.surah.id}") {
-                        BookmarkSectionHeader(
-                            surah = section.surah,
-                            first = index == 0,
-                            expanded = !collapsed,
-                            collapsible = !searching,
-                            onToggle = {
-                                collapsedSurahs = if (collapsed) {
-                                    collapsedSurahs - section.surah.id
-                                } else {
-                                    collapsedSurahs + section.surah.id
-                                }
-                                pendingRemoval = null
-                            },
-                        )
+                        BookmarkSectionHeader(section.surah, first = index == 0)
                     }
                     val expanded = section.surah.id in expandedSurahs
                     items(
-                        items = if (collapsed) {
-                            emptyList()
-                        } else {
-                            visibleBookmarkAyahs(section.ayahs, expanded, searching)
-                        },
+                        items = visibleBookmarkAyahs(section.ayahs, expanded, searching),
                         key = { "${it.surah.id}:${it.ayahNumber}" },
                     ) { bookmark ->
                         val key = BookmarkKey(bookmark.surah.id, bookmark.ayahNumber)
                         BookmarkAyahRow(
                             bookmark = bookmark,
-                            annotationText = uiState.annotations["${bookmark.surah.id}:${bookmark.ayahNumber}"],
                             confirming = pendingRemoval == key,
                             onOpen = { onOpenAyah(bookmark.surah.id, bookmark.ayahNumber) },
                             onRequestRemove = { pendingRemoval = key },
@@ -159,9 +124,7 @@ fun BookmarksScreen(
                             onKeep = { pendingRemoval = null },
                         )
                     }
-                    if (!collapsed && !searching &&
-                        section.ayahs.size > BOOKMARK_SECTION_PREVIEW_LIMIT
-                    ) {
+                    if (!searching && section.ayahs.size > BOOKMARK_SECTION_PREVIEW_LIMIT) {
                         item(key = "more-${section.surah.id}") {
                             BookmarkDisclosure(
                                 hiddenCount = hiddenBookmarkCount(section.ayahs, expanded, searching),
@@ -184,11 +147,9 @@ fun BookmarksScreen(
 
 @Composable
 private fun BookmarksHeader(onClose: () -> Unit) {
-    val focusManager = LocalFocusManager.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        // Top air comes from LazyColumn contentPadding (matches the soft edge).
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 28.dp),
     ) {
         Column(Modifier.weight(1f)) {
             Text(
@@ -200,27 +161,14 @@ private fun BookmarksHeader(onClose: () -> Unit) {
                 color = MaterialTheme.colorScheme.onBackground,
             )
         }
-        Box(
+        Text(
+            text = "Chapters  →",
+            style = MaterialTheme.typography.labelMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
+            color = MaterialTheme.colorScheme.primary,
             modifier = Modifier
-                .size(40.dp)
-                .quietClickable(
-                    role = Role.Button,
-                    onClick = {
-                        // Search may still hold focus after the sheet peels
-                        // away; drop it so the IME does not follow to Chapters.
-                        focusManager.clearFocus()
-                        onClose()
-                    },
-                ),
-            contentAlignment = Alignment.CenterEnd,
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                contentDescription = "Back to Chapters",
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                modifier = Modifier.size(24.dp),
-            )
-        }
+                .quietClickable(role = Role.Button, onClick = onClose)
+                .padding(vertical = 14.dp),
+        )
     }
 }
 
@@ -241,20 +189,19 @@ private fun BookmarkSearchField(value: String, onValueChange: (String) -> Unit) 
         cursorBrush = SolidColor(accent),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 24.dp, top = 24.dp, end = 24.dp)
+            .padding(horizontal = 24.dp, vertical = 24.dp)
             .height(52.dp)
             .onFocusChanged { focused = it.isFocused }
             .semantics { contentDescription = "Search bookmarked verses" },
         decorationBox = { field ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.width(40.dp), contentAlignment = Alignment.CenterStart) {
-                    Icon(
-                        Icons.Rounded.Search,
-                        contentDescription = null,
-                        tint = if (focused) accent else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
+                Icon(
+                    Icons.Rounded.Search,
+                    contentDescription = null,
+                    tint = if (focused) accent else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(Modifier.width(14.dp))
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     if (value.isEmpty()) {
                         Text(
@@ -276,31 +223,14 @@ private fun BookmarkSearchField(value: String, onValueChange: (String) -> Unit) 
 }
 
 @Composable
-private fun BookmarkSectionHeader(
-    surah: Surah,
-    first: Boolean,
-    expanded: Boolean,
-    collapsible: Boolean,
-    onToggle: () -> Unit,
-) {
+private fun BookmarkSectionHeader(surah: Surah, first: Boolean) {
     val gold = LocalQuranAccents.current.gold
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .then(
-                if (collapsible) {
-                    Modifier
-                        .quietClickable(role = Role.Button, onClick = onToggle)
-                        .semantics(mergeDescendants = true) {
-                            stateDescription = if (expanded) "Expanded" else "Collapsed"
-                        }
-                } else {
-                    Modifier
-                },
-            )
             .padding(horizontal = 24.dp)
-            .padding(top = if (first) 18.dp else 32.dp, bottom = 12.dp),
+            .padding(top = if (first) 8.dp else 32.dp, bottom = 16.dp),
     ) {
         Text(
             text = surah.id.toString(),
@@ -311,10 +241,9 @@ private fun BookmarkSectionHeader(
                 fontFeatureSettings = "'kern' 1, 'liga' 1, 'lnum' 1, 'tnum' 1",
             ),
             color = gold,
-            modifier = Modifier
-                .width(40.dp)
-                .padding(start = 4.dp),
+            modifier = Modifier.width(36.dp),
         )
+        Spacer(Modifier.width(16.dp))
         Text(
             text = surah.nameTransliteration,
             style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 24.sp),
@@ -330,19 +259,12 @@ private fun BookmarkSectionHeader(
             color = MaterialTheme.colorScheme.primary,
             maxLines = 1,
         )
-        Spacer(Modifier.width(16.dp))
-        DisclosureChevron(
-            expanded = expanded,
-            pointsLeftWhenCollapsed = true,
-            modifier = Modifier.alpha(if (collapsible) 1f else 0f),
-        )
     }
 }
 
 @Composable
 private fun BookmarkAyahRow(
     bookmark: BookmarkedAyah,
-    annotationText: String?,
     confirming: Boolean,
     onOpen: () -> Unit,
     onRequestRemove: () -> Unit,
@@ -352,15 +274,14 @@ private fun BookmarkAyahRow(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .padding(top = 8.dp, bottom = 12.dp),
+            .padding(horizontal = 24.dp, vertical = 12.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 // Balance the ribbon spine so the verse copy stays centered
                 // between equal reading gutters.
-                .padding(horizontal = 40.dp)
+                .padding(horizontal = 52.dp)
                 .quietClickable(onClick = onOpen),
         ) {
             Text(
@@ -380,16 +301,7 @@ private fun BookmarkAyahRow(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (annotationText != null) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = annotationText,
-                    style = verseAnnotationStyle(fontSize = 15.sp, lineHeight = 21.sp),
-                    color = LocalQuranAccents.current.annotationInk.copy(alpha = VERSE_ANNOTATION_INK_ALPHA),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+            Spacer(Modifier.height(8.dp))
             BookmarkReferenceOrConfirmation(
                 bookmark = bookmark,
                 confirming = confirming,
@@ -409,7 +321,6 @@ private fun BookmarkAyahRow(
                     true
                 },
                 animateOnTap = false,
-                edgeInset = 2.dp,
                 topInset = 0.dp,
                 bottomGap = 12.dp,
                 modifier = Modifier
@@ -475,13 +386,12 @@ private fun BookmarkReferenceOrConfirmation(
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Ayah",
+                        text = "${bookmark.surah.nameTransliteration} · ",
                         style = bookmarkMetadataStyle(),
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f),
                     )
-                    Spacer(Modifier.width(4.dp))
                     Text(
-                        text = bookmark.ayahNumber.toString(),
+                        text = "${bookmark.surah.id}:${bookmark.ayahNumber}",
                         style = bookmarkMetadataStyle(FontWeight.Medium, numeric = true),
                         color = LocalQuranAccents.current.gold,
                     )
@@ -504,7 +414,7 @@ private fun BookmarkDisclosure(hiddenCount: Int, expanded: Boolean, onClick: () 
         modifier = Modifier
             .fillMaxWidth()
             .quietClickable(role = Role.Button, onClick = onClick)
-            .padding(start = 64.dp, end = 24.dp, top = 4.dp, bottom = 16.dp),
+            .padding(start = 76.dp, end = 24.dp, top = 4.dp, bottom = 16.dp),
     )
 }
 

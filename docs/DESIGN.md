@@ -38,39 +38,6 @@ Hard rules:
 - **Taps have no ripple.** Touch feedback is the content's own motion
   (a word lighting, a page turning), never Material ink splash.
 
-### Turning the sheet
-
-Sheets turn with a horizontal swipe, handled by one stack-level detector
-(`paperStackDrag` in `MainActivity.kt`). A finger stroke is never perfectly
-flat, so the detector and the sheets' own vertical scrolling share the
-gesture by these rules:
-
-- **The dominant axis wins, decided early.** The moment total travel crosses
-  the system touch slop — the same distance at which a scrolling list locks —
-  the gesture commits to one axis: horizontal (with a slight vertical bias,
-  `|dx| > |dy| × 1.1`, since reading is the primary activity) turns the
-  page; otherwise the sheet's content scrolls. Deciding any later means
-  vertical scroll claims nearly every swipe and page turns feel dead.
-- **Children claim first.** The detector watches the Main pointer pass and
-  backs off the instant a child control consumes the gesture, so sliders and
-  scrolling lists keep working inside a sheet. A gesture that opened
-  vertical over a static area can still become a page turn on a clear,
-  sustained horizontal pull.
-- **A short pull resistance** (~14 dp, capped at 4% of the sheet width)
-  is subtracted from the drag so the sheet leans before it travels — paper
-  has weight — but the sheet starts following the finger almost immediately.
-- **One turn per gesture.** Releasing past 15% of the width, or flinging at
-  0.30 screen-widths/s, commits the turn; a gesture never advances more than
-  one sheet. The thresholds live beside the layer constants in
-  `MainActivity.kt` and are the tuning knobs for swipe eagerness.
-
-Vertical chapter boundaries in the reader are soft stops too. A scroll or
-fling may arrive at the opening header or next-chapter footer, but it never
-turns that leftover motion into a chapter jump. The reader must begin a fresh
-pull from the boundary (or tap its explicit control) to change chapters. Pull
-progress follows the finger in both directions, remains cancellable even after
-filling completely, and commits only when released while still fully filled.
-
 ## The ink bleed
 
 When the app must present something the system would normally raise as a
@@ -93,8 +60,6 @@ surfaces use it today / by design:
 | Notification permission | Play control | The allow / not-now question (word-by-word lyric fade) |
 | [Root Word Viewer](ROOT_VIEWER.md) | Long-pressed word | Root, form, and concordance for that word |
 | [Timings Lab](TIMINGS_LAB.md) | Long-pressed word (developer mode only) | The timing workbench |
-| Ornaments Lab | Settings → Developer (developer mode only) | The procedural ornament generator workbench — explore/design/save seeds |
-| [Share Send page](SHARE.md) | Share host / gather mode (not on player bar) | Ordered selection + text/image share (video later) |
 
 For the notification prompt specifically:
 
@@ -162,26 +127,17 @@ Two themes, both "paper":
   muted gold `#B8901C` reserved for Quranic ornament (ayah marks, surah
   numbers, the ۞).
 - **Nightfall**: near-black charcoal `#0A0B0C`, parchment ink `#E8E2D5`,
-  soft green `#7FB8A4`, warmer gold `#D9B44A`, deep repeat orange `#E06A18`.
-  Nightfall and Royal Green share a **fresh-ink glint** `#F8E9BE`: a newly
-  read word's ink lands white-gold — riding the same letter sweep, never a
-  separate motion — and dries back to parchment over 1 s. A glyph-shaped halo
-  makes it feel lit from within at the peak, then recedes with the tint. It is
-  not a spotlight: no radial field, background glow, box shadow, or clipped
-  word rectangle. See [GLIMMER.md](GLIMMER.md).
+  soft green `#7FB8A4`, warmer gold `#D9B44A`.
 - **Royal green**: deep green `#062C24`, parchment ink `#E8E2D5`,
-  soft green `#7FB8A4`, warmer gold `#D9B44A`, same deep repeat orange and
-  fresh-ink glint as Nightfall.
+  soft green `#7FB8A4`, warmer gold `#D9B44A`.
 
 Gold never marks interaction; green never decorates. One accent each.
 
 **Ruby** `#B3122F` (paper) / `#D64358` (nightfall + royal green) is the one
-deliberate third hue, and it belongs to saved-verse ink: the
-[bookmark ribbon](#bookmark-ribbon) and recolored bars on the ayah selector
-rail that show where marks fall in the chapter. It is walled off from gold
-(ornament) and green (interaction) precisely so "my marks" can never be
-misread as decoration or as a control — a bookmark is the reader's own ink,
-not the app's.
+deliberate third hue, and it belongs to exactly one thing: a saved verse on the
+[bookmark ribbon](#bookmark-ribbon). It is walled off from gold (ornament) and
+green (interaction) precisely so "my marks" can never be misread as decoration
+or as a control — a bookmark is the reader's own ink, not the app's.
 
 ## Type
 
@@ -193,15 +149,6 @@ not the app's.
   figures on in running text (`'kern', 'liga', 'onum'`).
 - **Display face**: Cormorant Garamond semibold for surah titles and
   headlines, where its tall fine-stroked capitals can breathe.
-- **The reader's hand**: Cormorant Garamond *Italic* at weight 500 for verse
-  notes, and nothing else — the chancery cursive Renaissance scribes wrote
-  marginal glosses in, and the hand italic type was cut from. It is
-  deliberately not EB Garamond Italic: the app's prose is EB Garamond, so its
-  own italic reads as **emphasis** — the same voice leaning — instead of a
-  second person writing on the page. This is a narrow, recorded exception to
-  Cormorant's display-only rule; the 500 weight plus the note's 62 % ink keep
-  the fine strokes from going wispy at note size. The roman Cormorant stays
-  display-only. See [ANNOTATIONS.md](ANNOTATIONS.md).
 - **English lyric mode**: EB Garamond regular, 22 sp with 1.5 em leading.
   It is one flush-left, ragged-right inline paragraph — never a flex/flow row
   of padded word tiles. Natural font spaces, kerning, common ligatures, and
@@ -484,15 +431,10 @@ weight.
 ## Bookmark ribbon
 
 Part of each verse block — not a floating overlay that tracks the list. The
-selector answers *where do I go*; the ribbon answers *what did I mark*. The
-ayah rail also carries ruby for saved verses: on the collapsed stack the
-nearest existing bar is recolored (no extra mark), and on the expanded wheel
-bookmarked ticks and numbers tint ruby so marks stay visible while scrubbing.
-Gold still means dial focus — a bookmarked ayah under the finger is gold, not
-ruby. The ribbon lives in the block's outer margin on the edge **opposite**
-the ayah selector (the selector side is a setting), and both ribbon and rail
-marks obey the same chrome rules: they fade with the rest of the chrome and
-vanish entirely while reciting.
+selector answers *where do I go*; the ribbon answers *what did I mark*. It
+lives in the block's outer margin on the edge **opposite** the ayah selector
+(the selector side is a setting), and it obeys the same chrome rules: it fades
+with the rest of the chrome and vanishes entirely while reciting.
 
 - **Unified with the verse.** The ribbon is composed inside `AyahBlock`, so its
   height *is* the block's height (Arabic, gloss, and translation together). It
@@ -523,7 +465,7 @@ SharedPreferences store (`data/BookmarkRepository.kt`), never in the read-only
 Once a newly marked verse returns to Chapters, the same physical ribbon used
 inside its verse block unfurls beside the title and runs to just above the page
 bottom, then remains exposed on the left edge. Its drawing stays fully unfurled
-while a separate navigation target opens Bookmarks, so tapping it—or
+while a separate 44 dp/px navigation target opens Bookmarks, so tapping it—or
 pulling right from Chapters—never plays a retract before the Bookmarks sheet
 slides in from the left above it. This is a real page in the paper stack, not an
 overlay.
@@ -532,23 +474,10 @@ overlay.
 
 The long Chapters ribbon is a structural part of the chapter document, not a
 decoration laid on top of it. Its visible ruby cloth begins beside the title,
-while its touch target remains available without making the cloth itself a
-wide, blank-looking control. Android permanently reserves a 28 dp Home lane,
-even before the first bookmark exists, so the chapter composition never moves
-when the ribbon appears. The lane matches the opposite page gutter exactly:
-7.5 dp of outer air, a 13 dp ribbon, then 7.5 dp of inner air. Its 28 dp target
-is a narrow Home-only exception to the usual 44 dp minimum; verse ribbons and
-the Bookmarks index keep their full 44 dp targets and 11 dp cloth.
-
-On Android, that lane is fixed to the viewport: scrolling the chapter list
-must never move the ribbon. It begins beside, and slightly below the top of,
-the single Cormorant “Beautiful Quran” masthead and keeps a small, optically
-balanced paper gutter on both sides of the ruby cloth. The Chapters masthead
-and settings rosette remain fixed above the scrolling chapter document,
-matching the web composition. The masthead does not repeat the Arabic app
-name; Arabic remains where it identifies Quranic content. The ribbon folds
-softly over the top page edge with two restrained rounded corners, matching
-the web renderer without turning its cap into a pill.
+while the full 44 dp/px touch target remains available without making the
+cloth itself a wide, blank-looking control. The cloth is centred in the
+narrow edge lane; its hit geometry is an interaction concern, not a visual
+gutter that sets the text measure.
 
 There is one content rule beside that lane. On a bookmarked Chapters page,
 the title, search field, and gold chapter-number column all begin on it. The
@@ -556,122 +485,37 @@ surah name may form a second, inner reading column, but no heading may drift
 back to the paper edge simply because it is larger. This alignment is checked
 as a relationship, not as unrelated platform padding values: web and Android
 may use their own layout primitives, yet must preserve the same visible
-anchors. Keep the gold chapter number close to its transliterated name; the
-number lane must not read as an empty decorative gutter.
-
-The Android and web search pills own an even 16 dp/px internal inset on both
-ends; icon and text spacing is independent of the chapter-number grid.
-Continue listening is the one full-bleed row in the scrolling chapter
-document: its quiet green wash and tap target reach both sheet edges, while
-its bilingual text remains on the same inner English and Arabic rails as the
-chapter rows. Both platforms keep the 28 dp/px outer lane, 26 dp/px number
-column, and 4 dp/px name gap; the fixed masthead pairs its title with the same
-30 dp/px gilded rosette Settings affordance.
+anchors.
 
 The ribbon's drawing and navigation are deliberately separate. Reuse
 `VerseBookmarkRibbon` for the cloth; put its Home/Chapters navigation on an
-adjacent quiet target (28 dp on Android Home, 44 px on web). That keeps the
-ribbon fully unfurled while the Bookmarks sheet opens, prevents a mark/unmark
-animation from being borrowed as navigation feedback, and leaves the shared
-component authoritative for its own visual language. Do not create another
-bookmark icon, a second ribbon shape, or a bespoke animated substitute.
-
-### Chapters bookmark treatment
-
-Android and web developer settings compare two quiet placements without
-changing the bookmark language: a top-bound ribbon and a typographic *Saved
-passages* line whose number-column mark is the same ruby cloth. The web ribbon
-is 96 px tall; Android begins at the physical screen edge and carries its 96 dp
-body below the status-bar inset so the tip clears the title. Both appear only
-when a bookmark exists, open the same Bookmarks sheet, and reuse each
-platform's `VerseBookmarkRibbon`; verse-level ribbons in the Reader never
-change.
-
-The selector is visible only in developer mode, but its persisted choice stays
-active if developer mode is hidden again. The inline treatment is omitted
-during active search so results remain answer-first. Its second line reports
-the live bookmark count as “1 saved ayah” or “12 saved ayahs.” The top-bound
-treatment retains the fixed 28 dp Home lane and separate
-quiet navigation target, so switching treatments never moves the chapter document
-or turns cloth animation into navigation feedback.
+adjacent quiet 44 dp/px target. That keeps the ribbon fully unfurled while the
+Bookmarks sheet opens, prevents a mark/unmark animation from being borrowed
+as navigation feedback, and leaves the shared component authoritative for its
+own visual language. Do not create another bookmark icon, a second ribbon
+shape, or a bespoke animated substitute.
 
 The bookmark index is a compact bilingual concordance, shared by Android and
-web. It uses one centered column (560 dp / 36 rem maximum) and a fixed 40 dp/px
-inner content spine from the outer title rule. The gold number belongs to the
-outer index lane, the English chapter name begins on the inner spine, and the
-isolated RTL Arabic name ends just before the fixed trailing disclosure lane.
-Verse copy balances that spine with an equal trailing gutter so its reading
-measure remains centered. Entries then stack Arabic at 24/36, translation at 17/25, and
-metadata at 14/20; the title is the only display-sized element. Spacing, not
-rules or containers, separates sections.
+web. It uses one centered column (560 dp / 36 rem maximum) and a fixed 52 dp/px
+content spine: a 44 dp/px ribbon lane followed by an 8 dp/px gap. Chapter rows
+align their gold number, English name, and isolated RTL Arabic name to that
+same spine. Verse copy balances that spine with an equal trailing gutter so
+its reading measure remains centered. Entries then stack Arabic at 24/36,
+translation at 17/25, and metadata at 14/20; the title is the only
+display-sized element. Spacing, not rules or containers, separates sections.
 
 The Bookmarks header contains only its title and the Chapters return action;
 the total marked-verse count is deliberately omitted.
 
-Within the fixed outer lane, the visible ruby edge keeps its 2 dp/px optical
-inset while the narrower gold chapter number begins 4 dp/px from the
-title/search rule. Those offsets are taken from the lane's right-hand air:
-they never widen the 44 dp/px ribbon target or change the page measure. Search
-text, chapter names, verse copy, metadata, and disclosures all begin on the
-same 40 dp/px inner spine; the Arabic chapter name reaches a fixed rule before
-the shared 20 dp/px chevron and its 16 dp/px air, while Arabic verse copy
-retains the sheet's outer rule below it.
-
-The index follows one vertical rhythm on both platforms: 24 dp/px from title
-to search and from search to the first chapter label, 32 dp/px before later
-chapter groups, 12 dp/px below a chapter header, and 8 dp/px between Arabic
-verse copy and its translation. The fixed-height ayah line supplies its own
-breathing room, so no extra spacer sits between translation and metadata.
-
-### Bookmark index alignment lessons
-
-- **Name anchors before assigning padding.** This surface has four: the outer
-  title rule, the 44 dp/px index target, the 40 dp/px inner reading spine, and
-  the fixed trailing disclosure lane. Each value expresses one relationship.
-  Scattered child padding recreates almost-aligned edges that fail as soon as
-  the viewport or platform changes.
-- **Visible ink and interaction geometry are separate.** The ribbon keeps a
-  44 dp/px target while its narrow cloth sits optically inside it. Moving the
-  cloth or chapter numeral must not move the target, widen the gutter, or push
-  the reading spine. The shared ribbon component remains the authority for the
-  cloth; page layout owns only its placement.
-- **Optical equality is not numeric equality.** A wide ruby strip and a small
-  gold numeral do not look centered at the same inset. Their 2 and 4 dp/px
-  offsets are intentionally different, but both are measured inside the same
-  lane. Tune the marked element, not the whole grid.
-- **Bilingual alignment needs both edges.** English search text, chapter names,
-  translation, and metadata begin on the inner left spine. Arabic chapter
-  names end before the aligned disclosure lane while verse copy keeps the
-  sheet's far-right rule. RTL direction shapes and orders Arabic; it does not
-  place the element on the page.
-- **Measure rhythm between visible ink, not only boxes.** A 52 dp/px search
-  field and a 44 dp/px metadata target contain internal air. Center text inside
-  those targets, then judge the visible title-to-search, search-to-section,
-  section-to-verse, and translation-to-reference gaps. Adding a spacer beside
-  an already centered target doubles the intended breathing room.
-- **A section should establish context once.** The chapter header owns the
-  chapter number and bilingual name. A bookmark row repeats only its ayah
-  number; repeating the chapter name or full reference weakens hierarchy and
-  makes a one-result section feel busier than it is.
-- **Verify relationships with real narrow data.** Check x-coordinates for the
-  outer rule and inner spine, right edges for Arabic, and ink-to-ink vertical
-  gaps with a wrapped translation and a vocalized Arabic verse. Web and Compose
-  may use different primitives, but these measured relationships must match.
-
 Results remain in Quranic order and can be searched by reference, chapter
-name, or verse text. Tapping a chapter header folds or unfolds its complete
-section. The shared disclosure chevron points down to open and up to fold;
-its fixed trailing column keeps every chapter row aligned, with the Arabic
-name ending on the neighboring rule. A chapter initially shows
-five marked verses; its green inline disclosure reveals the remainder, while
-an active search temporarily unfolds every matching chapter so no result is
-hidden. The section header establishes the chapter once; an individual result
-shows only its ayah number. The small ruby strip beside a result opens an
-inline Keep / Remove confirmation in that ayah line's fixed-height space before
-changing the mark, so the page does not jump. Keep is green, Remove is quiet
-ink, ayah numbers are gold, and ruby remains exclusive to the physical ribbon.
-Tapping the verse returns to it in the reader. The long Chapters ribbon is
-navigation only and never retracts when tapped.
+name, or verse text. A chapter initially shows five marked verses; its green
+inline disclosure reveals the remainder, while an active search shows every
+match. The small ruby strip beside a result opens an inline Keep / Remove
+confirmation in the reference line's fixed-height space before changing the
+mark, so the page does not jump. Keep is green, Remove is quiet ink, references
+are gold, and ruby remains exclusive to the physical ribbon. Tapping the verse
+returns to it in the reader. The long Chapters ribbon is navigation only and
+never retracts when tapped.
 
 ## Reading modes
 
