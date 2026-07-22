@@ -79,7 +79,7 @@ fun ShareHost(
     InkRevealOverlay(
         visible = ui.sendOpen,
         backgroundColor = overlayColors.background,
-        // Gather control sits in the player bar — bloom from the lower page.
+        // Bloom from the lower page (near the former gather control).
         originX = 0.5f,
         originY = 0.92f,
         modifier = Modifier.zIndex(4.5f),

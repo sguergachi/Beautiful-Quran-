@@ -124,6 +124,7 @@ Requires **JDK 21**. No Android device/emulator is needed for tests.
 | `docs/ANNOTATIONS.md` | Verse annotations (ḥawāshī) — reader's notes now, scholars' glosses later |
 | `docs/ROOT_VIEWER.md` | Hold-to-reveal root lexicon — concordance counts, ayah jumps, QAC data |
 | `docs/SHARE.md` | Gather mode and verse sharing — text + full-ink image shipped; video proposed |
+| `docs/VERSE_ACTIONS.md` | Bookmark · note · share UX — verse-first share plan (designed, not implemented) |
 | `docs/TIMINGS_LAB.md` | The in-app timing editor and its patch workflow (developer mode) |
 | `tools/timing_overrides/README.md` | Committed timing-correction patch format |
 | `PLAN.md` | Historical product/engineering plan — context, not current spec |
