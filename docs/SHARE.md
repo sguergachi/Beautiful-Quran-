@@ -26,9 +26,9 @@ The second is why selection is an ordered list and not a range.
 Gathering is a **mode of the reader sheet**, not a new sheet. The page keeps
 its layout; it grows ordinals in the margin.
 
-- **Enter** from the **Gather control in the player bar**
-  (`FormatListNumbered` in the transport row). Toggling it puts the reader
-  into gather mode and **pauses recitation** (the mode owns the tap).
+- **Enter** via `ShareViewModel.enterGather()` / `onGatherControlClick()`
+  (pauses recitation — the mode owns the tap). The player bar no longer
+  hosts a Gather control; entry UI is separate from transport.
 - **Pick** by tapping a verse (word or ayah). Its ordinal is written in the
   outer margin in gold Arabic-Indic numerals (١ ٢ ٣) — the same margin the
   bookmark ribbon lives in. The ribbon is hidden while gathering. Tap again
@@ -39,19 +39,16 @@ its layout; it grows ordinals in the margin.
 - **Selection outlives the page.** `List<AyahRef>` is held in
   `ShareViewModel` (activity scope), so turning to another chapter keeps the
   list intact.
-- **Leave** with system back (drops the selection) or press Gather with an
-  empty list. **Commit** with Gather when the list is non-empty (opens Send).
+- **Leave** with system back (drops the selection) or
+  `ShareViewModel.exitGather()`. **Commit** via
+  `onGatherControlClick()` when the list is non-empty (opens Send).
 
 While gathering, word taps do not seek, word long-press does not open the
 Root Viewer, ayah-mark long-press does not open annotations, and the bookmark
 ribbon is inactive. The mode owns the tap — interactions are *replaced*, not
 stacked.
 
-**Mode chrome (visual QA):** idle Gather matches full transport ink (not
-muted chrome); empty gather shows a gold pulse plus a quiet
-“Gathering — tap verses” line under the reciter; with a selection the line
-reads “Gathering · N”, the icon is solid gold with a count badge, and margin
-ordinals use `headlineSmall` full gold.
+**Mode chrome (visual QA):** margin ordinals use `headlineSmall` full gold.
 
 ### Why not long-press the ﴿N﴾ mark
 

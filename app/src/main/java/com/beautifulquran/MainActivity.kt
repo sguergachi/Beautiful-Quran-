@@ -681,8 +681,6 @@ private fun PaperStackApp(
                         gathering = shareUi.gathering,
                         gatherOrdinal = { sid, a -> shareUi.ordinals[AyahRef(sid, a)] },
                         onToggleGatheredAyah = shareViewModel::toggle,
-                        gatherCount = shareUi.selection.size,
-                        onGatherControlClick = shareViewModel::onGatherControlClick,
                     )
                 }
 

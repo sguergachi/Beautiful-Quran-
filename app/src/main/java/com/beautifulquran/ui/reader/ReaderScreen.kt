@@ -194,8 +194,6 @@ fun ReaderScreen(
     /** 1-based ordinal for a gathered verse, or null when not selected. */
     gatherOrdinal: (surahId: Int, ayah: Int) -> Int? = { _, _ -> null },
     onToggleGatheredAyah: (surahId: Int, ayah: Int) -> Unit = { _, _ -> },
-    gatherCount: Int = 0,
-    onGatherControlClick: () -> Unit = {},
 ) {
     LaunchedEffect(surahId) { viewModel.load(surahId) }
     DisposableEffect(onAyahSelectorExpandedChange) {
@@ -987,9 +985,6 @@ fun ReaderScreen(
                     onRepeatClick = { showRepeatDialog = true },
                     onSpeed = viewModel::cycleSpeed,
                     onReciterClick = onOpenSettings,
-                    gathering = gathering,
-                    gatherCount = gatherCount,
-                    onGatherClick = onGatherControlClick,
                 )
             }
         },
