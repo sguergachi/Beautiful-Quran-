@@ -32,14 +32,19 @@ ExoPlayer.currentPosition
 AudioOutputLatency.latencyMs   (0 / 80 / 180 from route)
         │
         ▼
-OutputLatency.heardMs(...)     (clamp ≥ 0)
-        │
+OutputLatency.highlightMs(...)  media − lag + lead  (clamp ≥ 0)
+        │                         lead = InkEngine.highlightLeadMs (lab; default 0)
         ▼
 HighlightClock.sample(...)
         │
         ▼
 PreparedTimings.activeInfo(...)   ← unchanged engine
 ```
+
+**Highlight lead** (Ink Lab → Highlight, session-only, default 0) advances the
+query time so each word’s wash can start *before* its segment `startMs`. It is
+the opposite direction of output lag: lag delays ink to match late audio; lead
+runs ink ahead of the timing table. Neither is baked into `HighlightEngine`.
 
 ## Presets
 

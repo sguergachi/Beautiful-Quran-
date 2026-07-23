@@ -63,4 +63,16 @@ object OutputLatency {
      */
     fun heardMs(mediaPositionMs: Long, latencyMs: Long): Long =
         (mediaPositionMs - latencyMs).coerceAtLeast(0L)
+
+    /**
+     * Karaoke query time fed to [HighlightEngine]: start from the heard
+     * playhead, then advance by [leadMs] so word ink can run *ahead* of the
+     * segment table (Ink Lab → Highlight lead). Default lead is 0.
+     *
+     * Net form (not sequential clamp) so lag and lead cancel cleanly:
+     * `max(0, media − latency + lead)`.
+     */
+    fun highlightMs(mediaPositionMs: Long, latencyMs: Long, leadMs: Long = 0L): Long =
+        (mediaPositionMs - latencyMs.coerceAtLeast(0L) + leadMs.coerceAtLeast(0L))
+            .coerceAtLeast(0L)
 }

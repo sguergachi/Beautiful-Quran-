@@ -63,7 +63,7 @@ private enum class InkLabTab(val label: String) {
     Sweep("Sweep"),
     Repeat("Repeat"),
     Tajweed("Tajweed"),
-    /** Karaoke clock: output lag + ayah fade-lead — not wash feel. */
+    /** Karaoke clock: word lead + output lag + ayah fade-lead — not wash feel. */
     Highlight("Highlight"),
 }
 
@@ -195,9 +195,21 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
                         }
                     }
 
-                    // Karaoke clock — when the word lights and when the next
-                    // ayah fades in (docs/OUTPUT_LATENCY.md).
+                    // Karaoke clock — word lead, BT lag, ayah prepare
+                    // (docs/OUTPUT_LATENCY.md).
                     InkLabTab.Highlight -> {
+                        TuningSlider(
+                            "Highlight lead ms",
+                            InkEngine.highlightLeadMs.toFloat(),
+                            0f..1200f,
+                            integer = true,
+                        ) {
+                            InkEngine.highlightLeadMs = it.roundToInt()
+                        }
+                        LabCaption(
+                            "How early each word's wash starts vs the timing table. " +
+                                "1200 = ink runs 1.2s ahead of HighlightEngine startMs.",
+                        )
                         val override = InkEngine.outputLatencyOverrideMs
                         TuningToggle("Manual output lag", override != null) { on ->
                             InkEngine.outputLatencyOverrideMs =
@@ -205,7 +217,8 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
                         }
                         LabCaption(
                             if (override == null) {
-                                "Auto: route preset (speaker 0 / A2DP 180 / LE 80)."
+                                "Auto: route preset (speaker 0 / A2DP 180 / LE 80). " +
+                                    "Lag delays ink to match late audio."
                             } else {
                                 "Override absolute lag subtracted from the playhead."
                             },
@@ -221,7 +234,7 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
                             }
                         }
                         TuningSlider(
-                            "Fade lead ms",
+                            "Ayah fade lead ms",
                             InkEngine.fadeLeadMs.toFloat(),
                             0f..1200f,
                             integer = true,
@@ -229,8 +242,8 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
                             InkEngine.fadeLeadMs = it.roundToInt()
                         }
                         LabCaption(
-                            "How early the next verse prepares before the last word ends " +
-                                "(focus + recess lift). Watch an ayah boundary — not mid-word ink.",
+                            "Ayah handoff only: next verse focus/recess before last word ends. " +
+                                "Does not move word washes.",
                         )
                     }
                 }
@@ -250,6 +263,7 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .quietClickable {
                             InkEngine.tuning = InkEngine.Tuning()
+                            InkEngine.highlightLeadMs = InkEngine.DEFAULT_HIGHLIGHT_LEAD_MS
                             InkEngine.fadeLeadMs = InkEngine.DEFAULT_FADE_LEAD_MS
                             InkEngine.outputLatencyOverrideMs = null
                             copyNote = null
@@ -337,6 +351,7 @@ internal fun formatTuningCopy(t: InkEngine.Tuning): String {
 /** Session highlight-sync knobs for the clipboard snapshot. */
 internal fun formatHighlightCopy(): String = buildString {
     appendLine("// Highlight sync (Ink Lab → Highlight) — session only")
+    appendLine("InkEngine.highlightLeadMs = ${InkEngine.highlightLeadMs}")
     appendLine("InkEngine.fadeLeadMs = ${InkEngine.fadeLeadMs}")
     val lag = InkEngine.outputLatencyOverrideMs
     append(

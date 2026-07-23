@@ -223,8 +223,9 @@ class ReaderViewModel(
     private var inkActivation = 0L
     private var lastInkSampleKey: Any? = null
     private var lastInkClockMs = -1L
-    /** Last applied [OutputLatency] so a route change can reset the clock. */
+    /** Last applied lag/lead so a lab or route change can reset the clock. */
     private var lastOutputLatencyMs = -1L
+    private var lastHighlightLeadMs = -1L
     /**
      * User seek target (ayah → ms) applied on the next poll once that ayah is
      * the media item — so ink jumps to the tapped word without waiting for
@@ -233,22 +234,25 @@ class ReaderViewModel(
     private var forcedHighlight: Pair<Int, Long>? = null
 
     /**
-     * Media playhead adjusted for the current audio route so ink tracks the
-     * ear (Bluetooth A2DP lag, etc.). Forced word seeks stay on the media
+     * Media playhead adjusted for output lag and optional highlight lead so
+     * ink tracks the ear (Bluetooth) and can run ahead of segment times
+     * (Ink Lab → Highlight lead). Forced word seeks stay on the media
      * timeline so a tap lights the word that was just sought.
      */
     private fun highlightPositionMs(forcedMediaMs: Long?): Long {
         // Ink Lab → Highlight can override route detection with an absolute lag.
         val latencyMs = InkEngine.outputLatencyOverrideMs?.toLong()
             ?: outputLatency.latencyMs.value
-        if (latencyMs != lastOutputLatencyMs) {
+        val leadMs = InkEngine.highlightLeadMs.toLong().coerceAtLeast(0L)
+        if (latencyMs != lastOutputLatencyMs || leadMs != lastHighlightLeadMs) {
             lastOutputLatencyMs = latencyMs
-            // Route flip (or lab override) jumps heard time; accept it as a
-            // real step so HighlightClock does not hold it as jitter.
+            lastHighlightLeadMs = leadMs
+            // Route / lab jump in query time; accept it as a real step so
+            // HighlightClock does not hold it as jitter.
             highlightClock.acceptNextSample()
         }
         if (forcedMediaMs != null) return forcedMediaMs
-        return OutputLatency.heardMs(player.positionMs, latencyMs)
+        return OutputLatency.highlightMs(player.positionMs, latencyMs, leadMs)
     }
 
     /** Emits the active word ~30x/sec while this surah is playing, but only
