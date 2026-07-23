@@ -294,10 +294,9 @@ class ReaderViewModel(
             }
     }
 
-    /** The ayah whose block is lit on the sheet. Normally the playing ayah,
-     * but the highlight crosses to the next ayah [InkEngine.fadeLeadMs] before
-     * the current one's audio ends, so the fade onto the next ayah begins a
-     * touch early and the transition feels anticipatory rather than abrupt.
+    /** The ayah focus/prepare target on the sheet. Normally the playing ayah,
+     * but advances to the next ayah [InkEngine.fadeLeadMs] before the current
+     * one's last word ends, so focus and recess-prepare lead the handoff.
      * Null while the chapter-opening basmalah lead-in is playing (no ayah yet). */
     val activeAyah: StateFlow<Int?> = pollingWhileLoaded(key = { it.ayah }) { ayah ->
         if (ayah == BASMALAH_PLAYLIST_AYAH) null else ayahWithFadeLead(ayah)
@@ -332,21 +331,26 @@ class ReaderViewModel(
     }
 
     /** Advances the lit ayah to the next one during the final
-     * [InkEngine.fadeLeadMs] of the current ayah's audio, so its fade-in leads
-     * the audio boundary. Only while playing (a paused position must not jump
-     * the highlight forward). */
+     * [InkEngine.fadeLeadMs] of the current ayah's *recitation*, so its fade-in
+     * leads the last word (including a waqf hold) rather than trailing encoded
+     * silence on the media file. Only while playing. */
     private fun ayahWithFadeLead(ayah: Int): Int {
-        if (!player.state.value.isPlaying) return ayah
-        val repeatRange = player.state.value.repeatRange
-        if (repeatRange != null && ayah >= repeatRange.last) return ayah
         val ayahCount = _uiState.value.content?.surah?.ayahCount ?: return ayah
-        if (ayah >= ayahCount) return ayah
-        val duration = player.durationMs
-        if (duration <= 0L) return ayah
-        val remaining = duration - player.positionMs
-        // Session-tunable from Ink Lab → Highlight (default 500 ms).
-        val lead = InkEngine.fadeLeadMs.toLong().coerceAtLeast(0L)
-        return if (remaining in 0..lead) ayah + 1 else ayah
+        // Prefer last word end so lead fires during the closing hold, not after
+        // it in file-trailing silence (where activeWord is already null and the
+        // Ink Lab slider appears to do nothing). Fall back to media duration
+        // when timings are missing or still loading.
+        val endMs = timings[ayah]?.lastOrNull()?.endMs?.takeIf { it > 0L }
+            ?: player.durationMs
+        return FadeLead.ayahWithFadeLead(
+            ayah = ayah,
+            isPlaying = player.state.value.isPlaying,
+            positionMs = player.positionMs,
+            endMs = endMs,
+            leadMs = InkEngine.fadeLeadMs.toLong(),
+            ayahCount = ayahCount,
+            repeatRangeLast = player.state.value.repeatRange?.last,
+        )
     }
 
     init {
@@ -791,9 +795,37 @@ class ReaderViewModel(
     companion object {
         private const val TICK_MS = 33L
         private const val PAUSED_TICK_MS = 250L
-        /** How early the block fade jumps to the next ayah, in ms. */
-        private const val FADE_LEAD_MS = 500L
         private const val START_SEEK_GRACE_MS = 1_500L
+    }
+}
+
+/**
+ * Pure ayah-handoff lead: when playback is in the final [leadMs] of an ayah's
+ * recitation span, report the *next* ayah so focus and ink-prepare can start
+ * early. Session-tunable via [InkEngine.fadeLeadMs] (Ink Lab → Highlight).
+ *
+ * [endMs] should be the last word's end (not media-file duration) so trailing
+ * encoded silence does not hide the lead entirely.
+ */
+internal object FadeLead {
+    fun ayahWithFadeLead(
+        ayah: Int,
+        isPlaying: Boolean,
+        positionMs: Long,
+        endMs: Long,
+        leadMs: Long,
+        ayahCount: Int,
+        repeatRangeLast: Int?,
+    ): Int {
+        if (!isPlaying) return ayah
+        if (repeatRangeLast != null && ayah >= repeatRangeLast) return ayah
+        if (ayah >= ayahCount) return ayah
+        if (endMs <= 0L) return ayah
+        val lead = leadMs.coerceAtLeast(0L)
+        // Once inside the lead window, stay advanced through trailing silence
+        // (position past endMs) until the media item itself advances.
+        val remaining = endMs - positionMs
+        return if (remaining <= lead) ayah + 1 else ayah
     }
 }
 

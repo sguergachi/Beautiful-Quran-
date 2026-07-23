@@ -141,7 +141,7 @@ object InkEngine {
      * Kept outside [Tuning] so visual paste/copy stays about the wash, while
      * these adjust when the karaoke clock and ayah handoff fire.
      */
-    /** How early the next ayah block fades in before the clip ends (ms). */
+    /** How early the next ayah prepares before the last word ends (ms). */
     var fadeLeadMs: Int by mutableStateOf(DEFAULT_FADE_LEAD_MS)
 
     /**
