@@ -621,27 +621,46 @@ fun ReaderScreen(
     // gets the pre-roll slide; boundary-to-boundary tracking after that stays
     // smooth. Playback follow is gated by [ReaderInteraction.shouldFollowPlayback]
     // and by the Ink Lab's session-only [InkEngine.focusEngineEnabled] freeze.
+    //
+    // Do **not** key this effect on isPlaying: pause/play (and brief seek
+    // buffering) would re-home a tall verse to its top anchor, then word-follow
+    // would scroll back down to the active word — the up/down/up stutter.
     val labFocusEnabled = InkEngine.focusEngineEnabled
-    fun shouldFollowPlayback(): Boolean =
+    val followPlayback =
         ReaderInteraction.shouldFollowPlayback(interaction) && labFocusEnabled
     var followWasEnabled by remember { mutableStateOf(followEnabled) }
-    LaunchedEffect(
-        playbackFocusTarget,
-        interaction,
-        playerState.isPlaying,
-        labFocusEnabled,
-    ) {
+    /** Last target we already homed onto while follow stayed on. Skips
+     * re-focus when activeAyah flickers null→same during seeks. */
+    var lastFollowFocusTarget by remember { mutableStateOf<Int?>(null) }
+
+    // Continue Listening tracks recited ayahs without driving scroll.
+    LaunchedEffect(playbackFocusTarget, playerState.isPlaying) {
         val target = playbackFocusTarget ?: return@LaunchedEffect
-        // Continue Listening advances with the recited verse, not scroll focus.
         if (target >= 1 && playerState.isPlaying) {
             viewModel.onListenedAyah(target)
         }
-        if (!shouldFollowPlayback()) {
+    }
+
+    LaunchedEffect(playbackFocusTarget, followPlayback) {
+        if (!followPlayback) {
             followWasEnabled = false
+            lastFollowFocusTarget = null
             return@LaunchedEffect
         }
+        val target = playbackFocusTarget ?: return@LaunchedEffect
         val justEnabled = !followWasEnabled
         followWasEnabled = true
+        // Same verse still following: word-band keep-in-view owns the camera.
+        // Re-homing here fights mid-verse position after pause/play/FF/back.
+        if (!ReaderInteraction.shouldHomeOntoPlaybackTarget(
+                target = target,
+                justEnabledFollow = justEnabled,
+                lastHomedTarget = lastFollowFocusTarget,
+            )
+        ) {
+            return@LaunchedEffect
+        }
+        lastFollowFocusTarget = target
         focusController.focus(target, animate = true, preRoll = justEnabled)
     }
 
@@ -649,12 +668,12 @@ fun ReaderScreen(
     // does not change, so observe the sparse word state without making the
     // screen recompose on every word and restore the verse's top anchor once.
     LaunchedEffect(isThisSurahPlaying, interaction, labFocusEnabled) {
-        if (!isThisSurahPlaying || !shouldFollowPlayback()) {
+        if (!isThisSurahPlaying || !followPlayback) {
             return@LaunchedEffect
         }
         var wasAtRepeatStart = false
         snapshotFlow { activeWordState.value }.collect { word ->
-            if (!shouldFollowPlayback()) return@collect
+            if (!followPlayback) return@collect
             val repeatAyah = word?.takeIf {
                 FocusEngine.startsFullAyahRepeat(
                     wordPosition = it.wordPosition,
@@ -725,7 +744,7 @@ fun ReaderScreen(
     SideEffect {
         if (layoutSignature == lastLayoutSignature) {
             stickyAyah = when {
-                shouldFollowPlayback() &&
+                followPlayback &&
                     playbackFocusTarget != null &&
                     !FocusEngine.isChapterTopFocusTarget(playbackFocusTarget) -> playbackFocusTarget
                 else -> scrolledAyah.value
@@ -740,7 +759,7 @@ fun ReaderScreen(
             return@LaunchedEffect
         }
         val pin = when {
-            shouldFollowPlayback() &&
+            followPlayback &&
                 playbackFocusTarget != null -> playbackFocusTarget
             else -> stickyAyah.coerceIn(1, lastAyahNumber)
         }

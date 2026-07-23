@@ -199,4 +199,37 @@ class ReaderInteractionTest {
             ),
         )
     }
+
+    @Test
+    fun `shouldHomeOntoPlaybackTarget skips same target while follow stays on`() {
+        // Pause/play and seek flicker must not re-home a tall mid-verse.
+        assertFalse(
+            ReaderInteraction.shouldHomeOntoPlaybackTarget(
+                target = 12,
+                justEnabledFollow = false,
+                lastHomedTarget = 12,
+            ),
+        )
+        assertTrue(
+            ReaderInteraction.shouldHomeOntoPlaybackTarget(
+                target = 13,
+                justEnabledFollow = false,
+                lastHomedTarget = 12,
+            ),
+        )
+        assertTrue(
+            ReaderInteraction.shouldHomeOntoPlaybackTarget(
+                target = 12,
+                justEnabledFollow = true,
+                lastHomedTarget = 12,
+            ),
+        )
+        assertTrue(
+            ReaderInteraction.shouldHomeOntoPlaybackTarget(
+                target = 12,
+                justEnabledFollow = false,
+                lastHomedTarget = null,
+            ),
+        )
+    }
 }
