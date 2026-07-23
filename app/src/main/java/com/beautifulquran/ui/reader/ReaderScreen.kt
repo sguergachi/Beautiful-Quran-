@@ -1891,6 +1891,13 @@ fun ReaderScreen(
                                         val segment = viewModel.segmentsFor(ayah.number)
                                             ?.firstOrNull { it.position == word.position }
                                         notifPermission.request {
+                                            // Mid-verse word play must not verse-home: for tall
+                                            // ayahs that pins the top, un-lays-out the bottom
+                                            // line the reader tapped, and word-band follow cannot
+                                            // measure it — so the page jumps up. Seed follow as
+                                            // already on this ayah so shouldHomeOnto skips.
+                                            lastFollowFocusTarget = ayah.number
+                                            followWasEnabled = true
                                             dispatch(ReaderInteractionEvent.EnableFollow)
                                             if (segment != null) {
                                                 viewModel.playFromWord(ayah.number, segment.startMs)

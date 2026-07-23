@@ -234,6 +234,27 @@ class ReaderInteractionTest {
     }
 
     @Test
+    fun `word-play seed skips verse home so tall-ayah bottom taps stay put`() {
+        // Screen sets lastHomed = tapped ayah and followWasEnabled = true before
+        // EnableFollow so justEnabled is false and the same target does not re-home.
+        assertFalse(
+            ReaderInteraction.shouldHomeOntoPlaybackTarget(
+                target = 141,
+                justEnabledFollow = false,
+                lastHomedTarget = 141,
+            ),
+        )
+        // Return-to-verse still homes when follow was off (justEnabled).
+        assertTrue(
+            ReaderInteraction.shouldHomeOntoPlaybackTarget(
+                target = 141,
+                justEnabledFollow = true,
+                lastHomedTarget = null,
+            ),
+        )
+    }
+
+    @Test
     fun `shouldKeepWordInView requires actual play not debounced chrome`() {
         // End of last ayah: isPlaying false while chrome may still be recessed.
         assertFalse(
