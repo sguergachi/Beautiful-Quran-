@@ -33,9 +33,10 @@ package com.beautifulquran.domain
  *   absorbed and the reciter sustains the **opening letter of this word**.
  *   Pass the previous word as [prevArabic]. The previous word can pass
  *   [nextArabic] so its trailing nūn exits early (absorbed, not settled).
- * - **Waqf share scale** — short ayah-final words cap how much of
- *   [Hold.waqfShare] they may spend, so a high slider does not sprint the
- *   run-up on a three-letter closer.
+ * - **Waqf length scale** — [Hold.waqfLengthScale] ramps how much of
+ *   [Hold.waqfShare] a closer may spend by letter count, so a high hold
+ *   slider does not sprint the run-up on short/medium finals (e.g. عَظِيمًا)
+ *   while long closers still get the full share.
  *
  * Pure Kotlin over immutable data, like [HighlightEngine] — no Android or
  * Compose dependencies, unit-tested on the JVM. The counts are murattal
@@ -67,9 +68,17 @@ object TajweedPacing {
         val isAyahFinal: Boolean = false,
         /** Ceiling on ordinary-letter speed, as a multiple of the plain rate. */
         val cruiseCap: Float = 1.25f,
-        /** Share of an ayah-final word's dwell spent on the closing letter.
-         *  Short words are capped below this (see [waqfShareCap]). */
+        /** Share of an ayah-final word's dwell spent on the closing letter
+         *  when the word is long enough (see [waqfLengthScale]). */
         val waqfShare: Float = 0.55f,
+        /**
+         * How strongly shorter closers reduce effective [waqfShare].
+         * 0 = every ayah-final word uses the full share (run-up can sprint).
+         * 1 = linear ramp from near-zero at [MIN_LETTERS] to full share at
+         * [WAQF_FULL_LETTERS] pronounced letters. Default protects medium
+         * closers like عَظِيمًا without muting long waqf.
+         */
+        val waqfLengthScale: Float = 0.7f,
         /** Fraction of its own slot the wash still crosses while holding, so
          *  the ink breathes instead of freezing dead. */
         val creep: Float = 0.08f,
@@ -196,7 +205,7 @@ object TajweedPacing {
         }
 
         val dwellShare = (
-            if (isWaqf) minOf(hold.waqfShare, waqfShareCap(letters))
+            if (isWaqf) effectiveWaqfShare(hold.waqfShare, letters, hold.waqfLengthScale)
             else 1f - 1f / hold.cruiseCap.coerceAtLeast(1f)
             ).coerceIn(0f, MAX_DWELL_SHARE)
         if (dwellShare <= 0f) return null
@@ -274,12 +283,24 @@ object TajweedPacing {
         return Curve(times.toFloatArray(), positions.toFloatArray(), letterCount)
     }
 
-    /** Short closers may not spend a large [Hold.waqfShare] (keeps run-up readable). */
-    private fun waqfShareCap(letters: Int): Float = when {
-        letters <= 3 -> 0.35f
-        letters == 4 -> 0.45f
-        letters == 5 -> 0.55f
-        else -> MAX_DWELL_SHARE
+    /**
+     * Effective waqf dwell share after length scaling.
+     *
+     * [lengthScale] 0 → raw [share]. 1 → factor ramps from a small step at
+     * [MIN_LETTERS] to 1 at [WAQF_FULL_LETTERS]. Mixed: factor = (1 − s) + s·t
+     * so short/medium closers keep a readable run-up when the hold slider is
+     * high without dropping the waqf gate entirely.
+     */
+    private fun effectiveWaqfShare(share: Float, letters: Int, lengthScale: Float): Float {
+        val s = lengthScale.coerceIn(0f, 1f)
+        if (s <= 0f) return share.coerceIn(0f, MAX_DWELL_SHARE)
+        // +1 so the shortest paced closer (3 letters) still has a non-zero
+        // factor when scale is 1 — otherwise dwellShare hits 0 and the gate
+        // returns null (plain sweep).
+        val span = (WAQF_FULL_LETTERS - MIN_LETTERS + 1).toFloat()
+        val t = ((letters - MIN_LETTERS + 1).toFloat() / span).coerceIn(0f, 1f)
+        val factor = (1f - s) + s * t
+        return (share * factor).coerceIn(0f, MAX_DWELL_SHARE)
     }
 
     /** Width slice of the pronounced event at [i]: its own slot plus any
@@ -420,6 +441,9 @@ object TajweedPacing {
     private const val SAKIN_COUNTS = 0.5f
     private const val QALQALAH_COUNTS = 0.75f
     private const val MIN_LETTERS = 3
+    /** Pronounced letters at which [Hold.waqfShare] is applied in full when
+     * [Hold.waqfLengthScale] is 1. Medium closers (≈5) sit mid-ramp. */
+    private const val WAQF_FULL_LETTERS = 8
     /** Floor on the voiced share so degenerate timing data cannot compress
      * the whole word into a blink followed by a long rest. */
     private const val MIN_SPOKEN_FRACTION = 0.25f

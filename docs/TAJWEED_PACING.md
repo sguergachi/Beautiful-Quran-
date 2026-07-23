@@ -195,10 +195,11 @@ The model is therefore a **gated hint**, built from four parts:
   the spoken span so the trailing nūn is not settled at handoff). Same-ayah
   neighbours only (`Hold.connect`, default on). Iẓhār and cross-ayah wasl are
   left alone.
-- **Waqf share cap.** Short ayah-final words clamp effective `waqfShare`
-  (3 letters ≤ 0.35, 4 ≤ 0.45, 5 ≤ 0.55, longer free up to the slider /
-  `MAX_DWELL_SHARE`) so a high slider cannot sprint the run-up on a short
-  closer.
+- **Waqf length scale.** `Hold.waqfLengthScale` (Ink Lab: **Waqf length
+  scale**, default 0.7) multiplies `waqfShare` by a letter-count ramp: 0 =
+  full share on every closer; 1 = linear from ~0 at 3 letters to full share
+  at 8+ pronounced letters. Medium closers like `عَظِيمًا` keep a readable
+  run-up when the hold slider is high; long closers still park hard.
 
 Breakpoints `(tᵢ, xᵢ)` — time fraction → width fraction, two per hold and one
 per plain letter — are evaluated as a **monotone piecewise-linear** map (a
@@ -230,7 +231,7 @@ Two refinements built into the curve, not the callers:
   `InkEngine.pacedFeather()` supplies the paced edge. Knobs on the Ink Lab's
   **Tajweed** tab: the `tajweedPacing` master toggle, `holdMadd` /
   `holdGhunnah` / `holdWaqf` / `holdConnect`, and the `cruiseCap`,
-  `waqfShare`, `holdCreep` and `pacedFeather` sliders.
+  `waqfShare`, `waqfLengthScale`, `holdCreep` and `pacedFeather` sliders.
 - **`ActiveWord`** — carries `spokenMs` (segment end − start) alongside the
   karaoke-hold `durationMs`, so the curve can rest after the voice stops.
 - **Renderer** — `AyahBlock` computes the active word's curve next to
@@ -320,7 +321,8 @@ the curve, not the weights, is the module boundary.
   cruising covers real distance; `ٱلنَّاسِ` holds only when ghunnah is enabled;
   `cruiseCap = 1` refuses a mid-word hold but still allows waqf; the closing
   letter of a verse-final word swallows over half the sweep; a bigger
-  `waqfShare` buys a measurably longer stillness (capped on short closers);
+  `waqfShare` buys a longer stillness and `waqfLengthScale` protects short /
+  medium closers' run-up;
   wasl entry (`مَن`→`يَقُولُ`, ikhfāʾ, iqlāb) parks on the next opening letter
   and wasl exit finishes the previous word early; no segment anywhere outruns
   the cruise cap; and every knob combination stays monotone and bounded with

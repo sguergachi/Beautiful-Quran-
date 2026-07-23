@@ -127,8 +127,12 @@ object InkEngine {
          *  hold length and this cap are the same dial; 1 means ordinary
          *  letters are never hurried and only [holdWaqf] can hold. */
         val cruiseCap: Float = 1.25f,
-        /** Share of a verse-closing word spent sustaining its final letter. */
+        /** Share of a verse-closing word spent sustaining its final letter
+         *  when the word is long enough (see [waqfLengthScale]). */
         val waqfShare: Float = 0.55f,
+        /** How strongly shorter closers reduce effective [waqfShare] — see
+         *  [TajweedPacing.Hold.waqfLengthScale]. */
+        val waqfLengthScale: Float = 0.7f,
         /** How far the wash still creeps while holding, so it breathes. */
         val holdCreep: Float = 0.08f,
     )
@@ -290,6 +294,7 @@ object InkEngine {
                 isAyahFinal = isAyahFinal,
                 cruiseCap = t.cruiseCap,
                 waqfShare = t.waqfShare,
+                waqfLengthScale = t.waqfLengthScale,
                 creep = t.holdCreep,
             ),
             prevArabic = prevArabic,

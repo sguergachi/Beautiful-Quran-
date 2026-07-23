@@ -187,6 +187,9 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
                         TuningSlider("Waqf hold", t.waqfShare, 0f..0.8f) {
                             InkEngine.tuning = t.copy(waqfShare = it)
                         }
+                        TuningSlider("Waqf length scale", t.waqfLengthScale, 0f..1f) {
+                            InkEngine.tuning = t.copy(waqfLengthScale = it)
+                        }
                         TuningSlider("Hold creep", t.holdCreep, 0f..0.3f) {
                             InkEngine.tuning = t.copy(holdCreep = it)
                         }
@@ -343,6 +346,7 @@ internal fun formatTuningCopy(t: InkEngine.Tuning): String {
         appendLine("    holdConnect = ${t.holdConnect},")
         appendLine("    cruiseCap = ${f(t.cruiseCap)},")
         appendLine("    waqfShare = ${f(t.waqfShare)},")
+        appendLine("    waqfLengthScale = ${f(t.waqfLengthScale)},")
         appendLine("    holdCreep = ${f(t.holdCreep)},")
         append(")")
     }
