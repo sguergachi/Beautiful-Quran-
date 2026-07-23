@@ -52,6 +52,20 @@ class OutputLatencyTest {
     }
 
     @Test
+    fun `highlightMs advances the clock by lead after lag`() {
+        // Word timed at 5000 should light when media is at 3800 with 1200 lead.
+        assertEquals(5_000L, OutputLatency.highlightMs(3_800L, latencyMs = 0L, leadMs = 1_200L))
+        // Lag and lead net: 1000 − 180 + 1200 = 2020.
+        assertEquals(2_020L, OutputLatency.highlightMs(1_000L, latencyMs = 180L, leadMs = 1_200L))
+        // Zero lead matches heardMs.
+        assertEquals(
+            OutputLatency.heardMs(1_000L, 180L),
+            OutputLatency.highlightMs(1_000L, latencyMs = 180L, leadMs = 0L),
+        )
+        assertEquals(0L, OutputLatency.highlightMs(50L, latencyMs = 180L, leadMs = 0L))
+    }
+
+    @Test
     fun `preset values are the documented table`() {
         assertEquals(0L, OutputLatency.LOCAL_MS)
         assertEquals(180L, OutputLatency.A2DP_MS)

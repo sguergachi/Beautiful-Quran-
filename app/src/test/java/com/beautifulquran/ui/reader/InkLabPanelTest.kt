@@ -34,18 +34,22 @@ class InkLabPanelTest {
 
     @Test
     fun formatHighlightCopy_includesSyncKnobs() {
-        val prevLead = InkEngine.fadeLeadMs
+        val prevWordLead = InkEngine.highlightLeadMs
+        val prevFadeLead = InkEngine.fadeLeadMs
         val prevLag = InkEngine.outputLatencyOverrideMs
         try {
+            InkEngine.highlightLeadMs = 1_200
             InkEngine.fadeLeadMs = 420
             InkEngine.outputLatencyOverrideMs = 200
             val text = formatHighlightCopy()
+            assertTrue(text.contains("highlightLeadMs = 1200"))
             assertTrue(text.contains("fadeLeadMs = 420"))
             assertTrue(text.contains("outputLatencyOverrideMs = 200"))
             InkEngine.outputLatencyOverrideMs = null
             assertTrue(formatHighlightCopy().contains("null"))
         } finally {
-            InkEngine.fadeLeadMs = prevLead
+            InkEngine.highlightLeadMs = prevWordLead
+            InkEngine.fadeLeadMs = prevFadeLead
             InkEngine.outputLatencyOverrideMs = prevLag
         }
     }
@@ -53,8 +57,11 @@ class InkLabPanelTest {
     @Test
     fun highlightSyncDefaultsMatchShippedConstants() {
         // Fresh process defaults — if a prior test left overrides, restore.
+        InkEngine.highlightLeadMs = InkEngine.DEFAULT_HIGHLIGHT_LEAD_MS
         InkEngine.fadeLeadMs = InkEngine.DEFAULT_FADE_LEAD_MS
         InkEngine.outputLatencyOverrideMs = null
+        assertEquals(0, InkEngine.DEFAULT_HIGHLIGHT_LEAD_MS)
+        assertEquals(InkEngine.DEFAULT_HIGHLIGHT_LEAD_MS, InkEngine.highlightLeadMs)
         assertEquals(500, InkEngine.DEFAULT_FADE_LEAD_MS)
         assertEquals(InkEngine.DEFAULT_FADE_LEAD_MS, InkEngine.fadeLeadMs)
         assertNull(InkEngine.outputLatencyOverrideMs)

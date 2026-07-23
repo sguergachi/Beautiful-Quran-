@@ -144,6 +144,13 @@ object InkEngine {
      * Kept outside [Tuning] so visual paste/copy stays about the wash, while
      * these adjust when the karaoke clock and ayah handoff fire.
      */
+    /**
+     * How early word ink runs ahead of [com.beautifulquran.domain.HighlightEngine]
+     * segment times (ms). Added to the playhead before the engine query so
+     * the next word's wash can start before the timed startMs. Default 0.
+     */
+    var highlightLeadMs: Int by mutableStateOf(DEFAULT_HIGHLIGHT_LEAD_MS)
+
     /** How early the next ayah prepares before the last word ends (ms). */
     var fadeLeadMs: Int by mutableStateOf(DEFAULT_FADE_LEAD_MS)
 
@@ -168,7 +175,8 @@ object InkEngine {
             CubicBezierEasing(it.sweepEaseX1, it.sweepEaseY1, it.sweepEaseX2, it.sweepEaseY2)
         }
 
-    /** Shipped defaults for [fadeLeadMs] / auto latency (route presets). */
+    /** Shipped defaults for highlight sync (lab session knobs start here). */
+    const val DEFAULT_HIGHLIGHT_LEAD_MS = 0
     const val DEFAULT_FADE_LEAD_MS = 500
 
     /**
