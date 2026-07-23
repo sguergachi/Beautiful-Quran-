@@ -108,12 +108,18 @@ class TajweedPacingTest {
 
     @Test
     fun `the verse-closing word sustains its final letter`() {
-        // Short closer: hold still lands on the last letter (share is capped).
-        val short = curveOf(sirat, hold = Hold(isAyahFinal = true))
+        // Full share (length scale off): hold lands in the last letter's slot.
+        val short = curveOf(
+            sirat,
+            hold = Hold(isAyahFinal = true, waqfLengthScale = 0f),
+        )
         assertEquals(1f, short.at(1f), 0f)
         assertTrue("hold sits in the final slot", short.at(0.5f) > 2f / 3f)
-        // Long closer, waqf-only (no mid-word madd competing for the budget).
-        val long = curveOf(dallin, hold = Hold(madd = false, isAyahFinal = true))
+        // Long closer, waqf-only, full share — hard park late in the sweep.
+        val long = curveOf(
+            dallin,
+            hold = Hold(madd = false, isAyahFinal = true, waqfLengthScale = 0f),
+        )
         val late = long.at(0.9f) - long.at(0.5f)
         assertTrue("long waqf should park the wash, moved $late", late < 0.08f)
     }
@@ -211,11 +217,14 @@ class TajweedPacingTest {
     }
 
     @Test
-    fun `short ayah-final words cap waqf share`() {
+    fun `waqf length scale protects short closers`() {
         // Same high slider: a short closer must keep more run-up (less stillness)
         // than a long closer that may spend the full share.
-        fun stillness(word: String, share: Float): Int {
-            val curve = curveOf(word, hold = Hold(isAyahFinal = true, waqfShare = share))
+        fun stillness(word: String, share: Float, lengthScale: Float = 0.7f): Int {
+            val curve = curveOf(
+                word,
+                hold = Hold(isAyahFinal = true, waqfShare = share, waqfLengthScale = lengthScale),
+            )
             val dt = 0.005f
             return (0 until 190).count { i ->
                 val t = i * dt
@@ -223,9 +232,45 @@ class TajweedPacingTest {
             }
         }
         // صِرَٰطَ is short; ٱلضَّآلِّينَ is long — at share 0.8 the long word
-        // is allowed a larger effective hold.
+        // is allowed a larger effective hold when length scale is on.
         assertTrue(
             stillness(dallin, 0.8f) > stillness(sirat, 0.8f),
+        )
+        // Turning the dial off equalizes effective share by length (long may
+        // still look longer only if it also holds a mid-word madd — use waqf-only).
+        val shortOff = stillness(sirat, 0.8f, lengthScale = 0f)
+        val shortOn = stillness(sirat, 0.8f, lengthScale = 1f)
+        assertTrue(
+            "length scale 1 should cut short-closer stillness ($shortOn) vs off ($shortOff)",
+            shortOn < shortOff,
+        )
+    }
+
+    @Test
+    fun `medium closer keeps more run-up when length scale is high`() {
+        // عَظِيمًا — typical medium ayah-final; high waqfShare with full length
+        // scale must not spend nearly the whole budget on the last letter.
+        val azima = "عَظِيمًا"
+        fun runUp(scale: Float): Float {
+            val curve = curveOf(
+                azima,
+                hold = Hold(
+                    madd = false,
+                    isAyahFinal = true,
+                    waqfShare = 0.8f,
+                    waqfLengthScale = scale,
+                ),
+            )
+            // Position reached halfway through the clock — more run-up ⇒ lower x
+            // when more time is spent later on the hold (higher effective share
+            // reaches the final slot earlier). Compare mid-hold stillness instead:
+            return curve.at(0.5f)
+        }
+        // Stronger length scale → smaller effective share → later hold → lower
+        // position at the midpoint of the sweep.
+        assertTrue(
+            "high length scale should leave more of the word for the run-up",
+            runUp(1f) < runUp(0f),
         )
     }
 
