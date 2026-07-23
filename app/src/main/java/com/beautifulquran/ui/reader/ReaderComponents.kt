@@ -1940,14 +1940,16 @@ fun AyahBlock(
     // so its waqf can be sustained.
     val pacing = activeWord
         ?.let { aw ->
-            ayah.words.firstOrNull { it.position == aw.wordPosition }
-                ?.let { word ->
-                    InkEngine.pacing(
-                        arabic = word.arabic,
-                        activeWord = aw,
-                        isAyahFinal = word.position == ayah.words.lastOrNull()?.position,
-                    )
-                }
+            val idx = ayah.words.indexOfFirst { it.position == aw.wordPosition }
+            ayah.words.getOrNull(idx)?.let { word ->
+                InkEngine.pacing(
+                    arabic = word.arabic,
+                    activeWord = aw,
+                    isAyahFinal = word.position == ayah.words.lastOrNull()?.position,
+                    prevArabic = ayah.words.getOrNull(idx - 1)?.arabic,
+                    nextArabic = ayah.words.getOrNull(idx + 1)?.arabic,
+                )
+            }
         }
 
     // Each word's ink behaviour, derived once for the whole ayah. All the

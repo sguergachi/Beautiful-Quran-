@@ -97,8 +97,11 @@ letter + its combining marks), then weight each event in harakah counts:
 | Silent letters | hamzat wasl mid-flow, ۟-marked alif, definite-article ل before a sun letter (next letter mushaddad) | 0 |
 
 Normalize to cumulative time fractions `t₀=0 … tₙ=1`. Zero-weight letters
-merge into their neighbour's glide (see the curve section). Cross-word rules
-(idghām across a word gap, madd ʿāriḍ at waqf) are out of scope for v1.
+merge into their neighbour's glide (see the curve section). Cross-word **nūn
+rules** (idghām / iqlāb / ikhfāʾ) use same-ayah `prevArabic` / `nextArabic`:
+hold on the next word's first letter; early exit on the previous word's
+trailing nūn. Iẓhār (ءهعحغخ) and cross-ayah wasl are not connected. Madd
+ʿāriḍ letter choice at waqf remains a force-weight on the final letter.
 Counts live as named constants in `TajweedPacing`.
 
 **The counts pick the moment, not the tempo.** An earlier revision spread
@@ -183,6 +186,19 @@ The model is therefore a **gated hint**, built from four parts:
   actually sustaining. This is the one case that deliberately cruises past
   `cruiseCap` (up to ~2.2× the word's own uniform rate, still slower in
   absolute terms than an ordinary word because the word is so much longer).
+- **Wasl connect (nūn rules).** When the **previous** word ends in nūn sākinah
+  or tanwīn and **this** word starts with idghām (`يرملون`), iqlāb (`ب`), or
+  ikhfāʾ (the fifteen letters), the nūn is absorbed under wasl and the
+  reciter sustains **this word's opening letter** (e.g. `مَن يَقُولُ`,
+  `مِن قَبۡلُ`, tanwīn + `وَ…`). `prevArabic` arms that entry hold;
+  `nextArabic` softens the previous word's exit (letters finish by ~82 % of
+  the spoken span so the trailing nūn is not settled at handoff). Same-ayah
+  neighbours only (`Hold.connect`, default on). Iẓhār and cross-ayah wasl are
+  left alone.
+- **Waqf share cap.** Short ayah-final words clamp effective `waqfShare`
+  (3 letters ≤ 0.35, 4 ≤ 0.45, 5 ≤ 0.55, longer free up to the slider /
+  `MAX_DWELL_SHARE`) so a high slider cannot sprint the run-up on a short
+  closer.
 
 Breakpoints `(tᵢ, xᵢ)` — time fraction → width fraction, two per hold and one
 per plain letter — are evaluated as a **monotone piecewise-linear** map (a
@@ -208,12 +224,13 @@ Two refinements built into the curve, not the callers:
 ## Integration — what changed where (Android, implemented)
 
 - **`InkEngine`** — `sweepMs` unchanged.
-  `InkEngine.pacing(arabic, activeWord, isAyahFinal)` returns the nullable
-  curve (gated on `Tuning.tajweedPacing`, default off) and assembles a
-  `TajweedPacing.Hold` from the tuning; `InkEngine.pacedFeather()` supplies the
-  paced edge. Eight knobs sit on the Ink Lab's **Tajweed** tab: the
-  `tajweedPacing` master toggle, `holdMadd` / `holdGhunnah` / `holdWaqf`, and
-  the `cruiseCap`, `waqfShare`, `holdCreep` and `pacedFeather` sliders.
+  `InkEngine.pacing(arabic, activeWord, isAyahFinal, prevArabic, nextArabic)`
+  returns the nullable curve (gated on `Tuning.tajweedPacing`, default off)
+  and assembles a `TajweedPacing.Hold` from the tuning;
+  `InkEngine.pacedFeather()` supplies the paced edge. Knobs on the Ink Lab's
+  **Tajweed** tab: the `tajweedPacing` master toggle, `holdMadd` /
+  `holdGhunnah` / `holdWaqf` / `holdConnect`, and the `cruiseCap`,
+  `waqfShare`, `holdCreep` and `pacedFeather` sliders.
 - **`ActiveWord`** — carries `spokenMs` (segment end − start) alongside the
   karaoke-hold `durationMs`, so the curve can rest after the voice stops.
 - **Renderer** — `AyahBlock` computes the active word's curve next to
@@ -227,7 +244,8 @@ Two refinements built into the curve, not the callers:
   the curve itself is tracked live (`rememberUpdatedState`), so every Ink Lab
   knob reshapes the word already on screen instead of waiting for the next
   activation. `AyahBlock` also passes `isAyahFinal` (the active word's position
-  vs `ayah.words.last()`), which is what arms the waqf hold.
+  vs `ayah.words.last()`), which arms the waqf hold, and the previous/next
+  words' `arabic` for wasl nūn entry and exit.
 - **Feather** — the make-or-break visual change, and the one the first
   revision got wrong. `letterFadeIn`'s wide edge is *what makes the reveal
   ethereal*: at 1.6× the word width the wash reads "closer to a whole-word
@@ -267,9 +285,11 @@ Known approximations, accepted for v1:
 
 - Counts assume uniform tempo within a word; real reciters also glide.
 - Widths are uniform per letter event (see the width-fractions section).
-- Cross-word rules (idghām/ikhfāʾ across the gap) and madd ʿāriḍ at waqf are
-  ignored; hamzat wasl is always treated as elided (true mid-flow, slightly
-  early at an utterance start).
+- Cross-word nūn rules (idghām / iqlāb / ikhfāʾ) are implemented same-ayah;
+  cross-ayah wasl and iẓhār are not. Madd ʿāriḍ at waqf still force-weights
+  the final letter rather than detecting the madd letter. Hamzat wasl is
+  always treated as elided (true mid-flow, slightly early at an utterance
+  start).
 - Word-level `startMs`/`endMs` are themselves ±73 ms — letter pacing inherits
   that, which is fine: the feathered edge is a wash, not a cursor.
 
@@ -300,9 +320,11 @@ the curve, not the weights, is the module boundary.
   cruising covers real distance; `ٱلنَّاسِ` holds only when ghunnah is enabled;
   `cruiseCap = 1` refuses a mid-word hold but still allows waqf; the closing
   letter of a verse-final word swallows over half the sweep; a bigger
-  `waqfShare` buys a measurably longer stillness; no segment anywhere outruns
-  the cap; and every knob combination stays monotone and bounded with exact
-  endpoints. **The golden literals must stay byte-identical to the DB** — an
+  `waqfShare` buys a measurably longer stillness (capped on short closers);
+  wasl entry (`مَن`→`يَقُولُ`, ikhfāʾ, iqlāb) parks on the next opening letter
+  and wasl exit finishes the previous word early; no segment anywhere outruns
+  the cruise cap; and every knob combination stays monotone and bounded with
+  exact endpoints. **The golden literals must stay byte-identical to the DB** — an
   editor or tool that NFC-normalizes the file fuses `ا + ٓ` into precomposed
   `آ` (U+0622) and silently changes the weights (the parser now unfuses U+0622
   defensively, but the DB itself is always decomposed).

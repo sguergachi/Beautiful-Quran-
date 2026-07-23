@@ -25,6 +25,7 @@ class InkLabPanelTest {
         assertTrue(text.contains("tajweedPacing = true"))
         assertTrue(text.contains("cruiseCap = 1.55f"))
         assertTrue(text.contains("holdGhunnah = true"))
+        assertTrue(text.contains("holdConnect ="))
         assertTrue(text.contains("waqfShare ="))
         // Fields without lab sliders still snapshot so nothing is lost on apply.
         assertTrue(text.contains("sweepEaseX1 ="))

@@ -39,8 +39,13 @@ class TajweedPacingTest {
     // Two letters: too short to pace at all.
     private val qul = "قُلۡ"
 
-    private fun curveOf(word: String, spoken: Float = 1f, hold: Hold = Hold()) =
-        requireNotNull(TajweedPacing.curve(word, spoken, hold))
+    private fun curveOf(
+        word: String,
+        spoken: Float = 1f,
+        hold: Hold = Hold(),
+        prevArabic: String? = null,
+        nextArabic: String? = null,
+    ) = requireNotNull(TajweedPacing.curve(word, spoken, hold, prevArabic, nextArabic))
 
     @Test
     fun `words with nothing dramatic take the plain sweep`() {
@@ -103,14 +108,14 @@ class TajweedPacingTest {
 
     @Test
     fun `the verse-closing word sustains its final letter`() {
-        val curve = curveOf(sirat, hold = Hold(isAyahFinal = true))
-        // Over half the word's time is spent on the last letter: from the
-        // midpoint of the sweep to its final tenth the ink barely travels.
-        val late = curve.at(0.9f) - curve.at(0.5f)
-        assertTrue("the waqf should park the wash, moved $late", late < 0.05f)
-        assertEquals(1f, curve.at(1f), 0f)
-        // And it is genuinely the closing letter being held.
-        assertTrue("hold sits in the final slot", curve.at(0.5f) > 2f / 3f)
+        // Short closer: hold still lands on the last letter (share is capped).
+        val short = curveOf(sirat, hold = Hold(isAyahFinal = true))
+        assertEquals(1f, short.at(1f), 0f)
+        assertTrue("hold sits in the final slot", short.at(0.5f) > 2f / 3f)
+        // Long closer, waqf-only (no mid-word madd competing for the budget).
+        val long = curveOf(dallin, hold = Hold(madd = false, isAyahFinal = true))
+        val late = long.at(0.9f) - long.at(0.5f)
+        assertTrue("long waqf should park the wash, moved $late", late < 0.08f)
     }
 
     @Test
@@ -126,6 +131,102 @@ class TajweedPacingTest {
             }
         }
         assertTrue(stillness(0.7f) > stillness(0.2f))
+    }
+
+    @Test
+    fun `wasl idgham holds the next word's opening letter`() {
+        // 2:8 مَن يَقُولُ — nūn sākinah + yāʾ (يرملون): sustain the yāʾ.
+        val yaqulu = "يَقُولُ"
+        val man = "مَن"
+        assertNull(
+            "without a predecessor the opening yāʾ is not dramatic",
+            TajweedPacing.curve(yaqulu),
+        )
+        val curve = curveOf(yaqulu, hold = Hold(madd = false), prevArabic = man)
+        // Mid-hold plateau barely moves; an equal late cruise covers real ground.
+        val held = curve.at(0.30f) - curve.at(0.12f)
+        val cruising = curve.at(0.85f) - curve.at(0.55f)
+        assertTrue("wasl should park on the opening letter, moved $held", held < 0.05f)
+        assertTrue("the rest of the word should still cruise, moved $cruising", cruising > 0.15f)
+        assertTrue("hold sits in the first slot", curve.at(0.4f) < 0.45f)
+        assertTrue("hold must read as a hold", cruising > held * 5f)
+    }
+
+    @Test
+    fun `wasl connect needs nūn or tanween into a noon-rule letter`() {
+        val yaqulu = "يَقُولُ"
+        // Previous word ends in a plain letter — no connect.
+        assertNull(TajweedPacing.curve(yaqulu, 1f, Hold(madd = false), prevArabic = "قَالَ"))
+        // Iẓhār (throat) letter — no connect hold.
+        assertNull(TajweedPacing.curve("عَلِيمٌ", 1f, Hold(madd = false), prevArabic = "مِن"))
+        // Toggle off.
+        assertNull(
+            TajweedPacing.curve(yaqulu, 1f, Hold(madd = false, connect = false), prevArabic = "مَن"),
+        )
+    }
+
+    @Test
+    fun `wasl idgham into waw holds the waw`() {
+        // 2:19 ظُلُمَٰتٞ وَرَعۡدٞ — tanwīn + wāw.
+        val waraad = "وَرَعۡدٞ"
+        val curve = curveOf(waraad, hold = Hold(madd = false), prevArabic = "ظُلُمَٰتٞ")
+        assertTrue("opening wāw holds early", curve.at(0.35f) < 0.4f)
+        assertEquals(1f, curve.at(1f), 0f)
+    }
+
+    @Test
+    fun `wasl ikhfa holds the next word's opening letter`() {
+        // 2:26 مِن قَبۡلُ — nūn + qāf (ikhfāʾ): sustain the qāf.
+        val qablu = "قَبۡلُ"
+        assertNull(TajweedPacing.curve(qablu, 1f, Hold(madd = false)))
+        val curve = curveOf(qablu, hold = Hold(madd = false), prevArabic = "مِن")
+        val held = curve.at(0.30f) - curve.at(0.12f)
+        val cruising = curve.at(0.90f) - curve.at(0.55f)
+        assertTrue("ikhfāʾ should park on the opening letter, moved $held", held < 0.05f)
+        assertTrue("the rest should cruise, moved $cruising", cruising > 0.15f)
+    }
+
+    @Test
+    fun `wasl iqlab holds the next word's opening ba`() {
+        // nūn + bāʾ (iqlāb): hold the bāʾ.
+        val bi = "بِسُورَةٖ"
+        val curve = curveOf(bi, hold = Hold(madd = false), prevArabic = "مِن")
+        assertTrue("iqlāb parks early on bāʾ", curve.at(0.35f) < 0.45f)
+        assertEquals(1f, curve.at(1f), 0f)
+    }
+
+    @Test
+    fun `wasl exit finishes the previous word early`() {
+        // Word ends in tanwīn feeding و… — ink reaches full before the handoff.
+        val thulumat = "ظُلُمَٰتٞ"
+        val curve = curveOf(
+            thulumat,
+            hold = Hold(madd = false),
+            nextArabic = "وَرَعۡدٞ",
+        )
+        assertEquals(1f, curve.at(0.82f), 1e-4f)
+        assertEquals(1f, curve.at(0.95f), 0f)
+        // Without a next-word absorb, nothing dramatic → plain sweep (null).
+        assertNull(TajweedPacing.curve(thulumat, 1f, Hold(madd = false)))
+    }
+
+    @Test
+    fun `short ayah-final words cap waqf share`() {
+        // Same high slider: a short closer must keep more run-up (less stillness)
+        // than a long closer that may spend the full share.
+        fun stillness(word: String, share: Float): Int {
+            val curve = curveOf(word, hold = Hold(isAyahFinal = true, waqfShare = share))
+            val dt = 0.005f
+            return (0 until 190).count { i ->
+                val t = i * dt
+                (curve.at(t + dt) - curve.at(t)) / dt < 0.2f
+            }
+        }
+        // صِرَٰطَ is short; ٱلضَّآلِّينَ is long — at share 0.8 the long word
+        // is allowed a larger effective hold.
+        assertTrue(
+            stillness(dallin, 0.8f) > stillness(sirat, 0.8f),
+        )
     }
 
     @Test
