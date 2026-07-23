@@ -119,6 +119,9 @@ object InkEngine {
         val holdMadd: Boolean = true,
         val holdGhunnah: Boolean = false,
         val holdWaqf: Boolean = true,
+        /** Cross-word idghām (nūn/tanwīn + يرملون): hold the next word's
+         *  opening letter. See [TajweedPacing.Hold.connect]. */
+        val holdConnect: Boolean = true,
         /** Ceiling on ordinary-letter speed while a hold is bought, as a
          *  multiple of the plain sweep rate. Word timings are contiguous, so
          *  hold length and this cap are the same dial; 1 means ordinary
@@ -250,14 +253,18 @@ object InkEngine {
      *
      * [arabic] is the active word's Hafs Uthmani text and [isAyahFinal] marks
      * the verse-closing word, whose waqf carries the only slack that is not
-     * borrowed from its neighbours. The voiced share comes from
-     * [ActiveWord.spokenMs] vs the karaoke hold, so the ink settles rather
-     * than smearing across a breath gap.
+     * borrowed from its neighbours. [prevArabic] / [nextArabic] are same-ayah
+     * neighbours for wasl nūn rules (entry hold on this opening letter; early
+     * exit when this trailing nūn is absorbed next). The voiced share comes
+     * from [ActiveWord.spokenMs] vs the karaoke hold, so the ink settles
+     * rather than smearing across a breath gap.
      */
     fun pacing(
         arabic: String,
         activeWord: ActiveWord,
         isAyahFinal: Boolean,
+        prevArabic: String? = null,
+        nextArabic: String? = null,
     ): TajweedPacing.Curve? {
         val t = tuning
         if (!t.tajweedPacing) return null
@@ -271,11 +278,14 @@ object InkEngine {
                 madd = t.holdMadd,
                 ghunnah = t.holdGhunnah,
                 waqf = t.holdWaqf,
+                connect = t.holdConnect,
                 isAyahFinal = isAyahFinal,
                 cruiseCap = t.cruiseCap,
                 waqfShare = t.waqfShare,
                 creep = t.holdCreep,
             ),
+            prevArabic = prevArabic,
+            nextArabic = nextArabic,
         )
     }
 
