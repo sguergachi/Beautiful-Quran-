@@ -137,6 +137,21 @@ object InkEngine {
     var tuning: Tuning by mutableStateOf(Tuning())
 
     /**
+     * Session-only *sync* knobs (Ink Lab → Highlight tab) — not ink feel.
+     * Kept outside [Tuning] so visual paste/copy stays about the wash, while
+     * these adjust when the karaoke clock and ayah handoff fire.
+     */
+    /** How early the next ayah block fades in before the clip ends (ms). */
+    var fadeLeadMs: Int by mutableStateOf(DEFAULT_FADE_LEAD_MS)
+
+    /**
+     * Extra output lag subtracted from the media playhead before the highlight
+     * clock, or null to use the route preset from [AudioOutputLatency]
+     * (speaker ≈ 0, A2DP ≈ 180, LE ≈ 80). Lab override is absolute when set.
+     */
+    var outputLatencyOverrideMs: Int? by mutableStateOf(null)
+
+    /**
      * Session-only Ink Lab override: when false, playback auto-scroll and
      * word-band follow stop so the page can be panned freely while auditioning
      * ink. Not part of [Tuning] — never copied into shipped defaults, and
@@ -150,13 +165,16 @@ object InkEngine {
             CubicBezierEasing(it.sweepEaseX1, it.sweepEaseY1, it.sweepEaseX2, it.sweepEaseY2)
         }
 
+    /** Shipped defaults for [fadeLeadMs] / auto latency (route presets). */
+    const val DEFAULT_FADE_LEAD_MS = 500
+
     /**
      * The ink state of the word at [position].
      *
      * [activeWord] is non-null **only for the ayah that owns the reciting
      * word** (the caller passes it filtered by `it.ayah == this ayah`), and it
      * tracks the true audio position. [isActiveAyah] is the *fade-led* focus
-     * bit, which flips to the next ayah [FADE_LEAD_MS] before the audio
+     * bit, which flips to the next ayah [fadeLeadMs] before the audio
      * boundary so the next verse can begin fading in early. The two disagree
      * during that lead — most visibly across a waqf, where the closing word is
      * still being held while focus has already moved on.

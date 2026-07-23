@@ -407,8 +407,11 @@ private fun Modifier.repeatInkLayer(
  * clock* and the curve shapes it into letter dwell — the ink stalls on a held
  * madd and glides over short letters. The bezier sweep easing would distort
  * that letter timing, so paced words drop it; the feathered wash edge keeps
- * the soft toe and shoulder. Like [sweepMs], the curve is captured at Active
- * entry.
+ * the soft toe and shoulder.
+ *
+ * Curve and duration are captured at Active entry: toggling tajweed (or
+ * retuning speed) mid-word must not remap a half-finished wash back toward
+ * the start — that read as the animation "resetting and playing again."
  */
 @Composable
 private fun rememberLetterSweep(
@@ -419,27 +422,23 @@ private fun rememberLetterSweep(
 ): State<Float> {
     val runSweep = active && sweepMs != null
     val sweep = remember(active, activation) { Animatable(if (runSweep) 0f else 1f) }
-    // Latest duration/pacing for this activation — not keys, so a mid-word
-    // speed retune cannot cancel and restart the wash.
-    val msState = rememberUpdatedState(sweepMs)
-    val pacingState = rememberUpdatedState(pacing)
+    // Locked for this activation — not rememberUpdatedState — so an Ink Lab
+    // tajweed toggle cannot jump the mapped wash position mid-word.
+    val entryMs = remember(active, activation) { sweepMs }
+    val entryPacing = remember(active, activation) { pacing }
     // Key on active + activation — restarts on word-tap / seek (activation bump).
     LaunchedEffect(active, activation) {
-        val ms = msState.value
+        val ms = entryMs
         if (active && ms != null) {
             sweep.snapTo(0f)
-            val easing = if (pacingState.value != null) LinearEasing else InkEngine.sweepEasing
+            val easing = if (entryPacing != null) LinearEasing else InkEngine.sweepEasing
             sweep.animateTo(1f, tween(ms, easing = easing))
         } else {
             sweep.snapTo(1f)
         }
     }
-    // Track the curve across recompositions so Ink Lab edits (the pacing
-    // toggle, the contrast slider) reshape the word already on screen instead
-    // of waiting for the next activation. The clock keeps running; only the
-    // time → position mapping swaps.
     return remember(active, activation) {
-        derivedStateOf { pacingState.value?.at(sweep.value) ?: sweep.value }
+        derivedStateOf { entryPacing?.at(sweep.value) ?: sweep.value }
     }
 }
 
@@ -621,6 +620,9 @@ private fun rememberWordHighlight(
     val glinting = glintInk != null &&
         InkEngine.glinting(ink.state, ink.repeat, startRevealed)
     val glintIdentity = rememberGlintIdentity(glinting, ink.repeat)
+    // Freeze tajweed curve for this activation so an Ink Lab toggle mid-word
+    // cannot remap the wash (or swap feather) and look like a reset.
+    val entryPacing = remember(isActive, activation) { pacing.takeIf { isActive } }
     return WordHighlight(
         isActive = isActive,
         repeat = ink.repeat,
@@ -628,7 +630,7 @@ private fun rememberWordHighlight(
         sweep = rememberLetterSweep(
             active = isActive,
             sweepMs = sweepMs,
-            pacing = if (isActive) pacing else null,
+            pacing = entryPacing,
             activation = activation,
         ),
         repeatWash = rememberRepeatWash(
@@ -639,7 +641,7 @@ private fun rememberWordHighlight(
         glintAlpha = rememberGlintAlpha(glinting),
         glintIsRepeat = glintIdentity.repeat,
         glintReplacedByRepeat = glintIdentity.replacedByRepeat,
-        pacing = if (isActive) pacing else null,
+        pacing = entryPacing,
     )
 }
 
@@ -1275,7 +1277,10 @@ private fun ResponsiveHafsAyah(
     val palette = rememberWordInkPalette()
     val ayahMarkInk = LocalQuranAccents.current.gold
     val glintInk = LocalQuranAccents.current.glintInk
-    val sweeps = rememberLetterSweeps(inks, activeSweepMs, pacing, activation)
+    // Lock tajweed for this activation (Hafs path shares one curve for the
+    // active word) so an Ink Lab toggle mid-word cannot remount the wash.
+    val entryPacing = remember(activation, activeSweepMs) { pacing }
+    val sweeps = rememberLetterSweeps(inks, activeSweepMs, entryPacing, activation)
     val repeatWashes = rememberRepeatWashes(inks, activeSweepMs, activation)
     val glints = rememberGlints(inks)
     val searchHitWash = rememberSearchHitWash(flashWordPosition != null)
@@ -1398,7 +1403,7 @@ private fun ResponsiveHafsAyah(
                                 progress = sweeps[activeIndex].value,
                                 paper = palette.paperColor,
                                 restingAlpha = InkEngine.State.Upcoming.inkAlpha(),
-                                feather = pacing?.let {
+                                feather = entryPacing?.let {
                                     InkEngine.pacedFeather()
                                 },
                             )
@@ -1449,7 +1454,7 @@ private fun ResponsiveHafsAyah(
                                 glowAlpha = InkEngine.tuning.glintGlowAlpha,
                                 glowRadius = InkEngine.tuning.glintGlowRadius,
                                 feather = if (index == activeIndex) {
-                                    pacing?.let { InkEngine.pacedFeather() }
+                                    entryPacing?.let { InkEngine.pacedFeather() }
                                 } else {
                                     null
                                 },
