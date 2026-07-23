@@ -619,19 +619,24 @@ fun ReaderScreen(
     // verse. The very first scroll after follow turns back on (return-to-verse,
     // or pressing play from a scrolled-away spot) is a deliberate jump, so it
     // gets the pre-roll slide; boundary-to-boundary tracking after that stays
-    // smooth. Playback follow is gated by [ReaderInteraction.shouldFollowPlayback].
+    // smooth. Playback follow is gated by [ReaderInteraction.shouldFollowPlayback]
+    // and by the Ink Lab's session-only [InkEngine.focusEngineEnabled] freeze.
+    val labFocusEnabled = InkEngine.focusEngineEnabled
+    fun shouldFollowPlayback(): Boolean =
+        ReaderInteraction.shouldFollowPlayback(interaction) && labFocusEnabled
     var followWasEnabled by remember { mutableStateOf(followEnabled) }
     LaunchedEffect(
         playbackFocusTarget,
         interaction,
         playerState.isPlaying,
+        labFocusEnabled,
     ) {
         val target = playbackFocusTarget ?: return@LaunchedEffect
         // Continue Listening advances with the recited verse, not scroll focus.
         if (target >= 1 && playerState.isPlaying) {
             viewModel.onListenedAyah(target)
         }
-        if (!ReaderInteraction.shouldFollowPlayback(interaction)) {
+        if (!shouldFollowPlayback()) {
             followWasEnabled = false
             return@LaunchedEffect
         }
@@ -643,13 +648,13 @@ fun ReaderScreen(
     // A reciter can restart the whole ayah inside one audio item. The ayah key
     // does not change, so observe the sparse word state without making the
     // screen recompose on every word and restore the verse's top anchor once.
-    LaunchedEffect(isThisSurahPlaying, interaction) {
-        if (!isThisSurahPlaying || !ReaderInteraction.shouldFollowPlayback(interaction)) {
+    LaunchedEffect(isThisSurahPlaying, interaction, labFocusEnabled) {
+        if (!isThisSurahPlaying || !shouldFollowPlayback()) {
             return@LaunchedEffect
         }
         var wasAtRepeatStart = false
         snapshotFlow { activeWordState.value }.collect { word ->
-            if (!ReaderInteraction.shouldFollowPlayback(interaction)) return@collect
+            if (!shouldFollowPlayback()) return@collect
             val repeatAyah = word?.takeIf {
                 FocusEngine.startsFullAyahRepeat(
                     wordPosition = it.wordPosition,
@@ -720,7 +725,7 @@ fun ReaderScreen(
     SideEffect {
         if (layoutSignature == lastLayoutSignature) {
             stickyAyah = when {
-                ReaderInteraction.shouldFollowPlayback(interaction) &&
+                shouldFollowPlayback() &&
                     playbackFocusTarget != null &&
                     !FocusEngine.isChapterTopFocusTarget(playbackFocusTarget) -> playbackFocusTarget
                 else -> scrolledAyah.value
@@ -735,7 +740,7 @@ fun ReaderScreen(
             return@LaunchedEffect
         }
         val pin = when {
-            ReaderInteraction.shouldFollowPlayback(interaction) &&
+            shouldFollowPlayback() &&
                 playbackFocusTarget != null -> playbackFocusTarget
             else -> stickyAyah.coerceIn(1, lastAyahNumber)
         }
@@ -1819,6 +1824,7 @@ fun ReaderScreen(
                                 // `isActive` short-circuits so only the reciting
                                 // block subscribes.
                                 keepActiveWordInView = followEnabled &&
+                                    labFocusEnabled &&
                                     recitingActive &&
                                     editingAnnotationAyah == 0 &&
                                     isActive,
@@ -2068,10 +2074,13 @@ fun ReaderScreen(
             // Ornamented return-to-ayah — floats above the player bar via the
             // shared FloatingPaperControl host. Yields while MainActivity's
             // concordance Back-to capsule is showing so the two never compete.
+            // Lab freeze already parks the page; suppress the return capsule
+            // so it does not fight the deliberate "leave me alone" state.
             val showReturnToAyah =
                 playerState.error == null &&
                     !rootReturnVisible &&
                     !followEnabled &&
+                    labFocusEnabled &&
                     recitingActive
             Box(
                 contentAlignment = Alignment.BottomCenter,
