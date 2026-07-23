@@ -60,6 +60,33 @@ Each condition exists because dropping it caused a real regression:
 regenerating any repair file; aggregate repair counts alone will not reveal a
 broken discriminator.
 
+## Phantom function-word repeats (issues #531/#533)
+
+Even a correctly-detected pair can be a mirage. When CTC drops or splits a word,
+the leftover fragment often matches a short earlier function word (مَا, مِنۡ, فِي,
+إِلَىٰ, …) and the aligner backtracks to it, inventing a repeat that is not in the
+audio. `dephantom()` removes these: a re-cover is kept only when it is **part of
+a re-recited span** (an adjacent re-cover at the consecutive position) **or on a
+distinctive word** (≥ 4 normalised chars). An isolated re-cover of a short word
+is folded away.
+
+The discriminator is span-vs-isolated, **not** word length: 2:33 أَلَمۡ أَقُل
+لَّكُمۡ is a genuine re-recitation on 3-char words and survives because it is a
+span; Hani 4:157 وَمَا / مِنۡ are lone short-word re-covers and are dropped.
+
+## Trusting a qdc span-repeat CTC collapsed (issue #533)
+
+CTC confirms or restores a repeat, but it must never **erase** one. CTC
+routinely collapses a re-recited phrase into one long span (it merges the
+re-say), so absence of a CTC repeat is not evidence the repeat is false.
+Therefore a qdc **span-repeat** (two or more consecutive positions re-covered,
+e.g. Hani 4:169 `[1,2,3,1,2,3,…]`) is kept even when CTC does not confirm it.
+
+A lone same-position qdc pair is still judged by CTC — strip it when CTC hears
+one utterance (the false-split class), keep it when CTC confirms (3:21). Only
+`strip` when `qdc has a repeat AND CTC has none AND it is not a span`. Without
+the span clause the generator deleted the correct Hani 4:169 re-recitation.
+
 ## Regenerating
 
 Repairs must be generated against a **raw qdc** database — i.e. with this
