@@ -97,6 +97,12 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
                 .background(MaterialTheme.colorScheme.background.copy(alpha = 0.96f))
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
+            // Always visible above the tabbed knobs: freezes FocusEngine
+            // auto-home so you can pan the page and still watch ink wash.
+            TuningToggle("Focus engine", InkEngine.focusEngineEnabled) {
+                InkEngine.focusEngineEnabled = it
+            }
+            Spacer(Modifier.height(4.dp))
             InkLabTabs(selected = tab, onSelect = { tab = it })
             Spacer(Modifier.height(8.dp))
             Column(
