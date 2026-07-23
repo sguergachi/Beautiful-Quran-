@@ -87,6 +87,20 @@ one utterance (the false-split class), keep it when CTC confirms (3:21). Only
 `strip` when `qdc has a repeat AND CTC has none AND it is not a span`. Without
 the span clause the generator deleted the correct Hani 4:169 re-recitation.
 
+## Re-timing a mis-positioned span (issues #417/#531/#533)
+
+qdc sometimes places a real re-recitation a word or two off: Hani 2:14 marks
+`[13,14]` (مَعَكُمۡ إِنَّمَا) when the reciter actually repeats `[12,13]` (إِنَّا
+مَعَكُمۡ); 2:33 marks `[11,12]` for a re-say of `[9,10,11]` (أَلَمۡ أَقُل لَّكُمۡ).
+CTC hears the boundary correctly, so `realign_span()` re-times from CTC — but
+ONLY for the narrow shifted-span shape: both the qdc and CTC repeats must be
+contiguous runs of ≤ 4 positions that overlap or abut. A long qdc span
+(2:110 `[5..12]`) or a fragmented CTC span (2:145 CTC `[20,21,24,26,28]`) is left
+on qdc's timing — there CTC is the rougher source and re-timing would make it
+worse. This is what let the four ear-verified `patches-from-417.json` overrides
+be deleted: the generator now reproduces all of them (2:14, 2:33, 4:143, 67:22)
+with no manual patch.
+
 ## Regenerating
 
 Repairs must be generated against a **raw qdc** database — i.e. with this
