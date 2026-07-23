@@ -463,6 +463,7 @@ class ReaderViewModel(
     private fun commitPrepared(prepared: PreparedSurah) {
         loadedSurah.value = prepared.content.surah.id
         focusedAyah = 1
+        longAyahMidpointConsumed = 0
         installTimings(prepared.timings)
         _uiState.value = ReaderUiState(
             content = prepared.content,
@@ -527,25 +528,41 @@ class ReaderViewModel(
         annotations.write(surahId, ayah, text)
     }
 
+    /**
+     * Long-ayah midpoint skip already issued for this ayah (0 = none).
+     * Decided by intent, not [PlayerController.positionMs], because seeks are
+     * async — a second FF before position catches up must not re-seek midpoint.
+     */
+    private var longAyahMidpointConsumed: Int = 0
+
     fun fastForward() {
         val content = _uiState.value.content ?: return
         val np = playerState.value.nowPlaying?.takeIf { it.surahId == surahId } ?: return
         // During the basmalah lead-in, skip ahead into ayah 1.
         if (np.ayah == BASMALAH_PLAYLIST_AYAH) {
+            longAyahMidpointConsumed = 0
             noteInkRestart(1, seekMs = 0L)
             player.seekToAyah(1)
             return
         }
-        val midpointMs = midpointForLongAyah(np.ayah)
-        if (midpointMs != null && player.positionMs < midpointMs - MIDPOINT_SEEK_GRACE_MS) {
-            noteInkRestart(np.ayah, seekMs = midpointMs)
-            player.seekToWord(np.ayah, midpointMs)
-            return
-        }
-
-        if (np.ayah < content.surah.ayahCount) {
-            noteInkRestart(np.ayah + 1, seekMs = 0L)
-            player.seekToAyah(np.ayah + 1)
+        val action = FastForwardPolicy.action(
+            ayah = np.ayah,
+            positionMs = player.positionMs,
+            ayahCount = content.surah.ayahCount,
+            midpointMs = midpointForLongAyah(np.ayah),
+            midpointConsumedForAyah = longAyahMidpointConsumed,
+        )
+        longAyahMidpointConsumed = FastForwardPolicy.nextConsumedAyah(action)
+        when (action) {
+            is FastForwardPolicy.Action.SeekToMidpoint -> {
+                noteInkRestart(action.ayah, seekMs = action.positionMs)
+                player.seekToWord(action.ayah, action.positionMs)
+            }
+            is FastForwardPolicy.Action.SeekToAyah -> {
+                noteInkRestart(action.ayah, seekMs = 0L)
+                player.seekToAyah(action.ayah)
+            }
+            FastForwardPolicy.Action.None -> Unit
         }
     }
 
@@ -576,7 +593,7 @@ class ReaderViewModel(
 
     private fun midpointForLongAyah(ayah: Int): Long? {
         val segments = timings[ayah].orEmpty()
-        if (segments.size < LONG_AYAH_MIN_WORDS) return null
+        if (segments.size < FastForwardPolicy.LONG_AYAH_MIN_WORDS) return null
         return segments[segments.size / 2].startMs
     }
 
@@ -774,8 +791,9 @@ class ReaderViewModel(
     companion object {
         private const val TICK_MS = 33L
         private const val PAUSED_TICK_MS = 250L
-        private const val LONG_AYAH_MIN_WORDS = 20
-        private const val MIDPOINT_SEEK_GRACE_MS = 1_000L
+        /** How early the block fade jumps to the next ayah, in ms. */
+        private const val FADE_LEAD_MS = 500L
         private const val START_SEEK_GRACE_MS = 1_500L
     }
 }
+
