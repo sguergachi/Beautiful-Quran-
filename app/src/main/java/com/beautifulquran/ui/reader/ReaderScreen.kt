@@ -1794,15 +1794,21 @@ fun ReaderScreen(
                             // Per-ayah derived reads so an ayah/word boundary
                             // recomposes exactly the blocks whose bit flips —
                             // never every visible AyahBlock (docs/PERFORMANCE.md).
-                            val isActive by remember(ayah.number, isThisSurahPlaying) {
-                                derivedStateOf {
-                                    isThisSurahPlaying &&
-                                        activeAyahState.value == ayah.number
-                                }
-                            }
                             val activeWord by remember(ayah.number) {
                                 derivedStateOf {
                                     activeWordState.value?.takeIf { it.ayah == ayah.number }
+                                }
+                            }
+                            // Ink policy matches web readerAyahInkPolicyActive: the
+                            // karaoke owner *and* the fade-lead target both stay
+                            // undimmed, so a waqf hold is not recessed early and the
+                            // next verse can lift its recess before handoff.
+                            val policyActive by remember(ayah.number, isThisSurahPlaying) {
+                                derivedStateOf {
+                                    if (!isThisSurahPlaying) return@derivedStateOf false
+                                    val inkAyah = activeWordState.value?.ayah
+                                    val leadAyah = activeAyahState.value
+                                    ayah.number == inkAyah || ayah.number == leadAyah
                                 }
                             }
                             // Per-verse derived read so scrolling only recomposes
@@ -1821,8 +1827,8 @@ fun ReaderScreen(
                                 readingMode = settings.readingMode,
                                 activeWord = activeWord,
                                 playbackSpeed = playerState.speed,
-                                isActiveAyah = isActive,
-                                dimmed = recitingActive && !isActive,
+                                isActiveAyah = policyActive,
+                                dimmed = recitingActive && !policyActive,
                                 // Keep the page readable the moment a jump
                                 // commits — the decelerating scroll is the cue,
                                 // and a 7 % fade would hide it.
@@ -1835,18 +1841,14 @@ fun ReaderScreen(
                                 searchQuery = activeQuery,
                                 flashWordPosition = searchFlashWord
                                     ?.takeIf { searchFlashAyah == ayah.number },
-                                // Word-level following is always on while this
-                                // verse is the lyric line: bottom-only band
-                                // correction lifts any active word clear of the
-                                // player-bar fold, and no-ops when already in
-                                // band (so short verses keep their top anchor).
-                                // `isActive` short-circuits so only the reciting
-                                // block subscribes.
+                                // Word-level following tracks the karaoke owner,
+                                // not the fade-led focus target — otherwise the
+                                // last word is abandoned during the lead window.
                                 keepActiveWordInView = followEnabled &&
                                     labFocusEnabled &&
                                     recitingActive &&
                                     editingAnnotationAyah == 0 &&
-                                    isActive,
+                                    activeWord != null,
                                 listCoordinates = { listCoordinates },
                                 onKeepWordInView = onKeepWordInView,
                                 onKeepAnnotationInView = onKeepAnnotationInView,

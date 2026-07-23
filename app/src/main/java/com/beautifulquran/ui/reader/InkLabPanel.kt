@@ -225,7 +225,10 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
                         ) {
                             InkEngine.fadeLeadMs = it.roundToInt()
                         }
-                        LabCaption("How early the next verse fades in before this clip ends.")
+                        LabCaption(
+                            "How early the next verse prepares before the last word ends " +
+                                "(focus + recess lift). Watch an ayah boundary — not mid-word ink.",
+                        )
                     }
                 }
             }
