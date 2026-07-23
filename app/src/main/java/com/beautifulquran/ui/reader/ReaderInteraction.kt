@@ -95,6 +95,19 @@ object ReaderInteraction {
         state.followEnabled && !state.annotating && state.pendingJumpAyah == 0
 
     /**
+     * Whether lyric-follow should call [ReaderFocusController.focus] for
+     * [target]. When follow just re-enabled, always home (return-to-verse).
+     * While follow stays on, only home when the playback target **changes** —
+     * re-homing the same tall verse on pause/play/seek fights word-band follow
+     * and stutters the page up then down.
+     */
+    fun shouldHomeOntoPlaybackTarget(
+        target: Int,
+        justEnabledFollow: Boolean,
+        lastHomedTarget: Int?,
+    ): Boolean = justEnabledFollow || target != lastHomedTarget
+
+    /**
      * Which ayah the transport "play from here" control should use: a pending
      * jump wins, else follow uses the reciting ayah when playing, else scroll.
      */
