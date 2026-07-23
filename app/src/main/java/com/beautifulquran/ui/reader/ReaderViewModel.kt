@@ -238,11 +238,13 @@ class ReaderViewModel(
      * timeline so a tap lights the word that was just sought.
      */
     private fun highlightPositionMs(forcedMediaMs: Long?): Long {
-        val latencyMs = outputLatency.latencyMs.value
+        // Ink Lab → Highlight can override route detection with an absolute lag.
+        val latencyMs = InkEngine.outputLatencyOverrideMs?.toLong()
+            ?: outputLatency.latencyMs.value
         if (latencyMs != lastOutputLatencyMs) {
             lastOutputLatencyMs = latencyMs
-            // Route flip (speaker ↔ BT) jumps heard time by ~preset ms; accept
-            // it as a real step so HighlightClock does not hold it as jitter.
+            // Route flip (or lab override) jumps heard time; accept it as a
+            // real step so HighlightClock does not hold it as jitter.
             highlightClock.acceptNextSample()
         }
         if (forcedMediaMs != null) return forcedMediaMs
@@ -293,9 +295,9 @@ class ReaderViewModel(
     }
 
     /** The ayah whose block is lit on the sheet. Normally the playing ayah,
-     * but the highlight crosses to the next ayah [FADE_LEAD_MS] before the
-     * current one's audio ends, so the fade onto the next ayah begins a touch
-     * early and the transition feels anticipatory rather than abrupt.
+     * but the highlight crosses to the next ayah [InkEngine.fadeLeadMs] before
+     * the current one's audio ends, so the fade onto the next ayah begins a
+     * touch early and the transition feels anticipatory rather than abrupt.
      * Null while the chapter-opening basmalah lead-in is playing (no ayah yet). */
     val activeAyah: StateFlow<Int?> = pollingWhileLoaded(key = { it.ayah }) { ayah ->
         if (ayah == BASMALAH_PLAYLIST_AYAH) null else ayahWithFadeLead(ayah)
@@ -329,9 +331,10 @@ class ReaderViewModel(
         InkEngine.prefaceWashProgress(highlightPositionMs(forcedMediaMs = null), endMs)
     }
 
-    /** Advances the lit ayah to the next one during the final [FADE_LEAD_MS] of
-     * the current ayah's audio, so its fade-in leads the audio boundary. Only
-     * while playing (a paused position must not jump the highlight forward). */
+    /** Advances the lit ayah to the next one during the final
+     * [InkEngine.fadeLeadMs] of the current ayah's audio, so its fade-in leads
+     * the audio boundary. Only while playing (a paused position must not jump
+     * the highlight forward). */
     private fun ayahWithFadeLead(ayah: Int): Int {
         if (!player.state.value.isPlaying) return ayah
         val repeatRange = player.state.value.repeatRange
@@ -341,7 +344,9 @@ class ReaderViewModel(
         val duration = player.durationMs
         if (duration <= 0L) return ayah
         val remaining = duration - player.positionMs
-        return if (remaining in 0..FADE_LEAD_MS) ayah + 1 else ayah
+        // Session-tunable from Ink Lab → Highlight (default 500 ms).
+        val lead = InkEngine.fadeLeadMs.toLong().coerceAtLeast(0L)
+        return if (remaining in 0..lead) ayah + 1 else ayah
     }
 
     init {
@@ -458,6 +463,7 @@ class ReaderViewModel(
     private fun commitPrepared(prepared: PreparedSurah) {
         loadedSurah.value = prepared.content.surah.id
         focusedAyah = 1
+        longAyahMidpointConsumed = 0
         installTimings(prepared.timings)
         _uiState.value = ReaderUiState(
             content = prepared.content,
@@ -522,37 +528,62 @@ class ReaderViewModel(
         annotations.write(surahId, ayah, text)
     }
 
+    /**
+     * Long-ayah midpoint skip already issued for this ayah (0 = none).
+     * Decided by intent, not [PlayerController.positionMs], because seeks are
+     * async — a second FF before position catches up must not re-seek midpoint.
+     */
+    private var longAyahMidpointConsumed: Int = 0
+
     fun fastForward() {
         val content = _uiState.value.content ?: return
         val np = playerState.value.nowPlaying?.takeIf { it.surahId == surahId } ?: return
         // During the basmalah lead-in, skip ahead into ayah 1.
         if (np.ayah == BASMALAH_PLAYLIST_AYAH) {
+            longAyahMidpointConsumed = 0
+            noteInkRestart(1, seekMs = 0L)
             player.seekToAyah(1)
             return
         }
-        val midpointMs = midpointForLongAyah(np.ayah)
-        if (midpointMs != null && player.positionMs < midpointMs - MIDPOINT_SEEK_GRACE_MS) {
-            player.seekToWord(np.ayah, midpointMs)
-            return
-        }
-
-        if (np.ayah < content.surah.ayahCount) {
-            player.seekToAyah(np.ayah + 1)
+        val action = FastForwardPolicy.action(
+            ayah = np.ayah,
+            positionMs = player.positionMs,
+            ayahCount = content.surah.ayahCount,
+            midpointMs = midpointForLongAyah(np.ayah),
+            midpointConsumedForAyah = longAyahMidpointConsumed,
+        )
+        longAyahMidpointConsumed = FastForwardPolicy.nextConsumedAyah(action)
+        when (action) {
+            is FastForwardPolicy.Action.SeekToMidpoint -> {
+                noteInkRestart(action.ayah, seekMs = action.positionMs)
+                player.seekToWord(action.ayah, action.positionMs)
+            }
+            is FastForwardPolicy.Action.SeekToAyah -> {
+                noteInkRestart(action.ayah, seekMs = 0L)
+                player.seekToAyah(action.ayah)
+            }
+            FastForwardPolicy.Action.None -> Unit
         }
     }
 
     fun fastBackward() {
         val np = playerState.value.nowPlaying?.takeIf { it.surahId == surahId } ?: return
         if (np.ayah == BASMALAH_PLAYLIST_AYAH) {
+            noteInkRestart(BASMALAH_PLAYLIST_AYAH, seekMs = 0L)
             player.seekToBasmalah()
             return
         }
         if (player.positionMs > START_SEEK_GRACE_MS) {
+            // Restart this ayah: pin ink at 0 and arm the clock settle window
+            // so post-seek position corrections cannot bounce word 2/3 and
+            // re-run the (tajweed) wash mid-hold.
+            noteInkRestart(np.ayah, seekMs = 0L)
             player.seekToAyah(np.ayah)
             return
         }
 
         if (np.ayah > 1) {
+            noteInkRestart(np.ayah - 1, seekMs = 0L)
             player.seekToAyah(np.ayah - 1)
         } else if (np.ayah == 1) {
             // Restart from the basmalah lead-in when present.
@@ -562,7 +593,7 @@ class ReaderViewModel(
 
     private fun midpointForLongAyah(ayah: Int): Long? {
         val segments = timings[ayah].orEmpty()
-        if (segments.size < LONG_AYAH_MIN_WORDS) return null
+        if (segments.size < FastForwardPolicy.LONG_AYAH_MIN_WORDS) return null
         return segments[segments.size / 2].startMs
     }
 
@@ -762,8 +793,7 @@ class ReaderViewModel(
         private const val PAUSED_TICK_MS = 250L
         /** How early the block fade jumps to the next ayah, in ms. */
         private const val FADE_LEAD_MS = 500L
-        private const val LONG_AYAH_MIN_WORDS = 20
-        private const val MIDPOINT_SEEK_GRACE_MS = 1_000L
         private const val START_SEEK_GRACE_MS = 1_500L
     }
 }
+

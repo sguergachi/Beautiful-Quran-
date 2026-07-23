@@ -40,8 +40,8 @@ class HighlightClockTest {
     }
 
     @Test
-    fun `a genuine backward seek passes through`() {
-        val clock = HighlightClock()
+    fun `a genuine backward seek passes through outside settle`() {
+        val clock = HighlightClock(settleSamples = 0)
         clock.sample("a", 5000)
         // Word tap / loop restart: jump well past the jitter threshold.
         assertEquals(1000L, clock.sample("a", 1000))
@@ -57,15 +57,15 @@ class HighlightClockTest {
     }
 
     @Test
-    fun `regression exactly at the threshold is a seek`() {
-        val clock = HighlightClock(seekThresholdMs = 250)
+    fun `regression exactly at the threshold is a seek outside settle`() {
+        val clock = HighlightClock(seekThresholdMs = 250, settleSamples = 0)
         clock.sample("a", 1000)
         assertEquals(750L, clock.sample("a", 750))
     }
 
     @Test
     fun `regression just under the threshold is jitter`() {
-        val clock = HighlightClock(seekThresholdMs = 250)
+        val clock = HighlightClock(seekThresholdMs = 250, settleSamples = 0)
         clock.sample("a", 1000)
         assertEquals(1000L, clock.sample("a", 751))
     }
@@ -79,5 +79,43 @@ class HighlightClockTest {
         assertEquals(900L, clock.sample("a", 900))
         // Subsequent small regressions are held again.
         assertEquals(900L, clock.sample("a", 880))
+    }
+
+    @Test
+    fun `post-seek overshoot then snap-back does not bounce the clock`() {
+        // Back-button / previous-ayah: first sample is 0, then the controller
+        // briefly reports ~800 ms (word 2–3), then a real ~100 ms, then a
+        // correction back. Without settle that lights word 2, starts its wash,
+        // then re-enters it.
+        val clock = HighlightClock()
+        clock.acceptNextSample()
+        assertEquals(0L, clock.sample("ayah 4", 0))
+        assertEquals(0L, clock.sample("ayah 4", 800)) // overshoot ignored
+        assertEquals(100L, clock.sample("ayah 4", 100)) // believable advance
+        assertEquals(100L, clock.sample("ayah 4", 40)) // snap-back held
+        assertEquals(140L, clock.sample("ayah 4", 140))
+    }
+
+    @Test
+    fun `settle holds large regressions that would otherwise count as seeks`() {
+        val clock = HighlightClock(seekThresholdMs = 250)
+        clock.sample("a", 0)
+        // Ramp within the settle step cap so we are mid-settle at ~500 ms.
+        assertEquals(100L, clock.sample("a", 100))
+        assertEquals(200L, clock.sample("a", 200))
+        assertEquals(300L, clock.sample("a", 300))
+        assertEquals(400L, clock.sample("a", 400))
+        assertEquals(500L, clock.sample("a", 500))
+        // 400 ms regression is above SEEK_THRESHOLD but still in settle → hold.
+        assertEquals(500L, clock.sample("a", 100))
+    }
+
+    @Test
+    fun `after settle expires a large regression is accepted as a seek`() {
+        val clock = HighlightClock(settleSamples = 2, maxSettleStepMs = 10_000)
+        clock.sample("a", 5000)
+        clock.sample("a", 5033) // settleLeft 1 → 0
+        clock.sample("a", 5066) // settle exhausted
+        assertEquals(1000L, clock.sample("a", 1000))
     }
 }

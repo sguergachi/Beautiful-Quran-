@@ -55,14 +55,16 @@ import kotlin.math.roundToInt
 /**
  * The panel's sections. There are far too many knobs to scroll as one list,
  * and they cluster naturally by what you are listening for: the resting page,
- * the wash that reveals a word, the orange repeat chain, and the experimental
- * tajweed hold.
+ * the wash that reveals a word, the orange repeat chain, the experimental
+ * tajweed hold, and the karaoke clock (Bluetooth lag + next-ayah lead).
  */
 private enum class InkLabTab(val label: String) {
     Ink("Ink"),
     Sweep("Sweep"),
     Repeat("Repeat"),
     Tajweed("Tajweed"),
+    /** Karaoke clock: output lag + ayah fade-lead — not wash feel. */
+    Highlight("Highlight"),
 }
 
 @Composable
@@ -189,6 +191,42 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
                             InkEngine.tuning = t.copy(pacedFeather = it)
                         }
                     }
+
+                    // Karaoke clock — when the word lights and when the next
+                    // ayah fades in (docs/OUTPUT_LATENCY.md).
+                    InkLabTab.Highlight -> {
+                        val override = InkEngine.outputLatencyOverrideMs
+                        TuningToggle("Manual output lag", override != null) { on ->
+                            InkEngine.outputLatencyOverrideMs =
+                                if (on) (override ?: 180) else null
+                        }
+                        LabCaption(
+                            if (override == null) {
+                                "Auto: route preset (speaker 0 / A2DP 180 / LE 80)."
+                            } else {
+                                "Override absolute lag subtracted from the playhead."
+                            },
+                        )
+                        if (override != null) {
+                            TuningSlider(
+                                "Output lag ms",
+                                override.toFloat(),
+                                0f..400f,
+                                integer = true,
+                            ) {
+                                InkEngine.outputLatencyOverrideMs = it.roundToInt()
+                            }
+                        }
+                        TuningSlider(
+                            "Fade lead ms",
+                            InkEngine.fadeLeadMs.toFloat(),
+                            0f..1200f,
+                            integer = true,
+                        ) {
+                            InkEngine.fadeLeadMs = it.roundToInt()
+                        }
+                        LabCaption("How early the next verse fades in before this clip ends.")
+                    }
                 }
             }
             Spacer(Modifier.height(2.dp))
@@ -206,6 +244,8 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .quietClickable {
                             InkEngine.tuning = InkEngine.Tuning()
+                            InkEngine.fadeLeadMs = InkEngine.DEFAULT_FADE_LEAD_MS
+                            InkEngine.outputLatencyOverrideMs = null
                             copyNote = null
                         }
                         .padding(vertical = 4.dp),
@@ -216,7 +256,8 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
                         .quietClickable {
-                            val text = formatTuningCopy(InkEngine.tuning)
+                            val text = formatTuningCopy(InkEngine.tuning) +
+                                "\n" + formatHighlightCopy()
                             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE)
                                 as? ClipboardManager
                             cm?.setPrimaryClip(ClipData.newPlainText("Ink Lab tuning", text))
@@ -284,6 +325,20 @@ internal fun formatTuningCopy(t: InkEngine.Tuning): String {
         appendLine("    holdCreep = ${f(t.holdCreep)},")
         append(")")
     }
+}
+
+/** Session highlight-sync knobs for the clipboard snapshot. */
+internal fun formatHighlightCopy(): String = buildString {
+    appendLine("// Highlight sync (Ink Lab → Highlight) — session only")
+    appendLine("InkEngine.fadeLeadMs = ${InkEngine.fadeLeadMs}")
+    val lag = InkEngine.outputLatencyOverrideMs
+    append(
+        if (lag == null) {
+            "InkEngine.outputLatencyOverrideMs = null // auto route preset"
+        } else {
+            "InkEngine.outputLatencyOverrideMs = $lag"
+        },
+    )
 }
 
 /**
@@ -392,6 +447,19 @@ private fun TuningToggle(
             modifier = Modifier.padding(horizontal = 2.dp),
         )
     }
+}
+
+/** Quiet helper line under a toggle or slider (Ink Lab only). */
+@Composable
+private fun LabCaption(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 4.dp),
+    )
 }
 
 @Composable
