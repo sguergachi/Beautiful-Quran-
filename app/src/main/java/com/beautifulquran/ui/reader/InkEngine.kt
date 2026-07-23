@@ -151,6 +151,14 @@ object InkEngine {
      */
     var outputLatencyOverrideMs: Int? by mutableStateOf(null)
 
+    /**
+     * Session-only Ink Lab override: when false, playback auto-scroll and
+     * word-band follow stop so the page can be panned freely while auditioning
+     * ink. Not part of [Tuning] — never copied into shipped defaults, and
+     * Reset on the panel does not touch it.
+     */
+    var focusEngineEnabled: Boolean by mutableStateOf(true)
+
     /** [Tuning.sweepEaseX1]..[Tuning.sweepEaseY2] as a Compose easing. */
     val sweepEasing: CubicBezierEasing
         get() = tuning.let {
