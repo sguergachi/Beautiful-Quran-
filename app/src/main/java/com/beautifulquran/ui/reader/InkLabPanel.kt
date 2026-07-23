@@ -45,6 +45,10 @@ import kotlin.math.roundToInt
  * clipboard (and Logcat tag `InkLab`) so tuned numbers can land in the
  * defaults in InkEngine.kt.
  *
+ * The action row also hosts a session-only [InkEngine.focusEngineEnabled]
+ * freeze (next to Copy values) so auto-home can be parked while panning.
+ * Reset does not touch it.
+ *
  * Enabled from Settings → Developer → "Ink Lab overlay" (developer mode
  * itself unlocks by tapping the Settings logo). See docs/INK_ENGINE.md.
  */
@@ -81,7 +85,7 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
                 .clip(RoundedCornerShape(14.dp))
                 .background(MaterialTheme.colorScheme.background.copy(alpha = 0.92f))
                 .quietClickable { expanded = !expanded }
-                .padding(horizontal = 14.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 6.dp),
         ) {
             Text(
                 text = "Ink Lab",
@@ -92,24 +96,18 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
             DisclosureChevron(expanded = expanded)
         }
         if (!expanded) return@Column
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
         Column(
             modifier = Modifier
-                .clip(RoundedCornerShape(18.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.background.copy(alpha = 0.96f))
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
-            // Always visible above the tabbed knobs: freezes FocusEngine
-            // auto-home so you can pan the page and still watch ink wash.
-            TuningToggle("Focus engine", InkEngine.focusEngineEnabled) {
-                InkEngine.focusEngineEnabled = it
-            }
-            Spacer(Modifier.height(4.dp))
             InkLabTabs(selected = tab, onSelect = { tab = it })
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
             Column(
                 modifier = Modifier
-                    .heightIn(max = 320.dp)
+                    .heightIn(max = 260.dp)
                     .verticalScroll(rememberScrollState(), reverseScrolling = false),
             ) {
                 val t = InkEngine.tuning
@@ -231,8 +229,14 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
                     }
                 }
             }
-            Spacer(modifier.height(4.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            Spacer(Modifier.height(2.dp))
+            // Actions share one row so chrome stays thin: Reset / Copy values
+            // sit beside the session-only focus freeze (not part of Tuning).
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 Text(
                     text = "Reset",
                     style = MaterialTheme.typography.labelLarge,
@@ -244,7 +248,7 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
                             InkEngine.outputLatencyOverrideMs = null
                             copyNote = null
                         }
-                        .padding(vertical = 6.dp),
+                        .padding(vertical = 4.dp),
                 )
                 Text(
                     text = "Copy values",
@@ -260,7 +264,12 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
                             Log.d("InkLab", text)
                             copyNote = "Copied"
                         }
-                        .padding(vertical = 6.dp),
+                        .padding(vertical = 4.dp),
+                )
+                ActionToggle(
+                    label = "Focus",
+                    value = InkEngine.focusEngineEnabled,
+                    onChange = { InkEngine.focusEngineEnabled = it },
                 )
             }
             copyNote?.let { note ->
@@ -268,7 +277,6 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
                     text = note,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp),
                 )
             }
         }
@@ -341,7 +349,7 @@ internal fun formatHighlightCopy(): String = buildString {
 @Composable
 private fun InkLabTabs(selected: InkLabTab, onSelect: (InkLabTab) -> Unit) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -358,19 +366,51 @@ private fun InkLabTabs(selected: InkLabTab, onSelect: (InkLabTab) -> Unit) {
                     },
                     modifier = Modifier
                         .quietClickable { onSelect(entry) }
-                        .padding(vertical = 4.dp),
+                        .padding(vertical = 2.dp),
                 )
                 // A hairline of ink under the live section, drawn at zero
                 // height when idle so the row never reflows on selection.
                 Spacer(
                     Modifier
-                        .padding(top = 2.dp)
+                        .padding(top = 1.dp)
                         .width(if (active) 18.dp else 0.dp)
                         .height(1.dp)
                         .background(MaterialTheme.colorScheme.primary),
                 )
             }
         }
+    }
+}
+
+/** Compact on/off for the action row — sits beside Copy values without a
+ * full-width label column. Same word idiom as [TuningToggle]. */
+@Composable
+private fun ActionToggle(
+    label: String,
+    value: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .quietClickable { onChange(!value) }
+            .padding(vertical = 4.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text = if (value) "on" else "off",
+            style = MaterialTheme.typography.labelLarge,
+            color = if (value) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
     }
 }
 
@@ -388,7 +428,7 @@ private fun TuningToggle(
         modifier = Modifier
             .fillMaxWidth()
             .quietClickable { onChange(!value) }
-            .padding(vertical = 6.dp),
+            .padding(vertical = 3.dp),
     ) {
         Text(
             text = label,
