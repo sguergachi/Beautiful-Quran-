@@ -108,6 +108,21 @@ object ReaderInteraction {
     ): Boolean = justEnabledFollow || target != lastHomedTarget
 
     /**
+     * Word-band keep-in-view must track **actual** play, not the debounced
+     * "reciting chrome" flag. After the last ayah ends, Media3 can snap
+     * position toward the item start while chrome is still recessed for a few
+     * hundred ms — if word-follow stays armed, it scrolls back up to word 1.
+     */
+    fun shouldKeepWordInView(
+        followEnabled: Boolean,
+        labFocusEnabled: Boolean,
+        isPlaying: Boolean,
+        annotating: Boolean,
+        hasActiveWord: Boolean,
+    ): Boolean =
+        followEnabled && labFocusEnabled && isPlaying && !annotating && hasActiveWord
+
+    /**
      * Which ayah the transport "play from here" control should use: a pending
      * jump wins, else follow uses the reciting ayah when playing, else scroll.
      */

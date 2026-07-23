@@ -232,4 +232,36 @@ class ReaderInteractionTest {
             ),
         )
     }
+
+    @Test
+    fun `shouldKeepWordInView requires actual play not debounced chrome`() {
+        // End of last ayah: isPlaying false while chrome may still be recessed.
+        assertFalse(
+            ReaderInteraction.shouldKeepWordInView(
+                followEnabled = true,
+                labFocusEnabled = true,
+                isPlaying = false,
+                annotating = false,
+                hasActiveWord = true,
+            ),
+        )
+        assertTrue(
+            ReaderInteraction.shouldKeepWordInView(
+                followEnabled = true,
+                labFocusEnabled = true,
+                isPlaying = true,
+                annotating = false,
+                hasActiveWord = true,
+            ),
+        )
+        assertFalse(
+            ReaderInteraction.shouldKeepWordInView(
+                followEnabled = true,
+                labFocusEnabled = true,
+                isPlaying = true,
+                annotating = false,
+                hasActiveWord = false,
+            ),
+        )
+    }
 }

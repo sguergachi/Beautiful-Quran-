@@ -641,12 +641,16 @@ fun ReaderScreen(
         }
     }
 
-    LaunchedEffect(playbackFocusTarget, followPlayback) {
+    LaunchedEffect(playbackFocusTarget, followPlayback, isThisSurahPlaying) {
         if (!followPlayback) {
             followWasEnabled = false
             lastFollowFocusTarget = null
             return@LaunchedEffect
         }
+        // Playlist finished (nowPlaying cleared at STATE_ENDED): leave the page
+        // on the last word — re-homing the final verse pins its top and feels
+        // like a random scroll-up at the end of the surah.
+        if (!isThisSurahPlaying) return@LaunchedEffect
         val target = playbackFocusTarget ?: return@LaunchedEffect
         val justEnabled = !followWasEnabled
         followWasEnabled = true
@@ -1844,11 +1848,17 @@ fun ReaderScreen(
                                 // Word-level following tracks the karaoke owner,
                                 // not the fade-led focus target — otherwise the
                                 // last word is abandoned during the lead window.
-                                keepActiveWordInView = followEnabled &&
-                                    labFocusEnabled &&
-                                    recitingActive &&
-                                    editingAnnotationAyah == 0 &&
-                                    activeWord != null,
+                                // Use [playingNow] (not debounced recitingActive):
+                                // after the last ayah ends, position can snap
+                                // toward the item start while chrome is still
+                                // recessed — word-follow would scroll back up.
+                                keepActiveWordInView = ReaderInteraction.shouldKeepWordInView(
+                                    followEnabled = followEnabled,
+                                    labFocusEnabled = labFocusEnabled,
+                                    isPlaying = playingNow,
+                                    annotating = editingAnnotationAyah != 0,
+                                    hasActiveWord = activeWord != null,
+                                ),
                                 listCoordinates = { listCoordinates },
                                 onKeepWordInView = onKeepWordInView,
                                 onKeepAnnotationInView = onKeepAnnotationInView,
