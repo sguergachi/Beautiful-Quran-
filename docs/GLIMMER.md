@@ -174,10 +174,11 @@ ink at any point.
 ## Ink Lab controls
 
 Enable developer mode in Settings, turn on **Ink Lab overlay**, start a
-Nightfall recitation, and expand **Ink Lab**. These controls are Android-only,
-session-only auditioning values; **Reset** restores the shipped defaults and
-**Copy values** puts a paste-ready `InkEngine.Tuning(…)` constructor on the
-clipboard (also written to Logcat under tag `InkLab`). Turn **Focus** off
+Nightfall recitation, and expand **Ink Lab**. These controls are Android-only
+auditioning values that persist on device until **Reset** (so multi-session
+tuning does not start from zero each launch). **Reset** restores the shipped
+defaults and **Copy values** puts a paste-ready `InkEngine.Tuning(…)` constructor
+on the clipboard (also written to Logcat under tag `InkLab`). Turn **Focus** off
 (next to Copy values) to freeze auto-home and word-band follow while you pan
 and inspect ink; the toggle is session-only and not part of `Tuning`.
 

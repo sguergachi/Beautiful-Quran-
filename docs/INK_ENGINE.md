@@ -423,8 +423,11 @@ with a hairline under the live one, no tab-bar chrome. The bottom action row
 holds **Reset**, **Copy values**, and a session-only **Focus** freeze
 (`InkEngine.focusEngineEnabled`) that parks playback auto-home and word-band
 follow so the page can be panned while auditioning ink; it is not part of
-`Tuning` and Reset does not touch it. Edits are session-only and never
-persisted — shipped behavior cannot drift; **Copy values** puts a paste-ready
+`Tuning` and Reset does not touch it. Lab numbers (Tuning + Highlight knobs)
+persist on device via `InkLabStore` across process restarts so multi-session
+auditioning keeps the last dial positions; **Reset** clears the store and
+restores shipped defaults (so future default changes apply cleanly). Focus
+is never persisted. **Copy values** still puts a paste-ready
 `InkEngine.Tuning(…)` constructor on the clipboard (and Logcat tag `InkLab`)
 so a tuned feel can be transcribed into the defaults in InkEngine.kt. Slider
 meanings, defaults, ranges, and the halo artifact stress check are documented

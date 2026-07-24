@@ -519,7 +519,7 @@ private fun DeveloperSection(
         checkParams = checkParams,
         checkPaintToken = checkPaintToken,
     )
-    Caption("Live sliders over the reader's highlight tuning. This session only.")
+    Caption("Live sliders over the reader's highlight tuning. Numbers persist until Reset.")
 
     Spacer(Modifier.height(20.dp))
     Text(

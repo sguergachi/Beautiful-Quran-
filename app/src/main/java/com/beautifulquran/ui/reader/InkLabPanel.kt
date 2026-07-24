@@ -40,14 +40,15 @@ import kotlin.math.roundToInt
 /**
  * Developer-mode overlay for tuning the highlight feel live: sliders bound
  * straight to [InkEngine.tuning], so every change is visible on the page
- * behind it while a recitation plays. Session-only — nothing here persists;
+ * behind it while a recitation plays. Lab numbers (Tuning + Highlight knobs)
+ * persist across process restarts via [InkLabStore] until **Reset**;
  * "Copy values" puts a paste-ready [InkEngine.Tuning] constructor on the
  * clipboard (and Logcat tag `InkLab`) so tuned numbers can land in the
- * defaults in InkEngine.kt.
+ * shipped defaults in InkEngine.kt.
  *
  * The action row also hosts a session-only [InkEngine.focusEngineEnabled]
  * freeze (next to Copy values) so auto-home can be parked while panning.
- * Reset does not touch it.
+ * Reset does not touch it, and Focus is never persisted.
  *
  * Enabled from Settings → Developer → "Ink Lab overlay" (developer mode
  * itself unlocks by tapping the Settings logo). See docs/INK_ENGINE.md.
@@ -265,10 +266,9 @@ fun InkLabPanel(modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
                         .quietClickable {
-                            InkEngine.tuning = InkEngine.Tuning()
-                            InkEngine.highlightLeadMs = InkEngine.DEFAULT_HIGHLIGHT_LEAD_MS
-                            InkEngine.fadeLeadMs = InkEngine.DEFAULT_FADE_LEAD_MS
-                            InkEngine.outputLatencyOverrideMs = null
+                            // Clears on-device overrides so future shipped
+                            // default changes apply; Focus freeze stays put.
+                            InkEngine.resetLabToShippedDefaults()
                             copyNote = null
                         }
                         .padding(vertical = 4.dp),
@@ -352,9 +352,9 @@ internal fun formatTuningCopy(t: InkEngine.Tuning): String {
     }
 }
 
-/** Session highlight-sync knobs for the clipboard snapshot. */
+/** Highlight-sync knobs for the clipboard snapshot (also persisted with Tuning). */
 internal fun formatHighlightCopy(): String = buildString {
-    appendLine("// Highlight sync (Ink Lab → Highlight) — session only")
+    appendLine("// Highlight sync (Ink Lab → Highlight) — persisted with lab numbers")
     appendLine("InkEngine.highlightLeadMs = ${InkEngine.highlightLeadMs}")
     appendLine("InkEngine.fadeLeadMs = ${InkEngine.fadeLeadMs}")
     val lag = InkEngine.outputLatencyOverrideMs
