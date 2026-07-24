@@ -36,6 +36,29 @@ import com.beautifulquran.ui.theme.quietClickable
 /** How playback should loop, chosen on the repeat sheet. */
 enum class RepeatChoice { OFF, ONE_AYAH, WHOLE_SURAH, AYAH_RANGE, NEXT_N_AYAHS }
 
+/** Retains an explicit choice when multiple controls describe the same range. */
+internal fun repeatChoice(
+    repeatMode: Int,
+    repeatRange: IntRange?,
+    currentAyah: Int,
+    retainedChoice: RepeatChoice?,
+): RepeatChoice {
+    val retainedRangeChoice = retainedChoice?.takeIf {
+        it == RepeatChoice.AYAH_RANGE || it == RepeatChoice.NEXT_N_AYAHS
+    }
+    return when {
+        repeatRange != null && retainedRangeChoice != null -> retainedRangeChoice
+        repeatRange != null &&
+            repeatRange.first == currentAyah &&
+            repeatRange.first < repeatRange.last -> RepeatChoice.NEXT_N_AYAHS
+        repeatRange != null && repeatRange.first == repeatRange.last -> RepeatChoice.ONE_AYAH
+        repeatRange != null -> RepeatChoice.AYAH_RANGE
+        repeatMode == Player.REPEAT_MODE_ONE -> RepeatChoice.ONE_AYAH
+        repeatMode == Player.REPEAT_MODE_ALL -> RepeatChoice.WHOLE_SURAH
+        else -> RepeatChoice.OFF
+    }
+}
+
 /**
  * A quiet sheet for choosing how the recitation repeats. Picking "a range of
  * ayahs" reveals two vertical wheels to bound the loop; picking "from this
@@ -48,9 +71,11 @@ fun RepeatDialog(
     repeatMode: Int,
     repeatRange: IntRange?,
     currentAyah: Int?,
+    retainedChoice: RepeatChoice?,
     onDismiss: () -> Unit,
     onRepeatMode: (Int) -> Unit,
     onRepeatRange: (Int, Int) -> Unit,
+    onChoiceApplied: (RepeatChoice) -> Unit,
 ) {
     val safeAyahCount = ayahCount.coerceAtLeast(1)
     val safeCurrentAyah = (currentAyah ?: 1).coerceIn(1, safeAyahCount)
@@ -59,14 +84,7 @@ fun RepeatDialog(
         repeatRange.first < repeatRange.last
     var choice by remember {
         mutableStateOf(
-            when {
-                isNextNRange -> RepeatChoice.NEXT_N_AYAHS
-                repeatRange != null && repeatRange.first == repeatRange.last -> RepeatChoice.ONE_AYAH
-                repeatRange != null -> RepeatChoice.AYAH_RANGE
-                repeatMode == Player.REPEAT_MODE_ONE -> RepeatChoice.ONE_AYAH
-                repeatMode == Player.REPEAT_MODE_ALL -> RepeatChoice.WHOLE_SURAH
-                else -> RepeatChoice.OFF
-            },
+            repeatChoice(repeatMode, repeatRange, safeCurrentAyah, retainedChoice),
         )
     }
     var from by remember {
@@ -181,6 +199,7 @@ fun RepeatDialog(
                                     safeCurrentAyah + nextNCount - 1,
                                 )
                             }
+                            onChoiceApplied(choice)
                             onDismiss()
                         },
                     ) { Text("Done") }
