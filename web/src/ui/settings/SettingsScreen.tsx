@@ -484,8 +484,9 @@ export function SettingsScreen({
                 }
               />
               <p className="settings-caption">
-                Default on: Gapless-5 (Web Audio hybrid) for seamless verse joins. Turn off
-                to compare the legacy dual-element handoff.
+                Default on: Gapless-5 at 1× for seamless verse joins. Non-1× speeds always
+                use the media path so pitch stays natural. Turn off to compare dual-element
+                joins at 1×.
               </p>
             </div>
 

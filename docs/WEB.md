@@ -208,6 +208,11 @@ mid-tier phones — measure first.
 
 - Same everyayah URLs / reciter slugs as Android `Reciter`.
 - Playlist model: one clip per ayah (+ basmalah preface where applicable).
+- **Speed / pitch:** at 1×, Gapless-5 (when preferred) joins verses seamlessly.
+  At 0.75× / 1.25× / 1.5× the player uses the media-element path with
+  `preservesPitch` so the reciter's voice stays natural (Gapless-5 Web Audio
+  rate-change always pitch-shifts). Pause mid-ayah resumes from the same
+  position on both transports (no `gotoTrack` restart).
 - **Word-level start:** `PlayerController.seekToWordAndPlay(ayah, positionMs)`
   seeks within the loaded clip (or rebuilds from that ayah) and plays —
   used by word taps. Mid-ayah starts never prepend the basmalah lead-in.
