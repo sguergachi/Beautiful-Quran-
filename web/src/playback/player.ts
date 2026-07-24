@@ -6,9 +6,11 @@
  * WebKit supports one media stream reliably, while dual-element/blob promotion
  * can wedge its playback pipeline. [AudioPrefetcher] still warms upcoming URLs.
  *
- * Default join path is Gapless-5 (HTML5 + Web Audio hybrid). [setGapless5Enabled]
- * can fall back to dual-element promote for A/B. HighlightEngine still receives
- * per-ayah positionMs either way.
+ * Default join path is Gapless-5 (HTML5 + Web Audio hybrid) at 1×. Non-1×
+ * speeds use the dual-element path so [HTMLMediaElement.preservesPitch] keeps
+ * natural voice (Gapless-5 Web Audio rate-change always shifts pitch).
+ * [setGapless5Enabled] is the developer preference; effective transport also
+ * depends on speed. HighlightEngine still receives per-ayah positionMs either way.
  *
  * `isPlaying` is set on play *intent* (before canplay / `HTMLMediaElement.play`)
  * so reader chrome can recede on the tap rather than after the buffer fills.
@@ -33,7 +35,10 @@ import {
 import { PlaybackStallWatchdog } from './playbackStallWatchdog'
 import { peekPlaylistNextIndex } from './playlistNext'
 import { MediaSessionBridge, browserMediaSession } from './mediaSessionBridge'
+import { wantsGapless5Transport } from './gaplessPolicy'
 import { buildPlaylist, type PlaylistItem } from './playlistPlan'
+
+export { wantsGapless5Transport } from './gaplessPolicy'
 
 export interface NowPlaying {
   surahId: number
@@ -109,11 +114,15 @@ export class PlayerController {
    */
   private pauseSuppressRemaining = 0
   /**
-   * Gapless-5 joins (default). When false, dual-`<audio>` promote is used.
-   * Toggled via Settings → Developer for A/B.
+   * Developer preference for Gapless-5 joins (Settings). Effective use also
+   * requires 1× speed — see [wantsGapless5Transport].
    */
+  private gapless5Preferred = false
+  /** Live transport: Gapless-5 when preferred and speed is 1×. */
   private gapless5Enabled = false
   private gapless5: Gapless5Backend | null = null
+  /** Serializes transport swaps when speed is cycled quickly. */
+  private transportChain: Promise<void> = Promise.resolve()
 
   constructor(
     prefetcher: AudioPrefetcher = new AudioPrefetcher(),
@@ -247,10 +256,31 @@ export class PlayerController {
   }
 
   /**
-   * Developer flag: swap verse-join engine. Reloads the current playlist into
-   * the selected transport and resumes from the same ayah/offset when possible.
+   * Developer preference for Gapless-5 joins. Effective only at 1× speed so
+   * non-1× playback can keep natural pitch on the media-element path.
+   * Reloads the playlist into the selected transport and resumes when possible.
    */
   async setGapless5Enabled(enabled: boolean): Promise<void> {
+    this.gapless5Preferred = enabled
+    await this.applyGapless5Transport()
+  }
+
+  /**
+   * Apply the live Gapless-5 transport (or dual-element fallback). Idempotent.
+   * Queued so rapid speed taps cannot interleave two swaps.
+   */
+  private applyGapless5Transport(): Promise<void> {
+    const run = this.transportChain.then(() => this.applyGapless5TransportLocked())
+    this.transportChain = run.then(
+      () => undefined,
+      () => undefined,
+    )
+    return run
+  }
+
+  private async applyGapless5TransportLocked(): Promise<void> {
+    // Re-evaluate after waiting in the queue — a later setSpeed may have run.
+    const enabled = wantsGapless5Transport(this.gapless5Preferred, this.state.speed)
     if (this.gapless5Enabled === enabled) return
 
     const resume = {
@@ -1204,6 +1234,8 @@ export class PlayerController {
     this.gapless5?.setSpeed(speed)
     this.patch({ speed })
     this.scheduleGaplessBoundary()
+    // Non-1× → media path (preservesPitch); 1× → Gapless-5 if preferred.
+    void this.applyGapless5Transport()
   }
 
   setRepeatMode(mode: PlayerState['repeatMode'], range: PlayerState['repeatRange'] = null) {

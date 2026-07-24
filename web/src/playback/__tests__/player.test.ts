@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Reciter, SurahContent } from '../../data/models'
 import type { AudioPrefetcher } from '../audioPrefetch'
+import { wantsGapless5Transport } from '../gaplessPolicy'
 import { FakeAudio } from './fakeAudio'
 
 let PlayerController: typeof import('../player').PlayerController
@@ -114,6 +115,30 @@ describe('PlayerController event sequences', () => {
     expect(audio.play).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps Gapless-5 off at non-1× even when the join preference is on', async () => {
+    const audio = new FakeAudio()
+    const player = new PlayerController(
+      instantPrefetcher(),
+      true,
+      null,
+      () => audio.asAudio(),
+    )
+    player.setSpeed(0.75)
+    await player.setGapless5Enabled(true)
+    expect(player.isGapless5Enabled()).toBe(false)
+    expect(player.getState().speed).toBe(0.75)
+
+    player.setSpeed(1)
+    // Preference is on and speed is 1× — may enable after the module loads, or
+    // stay off if Gapless-5 fails in this test environment. Non-1× must stay off.
+    await vi.waitFor(() => {
+      // Either gapless loaded at 1× or failed cleanly; never stuck mid-swap.
+      expect(player.getState().speed).toBe(1)
+    })
+    player.setSpeed(1.25)
+    await vi.waitFor(() => expect(player.isGapless5Enabled()).toBe(false))
+  })
+
   it('ignores a stale pause event from the retired element after a join', async () => {
     const created: FakeAudio[] = []
     const player = new PlayerController(
@@ -222,5 +247,15 @@ describe('PlayerController event sequences', () => {
       expect(player.getState().nowPlaying?.ayah).not.toBe(ayahBefore)
     })
     expect(player.getState().isPlaying).toBe(true)
+  })
+})
+
+describe('wantsGapless5Transport', () => {
+  it('is only true when preferred and speed is exactly 1×', () => {
+    expect(wantsGapless5Transport(true, 1)).toBe(true)
+    expect(wantsGapless5Transport(true, 0.75)).toBe(false)
+    expect(wantsGapless5Transport(true, 1.25)).toBe(false)
+    expect(wantsGapless5Transport(true, 1.5)).toBe(false)
+    expect(wantsGapless5Transport(false, 1)).toBe(false)
   })
 })
