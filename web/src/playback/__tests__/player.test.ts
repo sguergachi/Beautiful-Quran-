@@ -94,6 +94,26 @@ describe('PlayerController event sequences', () => {
     expect(audio.play).not.toHaveBeenCalled()
   })
 
+  it('resumes mid-ayah after pause without rewinding the clip', async () => {
+    const audio = new FakeAudio()
+    const player = new PlayerController(
+      instantPrefetcher(),
+      true,
+      null,
+      () => audio.asAudio(),
+    )
+    player.loadSurah(content, reciter, 1, { quiet: true, warm: false })
+    await player.play()
+    audio.currentTime = 4.2
+    player.pause()
+    expect(player.getState()).toMatchObject({ isPlaying: false })
+
+    await player.play()
+    expect(player.getState()).toMatchObject({ isPlaying: true })
+    expect(audio.currentTime).toBeCloseTo(4.2, 5)
+    expect(audio.play).toHaveBeenCalledTimes(2)
+  })
+
   it('ignores a stale pause event from the retired element after a join', async () => {
     const created: FakeAudio[] = []
     const player = new PlayerController(

@@ -23,12 +23,25 @@ export interface ActiveSource {
   volume: number
 }
 
+/** Keep natural pitch when playbackRate ≠ 1 (Android Media3 default). */
+function applyPreservesPitch(audio: HTMLAudioElement): void {
+  const el = audio as HTMLAudioElement & {
+    preservesPitch?: boolean
+    mozPreservesPitch?: boolean
+    webkitPreservesPitch?: boolean
+  }
+  el.preservesPitch = true
+  el.mozPreservesPitch = true
+  el.webkitPreservesPitch = true
+}
+
 function createBrowserAudio(): HTMLAudioElement {
   const audio = new Audio()
   audio.preload = 'auto'
   audio.setAttribute('playsinline', 'true')
   audio.setAttribute('webkit-playsinline', 'true')
   ;(audio as HTMLAudioElement & { playsInline?: boolean }).playsInline = true
+  applyPreservesPitch(audio)
   return audio
 }
 
@@ -77,6 +90,7 @@ export class MediaElementTransport {
     this.activeElement.loop = source.loop
     this.activeElement.src = source.src
     this.activeElement.playbackRate = source.playbackRate
+    applyPreservesPitch(this.activeElement)
     this.activeElement.volume = source.volume
     this.activeElement.load()
   }
@@ -93,6 +107,7 @@ export class MediaElementTransport {
     standby.loop = false
     standby.src = src
     standby.playbackRate = playbackRate
+    applyPreservesPitch(standby)
     standby.load()
     this.standbyIndex = index
   }
@@ -115,7 +130,11 @@ export class MediaElementTransport {
 
   setSpeed(speed: number): void {
     this.activeElement.playbackRate = speed
-    if (this.standbyElement) this.standbyElement.playbackRate = speed
+    applyPreservesPitch(this.activeElement)
+    if (this.standbyElement) {
+      this.standbyElement.playbackRate = speed
+      applyPreservesPitch(this.standbyElement)
+    }
   }
 
   resetVolumes(): void {
