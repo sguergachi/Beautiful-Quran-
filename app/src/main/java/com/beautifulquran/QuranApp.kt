@@ -12,6 +12,8 @@ import com.beautifulquran.ornamentslab.OrnamentSeedStore
 import com.beautifulquran.playback.AudioOutputLatency
 import com.beautifulquran.playback.PlayerController
 import com.beautifulquran.timingslab.TimingOverrides
+import com.beautifulquran.ui.reader.InkEngine
+import com.beautifulquran.ui.reader.InkLabStore
 import kotlinx.coroutines.flow.MutableSharedFlow
 
 class QuranApp : Application() {
@@ -36,6 +38,9 @@ class QuranApp : Application() {
         private set
     lateinit var ornamentSeeds: OrnamentSeedStore
         private set
+    /** Developer Ink Lab numbers — attached to [InkEngine] on start. */
+    lateinit var inkLab: InkLabStore
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -49,6 +54,9 @@ class QuranApp : Application() {
         outputLatency = AudioOutputLatency(this)
         timingOverrides = overrides
         ornamentSeeds = OrnamentSeedStore(this)
+        inkLab = InkLabStore(this)
+        // Restore last lab audition before any reader opens.
+        InkEngine.attachLabStore(inkLab)
         // Long-press app icon → Continue / Bookmarks (works without App Actions review).
         VoiceShortcuts.publishDynamic(this)
     }

@@ -64,8 +64,10 @@ object InkEngine {
     /**
      * Every knob that shapes the highlight *feel*, gathered so polish is a
      * one-file affair. Defaults are the shipped values; the developer-mode
-     * Ink Lab mutates [tuning] (session-only, never persisted) to audition
-     * changes live before they are transcribed back into these defaults.
+     * Ink Lab mutates [tuning] to audition changes live. Lab edits persist
+     * across process restarts via [InkLabStore] until Reset (see
+     * docs/INK_ENGINE.md); **Copy values** still produces a paste-ready
+     * constructor for promoting a feel into these shipped defaults.
      */
     data class Tuning(
         /** Resting ink of an upcoming / recessed word. */
@@ -138,38 +140,74 @@ object InkEngine {
     )
 
     /**
-     * Live tuning values. Snapshot-backed so the Ink Lab's edits reach every
-     * running animation; release builds only ever read the defaults.
+     * Optional on-device store attached from [com.beautifulquran.QuranApp].
+     * When set, every lab edit auto-saves; cold start reloads the last
+     * snapshot. Unit tests leave this null so mutations stay in-memory.
      */
-    var tuning: Tuning by mutableStateOf(Tuning())
+    private var labStore: InkLabStore? = null
+
+    /** Suppress auto-save while restoring shipped defaults or a snapshot. */
+    private var suppressLabPersist = false
 
     /**
-     * Session-only *sync* knobs (Ink Lab → Highlight tab) — not ink feel.
-     * Kept outside [Tuning] so visual paste/copy stays about the wash, while
-     * these adjust when the karaoke clock and ayah handoff fire.
+     * Live tuning values. Snapshot-backed so the Ink Lab's edits reach every
+     * running animation. With a store attached, edits survive process death;
+     * without one (tests, or before [attachLabStore]), values are in-memory.
+     */
+    private var tuningState by mutableStateOf(Tuning())
+    var tuning: Tuning
+        get() = tuningState
+        set(value) {
+            tuningState = value
+            persistLab()
+        }
+
+    /**
+     * Highlight-tab *sync* knobs — not ink feel. Kept outside [Tuning] so
+     * visual paste/copy stays about the wash, while these adjust when the
+     * karaoke clock and ayah handoff fire. Persisted with Tuning via
+     * [InkLabStore].
      */
     /**
      * How early word ink runs ahead of [com.beautifulquran.domain.HighlightEngine]
      * segment times (ms). Added to the playhead before the engine query so
      * the next word's wash can start before the timed startMs. Default 0.
      */
-    var highlightLeadMs: Int by mutableStateOf(DEFAULT_HIGHLIGHT_LEAD_MS)
+    private var highlightLeadState by mutableStateOf(DEFAULT_HIGHLIGHT_LEAD_MS)
+    var highlightLeadMs: Int
+        get() = highlightLeadState
+        set(value) {
+            highlightLeadState = value
+            persistLab()
+        }
 
     /** How early the next ayah prepares before the last word ends (ms). */
-    var fadeLeadMs: Int by mutableStateOf(DEFAULT_FADE_LEAD_MS)
+    private var fadeLeadState by mutableStateOf(DEFAULT_FADE_LEAD_MS)
+    var fadeLeadMs: Int
+        get() = fadeLeadState
+        set(value) {
+            fadeLeadState = value
+            persistLab()
+        }
 
     /**
      * Extra output lag subtracted from the media playhead before the highlight
      * clock, or null to use the route preset from [AudioOutputLatency]
      * (speaker ≈ 0, A2DP ≈ 180, LE ≈ 80). Lab override is absolute when set.
      */
-    var outputLatencyOverrideMs: Int? by mutableStateOf(null)
+    private var outputLatencyOverrideState by mutableStateOf<Int?>(null)
+    var outputLatencyOverrideMs: Int?
+        get() = outputLatencyOverrideState
+        set(value) {
+            outputLatencyOverrideState = value
+            persistLab()
+        }
 
     /**
      * Session-only Ink Lab override: when false, playback auto-scroll and
      * word-band follow stop so the page can be panned freely while auditioning
-     * ink. Not part of [Tuning] — never copied into shipped defaults, and
-     * Reset on the panel does not touch it.
+     * ink. Not part of [Tuning] — never persisted, never copied into shipped
+     * defaults, and Reset on the panel does not touch it.
      */
     var focusEngineEnabled: Boolean by mutableStateOf(true)
 
@@ -179,9 +217,62 @@ object InkEngine {
             CubicBezierEasing(it.sweepEaseX1, it.sweepEaseY1, it.sweepEaseX2, it.sweepEaseY2)
         }
 
-    /** Shipped defaults for highlight sync (lab session knobs start here). */
+    /** Shipped defaults for highlight sync (lab knobs start here). */
     const val DEFAULT_HIGHLIGHT_LEAD_MS = 0
     const val DEFAULT_FADE_LEAD_MS = 500
+
+    /**
+     * Attach [store] and restore any saved lab numbers. Call once from
+     * application start. Subsequent lab edits write through automatically.
+     */
+    fun attachLabStore(store: InkLabStore) {
+        labStore = store
+        store.load()?.let { applyLabSnapshot(it, persist = false) }
+    }
+
+    /** Capture the live lab numbers (Tuning + Highlight knobs). */
+    fun captureLabSnapshot(): InkLabSnapshot = InkLabSnapshot.capture()
+
+    /**
+     * Apply [snapshot] into the live engine. When [persist] is true and a
+     * store is attached, the snapshot is written through.
+     */
+    fun applyLabSnapshot(snapshot: InkLabSnapshot, persist: Boolean = true) {
+        val previous = suppressLabPersist
+        suppressLabPersist = true
+        try {
+            tuningState = snapshot.toTuning()
+            highlightLeadState = snapshot.highlightLeadMs
+            fadeLeadState = snapshot.fadeLeadMs
+            outputLatencyOverrideState = snapshot.outputLatencyOverrideMs
+        } finally {
+            suppressLabPersist = previous
+        }
+        if (persist) persistLab()
+    }
+
+    /**
+     * Drop any on-device lab overrides and restore shipped defaults. Focus
+     * freeze is left alone (session-only).
+     */
+    fun resetLabToShippedDefaults() {
+        labStore?.clear()
+        val previous = suppressLabPersist
+        suppressLabPersist = true
+        try {
+            tuningState = Tuning()
+            highlightLeadState = DEFAULT_HIGHLIGHT_LEAD_MS
+            fadeLeadState = DEFAULT_FADE_LEAD_MS
+            outputLatencyOverrideState = null
+        } finally {
+            suppressLabPersist = previous
+        }
+    }
+
+    private fun persistLab() {
+        if (suppressLabPersist) return
+        labStore?.save(captureLabSnapshot())
+    }
 
     /**
      * The ink state of the word at [position].

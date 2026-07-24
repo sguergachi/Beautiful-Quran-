@@ -58,8 +58,8 @@ data class Settings(
     val developerModeEnabled: Boolean = false,
     /** Shows the Ink Lab overlay on the reader — live sliders over the
      *  highlight tuning (see docs/INK_ENGINE.md). Only honoured while
-     *  [developerModeEnabled] is on; the tuning edits themselves are
-     *  session-only and never persisted. */
+     *  [developerModeEnabled] is on. Lab numbers persist via
+     *  [com.beautifulquran.ui.reader.InkLabStore] until Reset. */
     val inkLabEnabled: Boolean = false,
     /** Developer-selectable Chapters bookmark treatment. */
     val homeBookmarkStyle: HomeBookmarkStyle = HomeBookmarkStyle.TOP_BOUND,

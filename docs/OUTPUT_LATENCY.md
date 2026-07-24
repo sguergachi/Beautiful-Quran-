@@ -41,7 +41,7 @@ HighlightClock.sample(...)
 PreparedTimings.activeInfo(...)   ← unchanged engine
 ```
 
-**Highlight lead** (Ink Lab → Highlight, session-only, default 0) advances the
+**Highlight lead** (Ink Lab → Highlight, default 0; persists with other lab numbers) advances the
 query time so each word’s wash can start *before* its segment `startMs`. It is
 the opposite direction of output lag: lag delays ink to match late audio; lead
 runs ink ahead of the timing table. Neither is baked into `HighlightEngine`.
