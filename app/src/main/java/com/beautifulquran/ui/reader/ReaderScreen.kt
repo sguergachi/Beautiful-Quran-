@@ -287,6 +287,7 @@ fun ReaderScreen(
     val followEnabled = interaction.followEnabled
     val requestedJumpAyah = interaction.pendingJumpAyah
     var showRepeatDialog by remember { mutableStateOf(false) }
+    var retainedRepeatChoice by rememberSaveable { mutableStateOf<RepeatChoice?>(null) }
     val haptics = LocalHapticFeedback.current
     val onRootReturnUserMovedLatest = rememberUpdatedState(onRootReturnUserMoved)
     // Continuous next-chapter advance: fly the opening from footer → header.
@@ -2190,6 +2191,7 @@ fun ReaderScreen(
             repeatMode = playerState.repeatMode,
             repeatRange = repeatRangeForThisSurah,
             currentAyah = repeatStartAyah,
+            retainedChoice = retainedRepeatChoice,
             onDismiss = { showRepeatDialog = false },
             onRepeatMode = viewModel::setRepeatMode,
             onRepeatRange = { from, to ->
@@ -2198,6 +2200,7 @@ fun ReaderScreen(
                     viewModel.setRepeatRange(from, to)
                 }
             },
+            onChoiceApplied = { retainedRepeatChoice = it },
         )
     }
 
